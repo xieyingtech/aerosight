@@ -10,9 +10,18 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@nuxt/ui": "2.21.0",
+    "@prisma/client": "6.3.1",
+    "@prisma/nuxt": "^0.3.0",
+    "bcryptjs": "^3.0.0",
     "nuxt": "^3.15.4",
+    "nuxt-auth-utils": "^0.5.15",
     "vue": "latest",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "prisma": "6.3.1"
   },
   "packageManager": "pnpm@9.11.0+sha512.0a203ffaed5a3f63242cd064c8fb5892366c103e328079318f78062f24ea8c9d50bc6a47aa3567cabefd824d170e78fa2745ed1f16b132e16436146b7688f19b"
 }
