@@ -1,6 +1,5 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import prisma from "~/lib/prisma";
 
 const bodySchema = z.object({
   username: z.string().min(3),
