@@ -7,12 +7,11 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare && prisma generate"
   },
   "dependencies": {
-    "@nuxt/ui": "2.21.0",
     "@prisma/client": "6.3.1",
-    "@prisma/nuxt": "^0.3.0",
+    "@unocss/reset": "^65.5.0",
     "bcryptjs": "^3.0.0",
     "nuxt": "^3.15.4",
     "nuxt-auth-utils": "^0.5.15",
@@ -21,6 +20,11 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "prisma": "6.3.1"
+    "@element-plus/nuxt": "^1.1.1",
+    "@iconify-json/ri": "^1.2.5",
+    "@unocss/nuxt": "^65.5.0",
+    "element-plus": "^2.9.4",
+    "prisma": "6.3.1",
+    "unocss": "^65.5.0"
   }
 }

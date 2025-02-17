@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const bodySchema = z.object({
-  username: z.string().min(3),
-  password: z.string().min(8),
+  username: z.string(),
+  password: z.string(),
 });
 
 export default defineEventHandler(async (event) => {
