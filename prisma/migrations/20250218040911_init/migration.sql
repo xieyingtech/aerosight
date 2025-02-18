@@ -5,6 +5,7 @@ CREATE TABLE "User" (
     "password" TEXT NOT NULL,
     "phone" TEXT,
     "email" TEXT,
+    "admin" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -15,6 +16,16 @@ CREATE TABLE "Organization" (
     "name" TEXT NOT NULL,
 
     CONSTRAINT "Organization_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Project" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "organizationId" INTEGER NOT NULL,
+
+    CONSTRAINT "Project_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -36,6 +47,9 @@ CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+
+-- AddForeignKey
+ALTER TABLE "Project" ADD CONSTRAINT "Project_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Membership" ADD CONSTRAINT "Membership_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

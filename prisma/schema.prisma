@@ -16,6 +16,7 @@ model User {
   password    String
   phone       String?      @unique
   email       String?      @unique
+  admin       Boolean      @default(false)
   memberships Membership[]
 }
 
@@ -23,12 +24,21 @@ model Organization {
   id          Int          @id @default(autoincrement())
   name        String
   memberships Membership[]
+  projects    Project[]
+}
+
+model Project {
+  id             Int          @id @default(autoincrement())
+  name           String
+  description    String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId Int
 }
 
 model Membership {
   id             Int           @id @default(autoincrement())
   name           String
-  permissions    String[]
+  roles          String[]
   user           User          @relation(fields: [userId], references: [id])
   userId         Int
   Organization   Organization? @relation(fields: [organizationId], references: [id])

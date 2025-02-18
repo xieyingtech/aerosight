@@ -21,10 +21,19 @@ export default defineEventHandler(async (event) => {
   if (!user || !bcrypt.compareSync(password, user.password)) {
     throw createError({
       statusCode: 401,
-      message: "Invalid username or password",
+      statusMessage: "Invalid username or password",
     });
   }
 
-  await setUserSession(event, { user: { username } });
+  await setUserSession(event, {
+    user: { username, admin: user.admin },
+  });
   return { username };
 });
+
+declare module "#auth-utils" {
+  interface User {
+    username: string;
+    admin: boolean;
+  }
+}
