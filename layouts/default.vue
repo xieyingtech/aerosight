@@ -9,7 +9,6 @@ const collapsed = ref(true);
     <ElHeader>
       <ElMenu mode="horizontal">
         <ElMenuItem @click="navigateTo('/')">协盈穹目</ElMenuItem>
-        <ElMenuItem>工作台</ElMenuItem>
         <ElMenuItem @click="navigateTo('/profile')">用户中心</ElMenuItem>
       </ElMenu>
     </ElHeader>

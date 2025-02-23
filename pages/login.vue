@@ -38,15 +38,17 @@ async function login() {
 </script>
 
 <template>
-  <ElCard class="max-w-sm mx-auto mt-40vh">
-    <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
-      <ElFormItem label="用户名" prop="username">
-        <ElInput v-model="form.username" />
-      </ElFormItem>
-      <ElFormItem label="密码" prop="password" required>
-        <ElInput v-model="form.password" type="password" />
-      </ElFormItem>
-      <ElButton type="primary" @click="login">登录</ElButton>
-    </ElForm>
-  </ElCard>
+  <div class="max-w-sm mx-auto mt-32 px-4">
+    <ElCard>
+      <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
+        <ElFormItem label="用户名" prop="username">
+          <ElInput v-model="form.username" />
+        </ElFormItem>
+        <ElFormItem label="密码" prop="password" required>
+          <ElInput v-model="form.password" type="password" />
+        </ElFormItem>
+        <ElButton type="primary" @click="login">登录</ElButton>
+      </ElForm>
+    </ElCard>
+  </div>
 </template>
