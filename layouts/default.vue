@@ -7,7 +7,7 @@ const appConfig = useAppConfig();
     <ElHeader>
       <ElMenu mode="horizontal">
         <ElMenuItem @click="navigateTo('/')">
-          {{ appConfig.site.name }}
+          {{ appConfig.site.title }}
         </ElMenuItem>
         <ElMenuItem @click="navigateTo('/profile')">用户中心</ElMenuItem>
       </ElMenu>

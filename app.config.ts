@@ -1,6 +1,6 @@
 export default defineAppConfig({
   site: {
-    name: "AeroSight",
-    description: "My site description",
+    title: "AeroSight",
+    description: "Intelligent drone patrol management system",
   },
 });

@@ -1,5 +1,7 @@
 # AeroSight
 
+Intelligent drone patrol management system
+
 ## Setup
 
 ```bash

@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import "@unocss/reset/normalize.css";
+
+const appConfig = useAppConfig();
+
+useHead({
+  title: appConfig.site.title,
+});
 </script>
 
 <template>

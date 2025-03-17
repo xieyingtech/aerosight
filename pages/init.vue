@@ -59,7 +59,7 @@ async function login() {
 
 <template>
   <div class="w-full max-w-sm mx-auto px-4">
-    <h1 class="text-center">初始化 {{ appConfig.site.name }}</h1>
+    <h1 class="text-center">初始化 {{ appConfig.site.title }}</h1>
     <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
       <ElFormItem label="管理员邮箱" prop="email">
         <ElInput v-model="form.email" />

@@ -7,11 +7,6 @@ export default defineNuxtConfig({
     "@element-plus/nuxt",
     "@nuxtjs/leaflet",
   ],
-  app: {
-    head: {
-      title: "协盈穹目",
-    },
-  },
   echarts: {
     charts: ["BarChart"],
     components: ["DatasetComponent", "GridComponent", "TooltipComponent"],
