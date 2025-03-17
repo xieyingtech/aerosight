@@ -32,7 +32,7 @@ CREATE TABLE "Project" (
 CREATE TABLE "Membership" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "permissions" TEXT[],
+    "roles" TEXT[],
     "userId" INTEGER NOT NULL,
     "organizationId" INTEGER NOT NULL,
 

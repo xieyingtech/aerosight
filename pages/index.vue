@@ -1,7 +1,7 @@
-<template>
-  <div class="h-full">
-    <Tmap />
-  </div>
-</template>
+<script setup lang="ts">
+const { user, loggedIn } = useUserSession();
+</script>
 
-<script setup lang="ts"></script>
+<template>
+  {{ user }}
+</template>

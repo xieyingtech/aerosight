@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const bodySchema = z.object({
@@ -7,18 +6,15 @@ const bodySchema = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  const { username, password } = await readValidatedBody(
-    event,
-    bodySchema.parse
-  );
+  const body = await readValidatedBody(event, bodySchema.parse);
 
   const user = await prisma.user.findUnique({
     where: {
-      username: username,
+      username: body.username,
     },
   });
 
-  if (!user || !bcrypt.compareSync(password, user.password)) {
+  if (!user || !verifyPassword(user.password, body.password)) {
     throw createError({
       statusCode: 401,
       statusMessage: "Invalid username or password",
@@ -26,14 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await setUserSession(event, {
-    user: { username, admin: user.admin },
+    user: { username: user.username, admin: user.admin },
   });
-  return { username };
+  return { username: user.username, admin: user.admin };
 });
-
-declare module "#auth-utils" {
-  interface User {
-    username: string;
-    admin: boolean;
-  }
-}

@@ -33,6 +33,7 @@ model Project {
   description    String
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId Int
+  POI            POI[]
 }
 
 model Membership {
@@ -43,4 +44,14 @@ model Membership {
   userId         Int
   Organization   Organization? @relation(fields: [organizationId], references: [id])
   organizationId Int
+}
+
+model POI {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String
+  latitude    Float
+  longitude   Float
+  project     Project @relation(fields: [projectId], references: [id])
+  projectId   Int
 }

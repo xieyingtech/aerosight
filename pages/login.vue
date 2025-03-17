@@ -1,9 +1,7 @@
 <script setup lang="ts">
 const { loggedIn, session, user, clear, fetch } = useUserSession();
 
-definePageMeta({
-  layout: false,
-});
+const appConfig = useAppConfig();
 
 const formRef = useTemplateRef("formRef");
 
@@ -30,7 +28,11 @@ async function login() {
           navigateTo("/");
         })
         .catch((e) => {
-          ElMessage.error("账号或密码错误");
+          if (e.response.status === 401) {
+            ElMessage.error("用户名或密码错误");
+          } else {
+            ElMessage.error(e.message);
+          }
         });
     }
   });
@@ -38,17 +40,16 @@ async function login() {
 </script>
 
 <template>
-  <div class="max-w-sm mx-auto mt-32 px-4">
-    <ElCard>
-      <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
-        <ElFormItem label="用户名" prop="username">
-          <ElInput v-model="form.username" />
-        </ElFormItem>
-        <ElFormItem label="密码" prop="password" required>
-          <ElInput v-model="form.password" type="password" />
-        </ElFormItem>
-        <ElButton type="primary" @click="login">登录</ElButton>
-      </ElForm>
-    </ElCard>
+  <div class="w-full max-w-sm mx-auto px-4">
+    <h1 class="text-center">登录到 {{ appConfig.site.name }}</h1>
+    <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
+      <ElFormItem label="账号" prop="username">
+        <ElInput v-model="form.username" />
+      </ElFormItem>
+      <ElFormItem label="密码" prop="password" required>
+        <ElInput v-model="form.password" type="password" />
+      </ElFormItem>
+      <ElButton type="primary" class="w-full" @click="login">登录</ElButton>
+    </ElForm>
   </div>
 </template>

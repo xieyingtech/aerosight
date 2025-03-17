@@ -1,14 +1,5 @@
 <script setup lang="ts">
 import "@unocss/reset/normalize.css";
-
-const route = useRoute();
-const { loggedIn } = useUserSession();
-
-watchEffect(() => {
-  if (!loggedIn.value && route.path !== "/login") {
-    navigateTo("/login");
-  }
-});
 </script>
 
 <template>
@@ -20,5 +11,9 @@ watchEffect(() => {
 <style>
 body {
   margin: 0;
+}
+
+.el-menu--vertical:not(.el-menu--collapse) {
+  width: 200px;
 }
 </style>

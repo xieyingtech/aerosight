@@ -16,15 +16,18 @@ NUXT_PUBLIC_TIANDITU_APIKEY=your-tianditu-api-key
 DATABASE_URL=postgres://localhost/aerosight
 ```
 
+### Initialize Database
+
+```bash
+pnpm prisma migrate deploy
+```
+
 ### Development
 
 ```bash
 pnpm dev
 ```
 
-### Deployment
+### Initialize Admin User
 
-```bash
-pnpm build
-pnpm preview
-```
+Visit `http://localhost:3000/init` and create an admin user.
