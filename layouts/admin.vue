@@ -3,12 +3,12 @@ const collapsed = ref(true);
 </script>
 
 <template>
-  <NuxtLayout>
+  <NuxtLayout name="default">
     <ElContainer>
       <ElMenu class="flex flex-col" :collapse="collapsed">
         <ElMenuItem>
           <i class="el-icon i-ri-home-fill"></i>
-          <template #title>主菜单</template>
+          <template #title>仪表盘</template>
         </ElMenuItem>
         <ElMenuItem @click="collapsed = !collapsed">
           <i v-if="collapsed" class="el-icon i-ri-menu-unfold-fill"></i>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { loggedIn, session, user, clear, fetch } = useUserSession();
+const { fetch } = useUserSession();
 
 const appConfig = useAppConfig();
 

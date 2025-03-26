@@ -1,7 +1,11 @@
 <script setup lang="ts">
-const { user, loggedIn } = useUserSession();
+const { data, error } = useFetch("/api/memberships");
+
+if (error.value) {
+  navigateTo("/login");
+}
 </script>
 
 <template>
-  {{ user }}
+  {{ data }}
 </template>

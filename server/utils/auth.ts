@@ -1,7 +1,4 @@
-export default async function requireAdminSession(
-  event: Parameters<typeof requireUserSession>[0],
-  opts?: Parameters<typeof requireUserSession>[1]
-) {
+const requireAdminSession: typeof requireUserSession = async (event, opts) => {
   const session = await requireUserSession(event);
   if (!session.user.admin) {
     throw createError({
@@ -10,4 +7,6 @@ export default async function requireAdminSession(
     });
   }
   return session;
-}
+};
+
+export default requireAdminSession;
