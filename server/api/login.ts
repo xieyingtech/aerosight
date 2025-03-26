@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   await setUserSession(event, {
-    user: { id: user.id },
+    user: { id: user.id, admin: user.admin },
   });
   return { id: user.id };
 });

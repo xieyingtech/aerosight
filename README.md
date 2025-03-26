@@ -32,4 +32,4 @@ pnpm dev
 
 ### Initialize Admin User
 
-Visit `http://localhost:3000/init` and create an admin user.
+Visit `http://localhost:3000/admin/init` and create an admin user.
