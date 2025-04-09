@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { user, clear } = useUserSession();
+const { user, loggedIn, clear } = useUserSession();
+const { data } = useFetch("/api/user");
 const isSmallScreen = useMediaQuery("(max-width: 768px)");
 const showSidebar = ref(false);
 
@@ -16,13 +17,17 @@ const appConfig = useAppConfig();
         <ElMenuItem @click="navigateTo('/')">
           {{ appConfig.site.title }}
         </ElMenuItem>
-        <ElSubMenu index="profile" @click="navigateTo('/profile')">
-          <template #title>用户</template>
+        <ElSubMenu v-if="loggedIn" index="profile">
+          <template #title>{{ data?.username }}</template>
+          <ElMenuItem @click="navigateTo('/profile')">个人中心</ElMenuItem>
           <ElMenuItem v-if="user?.admin" @click="navigateTo('/admin')"
             >管理后台</ElMenuItem
           >
-          <ElMenuItem @click="clear">退出登录</ElMenuItem>
+          <ElMenuItem @click="clear">
+            <div class="text-red">退出登录</div>
+          </ElMenuItem>
         </ElSubMenu>
+        <ElMenuItem v-else @click="navigateTo('/login')">登录</ElMenuItem>
       </ElMenu>
     </ElHeader>
     <ElContainer>

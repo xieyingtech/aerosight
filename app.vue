@@ -22,10 +22,4 @@ body {
 .el-menu--vertical:not(.el-menu--collapse) {
   width: 250px;
 }
-
-/* @media screen and (max-width: 768px) {
-  .el-menu--horizontal {
-    width: 100%;
-  }
-} */
 </style>

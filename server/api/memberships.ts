@@ -5,5 +5,12 @@ export default defineEventHandler(async (event) => {
     where: {
       userId: user.id,
     },
+    include: {
+      organization: {
+        select: {
+          name: true,
+        },
+      },
+    },
   });
 });
