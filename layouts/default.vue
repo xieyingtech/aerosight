@@ -1,18 +1,28 @@
 <script setup lang="ts">
+const { user, clear } = useUserSession();
+
 const appConfig = useAppConfig();
 </script>
 
 <template>
   <ElContainer class="h-100vh">
     <ElHeader>
-      <ElMenu mode="horizontal">
+      <ElMenu mode="horizontal" :ellipsis="false">
         <ElMenuItem @click="navigateTo('/')">
           {{ appConfig.site.title }}
         </ElMenuItem>
-        <ElMenuItem @click="navigateTo('/profile')">用户中心</ElMenuItem>
+        <ElSubMenu index="profile" @click="navigateTo('/profile')">
+          <template #title>用户</template>
+          <ElMenuItem v-if="user?.admin" @click="navigateTo('/admin')"
+            >管理后台</ElMenuItem
+          >
+          <ElMenuItem @click="clear" class="text-red">退出登录</ElMenuItem>
+        </ElSubMenu>
       </ElMenu>
     </ElHeader>
-    <slot />
+    <ElContainer>
+      <slot />
+    </ElContainer>
   </ElContainer>
 </template>
 
