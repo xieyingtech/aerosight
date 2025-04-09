@@ -6,6 +6,7 @@ export default defineNuxtConfig({
     "@unocss/nuxt",
     "@element-plus/nuxt",
     "@nuxtjs/leaflet",
+    "@vueuse/nuxt",
   ],
   echarts: {
     charts: ["BarChart"],

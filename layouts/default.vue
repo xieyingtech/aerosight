@@ -16,7 +16,7 @@ const appConfig = useAppConfig();
           <ElMenuItem v-if="user?.admin" @click="navigateTo('/admin')"
             >管理后台</ElMenuItem
           >
-          <ElMenuItem @click="clear" class="text-red">退出登录</ElMenuItem>
+          <ElMenuItem @click="clear">退出登录</ElMenuItem>
         </ElSubMenu>
       </ElMenu>
     </ElHeader>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const collapsed = ref(true);
+const isSmallScreen = useMediaQuery("(max-width: 768px)");
+const collapsed = ref(isSmallScreen.value);
 const route = useRoute();
 </script>
 
