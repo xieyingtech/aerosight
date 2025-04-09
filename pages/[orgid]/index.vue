@@ -1,7 +1,5 @@
 <template>
-  <div class="h-full">
-    <Tmap />
-  </div>
+  <Tmap />
 </template>
 
 <script setup lang="ts"></script>

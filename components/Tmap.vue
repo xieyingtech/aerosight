@@ -21,21 +21,30 @@ const props = defineProps({
 </script>
 
 <template>
-  <LMap :zoom :center :options="{ attributionControl: false }">
-    <LLayerGroup name="天地图矢量" layerType="base">
-      <LTileLayer :url="tiandituVec" />
-      <LTileLayer :url="tiandituCva" />
-    </LLayerGroup>
-    <LLayerGroup name="天地图影像" layerType="base">
-      <LTileLayer :url="tiandituImg" />
-      <LTileLayer :url="tiandituCia" />
-    </LLayerGroup>
-    <LControlScale :imperial="false" />
-    <LControlLayers position="topright" />
-    <LControlAttribution
-      prefix="天地图 - GS(2024)0568号"
-      position="bottomright"
-    />
-    <slot />
-  </LMap>
+  <ClientOnly>
+    <div class="w-full h-full">
+      <LMap
+        :zoom
+        :center
+        :options="{ attributionControl: false }"
+        :use-global-leaflet="false"
+      >
+        <LLayerGroup name="天地图矢量" layerType="base">
+          <LTileLayer :url="tiandituVec" />
+          <LTileLayer :url="tiandituCva" />
+        </LLayerGroup>
+        <LLayerGroup name="天地图影像" layerType="base">
+          <LTileLayer :url="tiandituImg" />
+          <LTileLayer :url="tiandituCia" />
+        </LLayerGroup>
+        <LControlScale :imperial="false" />
+        <LControlLayers position="topright" />
+        <LControlAttribution
+          prefix="天地图 - GS(2024)0568号"
+          position="bottomright"
+        />
+        <slot />
+      </LMap>
+    </div>
+  </ClientOnly>
 </template>
