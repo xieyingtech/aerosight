@@ -1,13 +1,19 @@
 <script setup lang="ts">
 const collapsed = ref(true);
+const route = useRoute();
 </script>
 
 <template>
-  <NuxtLayout>
-    <ElMenu class="flex flex-col" :collapse="collapsed">
-      <ElMenuItem>
+  <NuxtLayout name="default">
+    <ElMenu
+      class="flex flex-col"
+      :collapse="collapsed"
+      router
+      :default-active="route.path"
+    >
+      <ElMenuItem :index="`/${route.params.orgid}`">
         <i class="el-icon i-ri-home-fill"></i>
-        <template #title>主菜单</template>
+        <template #title>地图</template>
       </ElMenuItem>
       <ElMenuItem @click="collapsed = !collapsed">
         <i v-if="collapsed" class="el-icon i-ri-menu-unfold-fill"></i>
