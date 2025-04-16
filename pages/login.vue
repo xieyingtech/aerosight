@@ -40,7 +40,7 @@ async function login() {
 </script>
 
 <template>
-  <div class="w-full max-w-sm mx-auto px-4">
+  <div class="w-full max-w-sm mx-auto px-4 box-border">
     <h1 class="text-center">登录到 {{ appConfig.site.title }}</h1>
     <ElForm ref="formRef" label-width="auto" :model="form" :rules="rules">
       <ElFormItem label="账号" prop="username">

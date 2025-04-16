@@ -1,13 +1,13 @@
 <script setup lang="ts">
-const collapsed = ref(true);
+const collapsed = ref(false);
 const route = useRoute();
 </script>
 
 <template>
   <NuxtLayout name="default">
-    <ElContainer>
+    <template #sidebar>
       <ElMenu
-        class="flex flex-col"
+        class="flex flex-col h-full"
         :collapse="collapsed"
         router
         :default-active="route.path"
@@ -33,10 +33,10 @@ const route = useRoute();
           </template>
         </ElMenuItem>
       </ElMenu>
-      <ElMain>
-        <slot />
-      </ElMain>
-    </ElContainer>
+    </template>
+    <ElMain>
+      <slot />
+    </ElMain>
   </NuxtLayout>
 </template>
 

@@ -33,16 +33,16 @@ model Project {
   description    String
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId Int
-  POI            POI[]
+  poi            POI[]
 }
 
 model Membership {
-  id             Int           @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   name           String
   roles          String[]
-  user           User          @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
   userId         Int
-  Organization   Organization? @relation(fields: [organizationId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId Int
 }
 

@@ -1,11 +1,9 @@
 <script setup lang="ts">
-const { data, error } = useFetch("/api/memberships");
-
-if (error.value) {
-  navigateTo("/login");
-}
+const appConfig = useAppConfig();
 </script>
 
 <template>
-  {{ data }}
+  <div class="w-full">
+    <h1 class="text-center">{{ appConfig.site.title }}</h1>
+  </div>
 </template>

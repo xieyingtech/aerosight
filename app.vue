@@ -20,6 +20,6 @@ body {
 }
 
 .el-menu--vertical:not(.el-menu--collapse) {
-  width: 200px;
+  width: 250px;
 }
 </style>
