@@ -13,3 +13,4 @@ definePageMeta({ layout: "admin" });
     <ElTableColumn prop="admin" label="Admin" />
   </ElTable>
 </template>
+

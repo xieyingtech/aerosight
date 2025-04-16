@@ -4,4 +4,6 @@ const { user } = useUserSession();
 definePageMeta({ layout: "admin" });
 </script>
 
-<template></template>
+<template>
+    
+</template>
