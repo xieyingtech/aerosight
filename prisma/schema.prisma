@@ -12,6 +12,7 @@ datasource db {
 
 model User {
   id          Int          @id @default(autoincrement())
+  name        String
   username    String       @unique
   password    String
   phone       String?      @unique
@@ -29,22 +30,21 @@ model Team {
 }
 
 model Project {
-  id        Int     @id @default(autoincrement())
-  name      String
-  description    String
-  team      Team    @relation(fields: [teamId], references: [id])
-  teamId    Int
-  poi       POI[]
+  id          Int    @id @default(autoincrement())
+  name        String
+  description String
+  team        Team   @relation(fields: [teamId], references: [id])
+  teamId      Int
+  poi         POI[]
 }
 
 model Membership {
-  id        Int     @id @default(autoincrement())
-  name      String
-  roles     String[]
-  user      User    @relation(fields: [userId], references: [id])
-  userId    Int
-  team      Team    @relation(fields: [teamId], references: [id])
-  teamId    Int
+  id     Int      @id @default(autoincrement())
+  roles  String[]
+  user   User     @relation(fields: [userId], references: [id])
+  userId Int
+  team   Team     @relation(fields: [teamId], references: [id])
+  teamId Int
 }
 
 model POI {
