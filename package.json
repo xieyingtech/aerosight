@@ -10,24 +10,24 @@
   },
   "dependencies": {
     "@nuxtjs/leaflet": "1.2.6",
-    "@prisma/client": "6.5.0",
+    "@prisma/client": "6.6.0",
     "@unocss/reset": "^66.0.0",
     "@vueuse/nuxt": "13.1.0",
     "echarts": "^5.6.0",
-    "nuxt": "3.15.4",
-    "nuxt-auth-utils": "^0.5.17",
-    "nuxt-echarts": "0.2.6",
+    "nuxt": "3.17.0",
+    "nuxt-auth-utils": "^0.5.20",
+    "nuxt-echarts": "0.3.0",
     "vue": "latest",
     "vue-router": "latest",
-    "zod": "^3.24.2"
+    "zod": "^3.24.3"
   },
   "devDependencies": {
     "@element-plus/nuxt": "^1.1.1",
     "@iconify-json/ri": "^1.2.5",
     "@unocss/nuxt": "^66.0.0",
-    "element-plus": "^2.9.7",
-    "prisma": "6.5.0",
+    "element-plus": "^2.9.9",
+    "prisma": "6.6.0",
     "unocss": "^66.0.0"
   },
-  "packageManager": "pnpm@9.11.0"
+  "packageManager": "pnpm@10.10.0"
 }
