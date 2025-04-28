@@ -7,11 +7,24 @@ export default defineEventHandler(async (event) => {
   if (isNaN(parseInt(id))) {
     throw createError({
       statusCode: 400,
-      message: "Invalid organization ID",
+      message: "Invalid team ID",
     });
   }
 
-  return await prisma.organization.delete({
+  const body = await readBody(event);
+
+  if (!body.name) {
+    throw createError({
+      statusCode: 400,
+      message: "Team name is required",
+    });
+  }
+
+  return await prisma.team.update({
     where: { id: parseInt(id) },
+    data: {
+      name: body.name,
+      description: body.description || null,
+    },
   });
 });

@@ -8,15 +8,15 @@ export default defineEventHandler(async (event) => {
   if (!body.name) {
     throw createError({
       statusCode: 400,
-      message: 'Organization name is required'
+      message: 'Team name is required'
     })
   }
 
-  const newOrg = await prisma.organization.create({
+  const newTeam = await prisma.team.create({
     data: {
       name: body.name
     }
   })
 
-  return newOrg
+  return newTeam
 })

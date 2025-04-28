@@ -6,21 +6,21 @@ definePageMeta({
 const route = useRoute();
 const teamId = parseInt(route.params.teamid as string);
 
-// 获取组织详情
+// 获取团队详情
 const { data: team, pending, error } = await useFetch(`/api/teams/${teamId}`, {
   key: `team-${teamId}`,
 });
 
-// 获取组织的项目统计
+// 获取团队的项目统计
 const projectCount = computed(() => team.value?.projects?.length || 0);
 
-// 获取组织的POI统计
+// 获取团队的POI统计
 const poiCount = computed(() => {
   if (!team.value?.projects) return 0;
   return team.value.projects.reduce((acc, project) => acc + (project.poi?.length || 0), 0);
 });
 
-// 获取组织的成员统计
+// 获取团队的成员统计
 const memberCount = computed(() => team.value?.memberships?.length || 0);
 </script>
 
@@ -39,18 +39,18 @@ const memberCount = computed(() => team.value?.memberships?.length || 0);
       :sub-title="error.message"
     />
 
-    <!-- 组织概况 -->
+    <!-- 团队概况 -->
     <div v-else-if="team" class="space-y-6">
-      <!-- 组织基本信息 -->
+      <!-- 团队基本信息 -->
       <ElCard class="team-info">
         <template #header>
           <div class="flex justify-between items-center">
             <h2 class="text-xl font-bold">{{ team.name }}</h2>
-            <ElButton type="primary" size="small">编辑组织信息</ElButton>
+            <ElButton type="primary" size="small">编辑团队信息</ElButton>
           </div>
         </template>
         <ElDescriptions :column="1" border>
-          <ElDescriptionsItem label="组织描述">
+          <ElDescriptionsItem label="团队描述">
             {{ team.description || '暂无描述' }}
           </ElDescriptionsItem>
           <ElDescriptionsItem label="创建时间">
@@ -81,7 +81,7 @@ const memberCount = computed(() => team.value?.memberships?.length || 0);
       <ElCard>
         <template #header>
           <div class="flex justify-between items-center">
-            <h3 class="font-bold">组织地图概览</h3>
+            <h3 class="font-bold">团队地图概览</h3>
             <ElSwitch v-model="showMap" active-text="显示地图" inactive-text="隐藏地图" />
           </div>
         </template>
@@ -116,11 +116,11 @@ const memberCount = computed(() => team.value?.memberships?.length || 0);
       </ElCard>
       <ElEmpty v-else description="暂无项目" />
 
-      <!-- 组织成员 -->
+      <!-- 团队成员 -->
       <ElCard v-if="team.memberships && team.memberships.length > 0">
         <template #header>
           <div class="flex justify-between items-center">
-            <h3 class="font-bold">组织成员</h3>
+            <h3 class="font-bold">团队成员</h3>
             <ElButton type="primary" size="small" @click="navigateTo(`/teams/${teamId}/members`)">
               管理成员
             </ElButton>
@@ -146,12 +146,12 @@ const memberCount = computed(() => team.value?.memberships?.length || 0);
       <ElEmpty v-else description="暂无成员" />
     </div>
 
-    <!-- 组织不存在 -->
+    <!-- 团队不存在 -->
     <ElResult
       v-else
       icon="info"
-      title="组织不存在"
-      sub-title="请检查您访问的组织是否正确"
+      title="团队不存在"
+      sub-title="请检查您访问的团队是否正确"
     />
   </div>
 </template>

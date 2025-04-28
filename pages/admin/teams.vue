@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { user } = useUserSession();
-const { data, refresh } = useFetch("/api/admin/orgs");
+const { data, refresh } = useFetch("/api/admin/teams");
 
 // 弹窗控制
 const dialogVisible = ref(false);
@@ -25,7 +25,7 @@ const submitForm = async () => {
   await formRef.value.validate(async (valid: boolean) => {
     if (valid) {
       try {
-        await $fetch("/api/admin/orgs", {
+        await $fetch("/api/admin/teams", {
           method: "POST",
           body: form,
         });
@@ -47,23 +47,23 @@ const submitForm = async () => {
   });
 };
 
-const currentOrg = ref(null);
+const currentTeam = ref(null);
 const editDialogVisible = ref(false);
 
-const editOrg = (org) => {
-  currentOrg.value = org;
-  form.name = org.name;
-  form.description = org.description || "";
+const editTeam = (team) => {
+  currentTeam.value = team;
+  form.name = team.name;
+  form.description = team.description || "";
   editDialogVisible.value = true;
 };
 
-const updateOrg = async () => {
+const updateTeam = async () => {
   if (!formRef.value) return;
 
   await formRef.value.validate(async (valid: boolean) => {
     if (valid) {
       try {
-        await $fetch(`/api/admin/orgs/${currentOrg.value.id}`, {
+        await $fetch(`/api/admin/teams/${currentTeam.value.id}`, {
           method: "PUT",
           body: form,
         });
@@ -81,10 +81,10 @@ const updateOrg = async () => {
   });
 };
 
-const handleDelete = async (org) => {
+const handleDelete = async (team) => {
   try {
     await ElMessageBox.confirm(
-      '确定要删除组织 "' + org.name + '" 吗？此操作不可恢复。',
+      '确定要删除组织 "' + team.name + '" 吗？此操作不可恢复。',
       "删除确认",
       {
         confirmButtonText: "确定",
@@ -93,7 +93,7 @@ const handleDelete = async (org) => {
       }
     );
 
-    await $fetch(`/api/admin/orgs/${org.id}`, {
+    await $fetch(`/api/admin/teams/${team.id}`, {
       method: "DELETE",
     });
 
@@ -123,7 +123,7 @@ definePageMeta({ layout: "admin" });
     <ElTableColumn prop="name" label="名称" />
     <ElTableColumn label="操作">
       <template #default="scope">
-        <ElButton size="small" type="primary" text @click="editOrg(scope.row)">
+        <ElButton size="small" type="primary" text @click="editTeam(scope.row)">
           编辑</ElButton
         >
         <ElButton
@@ -171,7 +171,7 @@ definePageMeta({ layout: "admin" });
     </ElForm>
     <template #footer>
       <ElButton @click="editDialogVisible = false">取消</ElButton>
-      <ElButton type="primary" @click="updateOrg">保存</ElButton>
+      <ElButton type="primary" @click="updateTeam">保存</ElButton>
     </template>
   </ElDialog>
 </template>

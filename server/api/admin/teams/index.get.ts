@@ -2,5 +2,5 @@ import { requireAdminSession } from "~/server/utils/auth";
 
 export default defineEventHandler(async (event) => {
   await requireAdminSession(event);
-  return await prisma.organization.findMany();
+  return await prisma.team.findMany();
 });

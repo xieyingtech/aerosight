@@ -20,7 +20,7 @@ const route = useRoute();
           <i class="el-icon i-ri-user-settings-line"></i>
           <template #title>用户</template>
         </ElMenuItem>
-        <ElMenuItem index="/admin/orgs">
+        <ElMenuItem index="/admin/teams">
           <i class="el-icon i-ri-community-line"></i>
           <template #title>组织</template>
         </ElMenuItem>

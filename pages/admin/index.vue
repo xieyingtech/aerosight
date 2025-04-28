@@ -11,7 +11,7 @@ definePageMeta({ layout: "admin" });
       <ElStatistic title="用户" :value="data?.users" />
     </ElCol>
     <ElCol :span="6">
-      <ElStatistic title="组织" :value="data?.orgs" />
+      <ElStatistic title="团队" :value="data?.teams" />
     </ElCol>
     <ElCol :span="6">
       <ElStatistic title="项目" :value="data?.projects" />

@@ -50,7 +50,7 @@ const { data } = useFetch("/api/memberships");
         </ElMenuItem>
         <ElMenuItem>
           <i class="el-icon i-ri-settings-line"></i>
-          <template #title>组织管理</template>
+          <template #title>团队管理</template>
         </ElMenuItem>
         <ElMenuItem @click="collapsed = !collapsed">
           <i v-if="collapsed" class="el-icon i-ri-menu-unfold-fill"></i>

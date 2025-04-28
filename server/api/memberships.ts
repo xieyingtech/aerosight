@@ -6,7 +6,7 @@ export default defineEventHandler(async (event) => {
       userId: user.id,
     },
     include: {
-      organization: {
+      team: {
         select: {
           name: true,
         },

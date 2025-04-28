@@ -2,20 +2,20 @@ export default defineEventHandler(async (event) => {
   // 验证用户是否已登录
   const { user } = await requireUserSession(event);
   
-  // 获取组织ID
+  // 获取团队ID
   const id = parseInt(event.context.params?.id || '');
   if (isNaN(id)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Invalid organization ID'
+      statusMessage: 'Invalid team ID'
     });
   }
   
-  // 检查用户是否是该组织的成员
+  // 检查用户是否是该团队的成员
   const membership = await prisma.membership.findFirst({
     where: {
       userId: user.id,
-      organizationId: id
+      teamId: id
     }
   });
   
@@ -23,12 +23,12 @@ export default defineEventHandler(async (event) => {
   if (!membership && !user.admin) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Organization not found'
+      statusMessage: 'Team not found'
     });
   }
   
-  // 获取组织详细信息
-  const organization = await prisma.organization.findUnique({
+  // 获取团队详细信息
+  const team = await prisma.team.findUnique({
     where: { id },
     include: {
       projects: {
@@ -49,12 +49,12 @@ export default defineEventHandler(async (event) => {
     }
   });
   
-  if (!organization) {
+  if (!team) {
     throw createError({
       statusCode: 404,
-      statusMessage: 'Organization not found'
+      statusMessage: 'Team not found'
     });
   }
   
-  return organization;
+  return team;
 });
