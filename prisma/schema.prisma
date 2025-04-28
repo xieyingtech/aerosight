@@ -23,6 +23,7 @@ model User {
 model Organization {
   id          Int          @id @default(autoincrement())
   name        String
+  description String?
   memberships Membership[]
   projects    Project[]
 }

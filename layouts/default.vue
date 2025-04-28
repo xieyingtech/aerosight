@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { user, loggedIn, clear } = useUserSession();
-const { data } = useFetch("/api/user");
+// const { data } = useFetch("/api/user");
 const isSmallScreen = useMediaQuery("(max-width: 768px)");
 const showSidebar = ref(false);
 
@@ -18,7 +18,7 @@ const appConfig = useAppConfig();
           {{ appConfig.site.title }}
         </ElMenuItem>
         <ElSubMenu v-if="loggedIn" index="profile">
-          <template #title>{{ data?.username }}</template>
+          <template #title>{{ user.username }}</template>
           <ElMenuItem @click="navigateTo('/profile')">个人中心</ElMenuItem>
           <ElMenuItem v-if="user?.admin" @click="navigateTo('/admin')"
             >管理后台</ElMenuItem
@@ -33,11 +33,11 @@ const appConfig = useAppConfig();
     <ElContainer>
       <ElAside
         v-if="!isSmallScreen || showSidebar"
-        class="max-md:absolute max-md:shadow top-60px bottom-0 z-10"
+        class="max-md:absolute max-md:shadow top-60px bottom-0 z-2"
       >
         <slot name="sidebar" />
       </ElAside>
-      <ElContainer class="z-0">
+      <ElContainer>
         <slot />
       </ElContainer>
     </ElContainer>

@@ -22,4 +22,10 @@ body {
 .el-menu--vertical:not(.el-menu--collapse) {
   width: 250px;
 }
+
+@media (max-width: 767.9px) {
+  .el-dialog {
+    width: 100% !important;
+  }
+}
 </style>

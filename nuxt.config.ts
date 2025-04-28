@@ -3,9 +3,9 @@ export default defineNuxtConfig({
   modules: [
     "nuxt-auth-utils",
     "nuxt-echarts",
-    "@unocss/nuxt",
     "@element-plus/nuxt",
     "@nuxtjs/leaflet",
+    "@unocss/nuxt",
     "@vueuse/nuxt",
   ],
   echarts: {
