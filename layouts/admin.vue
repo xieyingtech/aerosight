@@ -1,51 +1,65 @@
 <script setup lang="ts">
-const collapsed = ref(false);
 const route = useRoute();
+
+// 顶部菜单项
+const menuItems = [
+  {
+    label: '仪表盘',
+    icon: 'i-ri-dashboard-line',
+    route: '/admin'
+  },
+  {
+    label: '用户',
+    icon: 'i-ri-user-settings-line',
+    route: '/admin/users'
+  },
+  {
+    label: '组织',
+    icon: 'i-ri-organization-chart',
+    route: '/admin/teams'
+  }
+];
 </script>
 
 <template>
-  <NuxtLayout name="default">
-    <template #sidebar>
-      <ElMenu
-        class="flex flex-col h-full"
-        :collapse="collapsed"
-        router
-        :default-active="route.path"
-      >
-        <ElMenuItem index="/admin">
-          <i class="el-icon i-ri-dashboard-3-line"></i>
-          <template #title>仪表盘</template>
-        </ElMenuItem>
-        <ElMenuItem index="/admin/users">
-          <i class="el-icon i-ri-user-settings-line"></i>
-          <template #title>用户</template>
-        </ElMenuItem>
-        <ElMenuItem index="/admin/teams">
-          <i class="el-icon i-ri-community-line"></i>
-          <template #title>组织</template>
-        </ElMenuItem>
-        <ElMenuItem @click="collapsed = !collapsed">
-          <i v-if="collapsed" class="el-icon i-ri-menu-unfold-fill"></i>
-          <i v-else class="el-icon i-ri-menu-fold-fill"></i>
-          <template #title>
-            <span v-if="collapsed">展开</span>
-            <span v-else>收起</span>
-          </template>
-        </ElMenuItem>
-      </ElMenu>
-    </template>
-    <ElMain>
+  <div class="layout-wrapper">
+    <div class="admin-header bg-primary text-white py-2 px-4 flex align-items-center">
+      <h1 class="text-xl m-0">管理后台</h1>
+    </div>
+    
+    <Menubar :model="menuItems">
+      <template #item="{ item, props, hasSubmenu }">
+        <router-link v-if="item.route" v-slot="{ href, navigate }" :to="item.route" custom>
+          <a v-ripple :href="href" v-bind="props.action" @click="navigate">
+            <span :class="item.icon" class="mr-2" />
+            <span>{{ item.label }}</span>
+          </a>
+        </router-link>
+        <a v-else v-ripple :href="item.url" :target="item.target" v-bind="props.action">
+          <span :class="item.icon" class="mr-2" />
+          <span>{{ item.label }}</span>
+        </a>
+      </template>
+    </Menubar>
+    
+    <div class="admin-content p-4">
       <slot />
-    </ElMain>
-  </NuxtLayout>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.el-header {
-  padding: 0;
+.layout-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.el-menu--vertical > .el-menu-item:nth-last-child(1) {
-  margin-top: auto;
+.admin-content {
+  flex-grow: 1;
+}
+
+:deep(.p-menubar) {
+  border-radius: 0;
 }
 </style>

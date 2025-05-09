@@ -1,6 +1,7 @@
 -- CreateTable
 CREATE TABLE "User" (
     "id" SERIAL NOT NULL,
+    "name" TEXT,
     "username" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "phone" TEXT,
@@ -32,7 +33,6 @@ CREATE TABLE "Project" (
 -- CreateTable
 CREATE TABLE "Membership" (
     "id" SERIAL NOT NULL,
-    "name" TEXT NOT NULL,
     "roles" TEXT[],
     "userId" INTEGER NOT NULL,
     "teamId" INTEGER NOT NULL,

@@ -1,59 +1,91 @@
 <script setup lang="ts">
-const { user, loggedIn, clear } = useUserSession();
-// const { data } = useFetch("/api/user");
-const isSmallScreen = useMediaQuery("(max-width: 768px)");
-const showSidebar = ref(false);
+import type { BreadcrumbProps } from "primevue";
 
+const props = defineProps<{
+  breadcrumb?: BreadcrumbProps["model"];
+  title?: string;
+}>();
+
+const { user, loggedIn, clear } = useUserSession();
+const { data: profile } = loggedIn
+  ? useFetch("/api/user", { watch: [user] })
+  : {};
 const appConfig = useAppConfig();
+const userMenu = useTemplateRef("userMenu");
+
+useHead({
+  title: props.title
+    ? `${props.title} | ${appConfig.site.title}`
+    : appConfig.site.title,
+});
+
+const userMenuItems = [
+  {
+    label: "个人中心",
+    icon: "i-ri-user-settings-line",
+    route: "/profile",
+  },
+  {
+    label: "退出登录",
+    icon: "i-ri-logout-box-line",
+    command: () => {
+      clear();
+      navigateTo("/");
+    },
+  },
+];
 </script>
 
 <template>
-  <ElContainer class="h-100vh">
-    <ElHeader>
-      <ElMenu mode="horizontal" :ellipsis="false">
-        <ElMenuItem class="md:hidden!" @click="showSidebar = !showSidebar">
-          <i class="el-icon i-ri-menu-fill"></i>
-        </ElMenuItem>
-        <ElMenuItem @click="navigateTo('/')">
-          {{ appConfig.site.title }}
-        </ElMenuItem>
-        <ElSubMenu v-if="loggedIn" index="profile">
-          <template #title>{{ user.username }}</template>
-          <ElMenuItem @click="navigateTo('/profile')">个人中心</ElMenuItem>
-          <ElMenuItem v-if="user?.admin" @click="navigateTo('/admin')"
-            >管理后台</ElMenuItem
-          >
-          <ElMenuItem @click="clear">
-            <div class="text-red">退出登录</div>
-          </ElMenuItem>
-        </ElSubMenu>
-        <ElMenuItem v-else @click="navigateTo('/login')">登录</ElMenuItem>
-      </ElMenu>
-    </ElHeader>
-    <ElContainer>
-      <ElAside
-        v-if="!isSmallScreen || showSidebar"
-        class="max-md:absolute max-md:shadow top-60px bottom-0 z-2"
-      >
-        <slot name="sidebar" />
-      </ElAside>
-      <ElContainer>
-        <slot />
-      </ElContainer>
-    </ElContainer>
-  </ElContainer>
+  <div class="layout-wrapper">
+    <Menubar class="rounded-0">
+      <template #start>
+        <Breadcrumb
+          :home="{ icon: 'i-ri-home-line', route: '/' }"
+          :model="breadcrumb"
+        >
+          <template #item="{ item, props }">
+            <NuxtLink v-slot="{ href, navigate }" :to="item.route" custom>
+              <a :href="href" v-bind="props.action" @click="navigate">
+                <span :class="[item.icon, 'text-color']" />
+                <span class="text-primary font-semibold">{{ item.label }}</span>
+              </a>
+            </NuxtLink>
+          </template>
+        </Breadcrumb>
+      </template>
+
+      <template #end>
+        <Avatar
+          v-if="user"
+          @click="userMenu?.toggle"
+          class="cursor-pointer select-none"
+        >
+          {{ (profile?.name || profile?.username)?.charAt(0) }}
+        </Avatar>
+        <Button
+          v-else
+          label="登录"
+          icon="i-ri-login-box-line"
+          @click="navigateTo('/login')"
+        />
+        <Menu :model="userMenuItems" :popup="true" ref="userMenu">
+          <template #item="{ item, props }">
+            <NuxtLink v-slot="{ href, navigate }" :to="item.route" custom>
+              <a v-ripple :href="href" v-bind="props.action" @click="navigate">
+                <span :class="item.icon" />
+                <span class="ml-2">{{ item.label }}</span>
+              </a>
+            </NuxtLink>
+          </template>
+        </Menu>
+      </template>
+    </Menubar>
+
+    <div class="content">
+      <slot />
+    </div>
+  </div>
 </template>
 
-<style scoped>
-.el-header {
-  padding: 0;
-}
-
-.el-menu--horizontal > .el-menu-item:nth-child(2) {
-  margin-right: auto;
-}
-
-.el-aside {
-  width: auto;
-}
-</style>
+<style scoped></style>

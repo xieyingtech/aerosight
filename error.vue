@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import type { NuxtError } from "#app";
-
 const props = defineProps({
   error: Object as () => NuxtError,
 });
-
-console.error(props.error);
 </script>
 
 <template>
-  <NuxtLayout>
-    <ElEmpty :description="error?.message">
-      <ElButton type="primary" @click="navigateTo('/')">返回首页</ElButton>
-    </ElEmpty>
+  <NuxtLayout :title="props.error?.statusCode">
+    <div class="mx-auto p-4 text-center w-full max-w-md">
+      <h1>{{ error?.statusCode }}</h1>
+      <p>{{ error }}</p>
+    </div>
   </NuxtLayout>
 </template>
