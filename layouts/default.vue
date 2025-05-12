@@ -37,8 +37,8 @@ const userMenuItems = [
 </script>
 
 <template>
-  <div class="layout-wrapper">
-    <Menubar class="rounded-0">
+  <header>
+    <Menubar class="b-none">
       <template #start>
         <Breadcrumb
           :home="{ icon: 'i-ri-home-line', route: '/' }"
@@ -81,10 +81,11 @@ const userMenuItems = [
         </Menu>
       </template>
     </Menubar>
+    <slot name="header" />
+  </header>
 
-    <div class="content">
-      <slot />
-    </div>
+  <div class="p-4">
+    <slot />
   </div>
 </template>
 

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 const { user } = useUserSession();
-const { data } = useFetch("/api/admin/stats");
+// const { data } = useFetch("/api/admin/stats");
 
 definePageMeta({ layout: "admin" });
 </script>
 
 <template>
-  <div class="grid">
+  <!-- <div class="grid">
     <div class="col-12 md:col-3">
       <Card class="text-center">
         <template #title>用户</template>
@@ -43,5 +43,5 @@ definePageMeta({ layout: "admin" });
         </template>
       </Card>
     </div>
-  </div>
+  </div> -->
 </template>
