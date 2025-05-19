@@ -2,7 +2,7 @@
 const route = useRoute();
 
 // 顶部菜单项
-const menuItems = [
+const items = [
   {
     label: "仪表盘",
     icon: "i-ri-dashboard-line",
@@ -24,28 +24,41 @@ const menuItems = [
 <template>
   <NuxtLayout name="default">
     <template #header>
-      <!-- <Tabs value="/dashboard">
-      <TabList>
-        <Tab v-for="tab in items" :key="tab.label" :value="tab.route">
-          <router-link
-            v-if="tab.route"
+      <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
+        <template #item="{ item, props, hasSubmenu }">
+          <NuxtLink
+            v-if="item.route"
             v-slot="{ href, navigate }"
-            :to="tab.route"
+            :to="item.route"
             custom
           >
-            <a
-              v-ripple
-              :href="href"
-              @click="navigate"
-              class="flex items-center gap-2 text-inherit"
-            >
-              <i :class="tab.icon" />
-              <span>{{ tab.label }}</span>
+            <a v-ripple :href="href" v-bind="props.action" @click="navigate">
+              <span :class="item.icon" class="mr-2" />
+              <span>{{ item.label }}</span>
             </a>
-          </router-link>
-        </Tab>
-      </TabList>
-    </Tabs> -->
+          </NuxtLink>
+          <a
+            v-else-if="item.items && item.items.length"
+            v-ripple
+            v-bind="props.action"
+          >
+            <span :class="item.icon" class="mr-2" />
+            <span>{{ item.label }}</span>
+            <span v-if="hasSubmenu" class="i-ri-arrow-down-s-line ml-2" />
+          </a>
+          <a
+            v-else
+            v-ripple
+            :href="item.url"
+            :target="item.target"
+            v-bind="props.action"
+          >
+            <span :class="item.icon" class="mr-2" />
+            <span>{{ item.label }}</span>
+          </a>
+        </template>
+      </Menubar>
     </template>
+    <slot />
   </NuxtLayout>
 </template>

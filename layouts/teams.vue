@@ -57,46 +57,45 @@ const items = computed(() => [
 </script>
 
 <template>
-  <div class="layout-wrapper">
-    <Menubar :model="items">
-      <template #item="{ item, props, hasSubmenu }">
-        <router-link
-          v-if="item.route"
-          v-slot="{ href, navigate }"
-          :to="item.route"
-          custom
-        >
-          <a v-ripple :href="href" v-bind="props.action" @click="navigate">
+  <NuxtLayout name="default">
+    <template #header>
+      <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
+        <template #item="{ item, props, hasSubmenu }">
+          <NuxtLink
+            v-if="item.route"
+            v-slot="{ href, navigate }"
+            :to="item.route"
+            custom
+          >
+            <a v-ripple :href="href" v-bind="props.action" @click="navigate">
+              <span :class="item.icon" class="mr-2" />
+              <span>{{ item.label }}</span>
+            </a>
+          </NuxtLink>
+          <a
+            v-else-if="item.items && item.items.length"
+            v-ripple
+            v-bind="props.action"
+          >
+            <span :class="item.icon" class="mr-2" />
+            <span>{{ item.label }}</span>
+            <span v-if="hasSubmenu" class="i-ri-arrow-down-s-line ml-2" />
+          </a>
+          <a
+            v-else
+            v-ripple
+            :href="item.url"
+            :target="item.target"
+            v-bind="props.action"
+          >
             <span :class="item.icon" class="mr-2" />
             <span>{{ item.label }}</span>
           </a>
-        </router-link>
-        <a
-          v-else-if="item.items && item.items.length"
-          v-ripple
-          v-bind="props.action"
-        >
-          <span :class="item.icon" class="mr-2" />
-          <span>{{ item.label }}</span>
-          <span v-if="hasSubmenu" class="i-ri-arrow-down-s-line ml-2" />
-        </a>
-        <a
-          v-else
-          v-ripple
-          :href="item.url"
-          :target="item.target"
-          v-bind="props.action"
-        >
-          <span :class="item.icon" class="mr-2" />
-          <span>{{ item.label }}</span>
-        </a>
-      </template>
-    </Menubar>
-
-    <div class="content p-4">
-      <slot />
-    </div>
-  </div>
+        </template>
+      </Menubar>
+    </template>
+    <slot />
+  </NuxtLayout>
 </template>
 
 <style scoped>

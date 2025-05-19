@@ -38,7 +38,7 @@ const userMenuItems = [
 
 <template>
   <header>
-    <Menubar class="b-none">
+    <Menubar class="rounded-0 b-x-0 not-last:b-b-0">
       <template #start>
         <Breadcrumb
           :home="{ icon: 'i-ri-home-line', route: '/' }"

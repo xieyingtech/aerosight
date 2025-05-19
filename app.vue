@@ -6,7 +6,9 @@ import "@unocss/reset/normalize.css";
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+
   <Toast />
+  <ConfirmDialog />
 </template>
 
 <style>
