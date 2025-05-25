@@ -34,7 +34,7 @@ const submitForm = async () => {
     toast.add({
       severity: "success",
       summary: "成功",
-      detail: "组织创建成功",
+      detail: "团队创建成功",
       life: 3000,
     });
     dialogVisible.value = false;
@@ -50,7 +50,7 @@ const submitForm = async () => {
     toast.add({
       severity: "error",
       summary: "错误",
-      detail: "创建组织失败",
+      detail: "创建团队失败",
       life: 3000,
     });
     console.error(error);
@@ -104,7 +104,7 @@ const updateTeam = async () => {
 
 const handleDelete = async (team) => {
   confirmService.require({
-    message: `确定要删除组织 "${team.name}" 吗？此操作不可恢复。`,
+    message: `确定要删除团队 "${team.name}" 吗？此操作不可恢复。`,
     header: "删除确认",
     icon: "pi pi-exclamation-triangle",
     acceptLabel: "确定",
@@ -139,7 +139,7 @@ definePageMeta({ layout: "admin" });
 </script>
 
 <template>
-  <Button label="创建组织" icon="i-ri-add-line" @click="dialogVisible = true" />
+  <Button label="创建团队" icon="i-ri-add-line" @click="dialogVisible = true" />
   <DataTable :value="data ?? []" stripedRows>
     <Column field="id" header="ID" />
     <Column field="name" header="名称" />
@@ -160,29 +160,29 @@ definePageMeta({ layout: "admin" });
     </Column>
   </DataTable>
 
-  <!-- 创建组织对话框 -->
+  <!-- 创建团队对话框 -->
   <Dialog
     v-model:visible="dialogVisible"
-    header="创建组织"
+    header="创建团队"
     modal
     :style="{ width: '450px' }"
     :closable="true"
   >
     <div class="p-fluid">
       <div class="field mb-4">
-        <label for="name" class="block mb-1">组织名称</label>
+        <label for="name" class="block mb-1">团队名称</label>
         <InputText
           id="name"
           v-model="form.name"
           :class="{ 'p-invalid': submitted && !form.name }"
         />
         <small v-if="submitted && !form.name" class="p-error"
-          >组织名称不能为空</small
+          >团队名称不能为空</small
         >
       </div>
 
       <div class="field">
-        <label for="description" class="block mb-1">组织描述</label>
+        <label for="description" class="block mb-1">团队描述</label>
         <Textarea
           id="description"
           v-model="form.description"
@@ -203,29 +203,29 @@ definePageMeta({ layout: "admin" });
     </template>
   </Dialog>
 
-  <!-- 编辑组织对话框 -->
+  <!-- 编辑团队对话框 -->
   <Dialog
     v-model:visible="editDialogVisible"
-    header="编辑组织"
+    header="编辑团队"
     modal
     :style="{ width: '450px' }"
     :closable="true"
   >
     <div class="p-fluid">
       <div class="field mb-4">
-        <label for="edit-name" class="block mb-1">组织名称</label>
+        <label for="edit-name" class="block mb-1">团队名称</label>
         <InputText
           id="edit-name"
           v-model="form.name"
           :class="{ 'p-invalid': submitted && !form.name }"
         />
         <small v-if="submitted && !form.name" class="p-error"
-          >组织名称不能为空</small
+          >团队名称不能为空</small
         >
       </div>
 
       <div class="field">
-        <label for="edit-description" class="block mb-1">组织描述</label>
+        <label for="edit-description" class="block mb-1">团队描述</label>
         <Textarea
           id="edit-description"
           v-model="form.description"

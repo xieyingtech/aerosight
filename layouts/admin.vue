@@ -14,7 +14,7 @@ const items = [
     route: "/admin/users",
   },
   {
-    label: "组织",
+    label: "团队",
     icon: "i-ri-organization-chart",
     route: "/admin/teams",
   },
