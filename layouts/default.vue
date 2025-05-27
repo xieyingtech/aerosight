@@ -12,6 +12,7 @@ const { data: profile } = loggedIn
   : {};
 const appConfig = useAppConfig();
 const userMenu = useTemplateRef("userMenu");
+const route = useRoute();
 
 useHead({
   title: props.title
@@ -40,19 +41,21 @@ const userMenuItems = [
   <header>
     <Menubar class="rounded-0 b-x-0 not-last:b-b-0">
       <template #start>
-        <Breadcrumb
-          :home="{ icon: 'i-ri-home-line', route: '/' }"
-          :model="breadcrumb"
-        >
-          <template #item="{ item, props }">
-            <NuxtLink v-slot="{ href, navigate }" :to="item.route" custom>
-              <a :href="href" v-bind="props.action" @click="navigate">
-                <span :class="[item.icon, 'text-color']" />
-                <span class="text-primary font-semibold">{{ item.label }}</span>
-              </a>
-            </NuxtLink>
-          </template>
-        </Breadcrumb>
+        <div class="flex items-center gap-3">
+          <Breadcrumb
+            :home="{ icon: 'i-ri-home-line', route: '/' }"
+            :model="breadcrumb"
+          >
+            <template #item="{ item, props }">
+              <NuxtLink v-slot="{ href, navigate }" :to="item.route" custom>
+                <a :href="href" v-bind="props.action" @click="navigate">
+                  <span :class="[item.icon, 'text-color']" />
+                  <span class="text-primary font-semibold">{{ item.label }}</span>
+                </a>
+              </NuxtLink>
+            </template>
+          </Breadcrumb>
+        </div>
       </template>
 
       <template #end>

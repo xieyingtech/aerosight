@@ -1,1 +1,1 @@
-<template>new</template>
+<template>123</template>

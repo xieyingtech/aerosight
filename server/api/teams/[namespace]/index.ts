@@ -2,12 +2,24 @@ export default defineEventHandler(async (event) => {
   // 验证用户是否已登录
   const { user } = await requireUserSession(event);
   
-  // 获取团队ID
-  const id = parseInt(event.context.params?.id || '');
-  if (isNaN(id)) {
+  // 获取团队namespace
+  const namespace = event.context.params?.namespace;
+  if (!namespace) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Invalid team ID'
+      statusMessage: 'Invalid team namespace'
+    });
+  }
+  
+  // 检查用户是否是该团队的成员
+  const team = await prisma.team.findUnique({
+    where: { namespace }
+  });
+  
+  if (!team) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Team not found'
     });
   }
   
@@ -15,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const membership = await prisma.membership.findFirst({
     where: {
       userId: user.id,
-      teamId: id
+      teamId: team.id
     }
   });
   
@@ -28,8 +40,8 @@ export default defineEventHandler(async (event) => {
   }
   
   // 获取团队详细信息
-  const team = await prisma.team.findUnique({
-    where: { id },
+  const teamDetails = await prisma.team.findUnique({
+    where: { namespace },
     include: {
       projects: {
         include: {
@@ -49,12 +61,5 @@ export default defineEventHandler(async (event) => {
     }
   });
   
-  if (!team) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Team not found'
-    });
-  }
-  
-  return team;
+  return teamDetails;
 });

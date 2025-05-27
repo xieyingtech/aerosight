@@ -1,16 +1,17 @@
 <script setup lang="ts">
 const route = useRoute();
-const selectedTeam = ref(route.params.teamid);
+const { data: teams } = useFetch("/api/teams");
 
-const { data } = useFetch("/api/memberships");
+// 当前选中的团队
+const selectedTeam = ref(route.params.namespace);
 
 // 创建团队选择下拉菜单的选项
 const teamOptions = computed(() => {
-  if (!data.value) return [];
-  return data.value.map((membership) => ({
-    label: membership.team.name,
-    value: membership.teamId,
-    command: () => navigateTo(`/teams/${membership.teamId}`),
+  if (!teams.value) return [];
+  return teams.value.map((team) => ({
+    label: team.name,
+    value: team.namespace,
+    command: () => navigateTo(`/teams/${team.namespace}`),
   }));
 });
 
@@ -24,34 +25,34 @@ watch(selectedTeam, (newValue) => {
 // 侧边菜单项
 const items = computed(() => [
   {
-    label: "团队选择",
-    icon: "i-ri-team-line",
-    items: teamOptions.value,
-  },
-  {
-    label: "布防点",
-    icon: "i-ri-map-pin-line",
-    route: `/teams/${route.params.teamid}`,
+    label: "概况",
+    icon: "i-ri-dashboard-line",
+    route: `/teams/${route.params.namespace}`,
   },
   {
     label: "任务",
-    icon: "i-ri-flag-line",
-    route: `/teams/${route.params.teamid}/tasks`,
+    icon: "i-ri-task-line",
+    route: `/teams/${route.params.namespace}/tasks`,
   },
   {
-    label: "无人机",
-    icon: "i-ri-plane-line",
-    route: `/teams/${route.params.teamid}/drones`,
+    label: "事件",
+    icon: "i-ri-calendar-event-line",
+    route: `/teams/${route.params.namespace}/events`,
+  },
+  {
+    label: "设备",
+    icon: "i-ri-device-line",
+    route: `/teams/${route.params.namespace}/devices`,
   },
   {
     label: "成员",
     icon: "i-ri-user-3-line",
-    route: `/teams/${route.params.teamid}/members`,
+    route: `/teams/${route.params.namespace}/members`,
   },
   {
-    label: "团队管理",
+    label: "设置",
     icon: "i-ri-settings-line",
-    route: `/teams/${route.params.teamid}/settings`,
+    route: `/teams/${route.params.namespace}/settings`,
   },
 ]);
 </script>
@@ -60,6 +61,16 @@ const items = computed(() => [
   <NuxtLayout name="default">
     <template #header>
       <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
+        <template #start>
+          <Dropdown
+            v-if="teamOptions.length > 0"
+            :options="teamOptions"
+            v-model="selectedTeam"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="选择团队"
+          />
+        </template>
         <template #item="{ item, props, hasSubmenu }">
           <NuxtLink
             v-if="item.route"
