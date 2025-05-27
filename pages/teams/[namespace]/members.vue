@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({
-  layout: team,
+  layout: "team",
 });
 
 const route = useRoute();

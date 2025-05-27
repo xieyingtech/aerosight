@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({
-  layout: team,
+  layout: "team",
 });
 
 const route = useRoute();
@@ -135,7 +135,7 @@ async function createProject() {
             <template #title>
               <div
                 class="cursor-pointer"
-                @click="navigateTo(`/teams/${namespace}/projects/${project.id}/poi`)"
+                @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
               >
                 {{ project.name }}
               </div>
@@ -150,11 +150,11 @@ async function createProject() {
             <template #footer>
               <div class="flex justify-end pt-3">
                 <Button
-                  label="查看布防点"
-                  icon="i-ri-map-pin-line"
+                  label="查看项目"
+                  icon="i-ri-folder-open-line"
                   outlined
                   size="small"
-                  @click="navigateTo(`/teams/${namespace}/projects/${project.id}/poi`)"
+                  @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
                 />
               </div>
             </template>
