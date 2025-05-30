@@ -1,7 +1,7 @@
 export default defineEventHandler(async (event) => {
   const adminExists = await prisma.user.findFirst({
     where: {
-      admin: true,
+      systemAdmin: true, // Changed from admin
     },
   });
 
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       email,
       username,
       password: await hashPassword(password),
-      admin: true,
+      systemAdmin: true, // Changed from admin
     },
   });
 });

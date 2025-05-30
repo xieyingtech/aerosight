@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
       description: body.description,
     },
     include: {
-      memberships: true,
+      teamMembers: true, // Changed from memberships
     },
   });
 });

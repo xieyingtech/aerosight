@@ -13,21 +13,45 @@ export default defineEventHandler(async (event) => {
 
   const body = await readValidatedBody(event, createTeamSchema.parse);
 
+  const ownerRole = await prisma.role.findFirst({
+    where: { name: "Owner", teamId: null }, // 假设 "Owner" 是一个全局角色
+  });
+
+  if (!ownerRole) {
+    // 如果找不到 "Owner" 角色，则抛出错误，因为团队创建者应具有此角色
+    throw createError({
+      statusCode: 500,
+      message: "Default 'Owner' role not found. Please ensure it is created.",
+    });
+  }
+
   return await prisma.team.create({
     data: {
       name: body.name,
       namespace: body.namespace,
       description: body.description,
-      // 同时创建创建者的成员身份，设置为管理员角色
-      memberships: {
+      teamMembers: {
         create: {
           userId: user.id,
-          roles: ["admin"],
+          memberRoles: {
+            create: {
+              role: { connect: { id: ownerRole.id } },
+            },
+          },
         },
       },
     },
     include: {
-      memberships: true,
+      teamMembers: {
+        include: {
+          user: true,
+          memberRoles: {
+            include: {
+              role: true,
+            },
+          },
+        },
+      },
     },
   });
 });

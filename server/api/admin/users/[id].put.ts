@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
     username: body.username,
     phone: body.phone,
     email: body.email,
-    admin: body.admin,
+    systemAdmin: body.admin, // Changed from admin to systemAdmin
   };
 
   if (body.password) {

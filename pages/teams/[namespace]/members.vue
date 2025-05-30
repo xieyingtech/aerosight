@@ -12,7 +12,7 @@ const {
   pending,
   error,
 } = await useFetch(`/api/teams/${namespace}`, {
-  key: `team-${namespace}-members`,
+  key: `team-${namespace}-members`, // Key can remain, or be updated for clarity
 });
 
 // 添加成员对话框控制
@@ -42,10 +42,13 @@ async function addMember() {
   if (!validateAddMemberForm()) return;
   
   try {
-    // 实现添加成员的API调用
+    // API endpoint for adding members needs to be aware of the new TeamMember/MemberRole structure
     await $fetch(`/api/teams/${namespace}/members`, {
       method: 'POST',
-      body: addMemberForm
+      body: {
+        username: addMemberForm.username, // Or userId
+        roles: addMemberForm.roles, // Array of role names/IDs
+      }
     });
     
     // 刷新数据
@@ -60,15 +63,15 @@ async function addMember() {
 }
 
 // 移除成员确认
-function confirmRemoveMember(memberId) {
+function confirmRemoveMember(memberId: number) {
   // 实现确认对话框
 }
 
 // 移除成员
-async function removeMember(memberId) {
+async function removeMember(teamMemberId: number) { // Assuming memberId is now teamMemberId
   try {
-    // 实现移除成员的API调用
-    await $fetch(`/api/teams/${namespace}/members/${memberId}`, {
+    // API endpoint for removing members
+    await $fetch(`/api/teams/${namespace}/members/${teamMemberId}`, {
       method: 'DELETE'
     });
     
@@ -108,26 +111,25 @@ async function removeMember(memberId) {
     </Message>
     
     <!-- 成员列表 -->
-    <Card v-else-if="team && team.memberships && team.memberships.length > 0">
+    <Card v-else-if="team && team.teamMembers && team.teamMembers.length > 0">
       <template #header>
         <div class="flex justify-between items-center">
           <h3 class="font-bold">{{ team.name }} 的成员列表</h3>
         </div>
       </template>
       <template #content>
-        <DataTable :value="team.memberships" stripedRows>
+        <DataTable :value="team.teamMembers" stripedRows>
           <Column field="user.username" header="用户名" />
-          <Column field="name" header="角色" />
-          <Column header="权限" :style="{ width: '200px' }">
+          <!-- Assuming the API formats roles as an array of strings -->
+          <Column field="roles" header="角色">
             <template #body="slotProps">
-              <div class="flex flex-wrap">
+              <div class="flex flex-wrap gap-1">
                 <Tag
-                  v-for="(role, index) in slotProps.data.roles"
+                  v-for="(roleName, index) in slotProps.data.roles"
                   :key="index"
                   severity="info"
-                  class="mr-1 mb-1"
                 >
-                  {{ role }}
+                  {{ roleName }}
                 </Tag>
               </div>
             </template>
@@ -145,7 +147,7 @@ async function removeMember(memberId) {
                 text 
                 severity="danger" 
                 aria-label="删除" 
-                @click="confirmRemoveMember(slotProps.data.id)"
+                @click="confirmRemoveMember(slotProps.data.id)" 
               />
             </template>
           </Column>

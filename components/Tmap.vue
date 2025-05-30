@@ -17,6 +17,35 @@ const props = defineProps({
     type: Array,
     default: () => [39.906217, 116.3912757],
   },
+  clickable: {
+    type: Boolean,
+    default: false,
+  },
+  tempMarker: {
+    type: Array,
+    default: null,
+  },
+});
+
+const emit = defineEmits(['map-click']);
+
+// 处理地图点击事件
+const handleMapClick = (event) => {
+  if (props.clickable) {
+    emit('map-click', {
+      latlng: {
+        lat: event.latlng.lat,
+        lng: event.latlng.lng,
+      },
+    });
+  }
+};
+
+// 添加调试信息
+watch(() => props.tempMarker, (newMarker) => {
+  if (newMarker) {
+    console.log('临时标记位置:', newMarker);
+  }
 });
 </script>
 
@@ -28,6 +57,7 @@ const props = defineProps({
         :center
         :options="{ attributionControl: false }"
         :use-global-leaflet="false"
+        @click="handleMapClick"
       >
         <LLayerGroup name="天地图矢量" layerType="base">
           <LTileLayer :url="tiandituVec" />
@@ -43,8 +73,19 @@ const props = defineProps({
           prefix="天地图 - GS(2024)0568号"
           position="bottomright"
         />
+        
+        <!-- 临时标记（使用默认 Leaflet 标记） -->
+        <LMarker 
+          v-if="tempMarker" 
+          :lat-lng="tempMarker"
+        />
+        
         <slot />
       </LMap>
     </div>
   </ClientOnly>
 </template>
+
+<style>
+/* 移除所有自定义样式 */
+</style>

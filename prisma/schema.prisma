@@ -18,8 +18,8 @@ model User {
   password    String
   phone       String?      @unique
   email       String?      @unique
-  admin       Boolean      @default(false)
-  memberships Membership[]
+  systemAdmin Boolean      @default(false)
+  teamMembers TeamMember[]
 }
 
 model Team {
@@ -27,8 +27,42 @@ model Team {
   namespace   String       @unique
   name        String
   description String?
-  memberships Membership[]
+  teamMembers TeamMember[]
+  roles       Role[]
   projects    Project[]
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String
+  description String?
+  permissions Permission[]
+  memberRoles MemberRole[]
+  teamId      Int? // null teamId means this role is global
+  team        Team?        @relation(fields: [teamId], references: [id])
+}
+
+model TeamMember {
+  id          Int          @id @default(autoincrement())
+  userId      Int
+  teamId      Int
+  memberRoles MemberRole[]
+  user        User         @relation(fields: [userId], references: [id])
+  team        Team         @relation(fields: [teamId], references: [id])
+}
+
+model MemberRole {
+  id           Int        @id @default(autoincrement())
+  roleId       Int
+  teamMemberId Int
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id])
+  role         Role       @relation(fields: [roleId], references: [id])
+}
+
+enum Permission {
+  READ
+  WRITE
+  DELETE
 }
 
 model Project {
@@ -38,15 +72,6 @@ model Project {
   team        Team   @relation(fields: [teamId], references: [id])
   teamId      Int
   poi         POI[]
-}
-
-model Membership {
-  id     Int      @id @default(autoincrement())
-  roles  String[]
-  user   User     @relation(fields: [userId], references: [id])
-  userId Int
-  team   Team     @relation(fields: [teamId], references: [id])
-  teamId Int
 }
 
 model POI {

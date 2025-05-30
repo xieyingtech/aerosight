@@ -13,7 +13,7 @@ const form = reactive({
   email: "",
   phone: "",
   password: "",
-  admin: false,
+  systemAdmin: false, // Changed from admin
 });
 
 // 表单验证状态
@@ -63,7 +63,7 @@ const resetForm = () => {
   form.email = "";
   form.phone = "";
   form.password = "";
-  form.admin = false;
+  form.systemAdmin = false; // Changed from admin
   submitted.value = false;
 };
 
@@ -74,7 +74,7 @@ const editUser = (user) => {
   form.username = user.username;
   form.email = user.email || "";
   form.phone = user.phone || "";
-  form.admin = user.admin || false;
+  form.systemAdmin = user.systemAdmin || false; // Changed from admin
   form.password = ""; // 密码不回填
   editDialogVisible.value = true;
   submitted.value = false;
@@ -162,10 +162,10 @@ definePageMeta({ layout: "admin" });
     <Column field="username" header="用户名" />
     <Column field="email" header="邮箱" />
     <Column field="phone" header="电话" />
-    <Column field="admin" header="管理员">
+    <Column field="systemAdmin" header="系统管理员"> // Changed header text
       <template #body="slotProps">
-        <Tag :severity="slotProps.data.admin ? 'success' : 'info'">
-          {{ slotProps.data.admin ? "是" : "否" }}
+        <Tag :severity="slotProps.data.systemAdmin ? 'success' : 'info'"> // Changed field
+          {{ slotProps.data.systemAdmin ? "是" : "否" }} // Changed field
         </Tag>
       </template>
     </Column>
@@ -241,8 +241,8 @@ definePageMeta({ layout: "admin" });
 
       <div class="field mb-4">
         <div class="flex align-items-center">
-          <label for="admin" class="mr-2">管理员</label>
-          <InputSwitch id="admin" v-model="form.admin" />
+          <label for="admin" class="mr-2">系统管理员</label> // Changed label text
+          <InputSwitch id="admin" v-model="form.systemAdmin" /> // Changed v-model
         </div>
       </div>
     </div>
@@ -302,8 +302,8 @@ definePageMeta({ layout: "admin" });
 
       <div class="field mb-4">
         <div class="flex align-items-center">
-          <label for="edit-admin" class="mr-2">管理员</label>
-          <InputSwitch id="edit-admin" v-model="form.admin" />
+          <label for="edit-admin" class="mr-2">系统管理员</label> // Changed label text
+          <InputSwitch id="edit-admin" v-model="form.systemAdmin" /> // Changed v-model
         </div>
       </div>
     </div>

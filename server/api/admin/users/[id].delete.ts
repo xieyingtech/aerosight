@@ -23,8 +23,12 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  // 删除用户关联的所有membership
-  await prisma.membership.deleteMany({
+  // 删除用户关联的所有team memberships
+  // This will also require handling MemberRole if not cascaded by DB/Prisma
+  await prisma.memberRole.deleteMany({
+    where: { teamMember: { userId: parseInt(id) } },
+  });
+  await prisma.teamMember.deleteMany({ // Changed from membership
     where: { userId: parseInt(id) },
   });
 

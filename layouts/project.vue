@@ -1,27 +1,6 @@
 <script setup lang="ts">
 const route = useRoute();
-const { data: teams } = useFetch("/api/teams");
-
-// 当前选中的团队
-const selectedTeam = ref(route.params.namespace);
 const projectId = route.params.id;
-
-// 创建团队选择下拉菜单的选项
-const teamOptions = computed(() => {
-  if (!teams.value) return [];
-  return teams.value.map((team) => ({
-    label: team.name,
-    value: team.namespace,
-    command: () => navigateTo(`/teams/${team.namespace}`),
-  }));
-});
-
-// 监听团队变化
-watch(selectedTeam, (newValue) => {
-  if (newValue) {
-    navigateTo(`/teams/${newValue}`);
-  }
-});
 
 // 获取当前项目信息
 const { data: project } = useFetch(
@@ -59,28 +38,15 @@ const items = computed(() => [
 </script>
 
 <template>
-  <NuxtLayout name="default">
+  <NuxtLayout
+    name="default"
+    :breadcrumb=" [
+      { label: String(route.params.namespace), route: `/teams/${route.params.namespace}` },
+      { label: project?.name, route: `/teams/${route.params.namespace}/projects/${projectId}` },
+    ]"
+    :title="project?.name"
+  >
     <template #header>
-      <div class="flex items-center justify-between px-4 py-2 bg-gray-50 border-b">
-        <div class="flex items-center gap-2">
-          <Dropdown
-            v-if="teamOptions.length > 0"
-            :options="teamOptions"
-            v-model="selectedTeam"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="选择团队"
-          />
-          <span class="text-gray-400 mx-2">/</span>
-          <span class="font-medium">{{ project?.name }}</span>
-        </div>
-        <Button 
-          icon="i-ri-arrow-left-line"
-          text
-          @click="navigateTo(`/teams/${route.params.namespace}`)"
-          label="返回团队"
-        />
-      </div>
       <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
         <template #item="{ item, props, hasSubmenu }">
           <NuxtLink

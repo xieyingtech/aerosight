@@ -1,26 +1,5 @@
 <script setup lang="ts">
 const route = useRoute();
-const { data: teams } = useFetch("/api/teams");
-
-// 当前选中的团队
-const selectedTeam = ref(route.params.namespace);
-
-// 创建团队选择下拉菜单的选项
-const teamOptions = computed(() => {
-  if (!teams.value) return [];
-  return teams.value.map((team) => ({
-    label: team.name,
-    value: team.namespace,
-    command: () => navigateTo(`/teams/${team.namespace}`),
-  }));
-});
-
-// 监听团队变化
-watch(selectedTeam, (newValue) => {
-  if (newValue) {
-    navigateTo(`/teams/${newValue}`);
-  }
-});
 
 // 侧边菜单项
 const items = computed(() => [
@@ -58,19 +37,13 @@ const items = computed(() => [
 </script>
 
 <template>
-  <NuxtLayout name="default">
+  <NuxtLayout
+    name="default"
+    :breadcrumb="[{ label: String(route.params.namespace), route: `/teams/${route.params.namespace}` }]"
+    :title="route.params.namespace"
+  >
     <template #header>
       <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
-        <template #start>
-          <Dropdown
-            v-if="teamOptions.length > 0"
-            :options="teamOptions"
-            v-model="selectedTeam"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="选择团队"
-          />
-        </template>
         <template #item="{ item, props, hasSubmenu }">
           <NuxtLink
             v-if="item.route"

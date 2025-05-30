@@ -24,17 +24,20 @@ export default defineEventHandler(async (event) => {
   }
 
   // 检查用户是否是团队成员
-  const membership = await prisma.membership.findFirst({
+  const teamMember = await prisma.teamMember.findFirst({
     where: {
       userId: user.id,
       teamId: team.id,
     },
   });
 
-  if (!membership && !user.admin) {
+  // Fetch the full user object to check systemAdmin status
+  const fullUser = await prisma.user.findUnique({ where: { id: user.id } });
+
+  if (!teamMember && !fullUser?.systemAdmin) {
     throw createError({
       statusCode: 403,
-      message: '您不是该团队成员',
+      message: '您不是该团队成员或系统管理员',
     });
   }
 
