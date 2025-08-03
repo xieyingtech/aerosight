@@ -164,25 +164,25 @@ definePageMeta({ layout: "admin" });
         </template>
 
         <div class="space-y-4">
-          <UFormGroup label="用户名" name="username" :error="submitted && !form.username ? '用户名不能为空' : ''">
+          <UFormField label="用户名" name="username" :error="submitted && !form.username ? '用户名不能为空' : ''">
             <UInput v-model="form.username" placeholder="请输入用户名" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="密码" name="password" :error="submitted && !form.password ? '密码不能为空' : ''">
+          <UFormField label="密码" name="password" :error="submitted && !form.password ? '密码不能为空' : ''">
             <UInput v-model="form.password" type="password" placeholder="请输入密码" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="邮箱" name="email">
+          <UFormField label="邮箱" name="email">
             <UInput v-model="form.email" type="email" placeholder="请输入邮箱" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="电话" name="phone">
+          <UFormField label="电话" name="phone">
             <UInput v-model="form.phone" placeholder="请输入电话" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="系统管理员" name="systemAdmin">
+          <UFormField label="系统管理员" name="systemAdmin">
             <UToggle v-model="form.systemAdmin" />
-          </UFormGroup>
+          </UFormField>
         </div>
 
         <template #footer>
@@ -218,25 +218,25 @@ definePageMeta({ layout: "admin" });
         </template>
 
         <div class="space-y-4">
-          <UFormGroup label="用户名" name="username" :error="submitted && !form.username ? '用户名不能为空' : ''">
+          <UFormField label="用户名" name="username" :error="submitted && !form.username ? '用户名不能为空' : ''">
             <UInput v-model="form.username" placeholder="请输入用户名" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="密码" name="password">
+          <UFormField label="密码" name="password">
             <UInput v-model="form.password" type="password" placeholder="留空表示不修改密码" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="邮箱" name="email">
+          <UFormField label="邮箱" name="email">
             <UInput v-model="form.email" type="email" placeholder="请输入邮箱" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="电话" name="phone">
+          <UFormField label="电话" name="phone">
             <UInput v-model="form.phone" placeholder="请输入电话" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="系统管理员" name="systemAdmin">
+          <UFormField label="系统管理员" name="systemAdmin">
             <UToggle v-model="form.systemAdmin" />
-          </UFormGroup>
+          </UFormField>
         </div>
 
         <template #footer>

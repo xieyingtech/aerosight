@@ -291,14 +291,14 @@ async function submitForm() {
           <p>您目前没有任何团队，创建一个新团队开始使用</p>
 
           <div class="space-y-4">
-            <UFormGroup label="团队名称" :error="teamFormErrors.name">
+            <UFormField label="团队名称" :error="teamFormErrors.name">
               <UInput
                 v-model="teamForm.name"
                 placeholder="输入团队名称"
               />
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="团队标识" :error="teamFormErrors.namespace">
+            <UFormField label="团队标识" :error="teamFormErrors.namespace">
               <UInput
                 v-model="teamForm.namespace"
                 placeholder="自动生成的团队标识"
@@ -306,15 +306,15 @@ async function submitForm() {
               <template #help>
                 标识只能包含小写字母、数字和横线(-)
               </template>
-            </UFormGroup>
+            </UFormField>
 
-            <UFormGroup label="团队描述">
+            <UFormField label="团队描述">
               <UTextarea
                 v-model="teamForm.description"
                 placeholder="请输入团队描述"
                 :rows="3"
               />
-            </UFormGroup>
+            </UFormField>
           </div>
         </div>
 

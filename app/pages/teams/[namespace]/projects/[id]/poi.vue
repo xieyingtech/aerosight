@@ -327,39 +327,39 @@ watch(tempMarkerPosition, (newPos) => {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- 左侧：表单 -->
           <div class="space-y-4">
-            <UFormGroup label="名称" name="name">
+            <UFormField label="名称" name="name">
               <UInput 
                 v-model="currentPoi!.name" 
                 placeholder="请输入布防点名称"
               />
-            </UFormGroup>
+            </UFormField>
             
-            <UFormGroup label="描述" name="description">
+            <UFormField label="描述" name="description">
               <UTextarea
                 v-model="currentPoi!.description"
                 placeholder="请输入布防点描述"
                 :rows="3"
               />
-            </UFormGroup>
+            </UFormField>
             
             <div class="grid grid-cols-2 gap-4">
-              <UFormGroup label="纬度" name="latitude">
+              <UFormField label="纬度" name="latitude">
                 <UInput
                   v-model.number="currentPoi!.latitude"
                   type="number"
                   step="0.000001"
                   placeholder="纬度"
                 />
-              </UFormGroup>
+              </UFormField>
               
-              <UFormGroup label="经度" name="longitude">
+              <UFormField label="经度" name="longitude">
                 <UInput
                   v-model.number="currentPoi!.longitude"
                   type="number"
                   step="0.000001"
                   placeholder="经度"
                 />
-              </UFormGroup>
+              </UFormField>
             </div>
 
             <!-- 地图选点提示 -->

@@ -136,13 +136,13 @@ definePageMeta({ layout: "admin" });
         </template>
 
         <div class="space-y-4">
-          <UFormGroup label="团队名称" name="name" :error="submitted && !form.name ? '团队名称不能为空' : ''">
+          <UFormField label="团队名称" name="name" :error="submitted && !form.name ? '团队名称不能为空' : ''">
             <UInput v-model="form.name" placeholder="请输入团队名称" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="团队描述" name="description">
+          <UFormField label="团队描述" name="description">
             <UTextarea v-model="form.description" placeholder="请输入团队描述" :rows="3" />
-          </UFormGroup>
+          </UFormField>
         </div>
 
         <template #footer>
@@ -178,13 +178,13 @@ definePageMeta({ layout: "admin" });
         </template>
 
         <div class="space-y-4">
-          <UFormGroup label="团队名称" name="name" :error="submitted && !form.name ? '团队名称不能为空' : ''">
+          <UFormField label="团队名称" name="name" :error="submitted && !form.name ? '团队名称不能为空' : ''">
             <UInput v-model="form.name" placeholder="请输入团队名称" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="团队描述" name="description">
+          <UFormField label="团队描述" name="description">
             <UTextarea v-model="form.description" placeholder="请输入团队描述" :rows="3" />
-          </UFormGroup>
+          </UFormField>
         </div>
 
         <template #footer>

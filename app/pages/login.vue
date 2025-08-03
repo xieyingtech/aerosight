@@ -40,13 +40,13 @@ const onSubmit = async (event: any) => {
       @submit="onSubmit"
       class="space-y-4"
     >
-      <UFormGroup label="用户名" name="username">
+      <UFormField label="用户名" name="username">
         <UInput v-model="state.username" placeholder="请输入用户名" />
-      </UFormGroup>
+      </UFormField>
       
-      <UFormGroup label="密码" name="password">
+      <UFormField label="密码" name="password">
         <UInput v-model="state.password" type="password" placeholder="请输入密码" />
-      </UFormGroup>
+      </UFormField>
       
       <UButton type="submit" block>
         登录

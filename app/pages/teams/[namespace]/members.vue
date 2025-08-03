@@ -196,14 +196,14 @@ async function removeMember(teamMemberId: number) { // Assuming memberId is now 
           </div>
         </template>
         <div class="space-y-4">
-          <UFormGroup label="用户名">
+          <UFormField label="用户名">
             <UInput
               v-model="addMemberForm.username"
               placeholder="输入用户名"
             />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="角色">
+          <UFormField label="角色">
             <USelectMenu
               v-model="addMemberForm.roles"
               :options="availableRoles"
@@ -212,7 +212,7 @@ async function removeMember(teamMemberId: number) { // Assuming memberId is now 
               placeholder="选择角色"
               multiple
             />
-          </UFormGroup>
+          </UFormField>
         </div>
         
         <template #footer>
