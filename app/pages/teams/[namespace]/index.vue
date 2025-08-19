@@ -76,149 +76,103 @@ async function createProject() {
   <div class="p-4">
     <div class="flex justify-between items-center mb-4">
       <h1 class="text-2xl font-bold">项目列表</h1>
-      <Button
-        label="创建项目"
-        icon="i-ri-add-line"
-        @click="showCreateProjectDialog = true"
-      />
+      <UButton label="创建项目" icon="i-ri-add-line" @click="showCreateProjectDialog = true" />
     </div>
 
     <!-- 加载状态 -->
     <div v-if="pending" class="p-4">
-      <Skeleton :rows="5" animation="wave" />
+      <USkeleton :rows="5" animation="wave" />
     </div>
 
     <!-- 错误状态 -->
-    <Message v-else-if="error" severity="error" :closable="false">
+    <UAlert v-else-if="error" color="red" icon="i-ri-error-warning-line" :closable="false">
       {{ error.message }}
-    </Message>
+    </UAlert>
 
-    <!-- 项目列表 - 使用Card网格布局 -->
+    <!-- 项目列表 - 使用UCard网格布局 -->
     <div v-else-if="team && team.projects">
       <!-- 网格布局的项目卡片 -->
-      <div v-if="team.projects.length > 0" class="grid">
-        <div
-          v-for="project in team.projects"
-          :key="project.id"
-          class="col-12 md:col-6 lg:col-4 xl:col-3 p-2"
-        >
-          <Card class="h-full">
-            <template #header>
-              <div class="flex justify-between items-center">
-                <Badge
-                  :value="project.poi?.length || 0"
-                  severity="info"
-                  class="mr-2"
-                ></Badge>
-                <div class="flex gap-1">
-                  <Button
-                    icon="i-ri-edit-line"
-                    text
-                    rounded
-                    aria-label="编辑"
-                    @click="
-                      navigateTo(
-                        `/teams/${namespace}/projects/${project.id}/edit`
-                      )"
-                  />
-                  <Button
-                    icon="i-ri-delete-bin-line"
-                    text
-                    rounded
-                    severity="danger"
-                    aria-label="删除"
-                  />
-                </div>
-              </div>
-            </template>
-
-            <template #title>
-              <div
-                class="cursor-pointer"
-                @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
-              >
-                {{ project.name }}
-              </div>
-            </template>
-
-            <template #content>
-              <p class="m-0 text-gray-600 line-clamp-3">
-                {{ project.description || "暂无描述" }}
-              </p>
-            </template>
-
-            <template #footer>
-              <div class="flex justify-end pt-3">
-                <Button
-                  label="查看项目"
-                  icon="i-ri-folder-open-line"
-                  outlined
-                  size="small"
-                  @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
+      <UGrid v-if="team.projects.length > 0" cols="1 md:2 lg:3 xl:4" gap="4">
+        <UCard v-for="project in team.projects" :key="project.id" class="h-full">
+          <template #header>
+            <div class="flex justify-between items-center">
+              <UBadge color="primary" class="mr-2">
+                {{ project.poi?.length || 0 }}
+              </UBadge>
+              <div class="flex gap-1">
+                <UButton
+                  icon="i-ri-edit-line"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="编辑"
+                  @click="navigateTo(`/teams/${namespace}/projects/${project.id}/edit`)"
+                />
+                <UButton
+                  icon="i-ri-delete-bin-line"
+                  variant="ghost"
+                  size="sm"
+                  color="error"
+                  aria-label="删除"
                 />
               </div>
-            </template>
-          </Card>
-        </div>
-      </div>
+            </div>
+          </template>
+          <template #title>
+            <div
+              class="cursor-pointer"
+              @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
+            >
+              {{ project.name }}
+            </div>
+          </template>
+          <template #content>
+            <p class="m-0 text-gray-600 dark:text-gray-300 line-clamp-3">
+              {{ project.description || "暂无描述" }}
+            </p>
+          </template>
+          <template #footer>
+            <div class="flex justify-end pt-3">
+              <UButton
+                label="查看项目"
+                icon="i-ri-folder-open-line"
+                variant="outline"
+                size="sm"
+                @click="navigateTo(`/teams/${namespace}/projects/${project.id}`)"
+              />
+            </div>
+          </template>
+        </UCard>
+      </UGrid>
 
       <!-- 无项目状态 -->
-      <div
-        v-else
-        class="text-center p-8 bg-gray-50 rounded-md mt-4"
-      >
-        <i class="i-ri-folder-line text-5xl text-gray-400 mb-3"></i>
-        <p class="text-gray-500">暂无项目，点击上方"创建项目"按钮开始</p>
+      <div v-else class="text-center p-8 bg-gray-50 dark:bg-gray-900 rounded-md mt-4">
+        <UIcon name="i-ri-folder-line" class="text-5xl text-gray-400 mb-3" />
+        <p class="text-gray-500 dark:text-gray-300">暂无项目，点击上方"创建项目"按钮开始</p>
       </div>
     </div>
 
     <!-- 创建项目对话框 -->
-    <Dialog
-      v-model:visible="showCreateProjectDialog"
-      modal
-      header="创建新项目"
-      :style="{ width: '30rem' }"
-    >
-      <div class="flex flex-col gap-4">
-        <div class="flex flex-col gap-1">
-          <label for="projectName" class="font-medium">项目名称</label>
-          <InputText
-            id="projectName"
-            v-model="projectForm.name"
-            placeholder="输入项目名称"
-            :class="{ 'p-invalid': projectFormErrors.name }"
-          />
-          <small
-            v-if="projectFormErrors.name"
-            class="p-error"
-          >{{ projectFormErrors.name }}</small>
+    <UModal v-model="showCreateProjectDialog">
+      <UCard>
+        <template #header>
+          <span class="font-bold">创建新项目</span>
+        </template>
+        <div class="space-y-4">
+          <UFormField label="项目名称" name="name" :error="projectFormErrors.name">
+            <UInput v-model="projectForm.name" placeholder="输入项目名称" />
+          </UFormField>
+          <UFormField label="项目描述" name="description">
+            <UTextarea v-model="projectForm.description" placeholder="请输入项目描述" :rows="3" />
+          </UFormField>
         </div>
-
-        <div class="flex flex-col gap-1">
-          <label for="projectDescription" class="font-medium">项目描述</label>
-          <Textarea
-            id="projectDescription"
-            v-model="projectForm.description"
-            placeholder="请输入项目描述"
-            rows="3"
-            autoResize
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <Button
-          label="取消"
-          text
-          @click="showCreateProjectDialog = false"
-        />
-        <Button
-          label="创建"
-          icon="i-ri-check-line"
-          @click="createProject"
-        />
-      </template>
-    </Dialog>
+        <template #footer>
+          <div class="flex justify-end gap-3">
+            <UButton color="neutral" variant="ghost" @click="showCreateProjectDialog = false">取消</UButton>
+            <UButton icon="i-ri-check-line" @click="createProject">创建</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
 </template>
 

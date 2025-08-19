@@ -32,7 +32,7 @@ function generateNamespace(name: string) {
 // 监听名称变化，自动生成namespace
 watch(
   () => teamForm.name,
-  (newName) => {
+  (newName: string) => {
     if (newName) {
       teamForm.namespace = generateNamespace(newName);
     }
@@ -160,40 +160,29 @@ async function submitForm() {
     </section>
 
     <!-- 特性区域 - 不使用卡片，直接使用网格布局 -->
-    <section class="features py-8">
-      <div class="container mx-auto">
-        <h2 class="text-3xl font-bold text-center mb-8">主要特性</h2>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div class="text-center p-4">
-            <i class="i-ri-map-pin-line text-4xl text-primary mb-2"></i>
-            <h3 class="text-xl font-semibold mb-2">布防点管理</h3>
-            <p>
-              轻松创建和管理监控布防点，在地图上直观显示，实现精确定位和管理。
-            </p>
-          </div>
-          
-          <div class="text-center p-4">
-            <i class="i-ri-team-line text-4xl text-primary mb-2"></i>
-            <h3 class="text-xl font-semibold mb-2">团队协作</h3>
-            <p>
-              多人协作管理项目，分配任务和权限，提高团队工作效率。
-            </p>
-          </div>
-          
-          <div class="text-center p-4">
-            <i class="i-ri-flight-takeoff-line text-4xl text-primary mb-2"></i>
-            <h3 class="text-xl font-semibold mb-2">无人机控制</h3>
-            <p>
-              远程控制无人机执行监控任务，实时获取监控数据和图像。
-            </p>
-          </div>
+    <USection class="features" padding="lg">
+      <h2 class="text-3xl font-bold text-center mb-8 text-gray-900 dark:text-gray-100">主要特性</h2>
+      <UGrid cols="1 md:2 lg:3" gap="4">
+        <div class="text-center p-4">
+          <UIcon name="i-ri-map-pin-line" class="text-4xl text-primary mb-2" />
+          <h3 class="text-xl font-semibold mb-2">布防点管理</h3>
+          <p>轻松创建和管理监控布防点，在地图上直观显示，实现精确定位和管理。</p>
         </div>
-      </div>
-    </section>
+        <div class="text-center p-4">
+          <UIcon name="i-ri-team-line" class="text-4xl text-primary mb-2" />
+          <h3 class="text-xl font-semibold mb-2">团队协作</h3>
+          <p>多人协作管理项目，分配任务和权限，提高团队工作效率。</p>
+        </div>
+        <div class="text-center p-4">
+          <UIcon name="i-ri-flight-takeoff-line" class="text-4xl text-primary mb-2" />
+          <h3 class="text-xl font-semibold mb-2">无人机控制</h3>
+          <p>远程控制无人机执行监控任务，实时获取监控数据和图像。</p>
+        </div>
+      </UGrid>
+    </USection>
     
     <!-- 统计数据 -->
-    <section class="stats py-8 bg-gray-50">
+    <section class="stats py-8 bg-gray-50 dark:bg-gray-900">
       <div class="container mx-auto">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <UCard>
@@ -236,27 +225,22 @@ async function submitForm() {
     </section>
 
     <!-- 客户案例 -->
-    <section class="customers py-8">
-      <div class="container mx-auto">
-        <h2 class="text-3xl font-bold text-center mb-8">谁在使用</h2>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <div v-for="i in 8" :key="i" class="p-3">
-            <div
-              class="p-4 border rounded flex align-items-center justify-content-center h-24"
-            >
-              <span class="text-xl text-gray-400">客户 {{ i }}</span>
-            </div>
-          </div>
+    <USection class="customers" padding="lg">
+      <h2 class="text-3xl font-bold text-center mb-8">谁在使用</h2>
+      <UGrid cols="1 sm:2 md:4" gap="4">
+        <div v-for="i in 8" :key="i" class="p-3">
+          <UCard class="flex items-center justify-center h-24">
+            <span class="text-xl text-gray-400 dark:text-gray-300">客户 {{ i }}</span>
+          </UCard>
         </div>
-      </div>
-    </section>
+      </UGrid>
+    </USection>
 
     <!-- 底部CTA -->
-    <section class="cta py-8 bg-primary text-center">
+    <section class="cta py-8 bg-primary dark:bg-primary-900 text-center">
       <div class="container mx-auto">
-        <h2 class="text-3xl font-bold mb-4">准备好开始了吗？</h2>
-        <p class="mb-6">立即加入我们，开启智能无人机监控之旅</p>
+        <h2 class="text-3xl font-bold mb-4 text-white dark:text-gray-100">准备好开始了吗？</h2>
+        <p class="mb-6 text-white dark:text-gray-200">立即加入我们，开启智能无人机监控之旅</p>
 
         <div class="flex justify-center gap-3">
           <UButton

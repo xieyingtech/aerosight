@@ -77,8 +77,8 @@ const userMenuItems = computed(() => [
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
-    <header class="bg-white border-b border-gray-200">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+    <header class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
           <!-- 左侧：面包屑导航 -->
@@ -146,7 +146,7 @@ const userMenuItems = computed(() => [
       <slot name="header" />
     </header>
 
-    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       <slot />
     </main>
   </div>

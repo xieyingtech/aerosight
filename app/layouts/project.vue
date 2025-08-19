@@ -47,40 +47,14 @@ const items = computed(() => [
     :title="project?.name"
   >
     <template #header>
-      <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
-        <template #item="{ item, props, hasSubmenu }">
-          <NuxtLink
-            v-if="item.route"
-            v-slot="{ href, navigate }"
-            :to="item.route"
-            custom
-          >
-            <a v-ripple :href="href" v-bind="props.action" @click="navigate">
-              <span :class="item.icon" class="mr-2" />
-              <span>{{ item.label }}</span>
-            </a>
+      <UTabGroup :items="items" class="mb-2">
+        <template #default="{ item }">
+          <NuxtLink :to="item.route" class="flex items-center gap-2 px-4 py-2">
+            <UIcon :name="item.icon" class="w-5 h-5" />
+            <span>{{ item.label }}</span>
           </NuxtLink>
-          <a
-            v-else-if="item.items && item.items.length"
-            v-ripple
-            v-bind="props.action"
-          >
-            <span :class="item.icon" class="mr-2" />
-            <span>{{ item.label }}</span>
-            <span v-if="hasSubmenu" class="i-ri-arrow-down-s-line ml-2" />
-          </a>
-          <a
-            v-else
-            v-ripple
-            :href="item.url"
-            :target="item.target"
-            v-bind="props.action"
-          >
-            <span :class="item.icon" class="mr-2" />
-            <span>{{ item.label }}</span>
-          </a>
         </template>
-      </Menubar>
+      </UTabGroup>
     </template>
     <slot />
   </NuxtLayout>

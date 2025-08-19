@@ -16,4 +16,5 @@ export default defineNuxtConfig({
     charts: ["BarChart"],
     components: ["DatasetComponent", "GridComponent", "TooltipComponent"],
   },
+  srcDir: 'app',
 });

@@ -32,8 +32,10 @@ const onSubmit = async (event: any) => {
 </script>
 
 <template>
-  <div class="w-full max-w-sm mx-auto p-4">
-    <h1 class="text-center text-2xl font-bold mb-6">登录到 {{ appConfig.site.title }}</h1>
+  <UCard class="w-full max-w-sm mx-auto p-4">
+    <template #header>
+      <h1 class="text-center text-2xl font-bold">登录到 {{ appConfig.site.title }}</h1>
+    </template>
     <UForm
       :schema="schema"
       :state="state"
@@ -43,14 +45,12 @@ const onSubmit = async (event: any) => {
       <UFormField label="用户名" name="username">
         <UInput v-model="state.username" placeholder="请输入用户名" />
       </UFormField>
-      
       <UFormField label="密码" name="password">
         <UInput v-model="state.password" type="password" placeholder="请输入密码" />
       </UFormField>
-      
-      <UButton type="submit" block>
+      <UButton type="submit" block icon="i-ri-login-box-line">
         登录
       </UButton>
     </UForm>
-  </div>
+  </UCard>
 </template>

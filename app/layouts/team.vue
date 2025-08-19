@@ -1,39 +1,47 @@
 <script setup lang="ts">
+import USidebar from '@nuxt/ui';
+import UVerticalNav from '@nuxt/ui';
 const route = useRoute();
 
 // 侧边菜单项
-const items = computed(() => [
+const items = [
   {
+  type: 'link',
     label: "概况",
     icon: "i-ri-dashboard-line",
-    route: `/teams/${route.params.namespace}`,
+    to: `/teams/${route.params.namespace}`,
   },
   {
+    type: 'item',
     label: "任务",
     icon: "i-ri-task-line",
-    route: `/teams/${route.params.namespace}/tasks`,
+    to: `/teams/${route.params.namespace}/tasks`,
   },
   {
+    type: 'item',
     label: "事件",
     icon: "i-ri-calendar-event-line",
-    route: `/teams/${route.params.namespace}/events`,
+    to: `/teams/${route.params.namespace}/events`,
   },
   {
+    type: 'item',
     label: "设备",
     icon: "i-ri-device-line",
-    route: `/teams/${route.params.namespace}/devices`,
+    to: `/teams/${route.params.namespace}/devices`,
   },
   {
+    type: 'item',
     label: "成员",
     icon: "i-ri-user-3-line",
-    route: `/teams/${route.params.namespace}/members`,
+    to: `/teams/${route.params.namespace}/members`,
   },
   {
+    type: 'item',
     label: "设置",
     icon: "i-ri-settings-line",
-    route: `/teams/${route.params.namespace}/settings`,
+    to: `/teams/${route.params.namespace}/settings`,
   },
-]);
+];
 </script>
 
 <template>
@@ -43,7 +51,7 @@ const items = computed(() => [
     :title="route.params.namespace"
   >
     <template #header>
-      <Menubar :model="items" class="rounded-0 b-x-0 b-t-0">
+  <!-- <Menubar :model="items" class="rounded-0 b-x-0 b-t-0"> -->
         <template #item="{ item, props, hasSubmenu }">
           <NuxtLink
             v-if="item.route"
@@ -76,7 +84,15 @@ const items = computed(() => [
             <span>{{ item.label }}</span>
           </a>
         </template>
-      </Menubar>
+        <UTabGroup orientation="vertical" :items="items" class="w-64 min-h-screen bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+          <template #default="{ item }">
+            <NuxtLink :to="item.to" :target="item.target" class="flex items-center px-4 py-2 gap-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition">
+              <UIcon :name="item.icon" class="text-xl" />
+              <span>{{ item.label }}</span>
+              <UIcon v-if="item.items && item.items.length" name="i-ri-arrow-down-s-line" class="ml-auto" />
+            </NuxtLink>
+          </template>
+        </UTabGroup>
     </template>
     <slot />
   </NuxtLayout>

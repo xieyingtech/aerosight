@@ -50,40 +50,40 @@ watch(() => props.tempMarker, (newMarker) => {
 </script>
 
 <template>
-  <ClientOnly>
-    <div class="w-full h-full">
-      <LMap
-        :zoom
-        :center
-        :options="{ attributionControl: false }"
-        :use-global-leaflet="false"
-        @click="handleMapClick"
-      >
-        <LLayerGroup name="天地图矢量" layerType="base">
-          <LTileLayer :url="tiandituVec" />
-          <LTileLayer :url="tiandituCva" />
-        </LLayerGroup>
-        <LLayerGroup name="天地图影像" layerType="base">
-          <LTileLayer :url="tiandituImg" />
-          <LTileLayer :url="tiandituCia" />
-        </LLayerGroup>
-        <LControlScale :imperial="false" />
-        <LControlLayers position="topright" />
-        <LControlAttribution
-          prefix="天地图 - GS(2024)0568号"
-          position="bottomright"
-        />
-        
-        <!-- 临时标记（使用默认 Leaflet 标记） -->
-        <LMarker 
-          v-if="tempMarker" 
-          :lat-lng="tempMarker"
-        />
-        
-        <slot />
-      </LMap>
-    </div>
-  </ClientOnly>
+  <UCard>
+    <ClientOnly>
+      <div class="w-full h-full aspect-video rounded-lg overflow-hidden">
+        <LMap
+          :zoom
+          :center
+          :options="{ attributionControl: false }"
+          :use-global-leaflet="false"
+          @click="handleMapClick"
+        >
+          <LLayerGroup name="天地图矢量" layerType="base">
+            <LTileLayer :url="tiandituVec" />
+            <LTileLayer :url="tiandituCva" />
+          </LLayerGroup>
+          <LLayerGroup name="天地图影像" layerType="base">
+            <LTileLayer :url="tiandituImg" />
+            <LTileLayer :url="tiandituCia" />
+          </LLayerGroup>
+          <LControlScale :imperial="false" />
+          <LControlLayers position="topright" />
+          <LControlAttribution
+            prefix="天地图 - GS(2024)0568号"
+            position="bottomright"
+          />
+          <!-- 临时标记（使用默认 Leaflet 标记） -->
+          <LMarker 
+            v-if="tempMarker" 
+            :lat-lng="tempMarker"
+          />
+          <slot />
+        </LMap>
+      </div>
+    </ClientOnly>
+  </UCard>
 </template>
 
 <style>

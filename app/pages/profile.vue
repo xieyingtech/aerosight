@@ -47,23 +47,29 @@ async function updateUser(field) {
 
 <template>
   <div v-if="profile" class="flex flex-col gap-4">
-    <Panel header="昵称">
-      <div class="inline-flex gap-2">
-        <InputText v-model="profile.name" />
-        <Button @click="updateUser('name')">保存</Button>
+    <UCard>
+      <template #header>
+        <span class="font-bold">昵称</span>
+      </template>
+      <div class="flex gap-2">
+        <UInput v-model="profile.name" />
+        <UButton @click="updateUser('name')" icon="i-ri-save-line">保存</UButton>
       </div>
-    </Panel>
+    </UCard>
 
-    <Panel header="用户名">
-      <div class="inline-flex gap-2">
-        <InputText v-model="profile.username" />
-        <Button @click="updateUser('username')">保存</Button>
+    <UCard>
+      <template #header>
+        <span class="font-bold">用户名</span>
+      </template>
+      <div class="flex gap-2">
+        <UInput v-model="profile.username" />
+        <UButton @click="updateUser('username')" icon="i-ri-save-line">保存</UButton>
       </div>
-    </Panel>
+    </UCard>
 
     <div class="text-right">
-      <Button
-        severity="danger"
+      <UButton
+        color="red"
         label="退出登录"
         icon="i-ri-logout-box-line"
         @click="logout"
