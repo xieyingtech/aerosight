@@ -26,7 +26,8 @@
   "devDependencies": {
     "@iconify-json/ri": "^1.2.5",
     "prisma": "6.13.0",
-    "tailwindcss": "^4.1.11"
+    "tailwindcss": "^4.1.11",
+    "unocss": "^66.4.2"
   },
   "packageManager": "pnpm@10.14.0"
 }

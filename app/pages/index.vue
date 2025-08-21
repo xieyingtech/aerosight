@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
+onMounted(() => {
+  refreshTeams();
+});
 const appConfig = useAppConfig();
 const { user, loggedIn } = useUserSession();
-const { data: teams } = useFetch("/api/teams");
+const { data: teams, refresh: refreshTeams, pending: teamsPending } = useAsyncData("teams", () => $fetch("/api/teams"));
 const toast = useToast();
 
 // 对话框可见性控制
@@ -62,9 +66,7 @@ function validateTeamForm() {
 
 // 创建团队
 async function createTeam() {
-  // 验证表单，如果验证失败，返回false阻止对话框关闭
   if (!validateTeamForm()) return false;
-
   try {
     const response = await $fetch("/api/teams", {
       method: "POST",
@@ -74,14 +76,13 @@ async function createTeam() {
         description: teamForm.description,
       },
     });
-
     toast.add({
       title: "成功",
       description: "团队创建成功",
       color: "success",
     });
-
-    // 跳转到新团队页面
+    closeDialog();
+    await refreshTeams();
     navigateTo(`/teams/${response.namespace}`);
     return true;
   } catch (error: any) {
@@ -95,11 +96,14 @@ async function createTeam() {
 }
 
 function navigateToDashboard() {
-  const firstTeam = teams.value?.[0]?.namespace;
-  if (firstTeam) {
-    navigateTo(`/teams/${firstTeam}`);
+  if (teamsPending.value) return;
+  if (!teams.value || !Array.isArray(teams.value)) {
+    toast.add({ title: "错误", description: "团队数据获取失败", color: "error" });
+    return;
+  }
+  if (teams.value.length > 0) {
+    navigateTo(`/teams/${teams.value[0]?.namespace ?? ''}`);
   } else {
-    // 显示创建团队对话框
     dialogVisible.value = true;
   }
 }
@@ -107,11 +111,11 @@ function navigateToDashboard() {
 // 关闭对话框
 function closeDialog() {
   dialogVisible.value = false;
-  // 重置表单
   teamForm.name = "";
   teamForm.namespace = "";
   teamForm.description = "";
   teamFormErrors.value = { name: "", namespace: "" };
+  refreshTeams(); // 弹窗关闭后刷新团队列表，确保数据同步
 }
 
 // 提交表单
@@ -261,8 +265,8 @@ async function submitForm() {
       </div>
     </section>
 
-    <!-- 创建团队的对话框 -->
-    <UModal v-model="dialogVisible">
+    <!-- 创建团队的对话框（优化调试版） -->
+   <UModal v-model="dialogVisible">
       <UCard>
         <template #header>
           <div class="flex items-center gap-2">
@@ -270,51 +274,25 @@ async function submitForm() {
             <span class="font-bold">创建新团队</span>
           </div>
         </template>
-
         <div class="space-y-4">
           <p>您目前没有任何团队，创建一个新团队开始使用</p>
-
-          <div class="space-y-4">
-            <UFormField label="团队名称" :error="teamFormErrors.name">
-              <UInput
-                v-model="teamForm.name"
-                placeholder="输入团队名称"
-              />
-            </UFormField>
-
-            <UFormField label="团队标识" :error="teamFormErrors.namespace">
-              <UInput
-                v-model="teamForm.namespace"
-                placeholder="自动生成的团队标识"
-              />
-              <template #help>
-                标识只能包含小写字母、数字和横线(-)
-              </template>
-            </UFormField>
-
-            <UFormField label="团队描述">
-              <UTextarea
-                v-model="teamForm.description"
-                placeholder="请输入团队描述"
-                :rows="3"
-              />
-            </UFormField>
-          </div>
+          <UFormField label="团队名称" :error="teamFormErrors.name">
+            <UInput v-model="teamForm.name" placeholder="输入团队名称" />
+          </UFormField>
+          <UFormField label="团队标识" :error="teamFormErrors.namespace">
+            <UInput v-model="teamForm.namespace" placeholder="自动生成的团队标识" />
+            <template #help>
+              标识只能包含小写字母、数字和横线(-)
+            </template>
+          </UFormField>
+          <UFormField label="团队描述">
+            <UTextarea v-model="teamForm.description" placeholder="请输入团队描述" :rows="3" />
+          </UFormField>
         </div>
-
         <template #footer>
           <div class="flex justify-end gap-3">
-            <UButton 
-              label="取消" 
-              color="neutral" 
-              variant="outline" 
-              @click="closeDialog" 
-            />
-            <UButton 
-              label="创建" 
-              icon="i-ri-check-line" 
-              @click="submitForm" 
-            />
+            <UButton label="取消" color="neutral" variant="outline" @click="closeDialog" />
+            <UButton label="创建" icon="i-ri-check-line" @click="submitForm" />
           </div>
         </template>
       </UCard>

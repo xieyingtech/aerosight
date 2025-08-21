@@ -52,8 +52,8 @@ async function updateUser(field) {
         <span class="font-bold">昵称</span>
       </template>
       <div class="flex gap-2">
-        <UInput v-model="profile.name" />
-        <UButton @click="updateUser('name')" icon="i-ri-save-line">保存</UButton>
+  <UInput v-model="profile.name" />
+  <UButton @click="updateUser('name')" icon="i-ri-save-line">保存</UButton>
       </div>
     </UCard>
 
@@ -62,8 +62,8 @@ async function updateUser(field) {
         <span class="font-bold">用户名</span>
       </template>
       <div class="flex gap-2">
-        <UInput v-model="profile.username" />
-        <UButton @click="updateUser('username')" icon="i-ri-save-line">保存</UButton>
+  <UInput v-model="profile.username" />
+  <UButton @click="updateUser('username')" icon="i-ri-save-line">保存</UButton>
       </div>
     </UCard>
 
