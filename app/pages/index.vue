@@ -265,37 +265,48 @@ async function submitForm() {
       </div>
     </section>
 
-    <!-- 创建团队的对话框（优化调试版） -->
-   <UModal v-model="dialogVisible">
-      <UCard>
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-ri-team-line" class="text-xl" />
-            <span class="font-bold">创建新团队</span>
-          </div>
-        </template>
-        <div class="space-y-4">
-          <p>您目前没有任何团队，创建一个新团队开始使用</p>
-          <UFormField label="团队名称" :error="teamFormErrors.name">
-            <UInput v-model="teamForm.name" placeholder="输入团队名称" />
-          </UFormField>
-          <UFormField label="团队标识" :error="teamFormErrors.namespace">
-            <UInput v-model="teamForm.namespace" placeholder="自动生成的团队标识" />
-            <template #help>
-              标识只能包含小写字母、数字和横线(-)
+    <!-- 页面底部留白50px，防止底部按钮遮挡内容 -->
+    <div style="height:50px;"></div>
+
+    <UDrawer title="创建团队" v-model="dialogVisible">
+      <div class="fixed bottom-12 left-0 w-full flex justify-center z-50">
+        <UButton icon="i-lucide-rocket" size="xl" color="primary" variant="solid"@click="dialogVisible = true">立即开始
+        </UButton>
+      </div>
+      <template #body>
+        <div class="flex flex-col items-center justify-center w-full py-6">
+          <UCard class="w-full max-w-md shadow-lg">
+            <template #header>
+              <div class="flex items-center gap-2 justify-center">
+                <UIcon name="i-ri-team-line" class="text-2xl text-primary" />
+                <span class="font-bold text-lg">创建团队</span>
+              </div>
             </template>
-          </UFormField>
-          <UFormField label="团队描述">
-            <UTextarea v-model="teamForm.description" placeholder="请输入团队描述" :rows="3" />
-          </UFormField>
+            <UForm :state="teamForm" @submit="async (e) => { await submitForm(); }" class="space-y-5">
+              <UFormField label="团队名称" required :error="teamFormErrors.name">
+                <UInput v-model="teamForm.name" placeholder="输入团队名称" size="lg" class="w-full" />
+              </UFormField>
+              <UFormField label="团队标识（自动生成）" required :error="teamFormErrors.namespace">
+                <UInput v-model="teamForm.namespace" placeholder="自动生成标识" readonly size="lg" class="w-full" />
+                <template #help>标识仅含小写字母、数字和横线(如 "team-alpha-01")</template>
+              </UFormField>
+              <UFormField label="团队描述">
+                <UTextarea v-model="teamForm.description" placeholder="描述团队目标或职责" :rows="3" size="lg" class="w-full" />
+              </UFormField>
+              <div class="flex justify-center gap-4 pt-2">
+                <UButton label="取消" color="neutral" size="lg" variant="outline" @click="closeDialog" />
+                <UButton 
+                  type="submit" 
+                  label="创建" 
+                  icon="i-heroicons-check"
+                  size="lg"
+                />
+              </div>
+            </UForm>
+          </UCard>
         </div>
-        <template #footer>
-          <div class="flex justify-end gap-3">
-            <UButton label="取消" color="neutral" variant="outline" @click="closeDialog" />
-            <UButton label="创建" icon="i-ri-check-line" @click="submitForm" />
-          </div>
-        </template>
-      </UCard>
-    </UModal>
+      </template>
+    </UDrawer>
+
   </div>
 </template>
