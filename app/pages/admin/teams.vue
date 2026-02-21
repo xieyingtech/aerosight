@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user } = useUserSession();
+const user = useSupabaseUser();
 const { data, refresh } = useFetch("/api/admin/teams");
 
 // 弹窗控制

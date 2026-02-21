@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const appConfig = useAppConfig();
-const { user, loggedIn } = useUserSession();
+const user = useSupabaseUser();
 const { data: teams } = useFetch("/api/teams");
 const toast = useToast();
 
@@ -135,7 +135,7 @@ async function submitForm() {
 
         <div class="flex justify-center gap-3 mt-8">
           <UButton
-            v-if="loggedIn"
+            v-if="user"
             label="进入工作台"
             icon="i-ri-dashboard-line"
             size="lg"
@@ -260,7 +260,7 @@ async function submitForm() {
 
         <div class="flex justify-center gap-3">
           <UButton
-            v-if="loggedIn"
+            v-if="user"
             label="进入工作台"
             icon="i-ri-dashboard-line"
             size="lg"

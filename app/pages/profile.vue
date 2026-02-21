@@ -1,11 +1,11 @@
 <script setup lang="ts">
-const { clear } = useUserSession();
+const client = useSupabaseClient();
 const { data: profile } = useFetch("/api/user");
 const { data: memberships } = useFetch("/api/memberships");
 const toast = useToast();
 
-function logout() {
-  clear();
+async function logout() {
+  await client.auth.signOut();
   navigateTo("/login");
 }
 

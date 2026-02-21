@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user } = useUserSession();
+const user = useSupabaseUser();
 const { data } = useFetch("/api/admin/stats");
 
 definePageMeta({ layout: "admin" });

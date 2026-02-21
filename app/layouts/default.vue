@@ -8,14 +8,15 @@ const props = defineProps<{
   title?: string;
 }>();
 
-const { user, loggedIn, clear } = useUserSession();
-const { data: profile } = loggedIn
+const user = useSupabaseUser();
+const client = useSupabaseClient();
+const { data: profile } = user.value
   ? useFetch("/api/user", { watch: [user] })
   : {};
 const appConfig = useAppConfig();
 const route = useRoute();
 
-const { data: teams } = useFetch("/api/teams", { immediate: loggedIn.value });
+const { data: teams } = useFetch("/api/teams", { immediate: !!user.value });
 
 // 当前选中的团队
 const selectedTeam = ref(route.params.namespace as string | undefined);
@@ -68,8 +69,8 @@ const userMenuItems = computed(() => [
   {
     label: "退出登录",
     icon: "i-ri-logout-box-line",
-    onSelect: () => {
-      clear();
+    onSelect: async () => {
+      await client.auth.signOut();
       navigateTo("/");
     },
   },
@@ -111,7 +112,7 @@ const userMenuItems = computed(() => [
             <template v-if="user">
               <!-- 团队选择下拉框 -->
               <USelectMenu
-                v-if="loggedIn && teamOptionsForDropdown.length > 0"
+                v-if="user && teamOptionsForDropdown.length > 0"
                 v-model="selectedTeam"
                 :options="teamOptionsForDropdown"
                 placeholder="选择团队"

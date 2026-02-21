@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { z } from "zod";
 
-const { fetch } = useUserSession();
+const client = useSupabaseClient();
 const appConfig = useAppConfig();
 
 const schema = z.object({
@@ -22,7 +22,7 @@ const onSubmit = async (event: any) => {
       method: "POST",
       body: event.data,
     });
-    await fetch();
+    await client.auth.refreshUser();
     navigateTo("/");
   } catch (e: any) {
     // 暂时简化错误处理
