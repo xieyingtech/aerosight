@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  compatibilityDate: "2024-11-01",
+  compatibilityDate: "2025-07-15",
   modules: [
     "@nuxt/ui",
     "@vueuse/nuxt",
@@ -12,11 +12,15 @@ export default defineNuxtConfig({
   ui: {
     fonts: false,
   },
-  hub: {
-    db: "postgresql",
+  i18n: {
+    defaultLocale: "zh_cn",
+    locales: [{ code: "zh_cn", file: "zh_cn.json" }],
   },
   echarts: {
     charts: ["BarChart"],
     components: ["DatasetComponent", "GridComponent", "TooltipComponent"],
+  },
+  hub: {
+    db: "postgresql",
   },
 });
