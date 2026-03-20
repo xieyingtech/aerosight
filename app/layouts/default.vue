@@ -21,7 +21,7 @@ const navItems = computed(() => [
   <UHeader :title="site.title">
     <UNavigationMenu :items="navItems" variant="link" />
     <template #right>
-      <UButton variant="ghost">登录</UButton>
+      <UButton variant="ghost" to="/login">登录</UButton>
     </template>
     <template #body>
       <UNavigationMenu
