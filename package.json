@@ -8,20 +8,23 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@nuxt/ui": "^4.4.0",
-    "@nuxtjs/supabase": "^2.0.4",
+    "@electric-sql/pglite": "^0.4.1",
+    "@nuxt/ui": "^4.5.1",
+    "@nuxthub/core": "0.10.7",
+    "@nuxtjs/i18n": "10.2.3",
     "@vueuse/nuxt": "14.2.1",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.1",
     "echarts": "^6.0.0",
-    "nuxt": "4.3.1",
+    "nuxt": "4.4.2",
+    "nuxt-auth-utils": "0.5.29",
     "nuxt-echarts": "1.0.1",
     "nuxt-maplibre": "1.2.2",
-    "tailwindcss": "^4.2.0",
+    "postgres": "^3.4.8",
+    "tailwindcss": "^4.2.2",
     "vue": "latest",
     "vue-router": "latest",
     "zod": "^4.3.6"
   },
-  "devDependencies": {
-    "supabase": "^2.76.11"
-  },
-  "packageManager": "pnpm@10.30.1"
+  "packageManager": "pnpm@10.32.1"
 }
