@@ -37,9 +37,15 @@ function resolveMessage(message?: string) {
 }
 
 function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
+  const account = payload.data.username.trim();
+  const requestBody = {
+    password: payload.data.password,
+    ...(account.includes("@") ? { email: account } : { phone: account }),
+  };
+
   $fetch("/api/auth/login", {
     method: "POST",
-    body: payload.data,
+    body: requestBody,
   })
     .then(() => {
       navigateTo("/console");
