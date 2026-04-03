@@ -3,40 +3,51 @@ import type { AuthFormField, FormSubmitEvent } from "@nuxt/ui";
 import { z } from "zod";
 
 const { site } = useAppConfig();
+const { t } = useI18n();
 const toast = useToast();
 
-const fields: AuthFormField[] = [
+const fields = computed<AuthFormField[]>(() => [
   {
     name: "username",
-    label: "用户名",
+    label: t("auth.login.fields.username.label"),
     type: "text",
-    placeholder: "请输入用户名",
+    placeholder: t("auth.login.fields.username.placeholder"),
   },
   {
     name: "password",
-    label: "密码",
+    label: t("auth.login.fields.password.label"),
     type: "password",
-    placeholder: "请输入密码",
+    placeholder: t("auth.login.fields.password.placeholder"),
   },
-];
+]);
 
 const schema = z.object({
-  username: z.string("用户名不能为空"),
-  password: z.string("密码不能为空"),
+  username: z.string().min(1, t("errors.validation.username.required")),
+  password: z.string().min(1, t("errors.validation.password.required")),
 });
+
+const loginTitle = computed(() => t("auth.login.title", { site: site.title }));
+
+function resolveMessage(message?: string) {
+  if (!message) {
+    return t("errors.generic");
+  }
+
+  return message.startsWith("errors.") ? t(message) : message;
+}
 
 function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
   $fetch("/api/auth/login", {
     method: "POST",
-    body: payload,
+    body: payload.data,
   })
     .then(() => {
       navigateTo("/console");
     })
     .catch((err) => {
       toast.add({
-        title: "登录失败",
-        description: err.data.message || err.message,
+        title: t("auth.login.failed"),
+        description: resolveMessage(err.data?.message || err.message),
         color: "error",
       });
     });
@@ -48,7 +59,7 @@ function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
     <UPageBody>
       <UAuthForm
         class="w-md mx-auto"
-        :title="`登录到 ${site.title}`"
+        :title="loginTitle"
         :fields="fields"
         :schema="schema"
         @submit="login"

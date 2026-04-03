@@ -1,1 +1,32 @@
-{}
+{
+	"auth": {
+		"login": {
+			"title": "登录到 {site}",
+			"failed": "登录失败",
+			"fields": {
+				"username": {
+					"label": "用户名",
+					"placeholder": "请输入用户名"
+				},
+				"password": {
+					"label": "密码",
+					"placeholder": "请输入密码"
+				}
+			}
+		}
+	},
+	"errors": {
+		"generic": "请求失败，请稍后重试",
+		"auth": {
+			"invalidCredentials": "用户名或密码错误"
+		},
+		"validation": {
+			"username": {
+				"required": "用户名不能为空"
+			},
+			"password": {
+				"required": "密码不能为空"
+			}
+		}
+	}
+}
