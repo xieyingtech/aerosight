@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { site } = useAppConfig();
+const { user } = useUserSession();
 
 const navItems = computed(() => [
   {
@@ -21,7 +22,8 @@ const navItems = computed(() => [
   <UHeader :title="site.title">
     <UNavigationMenu :items="navItems" variant="link" />
     <template #right>
-      <UButton variant="ghost" to="/login">登录</UButton>
+      <UButton v-if="!user" variant="ghost" to="/login">登录</UButton>
+      <span v-else class="text-sm text-toned">{{ user.name }}</span>
     </template>
     <template #body>
       <UNavigationMenu
