@@ -2,6 +2,7 @@
 import type { AuthFormField, FormSubmitEvent } from "@nuxt/ui";
 import { z } from "zod";
 
+const { fetch } = useUserSession();
 const { site } = useAppConfig();
 const { t } = useI18n();
 const toast = useToast();
@@ -37,17 +38,17 @@ function resolveMessage(message?: string) {
 }
 
 function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
-  const account = payload.data.username.trim();
-  const requestBody = {
-    password: payload.data.password,
-    ...(account.includes("@") ? { email: account } : { phone: account }),
-  };
+  const username = payload.data.username.trim();
 
   $fetch("/api/auth/login", {
     method: "POST",
-    body: requestBody,
+    body: {
+      password: payload.data.password,
+      ...(username.includes("@") ? { email: username } : { phone: username }),
+    },
   })
-    .then(() => {
+    .then(async () => {
+      await fetch();
       navigateTo("/console");
     })
     .catch((err) => {

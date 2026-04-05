@@ -15,6 +15,36 @@
 			}
 		}
 	},
+	"projects": {
+		"index": {
+			"title": "项目",
+			"sidebar": {
+				"title": "筛选范围"
+			},
+			"scopes": {
+				"all": "全部",
+				"joined": "我参与的",
+				"managed": "我管理的"
+			},
+			"searchPlaceholder": "按项目名或描述搜索",
+			"searchButton": "搜索",
+			"resultCount": "共 {count} 个项目",
+			"noDescription": "暂无描述",
+			"table": {
+				"columns": {
+					"name": "项目",
+					"team": "团队",
+					"role": "我的角色",
+					"updatedAt": "最近更新"
+				}
+			},
+			"role": {
+				"owner": "所有者",
+				"admin": "管理员",
+				"member": "成员"
+			}
+		}
+	},
 	"errors": {
 		"generic": "请求失败，请稍后重试",
 		"auth": {
