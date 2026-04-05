@@ -1,36 +1,19 @@
 <script setup lang="ts">
 const { site } = useAppConfig();
 const { user } = useUserSession();
-
-const navItems = computed(() => [
-  {
-    label: "首页",
-    to: "/",
-  },
-  {
-    label: "控制台",
-    to: "/console",
-  },
-  {
-    label: "文档",
-    to: "/docs",
-  },
-]);
 </script>
 
 <template>
   <UHeader :title="site.title">
-    <UNavigationMenu :items="navItems" variant="link" />
     <template #right>
-      <UButton v-if="!user" variant="ghost" to="/login">登录</UButton>
-      <span v-else class="text-sm text-toned">{{ user.name }}</span>
-    </template>
-    <template #body>
-      <UNavigationMenu
-        :items="navItems"
-        variant="link"
-        orientation="vertical"
+      <UButton
+        icon="i-lucide-package"
+        color="neutral"
+        variant="outline"
+        to="/projects"
       />
+      <UAvatar v-if="user" :alt="user.name" />
+      <UButton v-else variant="outline" to="/login">登录</UButton>
     </template>
   </UHeader>
   <UMain>
@@ -44,9 +27,6 @@ const navItems = computed(() => [
         &copy; {{ new Date().getFullYear() }} {{ site.title }}. All rights
         reserved.
       </p>
-    </template>
-    <template #right>
-      <UNavigationMenu :items="navItems" variant="link" />
     </template>
   </UFooter>
 </template>

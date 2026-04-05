@@ -12,9 +12,12 @@ const { site } = useAppConfig();
         variant="naked"
       >
         <template #links>
-          <UButton>立即开始</UButton>
+          <UButton to="/projects">立即开始</UButton>
         </template>
-        <UIcon name="i-lucide-drone" class="not-lg:hidden w-full text-primary size-48" />
+        <UIcon
+          name="i-lucide-drone"
+          class="not-lg:hidden w-full text-primary size-48"
+        />
       </UPageCTA>
     </UPageBody>
   </UPage>
