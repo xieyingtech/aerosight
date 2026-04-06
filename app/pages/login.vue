@@ -69,7 +69,7 @@ function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
         :title="loginTitle"
         :fields="fields"
         :schema="schema"
-        @submit="login"
+        @submit.prevent="login"
       />
     </UPageBody>
   </UPage>
