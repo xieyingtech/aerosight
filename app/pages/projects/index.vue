@@ -102,7 +102,16 @@ function search() {
     <UPageHeader
       :title="t('projects.index.title')"
       :description="resultCountLabel"
-    />
+    >
+      <template #links>
+        <UButton
+          icon="i-lucide-plus"
+          color="primary"
+          :label="t('projects.index.newProject')"
+          to="/projects/new"
+        />
+      </template>
+    </UPageHeader>
     <UPageBody>
       <form class="w-full" @submit.prevent="search">
         <UFieldGroup class="w-full">
