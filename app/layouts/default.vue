@@ -1,6 +1,14 @@
 <script setup lang="ts">
 const { site } = useAppConfig();
-const { user } = useUserSession();
+const { user, clear } = useUserSession();
+
+const userItems = computed(() => {
+  if (!user.value) return [];
+  return [
+    { label: "个人中心", icon: "i-lucide-user", to: "/profile" },
+    { label: "登出", icon: "i-lucide-log-out", onClick: () => clear() },
+  ];
+});
 </script>
 
 <template>
@@ -12,7 +20,9 @@ const { user } = useUserSession();
         variant="outline"
         to="/projects"
       />
-      <UAvatar v-if="user" :alt="user.name" />
+      <UDropdownMenu v-if="user" :items="userItems" placement="bottom-end">
+        <UAvatar :alt="user.name" />
+      </UDropdownMenu>
       <UButton v-else variant="outline" to="/login">登录</UButton>
     </template>
     <template #body>
