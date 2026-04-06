@@ -2,7 +2,7 @@ import { db, schema } from "@nuxthub/db";
 import { aliasedTable, and, asc, count, eq } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
-  await requireUserSession(event);
+  const { user: _user } = await requireUserSession(event);
 
   const owners = aliasedTable(schema.teamMembers, "owners");
   const ownerUsers = aliasedTable(schema.users, "owner_users");

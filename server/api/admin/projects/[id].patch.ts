@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  await requireUserSession(event);
+  const { user: _user } = await requireUserSession(event);
 
   const id = z.coerce
     .number()

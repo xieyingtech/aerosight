@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  const session = await requireUserSession(event);
+  const { user } = await requireUserSession(event);
 
   const body = await readBody(event);
   const payload = z
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     })
     .parse(body);
 
-  const ownerUserId = payload.ownerUserId ?? session.user.id;
+  const ownerUserId = payload.ownerUserId ?? user.id;
 
   const owner = await db
     .select({ id: schema.users.id })

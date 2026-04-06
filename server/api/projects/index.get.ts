@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  const session = await requireUserSession(event);
+  const { user } = await requireUserSession(event);
 
   const { scope, search } = z
     .object({
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     })
     .parse(getQuery(event));
 
-  const conditions = [eq(schema.teamMembers.userId, session.user.id)];
+  const conditions = [eq(schema.teamMembers.userId, user.id)];
 
   if (scope === "joined") {
     conditions.push(eq(schema.teamMembers.role, "member"));
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
       schema.teamMembers,
       and(
         eq(schema.teamMembers.teamId, schema.teams.id),
-        eq(schema.teamMembers.userId, session.user.id),
+        eq(schema.teamMembers.userId, user.id),
       ),
     )
     .where(and(...conditions))

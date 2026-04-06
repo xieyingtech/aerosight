@@ -10,10 +10,12 @@ This project is built with nuxt@4 + @nuxt/hub + @nuxt/ui + @nuxtjs/i18n + nuxt-a
 
 ## Backend
 
-- Authentication should use `await getUserSession(event)` and `await requireUserSession(event)` from nuxt-auth-utils.
+- Authentication should use `const { user } = await getUserSession(event)` and `const { user } = await requireUserSession(event)` from nuxt-auth-utils.
 - The backend API should be as simple as possible. Do not arbitrarily customize the Type. If there is no need, do not perform too much validation. Please use Zod to validate the request body. Don't define the zod schema, directly use `z.object({ ... }).parse(body)` to validate the request body.
 - Database operations use the Drizzle ORM provided by NuxtHub. The database schema is defined in `server/db/schema.ts`. Use `import { db, schema } from "@nuxthub/db"` to access it.
 - The backend directly returns the result returned by the database. For example, `return db.select().from(users).where(eq(users.id, userId))`.
 - When there are multiple sub-paths under a certain path, directories should be created first, and then the `index.xxx.ts` should be used.
 - When validating request body with Zod, return i18n message codes in error messages (e.g., `errors.validation.required`). Update the corresponding i18n files with these message codes to support multiple languages.
 - Do not write the database migration files yourself. Instead, use `pnpm nuxt db generate` to generate them.
+
+After completing the editing, please run `pnpm nuxt typecheck` to check for any errors.

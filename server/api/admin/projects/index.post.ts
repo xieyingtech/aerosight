@@ -2,7 +2,7 @@ import { db, schema } from "@nuxthub/db";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  const session = await requireUserSession(event);
+  const { user } = await requireUserSession(event);
 
   const body = await readBody(event);
   const payload = z
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
       teamId: payload.teamId,
       name: payload.name,
       description: payload.description || null,
-      createdByUserId: session.user.id,
+      createdByUserId: user.id,
     })
     .returning();
 });

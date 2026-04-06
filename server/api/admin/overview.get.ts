@@ -2,7 +2,7 @@ import { db, schema } from "@nuxthub/db";
 import { count } from "drizzle-orm";
 
 export default defineEventHandler(async (event) => {
-  await requireUserSession(event);
+  const { user: _user } = await requireUserSession(event);
 
   const [usersResult, teamsResult, projectsResult] = await Promise.all([
     db.select({ total: count(schema.users.id) }).from(schema.users),

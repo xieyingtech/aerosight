@@ -31,7 +31,9 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-    "husky": "^9.1.7"
+    "@vue/language-core": "^3.2.6",
+    "husky": "^9.1.7",
+    "vue-tsc": "^3.2.6"
   },
   "packageManager": "pnpm@10.33.0"
 }

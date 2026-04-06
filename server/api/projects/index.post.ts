@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  const session = await requireUserSession(event);
+  const { user } = await requireUserSession(event);
 
   const body = await readBody(event);
   const { teamId, name } = z
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     .where(
       and(
         eq(schema.teamMembers.teamId, teamId),
-        eq(schema.teamMembers.userId, session.user.id),
+        eq(schema.teamMembers.userId, user.id),
         inArray(schema.teamMembers.role, ["owner", "admin"]),
       ),
     )
@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
     .values({
       teamId,
       name,
-      createdByUserId: session.user.id,
+      createdByUserId: user.id,
     })
     .returning();
 });

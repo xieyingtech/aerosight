@@ -2,7 +2,7 @@ import { db, schema } from "@nuxthub/db";
 import { z } from "zod";
 
 export default defineEventHandler(async (event) => {
-  await requireUserSession(event);
+  const { user: _user } = await requireUserSession(event);
 
   const body = await readBody(event);
   const payload = z
