@@ -14,6 +14,7 @@
     "@nuxthub/core": "0.10.7",
     "@nuxtjs/i18n": "10.2.4",
     "@vueuse/nuxt": "14.2.1",
+    "dayjs": "^1.11.20",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "echarts": "^6.0.0",
