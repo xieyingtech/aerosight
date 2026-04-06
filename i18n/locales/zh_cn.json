@@ -67,6 +67,52 @@
 			"noTeamDescription": "你当前没有 owner/admin 权限的团队，暂时无法创建项目"
 		}
 	},
+	"profile": {
+		"title": "个人中心",
+		"sidebar": {
+			"title": "菜单"
+		},
+		"tabs": {
+			"info": "个人信息",
+			"teams": "我的团队"
+		},
+		"info": {
+			"description": "查看并维护你的账号基础信息",
+			"save": "保存",
+			"saveSuccess": "保存成功",
+			"saveFailed": "保存失败",
+			"empty": "未填写",
+			"fields": {
+				"id": "用户 ID",
+				"name": "姓名",
+				"role": "系统角色",
+				"email": "邮箱",
+				"phone": "手机号",
+				"createdAt": "注册时间"
+			},
+			"placeholders": {
+				"name": "请输入姓名",
+				"email": "请输入邮箱",
+				"phone": "请输入手机号"
+			},
+			"table": {
+				"columns": {
+					"field": "字段",
+					"value": "内容"
+				}
+			}
+		},
+		"teams": {
+			"resultCount": "共 {count} 个团队",
+			"table": {
+				"columns": {
+					"name": "团队名称",
+					"role": "我的角色",
+					"joinedAt": "加入时间"
+				}
+			}
+		}
+	},
 	"errors": {
 		"generic": "请求失败，请稍后重试",
 		"auth": {
