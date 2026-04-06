@@ -6,7 +6,7 @@ This project is built with nuxt@4 + @nuxt/hub + @nuxt/ui + @nuxtjs/i18n + nuxt-a
 
 - Prioritize using components from Nuxt UI, and avoid writing too much tailwindcss yourself if not necessary.
 - For error messages in Toast, add `e.data?.message || e.message` in the description to display the specific error information.
-- Your code should be concise enough. Do not write auxiliary functions that are only used several times; instead, perform the operations directly within the template.
+- Your code should be concise enough. Do not write auxiliary functions that are only used several times; instead, perform the operations directly within the template. Excluding binding events.
 
 ## Backend
 
@@ -16,3 +16,4 @@ This project is built with nuxt@4 + @nuxt/hub + @nuxt/ui + @nuxtjs/i18n + nuxt-a
 - The backend directly returns the result returned by the database. For example, `return db.select().from(users).where(eq(users.id, userId))`.
 - When there are multiple sub-paths under a certain path, directories should be created first, and then the `index.xxx.ts` should be used.
 - When validating request body with Zod, return i18n message codes in error messages (e.g., `errors.validation.required`). Update the corresponding i18n files with these message codes to support multiple languages.
+- Do not write the database migration files yourself. Instead, use `pnpm nuxt db generate` to generate them.

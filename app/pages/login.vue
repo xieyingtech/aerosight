@@ -49,7 +49,7 @@ function login(payload: FormSubmitEvent<z.infer<typeof schema>>) {
   })
     .then(async () => {
       await fetch();
-      navigateTo("/console");
+      navigateTo("/");
     })
     .catch((err) => {
       toast.add({

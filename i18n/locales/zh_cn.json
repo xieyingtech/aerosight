@@ -74,14 +74,26 @@
 			"forbidden": "你没有权限执行此操作"
 		},
 		"validation": {
+			"id": {
+				"required": "参数 ID 无效"
+			},
 			"username": {
 				"required": "邮箱或手机号不能为空"
+			},
+			"userName": {
+				"required": "用户名称不能为空"
 			},
 			"password": {
 				"required": "密码不能为空"
 			},
 			"teamId": {
 				"required": "请选择团队"
+			},
+			"teamName": {
+				"required": "团队名称不能为空"
+			},
+			"ownerUserId": {
+				"required": "请选择团队 Owner"
 			},
 			"projectName": {
 				"required": "项目名称不能为空"

@@ -15,6 +15,9 @@ const { user } = useUserSession();
       <UAvatar v-if="user" :alt="user.name" />
       <UButton v-else variant="outline" to="/login">登录</UButton>
     </template>
+    <template #body>
+      <slot name="header-body" />
+    </template>
   </UHeader>
   <UMain>
     <UContainer>

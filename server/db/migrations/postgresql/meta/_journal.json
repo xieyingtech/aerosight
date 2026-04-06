@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1773992042326,
-      "tag": "0000_open_lifeguard",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1775185405634,
-      "tag": "0001_loose_maximus",
+      "when": 1775456725041,
+      "tag": "0000_typical_scorpion",
       "breakpoints": true
     }
   ]

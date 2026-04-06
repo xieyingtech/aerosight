@@ -6,6 +6,7 @@ export default defineNitroPlugin(async () => {
       name: "admin",
       email: "admin@example.com",
       password: await hashPassword("admin"),
+      role: "admin",
     });
     console.log("Default admin user created");
   }

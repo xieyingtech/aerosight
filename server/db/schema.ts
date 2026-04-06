@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   index,
@@ -48,6 +48,9 @@ export const teamMembers = pgTable(
   },
   (table) => [
     uniqueIndex("team_members_team_user_unique").on(table.teamId, table.userId),
+    uniqueIndex("team_members_single_owner_unique")
+      .on(table.teamId)
+      .where(sql`${table.role} = 'owner'`),
     index("team_members_user_idx").on(table.userId),
   ],
 );
