@@ -57,14 +57,6 @@ const columns: TableColumn<ProjectListItem>[] = [
     accessorKey: "name",
   },
   {
-    header: t("projects.index.table.columns.team"),
-    accessorKey: "teamName",
-  },
-  {
-    header: t("projects.index.table.columns.role"),
-    accessorKey: "role",
-  },
-  {
     header: t("projects.index.table.columns.updatedAt"),
     accessorKey: "updatedAt",
   },
@@ -93,18 +85,9 @@ const resultCountLabel = computed(() =>
   t("projects.index.resultCount", { count: projectItems.value.length }),
 );
 
-function applySearch() {
+function search() {
   searchQuery.value = searchText.value.trim();
   void refresh();
-}
-
-function formatUpdatedAt(value: string | Date) {
-  return new Date(value).toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Shanghai",
-  });
 }
 </script>
 
@@ -121,7 +104,7 @@ function formatUpdatedAt(value: string | Date) {
       :description="resultCountLabel"
     />
     <UPageBody>
-      <form class="w-full" @submit.prevent="applySearch">
+      <form class="w-full" @submit.prevent="search">
         <UFieldGroup class="w-full">
           <UInput
             v-model="searchText"
@@ -142,12 +125,24 @@ function formatUpdatedAt(value: string | Date) {
       <UTable :data="projectItems" :columns="columns" sticky class="flex-1">
         <template #name-cell="{ row }">
           <div class="space-y-1">
-            <NuxtLink
-              :to="`/projects/${row.original.id}`"
-              class="font-medium text-highlighted hover:underline"
-            >
-              {{ row.original.name }}
-            </NuxtLink>
+            <p class="flex items-center gap-2">
+              <ULink
+                :to="`/projects/${row.original.id}`"
+                class="min-w-0 text-sm hover:underline"
+              >
+                <span class="text-dimmed">{{ row.original.teamName }}/</span>
+                <span class="font-medium text-highlighted">
+                  {{ row.original.name }}
+                </span>
+              </ULink>
+              <UBadge
+                variant="subtle"
+                :color="roleColors[row.original.role]"
+                class="shrink-0"
+              >
+                {{ t(`projects.index.role.${row.original.role}`) }}
+              </UBadge>
+            </p>
             <p class="text-xs text-muted">
               {{
                 row.original.description || t("projects.index.noDescription")
@@ -156,19 +151,9 @@ function formatUpdatedAt(value: string | Date) {
           </div>
         </template>
 
-        <template #teamName-cell="{ row }">
-          <span class="text-sm text-muted">{{ row.original.teamName }}</span>
-        </template>
-
-        <template #role-cell="{ row }">
-          <UBadge variant="subtle" :color="roleColors[row.original.role]">
-            {{ t(`projects.index.role.${row.original.role}`) }}
-          </UBadge>
-        </template>
-
         <template #updatedAt-cell="{ row }">
           <span class="text-sm text-muted">
-            {{ formatUpdatedAt(row.original.updatedAt) }}
+            {{ new Date(row.original.updatedAt).toLocaleDateString() }}
           </span>
         </template>
       </UTable>
