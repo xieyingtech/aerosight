@@ -46,111 +46,109 @@ const selectedTeamId = computed<number | undefined>({
 </script>
 
 <template>
-  <UPage>
-    <UPageHeader
-      :title="t('projects.new.title')"
-      :description="t('projects.new.description')"
-    />
+  <UPageHeader
+    :title="t('projects.new.title')"
+    :description="t('projects.new.description')"
+  />
 
-    <UPageBody>
-      <UCard>
-        <UForm
-          :schema="schema"
-          :state="state"
-          class="space-y-4"
-          @submit="
-            async (payload) => {
-              try {
-                const created = await fetchApi('/api/projects', {
-                  method: 'POST',
-                  body: {
-                    teamId: payload.data.teamId,
-                    name: payload.data.name,
-                  },
-                });
+  <UPageBody>
+    <UCard>
+      <UForm
+        :schema="schema"
+        :state="state"
+        class="space-y-4"
+        @submit="
+          async (payload) => {
+            try {
+              const created = await fetchApi('/api/projects', {
+                method: 'POST',
+                body: {
+                  teamId: payload.data.teamId,
+                  name: payload.data.name,
+                },
+              });
 
-                const projectId = created[0]?.id;
+              const projectId = created[0]?.id;
 
-                toast.add({
-                  title: t('projects.new.successTitle'),
-                  description: t('projects.new.successDescription'),
-                  color: 'success',
-                });
+              toast.add({
+                title: t('projects.new.successTitle'),
+                description: t('projects.new.successDescription'),
+                color: 'success',
+              });
 
-                await navigateTo(
-                  projectId ? `/projects/${projectId}` : '/projects',
-                );
-              } catch (e) {
-                const error = e as {
-                  data?: { message?: string };
-                  message?: string;
-                };
-                const message = error.data?.message || error.message;
+              await navigateTo(
+                projectId ? `/projects/${projectId}` : '/projects',
+              );
+            } catch (e) {
+              const error = e as {
+                data?: { message?: string };
+                message?: string;
+              };
+              const message = error.data?.message || error.message;
 
-                toast.add({
-                  title: t('projects.new.failedTitle'),
-                  description: message
-                    ? String(message).startsWith('errors.')
-                      ? t(String(message))
-                      : String(message)
-                    : t('errors.generic'),
-                  color: 'error',
-                });
-              }
+              toast.add({
+                title: t('projects.new.failedTitle'),
+                description: message
+                  ? String(message).startsWith('errors.')
+                    ? t(String(message))
+                    : String(message)
+                  : t('errors.generic'),
+                color: 'error',
+              });
             }
-          "
+          }
+        "
+      >
+        <UFormField
+          :label="t('projects.new.fields.team.label')"
+          name="teamId"
+          required
         >
-          <UFormField
-            :label="t('projects.new.fields.team.label')"
-            name="teamId"
-            required
-          >
-            <USelectMenu
-              v-model="selectedTeamId"
-              :items="teamOptions"
-              value-key="id"
-              label-key="name"
-              :placeholder="t('projects.new.fields.team.placeholder')"
-              :loading="teamsPending"
-              class="w-full"
-            />
-          </UFormField>
-
-          <UFormField
-            :label="t('projects.new.fields.name.label')"
-            name="name"
-            required
-          >
-            <UInput
-              v-model="state.name"
-              class="w-full"
-              :placeholder="t('projects.new.fields.name.placeholder')"
-            />
-          </UFormField>
-
-          <UAlert
-            v-if="!teamsPending && !teamOptions.length"
-            color="warning"
-            variant="subtle"
-            :title="t('projects.new.noTeamTitle')"
-            :description="t('projects.new.noTeamDescription')"
+          <USelectMenu
+            v-model="selectedTeamId"
+            :items="teamOptions"
+            value-key="id"
+            label-key="name"
+            :placeholder="t('projects.new.fields.team.placeholder')"
+            :loading="teamsPending"
+            class="w-full"
           />
+        </UFormField>
 
-          <div class="flex items-center gap-3">
-            <UButton
-              type="submit"
-              color="primary"
-              icon="i-lucide-plus"
-              :disabled="!teamOptions.length"
-            >
-              {{ t("projects.new.submit") }}
-            </UButton>
-            <UButton color="neutral" variant="ghost" to="/projects">
-              {{ t("projects.new.cancel") }}
-            </UButton>
-          </div>
-        </UForm>
-      </UCard>
-    </UPageBody>
-  </UPage>
+        <UFormField
+          :label="t('projects.new.fields.name.label')"
+          name="name"
+          required
+        >
+          <UInput
+            v-model="state.name"
+            class="w-full"
+            :placeholder="t('projects.new.fields.name.placeholder')"
+          />
+        </UFormField>
+
+        <UAlert
+          v-if="!teamsPending && !teamOptions.length"
+          color="warning"
+          variant="subtle"
+          :title="t('projects.new.noTeamTitle')"
+          :description="t('projects.new.noTeamDescription')"
+        />
+
+        <div class="flex items-center gap-3">
+          <UButton
+            type="submit"
+            color="primary"
+            icon="i-lucide-plus"
+            :disabled="!teamOptions.length"
+          >
+            {{ t("projects.new.submit") }}
+          </UButton>
+          <UButton color="neutral" variant="ghost" to="/projects">
+            {{ t("projects.new.cancel") }}
+          </UButton>
+        </div>
+      </UForm>
+    </UCard>
+  </UPageBody>
 </template>

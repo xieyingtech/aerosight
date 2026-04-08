@@ -24,6 +24,7 @@ export default defineNuxtConfig({
     db: "postgresql",
   },
   routeRules: {
+    "/projects/**": { appLayout: "projects" },
     "/admin/**": { appLayout: "admin" },
   },
 });
