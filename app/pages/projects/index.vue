@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumn } from "@nuxt/ui";
+import type { NavigationMenuItem, TableColumn } from "@nuxt/ui";
 import type { InternalApi } from "nitropack/types";
 
 type ProjectScope = "all" | "joined" | "managed";
@@ -25,6 +25,31 @@ const activeScope = computed<ProjectScope>(() => {
 
   return "all";
 });
+
+const scopeItems = computed<NavigationMenuItem[]>(() => [
+  {
+    type: "label",
+    label: t("projects.index.sidebar.title"),
+  },
+  {
+    label: t("projects.index.scopes.all"),
+    icon: "i-lucide-layers-3",
+    to: "/projects",
+    active: activeScope.value === "all",
+  },
+  {
+    label: t("projects.index.scopes.joined"),
+    icon: "i-lucide-users",
+    to: "/projects?scope=joined",
+    active: activeScope.value === "joined",
+  },
+  {
+    label: t("projects.index.scopes.managed"),
+    icon: "i-lucide-shield-check",
+    to: "/projects?scope=managed",
+    active: activeScope.value === "managed",
+  },
+]);
 
 const columns: TableColumn<ProjectListItem>[] = [
   {
@@ -67,70 +92,78 @@ function search() {
 </script>
 
 <template>
-  <UPageHeader
-    :title="t('projects.index.title')"
-    :description="resultCountLabel"
-  >
-    <template #links>
-      <UButton
-        icon="i-lucide-plus"
-        color="primary"
-        :label="t('projects.index.newProject')"
-        to="/projects/new"
-      />
+  <UPage>
+    <template #left>
+      <UPageAside>
+        <UNavigationMenu :items="scopeItems" orientation="vertical" highlight />
+      </UPageAside>
     </template>
-  </UPageHeader>
-  <UPageBody>
-    <form class="w-full" @submit.prevent="search">
-      <UFieldGroup class="w-full">
-        <UInput
-          v-model="searchText"
-          class="flex-1"
-          :placeholder="t('projects.index.searchPlaceholder')"
-        />
+
+    <UPageHeader
+      :title="t('projects.index.title')"
+      :description="resultCountLabel"
+    >
+      <template #links>
         <UButton
-          type="submit"
-          color="neutral"
-          variant="subtle"
-          icon="i-lucide-search"
-          :aria-label="t('projects.index.searchButton')"
-          :loading="pending"
+          icon="i-lucide-plus"
+          color="primary"
+          :label="t('projects.index.newProject')"
+          to="/projects/new"
         />
-      </UFieldGroup>
-    </form>
-
-    <UTable :data="projectItems" :columns="columns" sticky class="flex-1">
-      <template #name-cell="{ row }">
-        <div class="space-y-1">
-          <p class="flex items-center gap-2">
-            <ULink
-              :to="`/projects/${row.original.id}`"
-              class="min-w-0 text-sm hover:underline"
-            >
-              <span class="text-dimmed">{{ row.original.teamName }}/</span>
-              <span class="font-medium text-highlighted">
-                {{ row.original.name }}
-              </span>
-            </ULink>
-            <UBadge
-              variant="subtle"
-              :color="roleColors[row.original.role]"
-              class="shrink-0"
-            >
-              {{ t(`projects.index.role.${row.original.role}`) }}
-            </UBadge>
-          </p>
-          <p class="text-xs text-muted">
-            {{ row.original.description || t("projects.index.noDescription") }}
-          </p>
-        </div>
       </template>
+    </UPageHeader>
+    <UPageBody>
+      <form class="w-full" @submit.prevent="search">
+        <UFieldGroup class="w-full">
+          <UInput
+            v-model="searchText"
+            class="flex-1"
+            :placeholder="t('projects.index.searchPlaceholder')"
+          />
+          <UButton
+            type="submit"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-search"
+            :aria-label="t('projects.index.searchButton')"
+            :loading="pending"
+          />
+        </UFieldGroup>
+      </form>
 
-      <template #updatedAt-cell="{ row }">
-        <span class="text-sm text-muted">
-          {{ new Date(row.original.updatedAt).toLocaleDateString() }}
-        </span>
-      </template>
-    </UTable>
-  </UPageBody>
+      <UTable :data="projectItems" :columns="columns" sticky class="flex-1">
+        <template #name-cell="{ row }">
+          <div class="space-y-1">
+            <p class="flex items-center gap-2">
+              <ULink
+                :to="`/projects/${row.original.id}`"
+                class="min-w-0 text-sm hover:underline"
+              >
+                <span class="text-dimmed">{{ row.original.teamName }}/</span>
+                <span class="font-medium text-highlighted">
+                  {{ row.original.name }}
+                </span>
+              </ULink>
+              <UBadge
+                variant="subtle"
+                :color="roleColors[row.original.role]"
+                class="shrink-0"
+              >
+                {{ t(`projects.index.role.${row.original.role}`) }}
+              </UBadge>
+            </p>
+            <p class="text-xs text-muted">
+              {{ row.original.description || t("projects.index.noDescription") }}
+            </p>
+          </div>
+        </template>
+
+        <template #updatedAt-cell="{ row }">
+          <span class="text-sm text-muted">
+            {{ new Date(row.original.updatedAt).toLocaleDateString() }}
+          </span>
+        </template>
+      </UTable>
+    </UPageBody>
+  </UPage>
 </template>
