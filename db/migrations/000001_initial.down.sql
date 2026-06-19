@@ -1,0 +1,1 @@
+-- irreversible initial schema migration
