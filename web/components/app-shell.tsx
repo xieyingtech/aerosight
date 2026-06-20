@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, Shield, User } from "lucide-react";
+import { Building2, Package, Shield, User } from "lucide-react";
 import { getSession } from "@/lib/api";
 import { LogoutButton } from "@/components/logout-button";
 
@@ -16,6 +16,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
             <Link className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100" href="/projects">
               <Package size={16} />
               项目
+            </Link>
+            <Link className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100" href="/teams">
+              <Building2 size={16} />
+              团队
             </Link>
             {session?.user.role === "admin" ? (
               <Link className="inline-flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-100" href="/admin">

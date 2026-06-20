@@ -102,6 +102,80 @@ func (s *Store) ListManagedTeams(ctx context.Context, userID int32) ([]ManagedTe
 	return items, rows.Err()
 }
 
+func (s *Store) ListTeams(ctx context.Context, userID int32, search string) ([]TeamListItem, error) {
+	query := `
+		select t.id, t.name, current_members.role, count(all_members.id), t.created_at, t.updated_at
+		from teams t
+		inner join team_members current_members on current_members.team_id = t.id and current_members.user_id = $1
+		left join team_members all_members on all_members.team_id = t.id
+		where current_members.user_id = $1`
+	args := []any{userID}
+	if strings.TrimSpace(search) != "" {
+		query += ` and t.name ilike $2`
+		args = append(args, "%"+strings.TrimSpace(search)+"%")
+	}
+	query += `
+		group by t.id, t.name, t.created_at, t.updated_at, current_members.role
+		order by t.name asc`
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TeamListItem{}
+	for rows.Next() {
+		var item TeamListItem
+		if err := rows.Scan(&item.ID, &item.Name, &item.Role, &item.MemberCount, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (s *Store) GetTeamDetail(ctx context.Context, userID, teamID int32) (TeamDetail, error) {
+	var detail TeamDetail
+	if err := s.pool.QueryRow(ctx, `
+		select t.id, t.name, tm.role, count(all_members.id), t.created_at, t.updated_at
+		from teams t
+		inner join team_members tm on tm.team_id = t.id and tm.user_id = $1
+		left join team_members all_members on all_members.team_id = t.id
+		where t.id = $2
+		group by t.id, t.name, t.created_at, t.updated_at, tm.role
+		limit 1
+	`, userID, teamID).Scan(
+		&detail.Team.ID,
+		&detail.Team.Name,
+		&detail.Team.Role,
+		&detail.Team.MemberCount,
+		&detail.Team.CreatedAt,
+		&detail.Team.UpdatedAt,
+	); err != nil {
+		return TeamDetail{}, err
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		select id, name, description, updated_at
+		from projects
+		where team_id = $1
+		order by updated_at desc
+	`, teamID)
+	if err != nil {
+		return TeamDetail{}, err
+	}
+	defer rows.Close()
+	detail.Projects = []TeamProject{}
+	for rows.Next() {
+		var project TeamProject
+		if err := rows.Scan(&project.ID, &project.Name, &project.Description, &project.UpdatedAt); err != nil {
+			return TeamDetail{}, err
+		}
+		detail.Projects = append(detail.Projects, project)
+	}
+	return detail, rows.Err()
+}
+
 func (s *Store) ListProjects(ctx context.Context, userID int32, scope, search string) ([]Project, error) {
 	query := `
 		select p.id, p.team_id, p.name, p.description, p.created_by_user_id, p.created_at, p.updated_at, t.name, tm.role, null::text

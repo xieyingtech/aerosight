@@ -84,6 +84,36 @@ func (s *Server) managedTeams(c *gin.Context) {
 	respond(c, items, err)
 }
 
+func (s *Server) teams(c *gin.Context) {
+	items, err := s.store.ListTeams(c.Request.Context(), currentUser(c).ID, c.Query("search"))
+	respond(c, items, err)
+}
+
+func (s *Server) createTeam(c *gin.Context) {
+	user := currentUser(c)
+	var body struct {
+		Name string `json:"name"`
+	}
+	if !bindJSON(c, &body) {
+		return
+	}
+	if optionalString(body.Name) == nil {
+		abort(c, http.StatusBadRequest, "errors.validation.teamName.required")
+		return
+	}
+	items, err := s.store.CreateTeam(c.Request.Context(), body.Name, user.ID)
+	respond(c, items, err)
+}
+
+func (s *Server) team(c *gin.Context) {
+	id, ok := idParam(c)
+	if !ok {
+		return
+	}
+	item, err := s.store.GetTeamDetail(c.Request.Context(), currentUser(c).ID, id)
+	respond(c, item, err)
+}
+
 func (s *Server) projects(c *gin.Context) {
 	items, err := s.store.ListProjects(c.Request.Context(), currentUser(c).ID, c.Query("scope"), c.Query("search"))
 	respond(c, items, err)

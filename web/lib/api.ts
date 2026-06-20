@@ -24,6 +24,27 @@ export type ManagedTeam = {
   name: string;
 };
 
+export type TeamRole = "owner" | "admin" | "member";
+
+export type TeamListItem = {
+  id: number;
+  name: string;
+  role: TeamRole;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TeamDetail = {
+  team: TeamListItem;
+  projects: {
+    id: number;
+    name: string;
+    description: string | null;
+    updatedAt: string;
+  }[];
+};
+
 const apiBase = process.env.API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export class ApiError extends Error {

@@ -20,6 +20,27 @@ type Team struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type TeamListItem struct {
+	ID          int32     `json:"id"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"`
+	MemberCount int64     `json:"memberCount"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type TeamDetail struct {
+	Team     TeamListItem  `json:"team"`
+	Projects []TeamProject `json:"projects"`
+}
+
+type TeamProject struct {
+	ID          int32     `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type Project struct {
 	ID              int32     `json:"id"`
 	TeamID          int32     `json:"teamId"`

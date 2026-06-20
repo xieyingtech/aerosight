@@ -8,6 +8,28 @@
       "failed": "登录失败"
     }
   },
+  "teams": {
+    "index": {
+      "title": "团队",
+      "newTeam": "新建团队",
+      "searchPlaceholder": "按团队名称搜索",
+      "searchButton": "搜索",
+      "resultCount": "共 {count} 个团队",
+      "role": {
+        "owner": "所有者",
+        "admin": "管理员",
+        "member": "成员"
+      },
+      "create": {
+        "successTitle": "创建成功",
+        "successDescription": "团队已创建",
+        "failedTitle": "创建失败"
+      }
+    },
+    "detail": {
+      "titleFallback": "团队详情"
+    }
+  },
   "errors": {
     "generic": "请求失败，请稍后重试",
     "auth": {
