@@ -6,11 +6,11 @@ Intelligent drone patrol management system.
 
 - API: Go + Gin + pgx, with sqlc query definitions in `db/queries`.
 - Web: Next.js App Router + React + Tailwind CSS + MapLibre.
-- Database: PostgreSQL. The initial migration is in `db/migrations/000001_initial.up.sql`.
+- Database: PostgreSQL. The development schema is in `db/schema.sql`.
 
 ## Development
 
-1. Create a PostgreSQL database and apply `db/migrations/000001_initial.up.sql`.
+1. Create a PostgreSQL database and apply `db/schema.sql`.
 2. Copy `.env.example` to `.env` and fill `DATABASE_URL` and `SESSION_SECRET`.
 3. Start the Go API:
 
