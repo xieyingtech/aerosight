@@ -3,6 +3,7 @@ import { Page } from "@/components/page";
 import { ProjectMap } from "@/components/project-map";
 import { readProjectSituationSnapshot } from "@/lib/project-snapshot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ProjectTimeline } from "@/components/project-timeline";
 
 export default async function ProjectOverview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,6 +19,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
         ))}
       </div>
       <ProjectMap snapshot={snapshot} />
+      <ProjectTimeline snapshot={snapshot} />
     </Page>
   );
 }

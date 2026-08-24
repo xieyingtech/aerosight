@@ -3,6 +3,7 @@ import { Page } from "@/components/page";
 import { ProjectMap } from "@/components/project-map";
 import { getProject, requireUser } from "@/lib/data";
 import { readProjectSituationSnapshot } from "@/lib/project-snapshot";
+import { ProjectTimeline } from "@/components/project-timeline";
 
 export default async function RealtimeOperationsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,6 +21,7 @@ export default async function RealtimeOperationsPage({ params }: { params: Promi
           <p className="mt-1 text-sm text-muted-foreground">设备上线或任务启动后，将在这里显示直播与控制状态。</p>
         </div>
       </div>
+      <ProjectTimeline snapshot={snapshot} />
     </Page>
   );
 }
