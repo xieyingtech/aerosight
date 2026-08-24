@@ -28,7 +28,7 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   assert.equal(snapshot?.project.id, 7);
   assert.match(client.statements[0], /repeatable read read only/i);
   assert.equal(client.statements.at(-1), "commit");
-  for (const marker of ["snapshot:devices", "snapshot:active-tasks", "snapshot:media", "snapshot:alerts"]) {
+  for (const marker of ["snapshot:devices", "snapshot:tracks", "snapshot:active-tasks", "snapshot:media", "snapshot:alerts"]) {
     assert(client.statements.some((statement) => statement.includes(marker)));
   }
   assert(client.released);

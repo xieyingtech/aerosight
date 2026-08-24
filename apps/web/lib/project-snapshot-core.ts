@@ -8,6 +8,7 @@ export type ProjectSituationSnapshot = {
   generatedAt: string;
   consistency: "repeatable-read";
   devices: Array<Record<string, unknown>>;
+  tracks: Array<Record<string, unknown>>;
   activeTasks: Array<Record<string, unknown>>;
   liveStreams: Array<Record<string, unknown>>;
   mediaPoints: Array<Record<string, unknown>>;
@@ -78,10 +79,23 @@ export async function readProjectSituationSnapshot(
     const activeTasks = (await client.query<Record<string, unknown>>(
       `/* snapshot:active-tasks */
        select run.id, run.status, run.started_at as "startedAt", run.created_at as "createdAt",
-              task.id as "taskId", task.name as "taskName"
+              task.id as "taskId", task.name as "taskName", run.input_snapshot_json as input
        from task_runs run join tasks task on task.id = run.task_id and task.project_id = run.project_id
        where run.project_id = $1 and run.status in ('queued', 'running', 'paused')
        order by run.created_at desc`,
+      [projectId]
+    )).rows;
+    const tracks = (await client.query<Record<string, unknown>>(
+      `/* snapshot:tracks */
+       select recent.device_id as "deviceId", min(recent.captured_at) as "startedAt",
+              max(recent.captured_at) as "endedAt", count(*)::int as "pointCount",
+              ST_AsGeoJSON(ST_MakeLine(recent.standard_position order by recent.captured_at))::json as geometry
+       from (
+         select pose.device_id, pose.captured_at, pose.standard_position
+         from poses pose where pose.project_id = $1 and pose.standard_position is not null
+         order by pose.captured_at desc limit 5000
+       ) recent
+       group by recent.device_id having count(*) >= 2`,
       [projectId]
     )).rows;
     const mediaPoints = (await client.query<Record<string, unknown>>(
@@ -104,12 +118,13 @@ export async function readProjectSituationSnapshot(
     )).rows;
 
     const generatedAt = new Date();
-    const latest = latestTimestamp([devices, activeTasks, mediaPoints, openAlerts]);
+    const latest = latestTimestamp([devices, tracks, activeTasks, mediaPoints, openAlerts]);
     const snapshot: ProjectSituationSnapshot = {
       project,
       generatedAt: generatedAt.toISOString(),
       consistency: "repeatable-read",
       devices,
+      tracks,
       activeTasks,
       liveStreams: [],
       mediaPoints,
