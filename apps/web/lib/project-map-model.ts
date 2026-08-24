@@ -126,3 +126,15 @@ export function firstMapCoordinate(model: FeatureCollection<Geometry, MapPropert
   }
   return null;
 }
+
+export function filterProjectMapModelByTime(
+  model: FeatureCollection<Geometry, MapProperties>,
+  range: { from: string; to: string } | null
+): FeatureCollection<Geometry, MapProperties> {
+  if (!range) return model;
+  return {
+    ...model,
+    features: model.features.filter((item) => !item.properties.capturedAt ||
+      (item.properties.capturedAt >= range.from && item.properties.capturedAt <= range.to))
+  };
+}

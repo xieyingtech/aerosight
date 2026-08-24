@@ -1,9 +1,8 @@
 import { getProject, requireUser } from "@/lib/data";
 import { Page } from "@/components/page";
-import { ProjectMap } from "@/components/project-map";
 import { readProjectSituationSnapshot } from "@/lib/project-snapshot";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ProjectTimeline } from "@/components/project-timeline";
+import { SituationExplorer } from "@/components/situation-explorer";
 
 export default async function ProjectOverview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,8 +17,7 @@ export default async function ProjectOverview({ params }: { params: Promise<{ id
           <Card key={String(label)}><CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{value}</CardContent></Card>
         ))}
       </div>
-      <ProjectMap snapshot={snapshot} />
-      <ProjectTimeline snapshot={snapshot} />
+      <SituationExplorer snapshot={snapshot} />
     </Page>
   );
 }

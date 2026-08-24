@@ -3,11 +3,20 @@
 import { useMemo, useState } from "react";
 import Map, { Layer, NavigationControl, Source } from "react-map-gl/maplibre";
 import { cn } from "@/lib/utils";
-import { createProjectMapModel, firstMapCoordinate, projectMapLayers } from "@/lib/project-map-model";
+import { createProjectMapModel, filterProjectMapModelByTime, firstMapCoordinate, projectMapLayers } from "@/lib/project-map-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
+import type { SituationSelection } from "@/lib/situation-state";
 
-export function ProjectMap({ snapshot, className }: { snapshot: ProjectSituationSnapshot; className?: string }) {
-  const model = useMemo(() => createProjectMapModel(snapshot), [snapshot]);
+const interactiveLayers = ["media-points", "alert-points", "suspected-points", "device-drones", "device-docks", "device-ground"];
+
+export function ProjectMap({ snapshot, className, selection, range, onSelect }: {
+  snapshot: ProjectSituationSnapshot;
+  className?: string;
+  selection?: SituationSelection | null;
+  range?: { from: string; to: string } | null;
+  onSelect?: (selection: SituationSelection) => void;
+}) {
+  const model = useMemo(() => filterProjectMapModelByTime(createProjectMapModel(snapshot), range ?? null), [snapshot, range]);
   const center = firstMapCoordinate(model) ?? [116.397, 39.908];
   const [visible, setVisible] = useState(() => new Set(projectMapLayers.map((layer) => layer.id)));
   const toggle = (id: typeof projectMapLayers[number]["id"]) => setVisible((current) => {
@@ -27,7 +36,15 @@ export function ProjectMap({ snapshot, className }: { snapshot: ProjectSituation
       </div>
       <Map
         initialViewState={{ longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
+        interactiveLayerIds={interactiveLayers}
         mapStyle="https://demotiles.maplibre.org/style.json"
+        onClick={(event) => {
+          const properties = event.features?.[0]?.properties;
+          if (properties?.entityId && onSelect) onSelect({
+            lane: String(properties.layerKind), entityId: String(properties.entityId),
+            label: String(properties.label ?? "地图要素"), timestamp: properties.capturedAt ? String(properties.capturedAt) : undefined
+          });
+        }}
         style={{ width: "100%", height: "100%" }}
       >
         <NavigationControl position="bottom-right" />
@@ -42,6 +59,7 @@ export function ProjectMap({ snapshot, className }: { snapshot: ProjectSituation
           {visible.has("drones") && <Layer id="device-drones" type="circle" filter={["==", ["get", "layerKind"], "device-drone"]} paint={{ "circle-color": "#0ea5e9", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
           {visible.has("docks") && <Layer id="device-docks" type="circle" filter={["==", ["get", "layerKind"], "device-dock"]} paint={{ "circle-color": "#334155", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("ground-robots") && <Layer id="device-ground" type="circle" filter={["==", ["get", "layerKind"], "device-ground"]} paint={{ "circle-color": "#22c55e", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
+          {selection && <Layer id="selected-map-point" type="circle" filter={["==", ["get", "entityId"], selection.entityId]} paint={{ "circle-color": "transparent", "circle-radius": 13, "circle-stroke-color": "#111827", "circle-stroke-width": 3 }} />}
         </Source>
       </Map>
       <div className="absolute bottom-3 left-3 rounded-md border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">

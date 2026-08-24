@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProjectMapModel, projectMapLayers } from "./project-map-model.ts";
+import { createProjectMapModel, filterProjectMapModelByTime, projectMapLayers } from "./project-map-model.ts";
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 
 const snapshot: ProjectSituationSnapshot = {
@@ -23,6 +23,13 @@ test("map layer registry keeps all operational layers stable", () => {
   assert.deepEqual(projectMapLayers.map((layer) => layer.id), [
     "regions", "mission-routes", "tracks", "suspected-construction", "media", "alerts", "drones", "docks", "ground-robots"
   ]);
+});
+
+test("history window keeps timeless regions but filters timestamped features", () => {
+  const model = createProjectMapModel(snapshot);
+  const filtered = filterProjectMapModelByTime(model, { from: "2026-08-24T10:00:00Z", to: "2026-08-24T10:01:00Z" });
+  assert(filtered.features.some((item) => item.properties.layerKind === "region"));
+  assert(filtered.features.length <= model.features.length);
 });
 
 test("map model renders air-ground features and drops foreign project data", () => {
