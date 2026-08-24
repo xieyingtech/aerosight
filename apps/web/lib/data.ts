@@ -16,6 +16,7 @@ export type Project = {
   description: string | null;
   teamName: string;
   role: TeamRole;
+  permissions: ProjectPermission[];
   updatedAt: Date;
 };
 
@@ -103,13 +104,17 @@ export async function listProjects(scope = "", search = "") {
   const user = await requireUser();
   const result = await query<Project>(
     `select p.id, p.team_id as "teamId", p.name, p.description,
-            t.name as "teamName", tm.role, p.updated_at as "updatedAt"
+            t.name as "teamName", tm.role,
+            coalesce(array_agg(distinct pp.permission) filter (where pp.permission is not null), '{}') as permissions,
+            p.updated_at as "updatedAt"
      from projects p
      join teams t on t.id = p.team_id
      join team_members tm on tm.team_id = t.id and tm.user_id = $1
+     left join project_permissions pp on pp.project_id = p.id and pp.user_id = $1
      where ($2 <> 'joined' or tm.role = 'member')
        and ($2 <> 'managed' or tm.role in ('owner', 'admin'))
        and ($3 = '' or p.name ilike '%' || $3 || '%' or coalesce(p.description, '') ilike '%' || $3 || '%' or t.name ilike '%' || $3 || '%')
+     group by p.id, t.name, tm.role
      order by p.updated_at desc`,
     [user.id, scope, search.trim()]
   );
@@ -122,11 +127,15 @@ export async function getProject(id: number) {
   if (!access) notFound();
   const result = await query<Project>(
     `select p.id, p.team_id as "teamId", p.name, p.description,
-            t.name as "teamName", tm.role, p.updated_at as "updatedAt"
+            t.name as "teamName", tm.role,
+            coalesce(array_agg(distinct pp.permission) filter (where pp.permission is not null), '{}') as permissions,
+            p.updated_at as "updatedAt"
      from projects p
      join teams t on t.id = p.team_id
      join team_members tm on tm.team_id = t.id and tm.user_id = $1
-     where p.id = $2 and p.team_id = $3`,
+     left join project_permissions pp on pp.project_id = p.id and pp.user_id = $1
+     where p.id = $2 and p.team_id = $3
+     group by p.id, t.name, tm.role`,
     [user.id, access.projectId, access.teamId]
   );
   const project = result.rows[0];

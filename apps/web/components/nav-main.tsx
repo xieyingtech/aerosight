@@ -20,6 +20,7 @@ type NavItem = {
   title: string;
   url: string;
   icon: React.ReactNode;
+  exact?: boolean;
   items?: { title: string; url: string }[];
 };
 
@@ -31,7 +32,7 @@ export function NavMain({ items, label }: { items: NavItem[]; label: string }) {
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
-          const isActive = item.url === "/admin" ? pathname === item.url : pathname.startsWith(item.url);
+          const isActive = item.exact || item.url === "/admin" ? pathname === item.url : pathname.startsWith(item.url);
           return (
             <Collapsible asChild defaultOpen={isActive} key={item.title}>
               <SidebarMenuItem>
