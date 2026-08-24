@@ -12,7 +12,6 @@
     "test": "pnpm test:worker",
     "test:worker": "cd apps/worker && go test ./...",
     "typecheck": "pnpm --dir apps/web typecheck",
-    "check": "pnpm typecheck && pnpm test:worker",
-    "admin:create": "cd apps/web && node --env-file-if-exists=.env.local scripts/create-admin.mjs"
+    "check": "pnpm typecheck && pnpm test:worker"
   }
 }

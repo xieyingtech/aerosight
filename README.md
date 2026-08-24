@@ -19,13 +19,7 @@
 pnpm install
 ```
 
-4. Create the first administrator:
-
-```bash
-ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=change-me pnpm admin:create
-```
-
-5. Start Next.js and the worker:
+4. Start Next.js and the worker:
 
 ```bash
 pnpm dev
@@ -33,6 +27,9 @@ pnpm dev
 
 They can also be started independently with `pnpm dev:web` and
 `pnpm dev:worker`.
+
+When Next.js starts with an empty `users` table, it creates the default
+administrator `admin@example.com` with password `admin`.
 
 Next.js owns authentication, authorization and synchronous database operations.
 The Go process is reserved for asynchronous work delivered through PostgreSQL
