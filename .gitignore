@@ -3,15 +3,15 @@
 
 # Go
 bin/
+.build/
 *.exe
 *.test
 coverage.out
 
 # Next.js
-web/.next/
-web/out/
-web/node_modules/
-web/tsconfig.tsbuildinfo
+apps/web/.next/
+apps/web/out/
+apps/web/tsconfig.tsbuildinfo
 
 # Package managers
 node_modules/

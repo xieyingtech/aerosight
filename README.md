@@ -1,41 +1,46 @@
 # AeroSight
 
-Intelligent drone patrol management system.
+空地一体化智能感知平台。
 
-## Stack
+## Structure
 
-- API: Go + Gin + pgx, with sqlc query definitions in `db/queries`.
-- Web: Next.js App Router + React + Tailwind CSS + MapLibre.
+- `apps/web`: Next.js App Router, Auth.js, PostgreSQL data access and the application UI.
+- `apps/worker`: Minimal Go worker process. Queue consumers will be added with the first background task.
+- `db`: PostgreSQL schema.
 - Database: PostgreSQL. The development schema is in `db/schema.sql`.
 
 ## Development
 
 1. Create a PostgreSQL database and apply `db/schema.sql`.
-2. Copy `.env.example` to `.env` and fill `DATABASE_URL` and `SESSION_SECRET`.
-3. Start the Go API:
+2. Copy `apps/web/.env.example` to `apps/web/.env.local` and fill `DATABASE_URL` and `AUTH_SECRET`.
+3. Install the web dependencies:
 
 ```bash
-go run ./cmd/api
+pnpm install
 ```
 
-4. Start the Next.js app:
+4. Create the first administrator:
 
 ```bash
-cd web
-pnpm install
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=change-me pnpm admin:create
+```
+
+5. Start Next.js and the worker:
+
+```bash
 pnpm dev
 ```
 
-The default admin user is created on API startup when the `users` table is empty:
+They can also be started independently with `pnpm dev:web` and
+`pnpm dev:worker`.
 
-- Email: `admin@example.com`
-- Password: `admin`
+Next.js owns authentication, authorization and synchronous database operations.
+The Go process is reserved for asynchronous work delivered through PostgreSQL
+and, when needed, Redis.
 
 ## Checks
 
 ```bash
-go test ./...
-cd web
-pnpm typecheck
+pnpm check
 pnpm build
 ```

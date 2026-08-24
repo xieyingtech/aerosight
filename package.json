@@ -1,0 +1,18 @@
+{
+  "name": "aerosight",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm run --parallel \"/^dev:.*/\"",
+    "dev:web": "pnpm --dir apps/web dev",
+    "dev:worker": "cd apps/worker && go run ./cmd/worker",
+    "build": "pnpm build:web && pnpm build:worker",
+    "build:web": "pnpm --dir apps/web build",
+    "build:worker": "cd apps/worker && go build -o ../../.build/aerosight-worker ./cmd/worker",
+    "test": "pnpm test:worker",
+    "test:worker": "cd apps/worker && go test ./...",
+    "typecheck": "pnpm --dir apps/web typecheck",
+    "check": "pnpm typecheck && pnpm test:worker",
+    "admin:create": "cd apps/web && node --env-file-if-exists=.env.local scripts/create-admin.mjs"
+  }
+}
