@@ -496,6 +496,46 @@ async function assertTelemetryIngestionSemantics(connectionString) {
   }
 }
 
+async function assertHeartbeatProjectionSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select device.id as device_id, device.project_id, project.team_id, adapter.id as adapter_id
+         from devices device
+         join projects project on project.id = device.project_id
+         join device_adapters adapter on adapter.project_id = project.id
+        where project.name = '北区巡检' limit 1`
+    );
+    const row = scope.rows[0];
+    await client.query(
+      `insert into device_connections (
+         project_id, team_id, adapter_id, device_id, session_key, status,
+         status_reason, last_heartbeat_at, heartbeat_interval_seconds, status_projected_at
+       ) values ($1, $2, $3, $4, 'heartbeat-schema-test', 'online',
+                 'heartbeat_fresh', now(), 30, now())`,
+      [row.project_id, row.team_id, row.adapter_id, row.device_id]
+    );
+    await client.query(
+      `update device_connections set heartbeat_interval_seconds = 1
+        where adapter_id = $1 and session_key = 'heartbeat-schema-test'`,
+      [row.adapter_id]
+    ).then(
+      () => assert(false, "invalid heartbeat interval should fail"),
+      (error) => assert(error.code === "23514", "heartbeat interval failed unexpectedly")
+    );
+    await client.query(
+      "update devices set status = 'connected' where id = $1 and project_id = $2",
+      [row.device_id, row.project_id]
+    ).then(
+      () => assert(false, "non-canonical device connectivity status should fail"),
+      (error) => assert(error.code === "23514", "device status constraint failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 async function assertSpatiotemporalSchema(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
@@ -595,7 +635,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 11, "empty database should apply all migrations");
+    assert(first.applied.length === 12, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -606,6 +646,7 @@ try {
     await assertProjectEventCursorAndDurability(connectionString);
     await assertDeviceConnectivityConstraints(connectionString);
     await assertTelemetryIngestionSemantics(connectionString);
+    await assertHeartbeatProjectionSchema(connectionString);
     await assertSpatiotemporalSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
@@ -620,7 +661,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 11, "existing database should record all migrations");
+    assert(first.applied.length === 12, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });

@@ -7,8 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"aerosight/worker/internal/config"
+	"aerosight/worker/internal/heartbeat"
 	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/outbox"
 	"aerosight/worker/internal/wakeup"
@@ -45,9 +47,16 @@ func main() {
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
-	if err := consumer.RunWithWake(ctx, wake); err != nil {
+	runContext, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	errors := make(chan error, 2)
+	go func() { errors <- consumer.RunWithWake(runContext, wake) }()
+	go func() { errors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
+	if err := <-errors; err != nil {
+		cancelRun()
 		logger.Error("worker stopped unexpectedly", "error", err.Error())
 		os.Exit(1)
 	}
+	cancelRun()
 	logger.Info("worker stopped")
 }

@@ -122,7 +122,8 @@ CREATE TABLE "devices" (
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "devices_id_project_unique" UNIQUE("id", "project_id")
+	CONSTRAINT "devices_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "devices_connectivity_status_valid" CHECK (status in ('online', 'degraded', 'offline', 'unknown'))
 );
 --> statement-breakpoint
 CREATE TABLE "device_external_identities" (
@@ -153,10 +154,13 @@ CREATE TABLE "device_connections" (
 	"status_reason" text,
 	"opened_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_heartbeat_at" timestamp with time zone,
+	"heartbeat_interval_seconds" integer DEFAULT 30 NOT NULL,
+	"status_projected_at" timestamp with time zone,
 	"closed_at" timestamp with time zone,
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	CONSTRAINT "device_connections_session_unique" UNIQUE("adapter_id", "session_key"),
-	CONSTRAINT "device_connections_status_valid" CHECK (status in ('online', 'degraded', 'offline', 'unknown'))
+	CONSTRAINT "device_connections_status_valid" CHECK (status in ('online', 'degraded', 'offline', 'unknown')),
+	CONSTRAINT "device_connections_heartbeat_interval_valid" CHECK (heartbeat_interval_seconds between 5 and 3600)
 );
 --> statement-breakpoint
 CREATE TABLE "device_telemetry" (
@@ -571,6 +575,7 @@ CREATE INDEX "devices_last_seen_idx" ON "devices" USING btree ("last_seen_at");-
 CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "device_connections_project_status_idx" ON "device_connections" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "device_connections_device_opened_idx" ON "device_connections" USING btree ("device_id","opened_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_connections_open_heartbeat_idx" ON "device_connections" USING btree ("last_heartbeat_at") WHERE "device_connections"."closed_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "device_telemetry_source_event_unique" ON "device_telemetry" USING btree ("adapter_id","event_id","captured_at");--> statement-breakpoint
 CREATE INDEX "device_telemetry_project_time_idx" ON "device_telemetry" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "device_telemetry_device_time_idx" ON "device_telemetry" USING btree ("device_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
