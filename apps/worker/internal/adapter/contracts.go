@@ -12,7 +12,10 @@ const SchemaVersionV1 = "adapter.aerosight.dev/v1"
 var upstreamEventTypes = map[string]bool{
 	"device.discovered": true,
 	"device.heartbeat":  true,
+	"device.connection": true,
 	"telemetry.pose":    true,
+	"telemetry.battery": true,
+	"live.status":       true,
 	"media.reference":   true,
 	"command.ack":       true,
 }

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "simulator.aerosight.dev/v1",
+  "name": "air-ground-inspection",
+  "projectId": 101,
+  "adapterId": 9001,
+  "startedAt": "2026-08-24T02:00:00Z",
+  "devices": [
+    {
+      "externalDeviceId": "sim-drone-01",
+      "name": "巡检无人机 01",
+      "deviceType": "drone",
+      "capabilities": ["flight.route", "camera.live", "camera.capture", "command.rth"]
+    },
+    {
+      "externalDeviceId": "sim-ground-01",
+      "name": "地面机器人 01",
+      "deviceType": "ground_robot",
+      "capabilities": ["navigation.route", "camera.live", "camera.capture"]
+    }
+  ],
+  "steps": [
+    {"offsetMilliseconds": 0, "externalDeviceId": "sim-drone-01", "eventType": "device.heartbeat", "payload": {"sessionKey": "drone-session", "linkQuality": 0.96, "heartbeatIntervalSeconds": 30}},
+    {"offsetMilliseconds": 0, "externalDeviceId": "sim-ground-01", "eventType": "device.heartbeat", "payload": {"sessionKey": "ground-session", "linkQuality": 0.91, "heartbeatIntervalSeconds": 30}},
+    {"offsetMilliseconds": 1000, "externalDeviceId": "sim-drone-01", "eventType": "telemetry.pose", "payload": {"deviceType": "drone", "crs": "EPSG:4326", "longitude": 120.1000, "latitude": 30.2000, "altitudeMeters": 80.0, "horizontalAccuracyMeters": 0.8}},
+    {"offsetMilliseconds": 1000, "externalDeviceId": "sim-ground-01", "eventType": "telemetry.pose", "payload": {"deviceType": "ground_robot", "crs": "EPSG:4326", "longitude": 120.1002, "latitude": 30.1998, "altitudeMeters": 8.0, "horizontalAccuracyMeters": 0.4}},
+    {"offsetMilliseconds": 1500, "externalDeviceId": "sim-drone-01", "eventType": "telemetry.battery", "payload": {"percent": 87}},
+    {"offsetMilliseconds": 1500, "externalDeviceId": "sim-ground-01", "eventType": "telemetry.battery", "payload": {"percent": 74}},
+    {"offsetMilliseconds": 2000, "externalDeviceId": "sim-drone-01", "eventType": "live.status", "payload": {"streamKey": "camera.main", "status": "started", "locator": "simulator://drone/camera.main"}},
+    {"offsetMilliseconds": 3000, "externalDeviceId": "sim-drone-01", "eventType": "telemetry.pose", "payload": {"deviceType": "drone", "crs": "EPSG:4326", "longitude": 120.1010, "latitude": 30.2010, "altitudeMeters": 82.0, "horizontalAccuracyMeters": 0.9}},
+    {"offsetMilliseconds": 3000, "externalDeviceId": "sim-ground-01", "eventType": "telemetry.pose", "payload": {"deviceType": "ground_robot", "crs": "EPSG:4326", "longitude": 120.1007, "latitude": 30.2001, "altitudeMeters": 8.1, "horizontalAccuracyMeters": 0.5}},
+    {"offsetMilliseconds": 3500, "externalDeviceId": "sim-drone-01", "eventType": "media.reference", "payload": {"mediaId": "sim-image-001", "mediaType": "image", "locator": "simulator://media/sim-image-001.jpg", "cameraKey": "camera.main"}},
+    {"offsetMilliseconds": 4000, "externalDeviceId": "sim-drone-01", "eventType": "command.ack", "payload": {"commandId": "command-start-route", "outcome": "ack"}},
+    {"offsetMilliseconds": 4500, "externalDeviceId": "sim-ground-01", "eventType": "command.ack", "payload": {"commandId": "command-blocked-route", "outcome": "nack", "reason": "obstacle_detected"}},
+    {"offsetMilliseconds": 5000, "externalDeviceId": "sim-drone-01", "eventType": "command.ack", "payload": {"commandId": "command-camera-zoom", "outcome": "timeout"}},
+    {"offsetMilliseconds": 5500, "externalDeviceId": "sim-drone-01", "eventType": "live.status", "payload": {"streamKey": "camera.main", "status": "stopped"}},
+    {"offsetMilliseconds": 6000, "externalDeviceId": "sim-ground-01", "eventType": "device.connection", "payload": {"status": "offline", "reason": "simulated_link_loss"}}
+  ]
+}

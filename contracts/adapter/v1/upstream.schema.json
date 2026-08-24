@@ -14,7 +14,11 @@
     "projectId": { "type": "integer", "minimum": 1 },
     "externalDeviceId": { "type": "string", "minLength": 1, "maxLength": 256 },
     "eventType": {
-      "enum": ["device.discovered", "device.heartbeat", "telemetry.pose", "media.reference", "command.ack"]
+      "enum": [
+        "device.discovered", "device.heartbeat", "device.connection",
+        "telemetry.pose", "telemetry.battery", "live.status",
+        "media.reference", "command.ack"
+      ]
     },
     "capturedAt": { "type": "string", "format": "date-time" },
     "receivedAt": { "type": "string", "format": "date-time" },
