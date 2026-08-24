@@ -1,10 +1,14 @@
 {
   "name": "@aerosight/web",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "test:migrations": "node scripts/db-migrate-test.mjs",
+    "test:unit": "node --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

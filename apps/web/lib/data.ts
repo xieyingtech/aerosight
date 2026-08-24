@@ -4,6 +4,8 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db, query } from "@/lib/db";
+import { resolveProjectAccess } from "@/lib/project-access";
+import type { ProjectPermission } from "@/lib/project-permission-policy";
 
 export type TeamRole = "owner" | "admin" | "member";
 
@@ -116,18 +118,30 @@ export async function listProjects(scope = "", search = "") {
 
 export async function getProject(id: number) {
   const user = await requireUser();
+  const access = await resolveProjectAccess(user.id, id);
+  if (!access) notFound();
   const result = await query<Project>(
     `select p.id, p.team_id as "teamId", p.name, p.description,
             t.name as "teamName", tm.role, p.updated_at as "updatedAt"
      from projects p
      join teams t on t.id = p.team_id
      join team_members tm on tm.team_id = t.id and tm.user_id = $1
-     where p.id = $2`,
-    [user.id, id]
+     where p.id = $2 and p.team_id = $3`,
+    [user.id, access.projectId, access.teamId]
   );
   const project = result.rows[0];
   if (!project) notFound();
   return project;
+}
+
+export async function requireCurrentProjectPermission(
+  projectId: number,
+  permission: ProjectPermission
+) {
+  const user = await requireUser();
+  const access = await resolveProjectAccess(user.id, projectId);
+  if (!access?.permissions.has(permission)) throw new Error("PROJECT_ACCESS_DENIED");
+  return { user, access };
 }
 
 const projectItemQueries = {
@@ -142,6 +156,26 @@ export async function listProjectItems(projectId: number, kind: keyof typeof pro
   await getProject(projectId);
   const result = await query<Record<string, unknown>>(projectItemQueries[kind], [projectId]);
   return result.rows;
+}
+
+const projectItemByIdQueries = {
+  devices: `select id, project_id as "projectId", name, type, status, last_seen_at as "lastSeenAt", updated_at as "updatedAt" from devices where project_id = $1 and id = $2`,
+  agents: `select id, project_id as "projectId", name, description, status, updated_at as "updatedAt" from agents where project_id = $1 and id = $2`,
+  tasks: `select id, project_id as "projectId", name, description, trigger_type as "triggerType", status, updated_at as "updatedAt" from tasks where project_id = $1 and id = $2`,
+  issues: `select id, project_id as "projectId", number, title, status, priority, updated_at as "updatedAt" from issues where project_id = $1 and id = $2`,
+  assets: `select id, project_id as "projectId", kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt" from assets where project_id = $1 and id = $2`
+} as const;
+
+export async function getProjectItem(
+  projectId: number,
+  kind: keyof typeof projectItemByIdQueries,
+  resourceId: number
+) {
+  await getProject(projectId);
+  const result = await query<Record<string, unknown>>(projectItemByIdQueries[kind], [projectId, resourceId]);
+  const item = result.rows[0];
+  if (!item) notFound();
+  return item;
 }
 
 export async function getProfileData() {

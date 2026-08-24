@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS postgis;
+--> statement-breakpoint
 CREATE TABLE "agent_messages" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"session_id" integer NOT NULL,
@@ -49,14 +51,60 @@ CREATE TABLE "assets" (
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "audit_events" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"request_id" text NOT NULL,
+	"idempotency_key" text,
+	"actor_user_id" integer,
+	"actor_agent_id" integer,
+	"action" text NOT NULL,
+	"resource_type" text NOT NULL,
+	"resource_id" text,
+	"input_hash" text NOT NULL,
+	"policy_result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"result_hash" text,
+	"status" text DEFAULT 'accepted' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "audit_events_actor_present" CHECK (actor_user_id is not null or actor_agent_id is not null),
+	CONSTRAINT "audit_events_status_valid" CHECK (status in ('accepted', 'completed'))
+);
+--> statement-breakpoint
+CREATE TABLE "device_adapters" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"adapter_type" text NOT NULL,
+	"vendor" text,
+	"protocol_version" text DEFAULT '1' NOT NULL,
+	"status" text DEFAULT 'disabled' NOT NULL,
+	"secret_ref" text,
+	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"capabilities_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"last_health_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"last_checked_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_adapters_project_name_unique" UNIQUE("project_id", "name"),
+	CONSTRAINT "device_adapters_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "device_adapters_status_valid" CHECK (status in ('disabled', 'connecting', 'connected', 'degraded', 'failed'))
+);
+--> statement-breakpoint
 CREATE TABLE "device_capabilities" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"device_id" integer NOT NULL,
+	"project_id" integer NOT NULL,
 	"capability_code" text NOT NULL,
 	"version" text,
+	"version_number" integer DEFAULT 1 NOT NULL,
+	"declared_by_adapter_id" bigint,
 	"params_schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"constraints_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "devices" (
@@ -64,12 +112,175 @@ CREATE TABLE "devices" (
 	"project_id" integer NOT NULL,
 	"name" text NOT NULL,
 	"type" text NOT NULL,
+	"adapter_id" bigint,
+	"device_model" text,
+	"firmware_version" text,
 	"status" text DEFAULT 'offline' NOT NULL,
+	"status_reason" text,
 	"last_seen_at" timestamp,
 	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "devices_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "device_external_identities" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"device_id" integer,
+	"external_device_id" text NOT NULL,
+	"external_device_type" text,
+	"identity_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"bound_at" timestamp with time zone,
+	CONSTRAINT "device_external_identities_adapter_external_unique" UNIQUE("adapter_id", "external_device_id"),
+	CONSTRAINT "device_external_identities_device_adapter_unique" UNIQUE("device_id", "adapter_id")
+);
+--> statement-breakpoint
+CREATE TABLE "device_connections" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"device_id" integer,
+	"session_key" text NOT NULL,
+	"status" text DEFAULT 'unknown' NOT NULL,
+	"link_quality" double precision,
+	"status_reason" text,
+	"opened_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_heartbeat_at" timestamp with time zone,
+	"closed_at" timestamp with time zone,
+	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "device_connections_session_unique" UNIQUE("adapter_id", "session_key"),
+	CONSTRAINT "device_connections_status_valid" CHECK (status in ('online', 'degraded', 'offline', 'unknown'))
+);
+--> statement-breakpoint
+CREATE TABLE "device_telemetry" (
+	"id" bigserial NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"device_id" integer NOT NULL,
+	"event_id" text NOT NULL,
+	"telemetry_type" text NOT NULL,
+	"sequence_number" bigint,
+	"captured_at" timestamp with time zone NOT NULL,
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "device_telemetry_pk" PRIMARY KEY("id", "captured_at")
+) PARTITION BY RANGE (captured_at);
+--> statement-breakpoint
+CREATE TABLE "device_telemetry_default" PARTITION OF "device_telemetry" DEFAULT;
+--> statement-breakpoint
+CREATE TABLE "telemetry_event_dedup" (
+	"adapter_id" bigint NOT NULL,
+	"event_id" text NOT NULL,
+	"project_id" integer NOT NULL,
+	"captured_at" timestamp with time zone NOT NULL,
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "telemetry_event_dedup_pk" PRIMARY KEY("adapter_id", "event_id")
+);
+--> statement-breakpoint
+CREATE TABLE "device_latest_telemetry" (
+	"device_id" integer PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"event_id" text NOT NULL,
+	"telemetry_type" text NOT NULL,
+	"sequence_number" bigint,
+	"captured_at" timestamp with time zone NOT NULL,
+	"received_at" timestamp with time zone NOT NULL,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "coordinate_references" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"code" text NOT NULL,
+	"name" text NOT NULL,
+	"authority" text,
+	"definition" text,
+	"vertical_datum" text,
+	"transform_version" text DEFAULT '1' NOT NULL,
+	"is_project_standard" boolean DEFAULT false NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "coordinate_references_project_code_version_unique" UNIQUE("project_id", "code", "transform_version"),
+	CONSTRAINT "coordinate_references_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "sensor_calibrations" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"device_id" integer NOT NULL,
+	"sensor_key" text NOT NULL,
+	"version" integer NOT NULL,
+	"intrinsic_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"extrinsic_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"valid_from" timestamp with time zone NOT NULL,
+	"valid_until" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "sensor_calibrations_device_sensor_version_unique" UNIQUE("device_id", "sensor_key", "version"),
+	CONSTRAINT "sensor_calibrations_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "sensor_calibrations_valid_range" CHECK (valid_until is null or valid_until > valid_from)
+);
+--> statement-breakpoint
+CREATE TABLE "observations" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"device_id" integer NOT NULL,
+	"calibration_id" bigint,
+	"observation_type" text NOT NULL,
+	"source_event_id" text NOT NULL,
+	"captured_at" timestamp with time zone NOT NULL,
+	"received_at" timestamp with time zone NOT NULL,
+	"time_quality" text DEFAULT 'trusted' NOT NULL,
+	"original_crs_id" bigint,
+	"original_geometry" geometry(GeometryZ),
+	"standard_geometry" geometry(GeometryZ, 4326),
+	"properties_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"validity" text DEFAULT 'valid' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "observations_source_unique" UNIQUE("adapter_id", "source_event_id"),
+	CONSTRAINT "observations_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "observations_time_quality_valid" CHECK (time_quality in ('trusted', 'uncertain', 'invalid')),
+	CONSTRAINT "observations_validity_valid" CHECK (validity in ('valid', 'degraded', 'late', 'invalid'))
+);
+--> statement-breakpoint
+CREATE TABLE "poses" (
+	"observation_id" bigint PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"device_id" integer NOT NULL,
+	"captured_at" timestamp with time zone NOT NULL,
+	"standard_position" geometry(PointZ, 4326),
+	"original_position" geometry(PointZ),
+	"orientation_x" double precision,
+	"orientation_y" double precision,
+	"orientation_z" double precision,
+	"orientation_w" double precision,
+	"velocity_x" double precision,
+	"velocity_y" double precision,
+	"velocity_z" double precision,
+	"horizontal_accuracy_m" double precision,
+	"vertical_accuracy_m" double precision,
+	"attitude_accuracy_deg" double precision,
+	"vertical_datum" text,
+	"transform_version" text,
+	"spatial_quality" text DEFAULT 'usable' NOT NULL,
+	CONSTRAINT "poses_spatial_quality_valid" CHECK (spatial_quality in ('usable', 'degraded', 'unusable')),
+	CONSTRAINT "poses_accuracy_nonnegative" CHECK ((horizontal_accuracy_m is null or horizontal_accuracy_m >= 0) and (vertical_accuracy_m is null or vertical_accuracy_m >= 0) and (attitude_accuracy_deg is null or attitude_accuracy_deg >= 0))
 );
 --> statement-breakpoint
 CREATE TABLE "issue_events" (
@@ -82,6 +293,24 @@ CREATE TABLE "issue_events" (
 	"actor_user_id" integer,
 	"actor_agent_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "idempotency_records" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"actor_key" text NOT NULL,
+	"operation" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"status" text DEFAULT 'processing' NOT NULL,
+	"response_json" jsonb,
+	"error_code" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	"expires_at" timestamp with time zone DEFAULT (now() + interval '24 hours') NOT NULL,
+	CONSTRAINT "idempotency_records_scope_unique" UNIQUE("project_id", "actor_key", "operation", "idempotency_key"),
+	CONSTRAINT "idempotency_records_status_valid" CHECK (status in ('processing', 'completed', 'failed'))
 );
 --> statement-breakpoint
 CREATE TABLE "issue_links" (
@@ -112,6 +341,36 @@ CREATE TABLE "issues" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "outbox_events" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"event_id" text NOT NULL,
+	"event_type" text NOT NULL,
+	"aggregate_type" text,
+	"aggregate_id" text,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempts" integer DEFAULT 0 NOT NULL,
+	"max_attempts" integer DEFAULT 8 NOT NULL,
+	"available_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"locked_by" text,
+	"locked_until" timestamp with time zone,
+	"last_error" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "outbox_events_event_unique" UNIQUE("event_id"),
+	CONSTRAINT "outbox_events_status_valid" CHECK (status in ('pending', 'processing', 'completed', 'dead')),
+	CONSTRAINT "outbox_events_attempts_valid" CHECK (attempts >= 0 and max_attempts > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "outbox_consumptions" (
+	"consumer_name" text NOT NULL,
+	"event_id" text NOT NULL,
+	"consumed_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "outbox_consumptions_pk" PRIMARY KEY("consumer_name", "event_id")
+);
+--> statement-breakpoint
 CREATE TABLE "projects" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"team_id" integer NOT NULL,
@@ -119,7 +378,43 @@ CREATE TABLE "projects" (
 	"description" text,
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "projects_id_team_unique" UNIQUE("id", "team_id")
+);
+--> statement-breakpoint
+CREATE TABLE "project_feature_flags" (
+	"project_id" integer PRIMARY KEY NOT NULL,
+	"device_commands_enabled" boolean DEFAULT false NOT NULL,
+	"operations_overview_enabled" boolean DEFAULT false NOT NULL,
+	"object_storage_enabled" boolean DEFAULT false NOT NULL,
+	"external_algorithms_enabled" boolean DEFAULT false NOT NULL,
+	"automatic_ai_enabled" boolean DEFAULT false NOT NULL,
+	"dependency_health_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"updated_by_user_id" integer,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "project_permissions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"user_id" integer NOT NULL,
+	"permission" text NOT NULL,
+	"granted_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "project_permissions_unique" UNIQUE("project_id", "user_id", "permission")
+);
+--> statement-breakpoint
+CREATE TABLE "project_events" (
+	"cursor" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"event_id" text NOT NULL,
+	"event_type" text NOT NULL,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "project_events_event_unique" UNIQUE("event_id")
 );
 --> statement-breakpoint
 CREATE TABLE "task_runs" (
@@ -159,7 +454,8 @@ CREATE TABLE "team_members" (
 	"team_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
 	"role" text DEFAULT 'member' NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "team_members_team_user_unique" UNIQUE("team_id", "user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "teams" (
@@ -193,12 +489,42 @@ ALTER TABLE "assets" ADD CONSTRAINT "assets_project_id_projects_id_fk" FOREIGN K
 ALTER TABLE "assets" ADD CONSTRAINT "assets_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_adapters" ADD CONSTRAINT "device_adapters_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_adapter_project_fk" FOREIGN KEY ("declared_by_adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("declared_by_adapter_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "devices" ADD CONSTRAINT "devices_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "devices" ADD CONSTRAINT "devices_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("adapter_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "telemetry_event_dedup" ADD CONSTRAINT "telemetry_event_dedup_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_latest_telemetry" ADD CONSTRAINT "device_latest_telemetry_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_latest_telemetry" ADD CONSTRAINT "device_latest_telemetry_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "coordinate_references" ADD CONSTRAINT "coordinate_references_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sensor_calibrations" ADD CONSTRAINT "sensor_calibrations_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sensor_calibrations" ADD CONSTRAINT "sensor_calibrations_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "observations" ADD CONSTRAINT "observations_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "observations" ADD CONSTRAINT "observations_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "observations" ADD CONSTRAINT "observations_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "observations" ADD CONSTRAINT "observations_calibration_project_fk" FOREIGN KEY ("calibration_id","project_id") REFERENCES "public"."sensor_calibrations"("id","project_id") ON DELETE SET NULL ("calibration_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "observations" ADD CONSTRAINT "observations_crs_project_fk" FOREIGN KEY ("original_crs_id","project_id") REFERENCES "public"."coordinate_references"("id","project_id") ON DELETE SET NULL ("original_crs_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "poses" ADD CONSTRAINT "poses_observation_project_fk" FOREIGN KEY ("observation_id","project_id") REFERENCES "public"."observations"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "poses" ADD CONSTRAINT "poses_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "idempotency_records" ADD CONSTRAINT "idempotency_records_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -206,8 +532,16 @@ ALTER TABLE "issues" ADD CONSTRAINT "issues_project_id_projects_id_fk" FOREIGN K
 ALTER TABLE "issues" ADD CONSTRAINT "issues_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_opened_by_user_id_users_id_fk" FOREIGN KEY ("opened_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_assignee_user_id_users_id_fk" FOREIGN KEY ("assignee_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "outbox_events" ADD CONSTRAINT "outbox_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "outbox_consumptions" ADD CONSTRAINT "outbox_consumptions_event_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."outbox_events"("event_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_updated_by_user_id_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_team_member_fk" FOREIGN KEY ("team_id","user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_granted_by_user_id_users_id_fk" FOREIGN KEY ("granted_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_events" ADD CONSTRAINT "project_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -225,13 +559,36 @@ CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id",
 CREATE INDEX "assets_task_run_idx" ON "assets" USING btree ("task_run_id");--> statement-breakpoint
 CREATE INDEX "assets_issue_idx" ON "assets" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "assets_device_idx" ON "assets" USING btree ("device_id");--> statement-breakpoint
+CREATE INDEX "audit_events_project_created_idx" ON "audit_events" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "audit_events_request_idx" ON "audit_events" USING btree ("request_id");--> statement-breakpoint
+CREATE INDEX "audit_events_resource_idx" ON "audit_events" USING btree ("project_id","resource_type","resource_id");--> statement-breakpoint
+CREATE INDEX "device_adapters_project_status_idx" ON "device_adapters" USING btree ("project_id","status");--> statement-breakpoint
 CREATE UNIQUE INDEX "device_capabilities_device_code_unique" ON "device_capabilities" USING btree ("device_id","capability_code");--> statement-breakpoint
 CREATE INDEX "device_capabilities_code_idx" ON "device_capabilities" USING btree ("capability_code");--> statement-breakpoint
 CREATE UNIQUE INDEX "devices_project_name_unique" ON "devices" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "devices_project_status_idx" ON "devices" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "devices_last_seen_idx" ON "devices" USING btree ("last_seen_at");--> statement-breakpoint
+CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_connections_project_status_idx" ON "device_connections" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "device_connections_device_opened_idx" ON "device_connections" USING btree ("device_id","opened_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "device_telemetry_source_event_unique" ON "device_telemetry" USING btree ("adapter_id","event_id","captured_at");--> statement-breakpoint
+CREATE INDEX "device_telemetry_project_time_idx" ON "device_telemetry" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_telemetry_device_time_idx" ON "device_telemetry" USING btree ("device_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "telemetry_event_dedup_received_idx" ON "telemetry_event_dedup" USING btree ("received_at");--> statement-breakpoint
+CREATE INDEX "device_latest_telemetry_project_time_idx" ON "device_latest_telemetry" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "coordinate_references_one_standard_idx" ON "coordinate_references" USING btree ("project_id") WHERE "coordinate_references"."is_project_standard";--> statement-breakpoint
+CREATE INDEX "sensor_calibrations_device_valid_idx" ON "sensor_calibrations" USING btree ("device_id","sensor_key","valid_from" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "observations_project_time_idx" ON "observations" USING btree ("project_id","captured_at" DESC NULLS LAST,"id");--> statement-breakpoint
+CREATE INDEX "observations_device_type_time_idx" ON "observations" USING btree ("device_id","observation_type","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "observations_standard_geometry_gist" ON "observations" USING gist ("standard_geometry");--> statement-breakpoint
+CREATE INDEX "observations_original_geometry_gist" ON "observations" USING gist ("original_geometry");--> statement-breakpoint
+CREATE INDEX "poses_project_time_idx" ON "poses" USING btree ("project_id","captured_at" DESC NULLS LAST,"observation_id");--> statement-breakpoint
+CREATE INDEX "poses_device_time_idx" ON "poses" USING btree ("device_id","captured_at" DESC NULLS LAST,"observation_id");--> statement-breakpoint
+CREATE INDEX "poses_standard_position_gist" ON "poses" USING gist ("standard_position");--> statement-breakpoint
 CREATE INDEX "issue_events_issue_created_idx" ON "issue_events" USING btree ("issue_id","created_at");--> statement-breakpoint
 CREATE INDEX "issue_events_project_created_idx" ON "issue_events" USING btree ("project_id","created_at");--> statement-breakpoint
+CREATE INDEX "idempotency_records_expiry_idx" ON "idempotency_records" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX "idempotency_records_project_created_idx" ON "idempotency_records" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "issue_links_issue_target_unique" ON "issue_links" USING btree ("issue_id","link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_target_idx" ON "issue_links" USING btree ("link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_project_issue_idx" ON "issue_links" USING btree ("project_id","issue_id");--> statement-breakpoint
@@ -239,14 +596,38 @@ CREATE UNIQUE INDEX "issues_project_number_unique" ON "issues" USING btree ("pro
 CREATE INDEX "issues_project_status_idx" ON "issues" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "issues_project_priority_idx" ON "issues" USING btree ("project_id","priority");--> statement-breakpoint
 CREATE INDEX "issues_task_run_idx" ON "issues" USING btree ("task_run_id");--> statement-breakpoint
+CREATE INDEX "outbox_events_claim_idx" ON "outbox_events" USING btree ("status","available_at","locked_until","id");--> statement-breakpoint
+CREATE INDEX "outbox_events_project_created_idx" ON "outbox_events" USING btree ("project_id","created_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "projects_team_name_unique" ON "projects" USING btree ("team_id","name");--> statement-breakpoint
 CREATE INDEX "projects_team_idx" ON "projects" USING btree ("team_id");--> statement-breakpoint
+CREATE INDEX "project_feature_flags_updated_idx" ON "project_feature_flags" USING btree ("updated_at");--> statement-breakpoint
+CREATE INDEX "project_permissions_user_project_idx" ON "project_permissions" USING btree ("user_id","project_id");--> statement-breakpoint
+CREATE INDEX "project_permissions_project_permission_idx" ON "project_permissions" USING btree ("project_id","permission");--> statement-breakpoint
+CREATE INDEX "project_events_project_cursor_idx" ON "project_events" USING btree ("project_id","cursor");--> statement-breakpoint
+CREATE INDEX "project_events_project_occurred_idx" ON "project_events" USING btree ("project_id","occurred_at","cursor");--> statement-breakpoint
 CREATE INDEX "task_runs_project_created_idx" ON "task_runs" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_task_created_idx" ON "task_runs" USING btree ("task_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "tasks_project_name_unique" ON "tasks" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "tasks_project_status_idx" ON "tasks" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "tasks_trigger_type_idx" ON "tasks" USING btree ("trigger_type");--> statement-breakpoint
-CREATE UNIQUE INDEX "team_members_team_user_unique" ON "team_members" USING btree ("team_id","user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "team_members_single_owner_unique" ON "team_members" USING btree ("team_id") WHERE "team_members"."role" = 'owner';--> statement-breakpoint
 CREATE INDEX "team_members_user_idx" ON "team_members" USING btree ("user_id");
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION notify_aerosight_outbox() RETURNS trigger AS $$
+BEGIN
+	PERFORM pg_notify('aerosight_outbox', json_build_object('projectId', NEW.project_id, 'eventId', NEW.event_id)::text);
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER outbox_events_notify AFTER INSERT ON outbox_events FOR EACH ROW EXECUTE FUNCTION notify_aerosight_outbox();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION notify_aerosight_project_event() RETURNS trigger AS $$
+BEGIN
+	PERFORM pg_notify('aerosight_project_events', json_build_object('projectId', NEW.project_id, 'cursor', NEW.cursor)::text);
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER project_events_notify AFTER INSERT ON project_events FOR EACH ROW EXECUTE FUNCTION notify_aerosight_project_event();

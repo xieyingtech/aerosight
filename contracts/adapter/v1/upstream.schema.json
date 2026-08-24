@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aerosight.local/contracts/adapter/v1/upstream.schema.json",
+  "title": "AeroSight Adapter Upstream Envelope v1",
+  "type": "object",
+  "required": [
+    "schemaVersion", "eventId", "adapterId", "projectId", "externalDeviceId",
+    "eventType", "capturedAt", "receivedAt", "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "adapter.aerosight.dev/v1" },
+    "eventId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "adapterId": { "type": "integer", "minimum": 1 },
+    "projectId": { "type": "integer", "minimum": 1 },
+    "externalDeviceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "eventType": {
+      "enum": ["device.discovered", "device.heartbeat", "telemetry.pose", "media.reference", "command.ack"]
+    },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "receivedAt": { "type": "string", "format": "date-time" },
+    "sequence": { "type": "integer", "minimum": 0 },
+    "payload": { "type": "object" },
+    "signatureContext": { "type": "object" }
+  },
+  "additionalProperties": false
+}

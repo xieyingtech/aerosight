@@ -1,0 +1,651 @@
+import { randomBytes } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+import pg from "pg";
+
+import { assertPostgisAvailable, migrateDatabase } from "./db-migrate.mjs";
+
+const { Client } = pg;
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const legacySchema = await readFile(
+  resolve(repositoryRoot, "db/migrations/0001_baseline.sql"),
+  "utf8"
+);
+const currentSchema = await readFile(resolve(repositoryRoot, "db/schema.sql"), "utf8");
+const integrationFixture = JSON.parse(
+  await readFile(resolve(repositoryRoot, "test/fixtures/air-ground-projects.json"), "utf8")
+);
+const silentLogger = { info() {} };
+let adminUrl;
+
+function docker(...args) {
+  const result = spawnSync("docker", args, { encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || `docker ${args[0]} failed`);
+  }
+  return result.stdout.trim();
+}
+
+async function startTestPostgis() {
+  if (process.env.MIGRATION_TEST_DATABASE_URL) {
+    return { url: process.env.MIGRATION_TEST_DATABASE_URL, cleanup() {} };
+  }
+
+  const name = `aerosight-postgis-test-${randomBytes(5).toString("hex")}`;
+  docker(
+    "run",
+    "--detach",
+    "--rm",
+    "--platform",
+    "linux/amd64",
+    "--name",
+    name,
+    "--env",
+    "POSTGRES_PASSWORD=aerosight-test",
+    "--publish",
+    "127.0.0.1::5432",
+    "postgis/postgis:17-3.5"
+  );
+  const portOutput = docker("port", name, "5432/tcp");
+  const port = portOutput.match(/:(\d+)$/)?.[1];
+  if (!port) throw new Error(`Could not determine PostgreSQL port from: ${portOutput}`);
+  const url = `postgresql://postgres:aerosight-test@127.0.0.1:${port}/postgres`;
+
+  let lastError;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const client = new Client({ connectionString: url });
+    try {
+      await client.connect();
+      await client.end();
+      return { url, cleanup: () => docker("stop", name) };
+    } catch (error) {
+      lastError = error;
+      await client.end().catch(() => {});
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+    }
+  }
+
+  docker("stop", name);
+  throw lastError ?? new Error("Timed out waiting for PostGIS test database");
+}
+
+function databaseUrl(name) {
+  const url = new URL(adminUrl);
+  url.pathname = `/${name}`;
+  return url.toString();
+}
+
+async function withTemporaryDatabase(label, test) {
+  const name = `aerosight_migration_${label}_${randomBytes(5).toString("hex")}`;
+  const admin = new Client({ connectionString: adminUrl });
+  await admin.connect();
+  await admin.query(`create database "${name}"`);
+
+  try {
+    await test(databaseUrl(name));
+  } finally {
+    await admin.query(`drop database if exists "${name}" with (force)`);
+    await admin.end();
+  }
+}
+
+async function readMigrationState(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const tables = await client.query(
+      `select to_regclass('public.users') as users,
+              to_regclass('public.projects') as projects,
+              to_regclass('public.devices') as devices,
+              postgis_full_version() as postgis_version,
+              st_astext('SRID=4326;POINT Z (120.1 30.2 88)'::geometry(PointZ, 4326)) as point_z`
+    );
+    const migrations = await client.query(
+      "select name, checksum, adopted from schema_migrations order by name"
+    );
+    return { tables: tables.rows[0], migrations: migrations.rows };
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertLegacyProjectDefaults(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    await client.query("insert into users (name, email) values ('legacy-user', 'legacy@example.test')");
+    await client.query("insert into teams (name) values ('legacy-team')");
+    await client.query(
+      `insert into team_members (team_id, user_id, role)
+       select teams.id, users.id, 'owner' from teams cross join users
+       where teams.name = 'legacy-team' and users.email = 'legacy@example.test'`
+    );
+    await client.query(
+      `insert into projects (team_id, name)
+       select id, 'legacy-project' from teams where name = 'legacy-team'`
+    );
+    const result = await client.query(
+      `select project.name,
+              coalesce(flags.device_commands_enabled, false) as device_commands,
+              coalesce(flags.operations_overview_enabled, false) as operations_overview,
+              coalesce(flags.object_storage_enabled, false) as object_storage,
+              coalesce(flags.external_algorithms_enabled, false) as external_algorithms,
+              coalesce(flags.automatic_ai_enabled, false) as automatic_ai
+         from projects project
+         left join project_feature_flags flags on flags.project_id = project.id
+        where project.name = 'legacy-project'`
+    );
+    const row = result.rows[0];
+    assert(row?.name === "legacy-project", "legacy project query stopped working");
+    assert(
+      [row.device_commands, row.operations_overview, row.object_storage, row.external_algorithms, row.automatic_ai].every(
+        (value) => value === false
+      ),
+      "new project capabilities must default to disabled"
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertProjectIsolationFixture(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    for (const project of integrationFixture.projects) {
+      const user = await client.query(
+        "insert into users (name, email) values ($1, $2) returning id",
+        [project.owner.name, project.owner.email]
+      );
+      const team = await client.query("insert into teams (name) values ($1) returning id", [project.teamName]);
+      await client.query(
+        "insert into team_members (team_id, user_id, role) values ($1, $2, 'owner')",
+        [team.rows[0].id, user.rows[0].id]
+      );
+      const insertedProject = await client.query(
+        "insert into projects (team_id, name, created_by_user_id) values ($1, $2, $3) returning id",
+        [team.rows[0].id, project.name, user.rows[0].id]
+      );
+      for (const device of project.devices) {
+        await client.query(
+          `insert into devices (project_id, name, type, status, metadata_json)
+           values ($1, $2, $3, 'offline', jsonb_build_object('externalId', $4::text))`,
+          [insertedProject.rows[0].id, device.name, device.type, device.externalId]
+        );
+      }
+    }
+
+    for (const project of integrationFixture.projects) {
+      const visible = await client.query(
+        `select project.name as project_name, device.name as device_name
+           from projects project
+           join team_members membership on membership.team_id = project.team_id
+           join users actor on actor.id = membership.user_id
+           join devices device on device.project_id = project.id
+          where actor.email = $1`,
+        [project.owner.email]
+      );
+      assert(visible.rowCount === project.devices.length, "project member saw an unexpected device count");
+      assert(
+        visible.rows.every((row) => row.project_name === project.name),
+        "project member query crossed the project boundary"
+      );
+    }
+
+    const crossProject = await client.query(
+      `select project.id as project_id, project.team_id, actor.id as foreign_user_id
+         from projects project
+         join users actor on actor.email = 'south-operator@example.test'
+        where project.name = '北区巡检'`
+    );
+    const target = crossProject.rows[0];
+    await client.query(
+      `insert into project_permissions (project_id, team_id, user_id, permission)
+       values ($1, $2, $3, 'event:handle')`,
+      [target.project_id, target.team_id, target.foreign_user_id]
+    ).then(
+      () => assert(false, "cross-team project permission should violate membership constraint"),
+      (error) => assert(error.code === "23503", "cross-team permission failed for an unexpected reason")
+    );
+
+    const guessedResource = await client.query(
+      `select device.id
+         from devices device
+         join projects project on project.id = device.project_id
+         join team_members membership on membership.team_id = project.team_id
+         join users actor on actor.id = membership.user_id
+        where actor.email = 'north-operator@example.test'
+          and project.name = '北区巡检'
+          and device.id = (
+            select foreign_device.id
+              from devices foreign_device
+              join projects foreign_project on foreign_project.id = foreign_device.project_id
+             where foreign_project.name = '南区巡检'
+             limit 1
+          )`
+    );
+    assert(guessedResource.rowCount === 0, "scoped resource lookup exposed another project resource ID");
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertConcurrentIdempotency(connectionString) {
+  const setup = new Client({ connectionString });
+  await setup.connect();
+  await setup.query("create table idempotency_test_effects (id bigserial primary key, marker text not null)");
+  const scope = await setup.query(
+    "select id as project_id, team_id from projects where name = 'legacy-project'"
+  );
+  await setup.end();
+  const { project_id: projectId, team_id: teamId } = scope.rows[0];
+
+  const first = new Client({ connectionString });
+  const second = new Client({ connectionString });
+  await first.connect();
+  await second.connect();
+  try {
+    await first.query("begin");
+    const owner = await first.query(
+      `insert into idempotency_records (
+         project_id, team_id, actor_key, operation, idempotency_key, request_hash
+       ) values ($1, $2, 'user:fixture', 'test.effect', 'same-key', 'same-request')
+       on conflict (project_id, actor_key, operation, idempotency_key) do nothing
+       returning id`,
+      [projectId, teamId]
+    );
+    assert(owner.rowCount === 1, "first concurrent request did not own the idempotency record");
+
+    const contender = second.query(
+      `insert into idempotency_records (
+         project_id, team_id, actor_key, operation, idempotency_key, request_hash
+       ) values ($1, $2, 'user:fixture', 'test.effect', 'same-key', 'same-request')
+       on conflict (project_id, actor_key, operation, idempotency_key) do nothing
+       returning id`,
+      [projectId, teamId]
+    );
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+    await first.query("insert into idempotency_test_effects (marker) values ('executed-once')");
+    await first.query(
+      `update idempotency_records
+          set status = 'completed', response_json = '{"ok":true}'::jsonb, completed_at = now()
+        where id = $1`,
+      [owner.rows[0].id]
+    );
+    await first.query("commit");
+
+    const contenderResult = await contender;
+    assert(contenderResult.rowCount === 0, "concurrent duplicate unexpectedly owned a record");
+    const result = await second.query(
+      `select record.status, record.response_json as response,
+              (select count(*)::int from idempotency_test_effects) as effects
+         from idempotency_records record
+        where record.project_id = $1 and record.idempotency_key = 'same-key'`,
+      [projectId]
+    );
+    assert(result.rows[0].status === "completed", "duplicate did not observe completed operation");
+    assert(result.rows[0].response.ok === true, "duplicate did not observe original response");
+    assert(result.rows[0].effects === 1, "concurrent duplicate produced more than one side effect");
+  } finally {
+    await first.end();
+    await second.end();
+  }
+}
+
+async function assertProjectEventCursorAndDurability(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      "select id as project_id, team_id from projects where name = 'legacy-project'"
+    );
+    const { project_id: projectId, team_id: teamId } = scope.rows[0];
+    const first = await client.query(
+      `insert into project_events (project_id, team_id, event_id, event_type)
+       values ($1, $2, 'cursor-event-1', 'fixture.cursor') returning cursor`,
+      [projectId, teamId]
+    );
+    const second = await client.query(
+      `insert into project_events (project_id, team_id, event_id, event_type)
+       values ($1, $2, 'cursor-event-2', 'fixture.cursor') returning cursor`,
+      [projectId, teamId]
+    );
+    assert(
+      Number(second.rows[0].cursor) > Number(first.rows[0].cursor),
+      "project event cursor did not increase monotonically"
+    );
+
+    await client.query(
+      `insert into outbox_events (project_id, team_id, event_id, event_type)
+       values ($1, $2, 'durable-without-listener', 'fixture.outbox')`,
+      [projectId, teamId]
+    );
+    const claimed = await client.query(
+      `update outbox_events
+          set status = 'processing', attempts = attempts + 1,
+              locked_by = 'fixture-worker', locked_until = now() + interval '30 seconds'
+        where event_id = 'durable-without-listener' and status = 'pending'
+        returning event_id`
+    );
+    assert(claimed.rowCount === 1, "outbox event was lost when no notification listener existed");
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertDeviceConnectivityConstraints(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const projects = await client.query(
+      `select project.id, project.team_id, project.name
+         from projects project where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = projects.rows.find((project) => project.name === "北区巡检");
+    const south = projects.rows.find((project) => project.name === "南区巡检");
+    const northAdapter = await client.query(
+      `insert into device_adapters (project_id, team_id, name, adapter_type)
+       values ($1, $2, 'north-simulator', 'simulator') returning id`,
+      [north.id, north.team_id]
+    );
+    const southAdapter = await client.query(
+      `insert into device_adapters (project_id, team_id, name, adapter_type)
+       values ($1, $2, 'south-simulator', 'simulator') returning id`,
+      [south.id, south.team_id]
+    );
+    const northDevice = await client.query(
+      "select id from devices where project_id = $1 limit 1",
+      [north.id]
+    );
+
+    await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, device_id, external_device_id
+       ) values ($1, $2, $3, $4, 'cross-project-device')`,
+      [north.id, north.team_id, southAdapter.rows[0].id, northDevice.rows[0].id]
+    ).then(
+      () => assert(false, "cross-project adapter identity binding should fail"),
+      (error) => assert(error.code === "23503", "cross-project identity failed unexpectedly")
+    );
+
+    await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, device_id, external_device_id
+       ) values ($1, $2, $3, $4, 'north-device')`,
+      [north.id, north.team_id, northAdapter.rows[0].id, northDevice.rows[0].id]
+    );
+
+    const repeated = await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, external_device_id, external_device_type, identity_json
+       ) values ($1, $2, $3, 'repeated-discovery', 'drone', '{"capabilities":["flight.route"]}'::jsonb)
+       on conflict (adapter_id, external_device_id) do update
+         set identity_json = excluded.identity_json, last_seen_at = now()
+       returning id`,
+      [north.id, north.team_id, northAdapter.rows[0].id]
+    );
+    const repeatedAgain = await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, external_device_id, external_device_type, identity_json
+       ) values ($1, $2, $3, 'repeated-discovery', 'drone', '{"capabilities":["flight.route","camera.live"]}'::jsonb)
+       on conflict (adapter_id, external_device_id) do update
+         set identity_json = excluded.identity_json, last_seen_at = now()
+       returning id`,
+      [north.id, north.team_id, northAdapter.rows[0].id]
+    );
+    assert(repeated.rows[0].id === repeatedAgain.rows[0].id, "repeat discovery created another identity");
+    await client.query(
+      "update device_external_identities set device_id = $2 where id = $1",
+      [repeated.rows[0].id, northDevice.rows[0].id]
+    ).then(
+      () => assert(false, "conflicting identity binding should fail"),
+      (error) => assert(error.code === "23505", "identity binding conflict failed unexpectedly")
+    );
+
+    await client.query(
+      `insert into device_capabilities (device_id, project_id, capability_code, declared_by_adapter_id)
+       values ($1, $2, 'camera.live', $3)`,
+      [northDevice.rows[0].id, north.id, northAdapter.rows[0].id]
+    );
+    const changed = await client.query(
+      `insert into device_capabilities (device_id, project_id, capability_code, declared_by_adapter_id)
+       values ($1, $2, 'camera.live', $3)
+       on conflict (device_id, capability_code) do update
+         set version_number = device_capabilities.version_number + 1, updated_at = now()
+       returning version_number`,
+      [northDevice.rows[0].id, north.id, northAdapter.rows[0].id]
+    );
+    assert(changed.rows[0].version_number === 2, "capability declaration version did not advance");
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertTelemetryIngestionSemantics(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select device.id as device_id, device.project_id, project.team_id, adapter.id as adapter_id
+         from devices device
+         join projects project on project.id = device.project_id
+         join device_adapters adapter on adapter.project_id = project.id
+        where project.name = '北区巡检' limit 1`
+    );
+    const row = scope.rows[0];
+    const captured = new Date("2026-08-24T10:00:00.000Z");
+    await client.query(
+      `create table if not exists device_telemetry_202608
+       partition of device_telemetry for values from ('2026-08-01T00:00:00Z') to ('2026-09-01T00:00:00Z')`
+    );
+    const firstDedup = await client.query(
+      `insert into telemetry_event_dedup (adapter_id, event_id, project_id, captured_at)
+       values ($1, 'telemetry-event-1', $2, $3)
+       on conflict (adapter_id, event_id) do nothing returning event_id`,
+      [row.adapter_id, row.project_id, captured]
+    );
+    const duplicateDedup = await client.query(
+      `insert into telemetry_event_dedup (adapter_id, event_id, project_id, captured_at)
+       values ($1, 'telemetry-event-1', $2, $3)
+       on conflict (adapter_id, event_id) do nothing returning event_id`,
+      [row.adapter_id, row.project_id, captured]
+    );
+    assert(firstDedup.rowCount === 1 && duplicateDedup.rowCount === 0, "telemetry event dedup failed");
+
+    await client.query(
+      `insert into device_telemetry (
+         project_id, team_id, adapter_id, device_id, event_id, telemetry_type,
+         sequence_number, captured_at, payload_json
+       ) values ($1, $2, $3, $4, 'telemetry-event-1', 'pose', 2, $5, '{"battery":88}'::jsonb)`,
+      [row.project_id, row.team_id, row.adapter_id, row.device_id, captured]
+    );
+    await client.query(
+      `insert into device_latest_telemetry (
+         device_id, project_id, adapter_id, event_id, telemetry_type, sequence_number,
+         captured_at, received_at, payload_json
+       ) values ($1, $2, $3, 'telemetry-event-1', 'pose', 2, $4, now(), '{"battery":88}'::jsonb)`,
+      [row.device_id, row.project_id, row.adapter_id, captured]
+    );
+    await client.query(
+      `insert into device_latest_telemetry (
+         device_id, project_id, adapter_id, event_id, telemetry_type, sequence_number,
+         captured_at, received_at, payload_json
+       ) values ($1, $2, $3, 'older-event', 'pose', 99, $4, now(), '{"battery":10}'::jsonb)
+       on conflict (device_id) do update set
+         event_id = excluded.event_id, sequence_number = excluded.sequence_number,
+         captured_at = excluded.captured_at, payload_json = excluded.payload_json
+       where excluded.captured_at > device_latest_telemetry.captured_at
+          or (excluded.captured_at = device_latest_telemetry.captured_at
+              and coalesce(excluded.sequence_number, -1) > coalesce(device_latest_telemetry.sequence_number, -1))`,
+      [row.device_id, row.project_id, row.adapter_id, new Date("2026-08-24T09:00:00.000Z")]
+    );
+    const latest = await client.query(
+      "select event_id, payload_json from device_latest_telemetry where device_id = $1",
+      [row.device_id]
+    );
+    assert(latest.rows[0].event_id === "telemetry-event-1", "late telemetry regressed the latest projection");
+    const partition = await client.query(
+      "select tableoid::regclass::text as partition from device_telemetry where event_id = 'telemetry-event-1'"
+    );
+    assert(partition.rows[0].partition === "device_telemetry_202608", "telemetry missed its monthly partition");
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertSpatiotemporalSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select device.id as device_id, device.project_id, project.team_id, adapter.id as adapter_id
+         from devices device
+         join projects project on project.id = device.project_id
+         join device_adapters adapter on adapter.project_id = project.id
+        where project.name = '北区巡检' limit 1`
+    );
+    const row = scope.rows[0];
+    const crs = await client.query(
+      `insert into coordinate_references (
+         project_id, team_id, code, name, authority, vertical_datum, is_project_standard
+       ) values ($1, $2, 'EPSG:4326', 'WGS 84', 'EPSG', 'ellipsoid', true) returning id`,
+      [row.project_id, row.team_id]
+    );
+    const calibration = await client.query(
+      `insert into sensor_calibrations (
+         project_id, team_id, device_id, sensor_key, version, valid_from
+       ) values ($1, $2, $3, 'camera.main', 1, '2026-01-01T00:00:00Z') returning id`,
+      [row.project_id, row.team_id, row.device_id]
+    );
+    const observation = await client.query(
+      `insert into observations (
+         project_id, team_id, adapter_id, device_id, calibration_id,
+         observation_type, source_event_id, captured_at, received_at,
+         original_crs_id, original_geometry, standard_geometry, quality_json
+       ) values (
+         $1, $2, $3, $4, $5, 'pose', 'observation-pose-1',
+         '2026-08-24T10:00:00Z', '2026-08-24T10:00:01Z', $6,
+         ST_SetSRID(ST_MakePoint(120.1, 30.2, 88), 4326),
+         ST_SetSRID(ST_MakePoint(120.1, 30.2, 88), 4326),
+         '{"horizontalAccuracyMeters":1.2}'::jsonb
+       ) returning id`,
+      [row.project_id, row.team_id, row.adapter_id, row.device_id, calibration.rows[0].id, crs.rows[0].id]
+    );
+    await client.query(
+      `insert into poses (
+         observation_id, project_id, device_id, captured_at, standard_position,
+         original_position, orientation_w, horizontal_accuracy_m, vertical_datum, transform_version
+       ) values (
+         $1, $2, $3, '2026-08-24T10:00:00Z',
+         ST_SetSRID(ST_MakePoint(120.1, 30.2, 88), 4326),
+         ST_SetSRID(ST_MakePoint(120.1, 30.2, 88), 4326),
+         1, 1.2, 'ellipsoid', '1'
+       )`,
+      [observation.rows[0].id, row.project_id, row.device_id]
+    );
+    const geometry = await client.query(
+      `select ST_SRID(standard_position) as srid, ST_NDims(standard_position) as dimensions,
+              horizontal_accuracy_m
+         from poses where observation_id = $1`,
+      [observation.rows[0].id]
+    );
+    assert(geometry.rows[0].srid === 4326, "standard pose SRID is not WGS84");
+    assert(geometry.rows[0].dimensions === 3, "standard pose did not preserve altitude");
+    assert(Number(geometry.rows[0].horizontal_accuracy_m) === 1.2, "pose quality was not preserved");
+
+    const south = await client.query(
+      `select project.id, project.team_id, device.id as device_id, adapter.id as adapter_id
+         from projects project
+         join devices device on device.project_id = project.id
+         join device_adapters adapter on adapter.project_id = project.id
+        where project.name = '南区巡检' limit 1`
+    );
+    await client.query(
+      `insert into observations (
+         project_id, team_id, adapter_id, device_id, calibration_id,
+         observation_type, source_event_id, captured_at, received_at
+       ) values ($1, $2, $3, $4, $5, 'pose', 'cross-project-calibration', now(), now())`,
+      [south.rows[0].id, south.rows[0].team_id, south.rows[0].adapter_id,
+       south.rows[0].device_id, calibration.rows[0].id]
+    ).then(
+      () => assert(false, "cross-project calibration reference should fail"),
+      (error) => assert(error.code === "23503", "cross-project calibration failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+const unavailableClient = { query: async () => ({ rowCount: 0, rows: [] }) };
+await assertPostgisAvailable(unavailableClient).then(
+  () => assert(false, "missing PostGIS should fail availability validation"),
+  (error) => assert(String(error).includes("PostGIS extension is required"), "unclear PostGIS error")
+);
+
+const testPostgis = await startTestPostgis();
+adminUrl = testPostgis.url;
+try {
+  await withTemporaryDatabase("empty", async (connectionString) => {
+    const first = await migrateDatabase({ connectionString, logger: silentLogger });
+    const state = await readMigrationState(connectionString);
+    assert(first.applied.length === 11, "empty database should apply all migrations");
+    assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
+    assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
+    assert(state.tables.postgis_version, "PostGIS version was not queryable");
+    assert(state.tables.point_z === "POINT Z (120.1 30.2 88)", "PointZ round trip failed");
+    await assertLegacyProjectDefaults(connectionString);
+    await assertProjectIsolationFixture(connectionString);
+    await assertConcurrentIdempotency(connectionString);
+    await assertProjectEventCursorAndDurability(connectionString);
+    await assertDeviceConnectivityConstraints(connectionString);
+    await assertTelemetryIngestionSemantics(connectionString);
+    await assertSpatiotemporalSchema(connectionString);
+
+    const second = await migrateDatabase({ connectionString, logger: silentLogger });
+    assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
+  });
+
+  await withTemporaryDatabase("existing", async (connectionString) => {
+    const legacy = new Client({ connectionString });
+    await legacy.connect();
+    await legacy.query(legacySchema);
+    await legacy.end();
+
+    const first = await migrateDatabase({ connectionString, logger: silentLogger });
+    const before = await readMigrationState(connectionString);
+    assert(first.applied.length === 11, "existing database should record all migrations");
+    assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
+
+    const second = await migrateDatabase({ connectionString, logger: silentLogger });
+    const after = await readMigrationState(connectionString);
+    assert(second.applied.length === 0, "second existing-database migration run must be a no-op");
+    assert(JSON.stringify(before) === JSON.stringify(after), "second run changed migration state");
+  });
+
+  await withTemporaryDatabase("snapshot", async (connectionString) => {
+    const client = new Client({ connectionString });
+    await client.connect();
+    try {
+      await client.query(currentSchema);
+      const result = await client.query(
+        `select to_regclass('public.users') as users,
+                to_regclass('public.device_adapters') as adapters,
+                to_regclass('public.device_telemetry') as telemetry`
+      );
+      assert(result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry, "schema snapshot is incomplete");
+    } finally {
+      await client.end();
+    }
+  });
+} finally {
+  testPostgis.cleanup();
+}
+
+console.info("Database migration tests passed: PostGIS, empty, existing, and repeated execution.");

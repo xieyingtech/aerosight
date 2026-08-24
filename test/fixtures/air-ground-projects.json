@@ -1,0 +1,32 @@
+{
+  "projects": [
+    {
+      "key": "north-sector",
+      "name": "北区巡检",
+      "teamName": "北区团队",
+      "owner": { "name": "北区操作员", "email": "north-operator@example.test" },
+      "devices": [
+        {
+          "externalId": "sim-drone-north-01",
+          "name": "北区模拟无人机 01",
+          "type": "drone",
+          "capabilities": ["flight.route", "camera.live", "camera.capture"]
+        }
+      ]
+    },
+    {
+      "key": "south-sector",
+      "name": "南区巡检",
+      "teamName": "南区团队",
+      "owner": { "name": "南区操作员", "email": "south-operator@example.test" },
+      "devices": [
+        {
+          "externalId": "sim-ground-south-01",
+          "name": "南区模拟地面设备 01",
+          "type": "ground_robot",
+          "capabilities": ["mobility.pose", "camera.capture"]
+        }
+      ]
+    }
+  ]
+}

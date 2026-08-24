@@ -2,20 +2,52 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"aerosight/worker/internal/config"
+	"aerosight/worker/internal/observability"
+	"aerosight/worker/internal/outbox"
+	"aerosight/worker/internal/wakeup"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	workerConfig, err := config.Load()
+	if err != nil {
+		slog.New(slog.NewJSONHandler(os.Stderr, nil)).Error("worker configuration invalid", "error", err.Error())
+		os.Exit(1)
+	}
+
+	runID := observability.CorrelationID("")
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With(
+		"worker", workerConfig.WorkerName,
+		"request_id", runID,
+	)
 	logger.Info("worker started")
 
-	// Task consumers will be registered here once the first queue contract exists.
-	<-ctx.Done()
+	database, err := sql.Open("pgx", workerConfig.DatabaseURL)
+	if err != nil {
+		logger.Error("database driver initialization failed", "error", err.Error())
+		os.Exit(1)
+	}
+	defer database.Close()
+	if err := database.PingContext(ctx); err != nil {
+		logger.Error("database connection failed", "error", err.Error())
+		os.Exit(1)
+	}
+
+	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
+	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
+	if err := consumer.RunWithWake(ctx, wake); err != nil {
+		logger.Error("worker stopped unexpectedly", "error", err.Error())
+		os.Exit(1)
+	}
 	logger.Info("worker stopped")
 }

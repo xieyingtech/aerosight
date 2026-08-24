@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  AeroSight is an air-ground integrated intelligent sensing platform.
+  It is a pnpm monorepo with a Next.js App Router web application in apps/web,
+  a Go asynchronous worker in apps/worker, and a PostgreSQL schema in db/schema.sql.
+  Next.js owns authentication, authorization, and synchronous database access.
+  The Go worker owns background processing.
+
+  The primary ownership hierarchy is User -> Team membership -> Project ->
+  project resources. Project access must be authorized through team membership;
+  owner and admin roles manage projects while members access existing projects.
+  Preserve tenant isolation in every project-scoped query and operation.
+
+  Prefer focused changes that follow existing patterns. Include database migration,
+  authorization, backward compatibility, and asynchronous-processing impact when
+  relevant. Verification commands are `pnpm check` and `pnpm build`; run the
+  smallest relevant checks during implementation and the full checks before archive.
+
+rules:
+  proposal:
+    - 明确说明目标、非目标、用户可见变化和受影响的现有能力
+    - 涉及数据或权限时，明确迁移、兼容性和租户隔离影响
+  specs:
+    - 每项 Requirement 至少包含一个可验证的 Scenario
+    - Scenario 使用 GIVEN/WHEN/THEN，并覆盖关键失败路径
+  design:
+    - 记录关键技术决策、备选方案以及数据库或权限边界
+  tasks:
+    - 将任务拆成可独立验证的小步骤，并明确对应的检查或测试
+
+operations:
+  apply:
+    guidance:
+      - 保留工作区中与当前 Change 无关的用户修改
+      - 实现后运行与改动相关的最小检查，并记录结果
+  archive:
+    guidance:
+      - 归档前确认任务完成、Delta Spec 已同步，并运行完整检查

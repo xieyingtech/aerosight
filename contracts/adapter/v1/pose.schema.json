@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aerosight.local/contracts/adapter/v1/pose.schema.json",
+  "title": "AeroSight Mobile Device Pose v1",
+  "type": "object",
+  "required": ["deviceType", "crs", "longitude", "latitude"],
+  "properties": {
+    "deviceType": { "enum": ["drone", "ground_robot", "mobile_sensor", "other"] },
+    "crs": { "type": "string", "minLength": 1 },
+    "verticalDatum": { "type": "string" },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "altitudeMeters": { "type": "number" },
+    "orientation": {
+      "type": "object",
+      "required": ["x", "y", "z", "w"],
+      "properties": {
+        "x": { "type": "number" }, "y": { "type": "number" },
+        "z": { "type": "number" }, "w": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "velocityMetersPerSecond": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "horizontalAccuracyMeters": { "type": "number", "minimum": 0 },
+    "verticalAccuracyMeters": { "type": "number", "minimum": 0 },
+    "attitudeAccuracyDegrees": { "type": "number", "minimum": 0 },
+    "quality": { "type": "object" }
+  },
+  "additionalProperties": false
+}

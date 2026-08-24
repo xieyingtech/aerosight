@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aerosight.local/contracts/adapter/v1/command.schema.json",
+  "title": "AeroSight Adapter Command Envelope v1",
+  "type": "object",
+  "required": [
+    "schemaVersion", "commandId", "idempotencyKey", "adapterId", "projectId",
+    "externalDeviceId", "capabilityCode", "parameters", "deadline", "safetyContext"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "adapter.aerosight.dev/v1" },
+    "commandId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "adapterId": { "type": "integer", "minimum": 1 },
+    "projectId": { "type": "integer", "minimum": 1 },
+    "externalDeviceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "capabilityCode": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "parameters": { "type": "object" },
+    "deadline": { "type": "string", "format": "date-time" },
+    "safetyContext": { "type": "object" }
+  },
+  "additionalProperties": false
+}
