@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import pg from "pg";
+import { loadLocalEnvironment } from "./load-local-env.mjs";
 
 const { Pool } = pg;
 const MIGRATION_LOCK_KEY = "aerosight.db.migrations";
@@ -139,6 +140,7 @@ export async function migrateDatabase({ connectionString, logger = console } = {
 
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : undefined;
 if (invokedPath === import.meta.url) {
+  loadLocalEnvironment();
   migrateDatabase().catch((error) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;

@@ -3,9 +3,10 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "dev": "pnpm run --parallel \"/^dev:.*/\"",
+    "predev": "pnpm db:migrate",
+    "dev": "pnpm run \"/^dev:.*/\"",
     "dev:web": "pnpm --dir apps/web dev",
-    "dev:worker": "cd apps/worker && go run ./cmd/worker",
+    "dev:worker": "node scripts/dev-worker.mjs",
     "build": "pnpm build:web && pnpm build:worker",
     "build:web": "pnpm --dir apps/web build",
     "build:worker": "cd apps/worker && go build -o ../../.build/aerosight-worker ./cmd/worker",

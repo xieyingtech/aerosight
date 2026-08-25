@@ -11,8 +11,18 @@
 
 ## Development
 
-1. Create a PostgreSQL database and apply `db/schema.sql`.
-2. Copy `apps/web/.env.example` to `apps/web/.env.local` and fill `DATABASE_URL` and `AUTH_SECRET`.
+1. Create a PostgreSQL database and apply all pending migrations:
+
+```bash
+pnpm db:migrate
+```
+
+`db/schema.sql` remains the complete schema snapshot. Existing installations
+that already match this snapshot safely adopt the baseline migration on their
+first migration run.
+2. Copy `apps/web/.env.example` to `.env.local` at the repository root and fill
+   `DATABASE_URL` and `AUTH_SECRET`. Then either copy it to
+   `apps/web/.env.local` or symlink that path to the root `.env.local`.
 3. Install the web dependencies:
 
 ```bash
@@ -40,4 +50,5 @@ and, when needed, Redis.
 ```bash
 pnpm check
 pnpm build
+pnpm test:migrations
 ```
