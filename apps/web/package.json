@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prestart": "pnpm db:migrate",
     "start": "next start",
     "db:migrate": "node scripts/db-migrate.mjs",
     "test:migrations": "node scripts/db-migrate-test.mjs",

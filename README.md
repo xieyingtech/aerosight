@@ -53,6 +53,20 @@ pnpm build
 pnpm test:migrations
 ```
 
+## Production startup
+
+Build the Web application and worker, then start both processes from the
+workspace root:
+
+```bash
+pnpm build
+pnpm start
+```
+
+`pnpm start` checks and applies pending database migrations before starting
+either process. Running `pnpm --dir apps/web start` directly performs the same
+migration check before starting Next.js.
+
 ## Spec-driven development
 
 This repository uses [OpenSpec](https://openspec.dev/) for non-trivial feature,
