@@ -52,3 +52,30 @@ pnpm check
 pnpm build
 pnpm test:migrations
 ```
+
+## Spec-driven development
+
+This repository uses [OpenSpec](https://openspec.dev/) for non-trivial feature,
+behavior, data-model, API, and authorization changes. OpenSpec artifacts are
+written in Chinese and committed alongside the code.
+
+In Codex, use the generated skills in this order:
+
+1. `$openspec-explore` to investigate or clarify an idea without changing code.
+2. `$openspec-propose <change description>` to create the proposal, delta specs,
+   design, and implementation tasks.
+3. Review the generated artifacts, then start a new request with
+   `$openspec-apply-change <change name>` to implement it.
+4. Use `$openspec-sync-specs <change name>` and
+   `$openspec-archive-change <change name>` after implementation and verification.
+
+The CLI is available through pnpm:
+
+```bash
+pnpm spec list
+pnpm spec status --change <change-name>
+pnpm spec validate <change-name>
+```
+
+Active changes live in `openspec/changes/`; current system specifications live
+in `openspec/specs/` after changes are synchronized and archived.

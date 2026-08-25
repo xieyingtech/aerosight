@@ -5,6 +5,7 @@
   "scripts": {
     "predev": "pnpm db:migrate",
     "dev": "pnpm run \"/^dev:.*/\"",
+    "spec": "openspec",
     "dev:web": "pnpm --dir apps/web dev",
     "dev:worker": "node scripts/dev-worker.mjs",
     "build": "pnpm build:web && pnpm build:worker",
@@ -17,5 +18,8 @@
     "test:worker": "cd apps/worker && go test ./...",
     "typecheck": "pnpm --dir apps/web typecheck",
     "check": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "1.10.0"
   }
 }
