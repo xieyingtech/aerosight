@@ -11,7 +11,13 @@ const runtimeConfigSchema = z.object({
   ),
   OBJECT_STORAGE_LOCAL_ROOT: z.string().trim().min(1).optional(),
   ALGORITHM_ALLOWED_HOSTS: z.string().default(""),
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info")
+  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  AI_PROVIDER: z.enum(["disabled", "openai"]).default("disabled"),
+  AI_MODEL: z.string().trim().optional(),
+  OPENAI_API_KEY: z.string().trim().optional()
+}).superRefine((config,context)=>{
+  if(config.AI_PROVIDER==="openai"&&!config.AI_MODEL)context.addIssue({code:"custom",path:["AI_MODEL"],message:"AI_MODEL is required when AI_PROVIDER=openai"});
+  if(config.AI_PROVIDER==="openai"&&!config.OPENAI_API_KEY)context.addIssue({code:"custom",path:["OPENAI_API_KEY"],message:"OPENAI_API_KEY is required when AI_PROVIDER=openai"});
 });
 
 export type WebRuntimeConfig = {
@@ -20,6 +26,9 @@ export type WebRuntimeConfig = {
   objectStorageLocalRoot: string | null;
   algorithmAllowedHosts: string[];
   logLevel: "debug" | "info" | "warn" | "error";
+  aiProvider: "disabled" | "openai";
+  aiModel: string | null;
+  openaiApiKey: string | null;
 };
 
 export function parseWebRuntimeConfig(environment: Record<string, string | undefined>): WebRuntimeConfig {
@@ -33,7 +42,10 @@ export function parseWebRuntimeConfig(environment: Record<string, string | undef
     authSecret: parsed.data.AUTH_SECRET,
     objectStorageLocalRoot: parsed.data.OBJECT_STORAGE_LOCAL_ROOT ?? null,
     algorithmAllowedHosts: parsed.data.ALGORITHM_ALLOWED_HOSTS.split(",").map((host) => host.trim()).filter(Boolean),
-    logLevel: parsed.data.LOG_LEVEL
+    logLevel: parsed.data.LOG_LEVEL,
+    aiProvider: parsed.data.AI_PROVIDER,
+    aiModel: parsed.data.AI_MODEL ?? null,
+    openaiApiKey: parsed.data.OPENAI_API_KEY ?? null
   };
 }
 
