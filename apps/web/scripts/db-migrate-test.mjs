@@ -718,6 +718,59 @@ async function assertLiveStreamSchema(connectionString) {
   }
 }
 
+async function assertTaskVersionSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select project.id, project.team_id, actor.id as user_id
+         from projects project join users actor on actor.email = 'legacy@example.test'
+        where project.name = 'legacy-project'`
+    );
+    const row = scope.rows[0];
+    const task = await client.query(
+      `insert into tasks (
+         project_id, team_id, name, trigger_type, script, created_by_user_id
+       ) values ($1, $2, 'versioned-task', 'manual', 'inspect', $3) returning id`,
+      [row.id, row.team_id, row.user_id]
+    );
+    const version = await client.query(
+      `insert into task_versions (
+         project_id, team_id, task_id, version, status, definition_json, script, created_by_user_id
+       ) values ($1, $2, $3, 1, 'draft', '{"name":"versioned-task"}'::jsonb, 'inspect', $4)
+       returning id`,
+      [row.id, row.team_id, task.rows[0].id, row.user_id]
+    );
+    await client.query(
+      `insert into task_steps (
+         project_id, team_id, task_version_id, position, step_key, name, action
+       ) values ($1, $2, $3, 1, 'capture', '采集', 'camera.capture')`,
+      [row.id, row.team_id, version.rows[0].id]
+    );
+    await client.query(
+      `update task_versions set status = 'published', published_by_user_id = $2, published_at = now()
+        where id = $1`,
+      [version.rows[0].id, row.user_id]
+    );
+    await client.query(
+      "update task_versions set script = 'changed' where id = $1",
+      [version.rows[0].id]
+    ).then(
+      () => assert(false, "published task version should be immutable"),
+      (error) => assert(error.code === "55000", "published task mutation failed unexpectedly")
+    );
+    await client.query(
+      "update task_steps set action = 'changed' where task_version_id = $1",
+      [version.rows[0].id]
+    ).then(
+      () => assert(false, "published task steps should be immutable"),
+      (error) => assert(error.code === "55000", "published task step mutation failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -734,7 +787,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 14, "empty database should apply all migrations");
+    assert(first.applied.length === 15, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -749,6 +802,7 @@ try {
     await assertSpatiotemporalSchema(connectionString);
     await assertMediaEvidenceSchema(connectionString);
     await assertLiveStreamSchema(connectionString);
+    await assertTaskVersionSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -758,12 +812,38 @@ try {
     const legacy = new Client({ connectionString });
     await legacy.connect();
     await legacy.query(legacySchema);
+    const legacyUser = await legacy.query("insert into users (name, email) values ('upgrade-user', 'upgrade@example.test') returning id");
+    const legacyTeam = await legacy.query("insert into teams (name) values ('upgrade-team') returning id");
+    await legacy.query("insert into team_members (team_id, user_id, role) values ($1, $2, 'owner')", [legacyTeam.rows[0].id, legacyUser.rows[0].id]);
+    const legacyProject = await legacy.query("insert into projects (team_id, name) values ($1, 'upgrade-project') returning id", [legacyTeam.rows[0].id]);
+    const legacyTask = await legacy.query(
+      "insert into tasks (project_id, name, trigger_type, script, created_by_user_id) values ($1, 'legacy-task', 'manual', 'legacy-script', $2) returning id",
+      [legacyProject.rows[0].id, legacyUser.rows[0].id]
+    );
+    await legacy.query(
+      "insert into task_runs (project_id, task_id, trigger_source, created_by_user_id) values ($1, $2, 'manual', $3)",
+      [legacyProject.rows[0].id, legacyTask.rows[0].id, legacyUser.rows[0].id]
+    );
     await legacy.end();
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 14, "existing database should record all migrations");
+    assert(first.applied.length === 15, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
+    const upgraded = new Client({ connectionString });
+    await upgraded.connect();
+    const upgradedTask = await upgraded.query(
+      `select task.current_published_version_id, version.status, version.script,
+              run.task_version_id
+         from tasks task
+         join task_versions version on version.id = task.current_published_version_id
+         join task_runs run on run.task_id = task.id and run.project_id = task.project_id
+        where task.name = 'legacy-task'`
+    );
+    await upgraded.end();
+    assert(upgradedTask.rows[0]?.status === "published", "legacy task did not receive a published compatibility version");
+    assert(upgradedTask.rows[0]?.script === "legacy-script", "legacy task script changed during upgrade");
+    assert(upgradedTask.rows[0]?.task_version_id === upgradedTask.rows[0]?.current_published_version_id, "legacy run did not pin its compatibility version");
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     const after = await readMigrationState(connectionString);
@@ -782,11 +862,14 @@ try {
                 to_regclass('public.device_telemetry') as telemetry,
                 to_regclass('public.asset_upload_intents') as upload_intents,
                 to_regclass('public.evidence_links') as evidence_links,
-                to_regclass('public.live_streams') as live_streams`
+                to_regclass('public.live_streams') as live_streams,
+                to_regclass('public.task_versions') as task_versions,
+                to_regclass('public.task_steps') as task_steps`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
-        result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams,
+        result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
+        result.rows[0].task_versions && result.rows[0].task_steps,
         "schema snapshot is incomplete"
       );
     } finally {

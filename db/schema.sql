@@ -545,6 +545,7 @@ CREATE TABLE "task_runs" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
 	"task_id" integer NOT NULL,
+	"task_version_id" bigint,
 	"trigger_source" text NOT NULL,
 	"status" text DEFAULT 'queued' NOT NULL,
 	"input_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
@@ -560,6 +561,7 @@ CREATE TABLE "task_runs" (
 CREATE TABLE "tasks" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
 	"name" text NOT NULL,
 	"description" text,
 	"trigger_type" text NOT NULL,
@@ -571,7 +573,47 @@ CREATE TABLE "tasks" (
 	"script" text NOT NULL,
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"current_published_version_id" bigint,
+	CONSTRAINT "tasks_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "task_versions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"task_id" integer NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"definition_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"script" text NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "task_versions_status_valid" CHECK (status in ('draft', 'published', 'retired')),
+	CONSTRAINT "task_versions_version_positive" CHECK (version > 0),
+	CONSTRAINT "task_versions_task_version_unique" UNIQUE("task_id", "version"),
+	CONSTRAINT "task_versions_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "task_steps" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"task_version_id" bigint NOT NULL,
+	"position" integer NOT NULL,
+	"step_key" text NOT NULL,
+	"name" text NOT NULL,
+	"capability_code" text,
+	"action" text NOT NULL,
+	"parameters_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"failure_policy_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"media_requirements_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "task_steps_position_positive" CHECK (position > 0),
+	CONSTRAINT "task_steps_version_position_unique" UNIQUE("task_version_id", "position"),
+	CONSTRAINT "task_steps_version_key_unique" UNIQUE("task_version_id", "step_key")
 );
 --> statement-breakpoint
 CREATE TABLE "team_members" (
@@ -602,6 +644,34 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_email_unique" UNIQUE("email"),
 	CONSTRAINT "users_phone_unique" UNIQUE("phone")
 );
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_task_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF OLD.status IN ('published', 'retired') THEN
+		RAISE EXCEPTION 'published task versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER task_versions_published_immutable
+BEFORE UPDATE OR DELETE ON task_versions
+FOR EACH ROW EXECUTE FUNCTION protect_published_task_version();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_task_step()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM task_versions WHERE id = OLD.task_version_id AND status IN ('published', 'retired')) THEN
+		RAISE EXCEPTION 'published task steps are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER task_steps_published_immutable
+BEFORE UPDATE OR DELETE ON task_steps
+FOR EACH ROW EXECUTE FUNCTION protect_published_task_step();
 --> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -692,8 +762,17 @@ ALTER TABLE "project_events" ADD CONSTRAINT "project_events_project_team_fk" FOR
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_version_project_fk" FOREIGN KEY ("task_version_id","project_id") REFERENCES "public"."task_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tasks" ADD CONSTRAINT "tasks_current_version_project_fk" FOREIGN KEY ("current_published_version_id","project_id") REFERENCES "public"."task_versions"("id","project_id") ON DELETE SET NULL ("current_published_version_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_versions" ADD CONSTRAINT "task_versions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_versions" ADD CONSTRAINT "task_versions_task_project_fk" FOREIGN KEY ("task_id","project_id") REFERENCES "public"."tasks"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_versions" ADD CONSTRAINT "task_versions_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_versions" ADD CONSTRAINT "task_versions_published_by_fk" FOREIGN KEY ("published_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_steps" ADD CONSTRAINT "task_steps_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_steps" ADD CONSTRAINT "task_steps_version_project_fk" FOREIGN KEY ("task_version_id","project_id") REFERENCES "public"."task_versions"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "team_members" ADD CONSTRAINT "team_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agent_messages_session_created_idx" ON "agent_messages" USING btree ("session_id","created_at");--> statement-breakpoint
@@ -767,6 +846,9 @@ CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> st
 CREATE UNIQUE INDEX "tasks_project_name_unique" ON "tasks" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "tasks_project_status_idx" ON "tasks" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "tasks_trigger_type_idx" ON "tasks" USING btree ("trigger_type");--> statement-breakpoint
+CREATE UNIQUE INDEX "task_versions_one_draft_idx" ON "task_versions" USING btree ("task_id") WHERE "task_versions"."status" = 'draft';--> statement-breakpoint
+CREATE INDEX "task_versions_project_status_idx" ON "task_versions" USING btree ("project_id","status","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "task_steps_version_position_idx" ON "task_steps" USING btree ("task_version_id","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "team_members_single_owner_unique" ON "team_members" USING btree ("team_id") WHERE "team_members"."role" = 'owner';--> statement-breakpoint
 CREATE INDEX "team_members_user_idx" ON "team_members" USING btree ("user_id");
 --> statement-breakpoint
