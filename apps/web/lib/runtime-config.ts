@@ -10,6 +10,7 @@ const runtimeConfigSchema = z.object({
     z.string().min(16, "AUTH_SECRET must contain at least 16 characters")
   ),
   OBJECT_STORAGE_LOCAL_ROOT: z.string().trim().min(1).optional(),
+  ALGORITHM_ALLOWED_HOSTS: z.string().default(""),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info")
 });
 
@@ -17,6 +18,7 @@ export type WebRuntimeConfig = {
   databaseUrl: string;
   authSecret: string;
   objectStorageLocalRoot: string | null;
+  algorithmAllowedHosts: string[];
   logLevel: "debug" | "info" | "warn" | "error";
 };
 
@@ -30,6 +32,7 @@ export function parseWebRuntimeConfig(environment: Record<string, string | undef
     databaseUrl: parsed.data.DATABASE_URL,
     authSecret: parsed.data.AUTH_SECRET,
     objectStorageLocalRoot: parsed.data.OBJECT_STORAGE_LOCAL_ROOT ?? null,
+    algorithmAllowedHosts: parsed.data.ALGORITHM_ALLOWED_HOSTS.split(",").map((host) => host.trim()).filter(Boolean),
     logLevel: parsed.data.LOG_LEVEL
   };
 }

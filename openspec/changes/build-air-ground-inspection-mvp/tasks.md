@@ -61,7 +61,7 @@
 
 - [x] 7.1 创建 `algorithm_providers`、`algorithm_definitions`、`algorithm_definition_versions`、`algorithm_runs` 和 `algorithm_run_attempts`，并通过项目复合外键、不可变版本和幂等 run 约束测试验证。
 - [x] 7.2 实现算法服务管理 API/UI，配置 `type`、`baseUrl`、`secretRef`、认证、允许 header、超时、并发和速率限制，通过 owner/admin/member 授权与 key 不回显测试验证。
-- [ ] 7.3 实现出站 URL 安全策略，校验 HTTPS、域名 allowlist、DNS 解析地址和每次重定向，拒绝 loopback、link-local、元数据地址与未授权私网，并通过 SSRF 套件验证。
+- [x] 7.3 实现出站 URL 安全策略，校验 HTTPS、域名 allowlist、DNS 解析地址和每次重定向，拒绝 loopback、link-local、元数据地址与未授权私网，并通过 SSRF 套件验证。
 - [ ] 7.4 定义算法 adapter 接口与 canonical result schema，覆盖输入资产/时空上下文、同步/轮询/callback、原始结果和版本化 mapping，并通过 JSON Schema 契约测试验证。
 - [ ] 7.5 实现 MVP `http-json` adapter，使用预签名资产 URL、退避、熔断和 attempt 审计，并通过模拟同步、异步、超时、限流和格式漂移服务测试验证。
 - [ ] 7.6 为 `kserve-v2`、`ogc-processes`、`ai-sdk` 注册明确 capability 与实现状态，已启用 adapter 通过协议契约测试，未启用 adapter 通过显式不可用测试验证不误报成功。

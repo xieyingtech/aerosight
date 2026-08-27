@@ -5,6 +5,8 @@ import { algorithmProviderInputSchema, publicAlgorithmProvider, type AlgorithmPr
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
 import { correlationId } from "@/lib/observability";
+import { assertSafeOutboundUrl } from "@/lib/outbound-url-policy";
+import { getWebRuntimeConfig } from "@/lib/runtime-config";
 
 type ProviderRow = {
   id: string; projectId: number; name: string; providerType: AlgorithmProviderInput["providerType"];
@@ -26,6 +28,7 @@ export async function listAlgorithmProviders(projectId: number) {
 export async function createAlgorithmProvider(projectId: number, rawInput: unknown, requestId?: string | null) {
   const input = algorithmProviderInputSchema.parse(rawInput);
   const { user, access } = await requireCurrentProjectPermission(projectId, "algorithm:manage");
+  await assertSafeOutboundUrl(input.baseUrl, { allowedHosts: getWebRuntimeConfig().algorithmAllowedHosts });
   return withAuditedProjectWrite({
     projectId, teamId: access.teamId, requestId: correlationId(requestId), actorUserId: user.id,
     action: "algorithm_provider.create", resourceType: "algorithm_provider", input,
@@ -43,6 +46,7 @@ export async function createAlgorithmProvider(projectId: number, rawInput: unkno
 export async function updateAlgorithmProvider(projectId: number, providerId: number, rawInput: unknown, requestId?: string | null) {
   const input = algorithmProviderInputSchema.parse(rawInput);
   const { user, access } = await requireCurrentProjectPermission(projectId, "algorithm:manage");
+  await assertSafeOutboundUrl(input.baseUrl, { allowedHosts: getWebRuntimeConfig().algorithmAllowedHosts });
   return withAuditedProjectWrite({
     projectId, teamId: access.teamId, requestId: correlationId(requestId), actorUserId: user.id,
     action: "algorithm_provider.update", resourceType: "algorithm_provider", resourceId: String(providerId), input,
@@ -58,4 +62,14 @@ export async function updateAlgorithmProvider(projectId: number, providerId: num
     if (!result.rows[0]) throw new Error("ALGORITHM_PROVIDER_NOT_FOUND");
     return publicAlgorithmProvider(result.rows[0]);
   });
+}
+
+export async function testAlgorithmProviderEndpoint(projectId: number, providerId: number) {
+  await requireCurrentProjectPermission(projectId, "algorithm:manage");
+  const provider = (await query<{ baseUrl: string }>(
+    `select base_url as "baseUrl" from algorithm_providers where project_id = $1 and id = $2`, [projectId, providerId]
+  )).rows[0];
+  if (!provider) throw new Error("ALGORITHM_PROVIDER_NOT_FOUND");
+  const target = await assertSafeOutboundUrl(provider.baseUrl, { allowedHosts: getWebRuntimeConfig().algorithmAllowedHosts });
+  return { safe: true, protocol: target.url.protocol, host: target.url.hostname, resolvedAddressCount: target.addresses.length };
 }
