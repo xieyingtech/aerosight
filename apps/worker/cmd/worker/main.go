@@ -13,6 +13,7 @@ import (
 	"aerosight/worker/internal/config"
 	"aerosight/worker/internal/heartbeat"
 	"aerosight/worker/internal/media"
+	"aerosight/worker/internal/mission"
 	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/outbox"
 	"aerosight/worker/internal/wakeup"
@@ -48,6 +49,10 @@ func main() {
 	}
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
+	missionProcessor := mission.NewProcessor(nil)
+	consumer.Register("task_run.transitioned", missionProcessor.Handler)
+	consumer.Register("mission.control", missionProcessor.Handler)
+	consumer.Register("command.ack", missionProcessor.Handler)
 	if workerConfig.ObjectStorageLocalRoot == "" {
 		consumer.Register("asset.available", func(context.Context, *sql.Tx, outbox.Event) error {
 			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")

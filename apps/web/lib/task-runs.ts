@@ -40,7 +40,7 @@ export async function transitionMissionRun(input: {
     await publishProjectEvent(client, {
       projectId: input.projectId, teamId: access.teamId, eventId: randomUUID(),
       eventType: "task_run.transitioned",
-      payload: { from: current.rows[0].status, to: next.status, stateVersion: next.stateVersion, reason: input.reason },
+      payload: { taskRunId: input.taskRunId, from: current.rows[0].status, to: next.status, stateVersion: next.stateVersion, reason: input.reason },
       enqueue: true
     });
     return updated.rows[0];
