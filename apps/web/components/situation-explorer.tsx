@@ -8,6 +8,7 @@ import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import { initialSituationState, situationReducer } from "@/lib/situation-state";
 import { applyReplayToSnapshot } from "@/lib/replay-model";
 import type { ProjectReplay } from "@/lib/project-replay-core";
+import { LiveStreamPanel } from "@/components/live-stream-panel";
 
 function selectedRecord(snapshot: ProjectSituationSnapshot, lane: string, entityId: string) {
   const sources = lane.includes("device") || lane === "track" ? snapshot.devices
@@ -53,6 +54,9 @@ export function SituationExplorer({ snapshot, mapClassName }: { snapshot: Projec
           </div> : <div className="flex flex-1 flex-col items-center justify-center p-8 text-center"><CrosshairIcon className="mb-3 size-8 text-muted-foreground" /><p className="text-sm font-medium">选择地图或时间线要素</p><p className="mt-1 text-xs text-muted-foreground">设备、媒体和告警会同步显示在这里。</p></div>}
           <div className="mt-auto border-t px-4 py-3 text-xs text-muted-foreground"><span className="flex items-center gap-2"><RadioTowerIcon className="size-3.5" />{replayStatus === "loading" ? "正在加载回放…" : replayStatus === "error" ? "回放加载失败" : state.range ? `${new Date(state.range.from).toLocaleTimeString("zh-CN")} — ${new Date(state.range.to).toLocaleTimeString("zh-CN")}` : "跟随最新态势"}</span></div>
         </aside>
+      </div>
+      <div className="rounded-xl border bg-card">
+        <LiveStreamPanel cursor={state.cursor} mode={state.mode} selection={state.selection} snapshot={viewSnapshot} />
       </div>
       <ProjectTimeline cursor={state.cursor} onCursorChange={(cursor) => dispatch({ type: "set-cursor", cursor })} onRangeChange={(from, to) => dispatch({ type: "set-range", from, to })} onReturnLive={() => dispatch({ type: "return-live" })} onSelect={(selection) => dispatch({ type: "select", selection })} range={state.range} snapshot={viewSnapshot} />
     </div>

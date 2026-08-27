@@ -67,7 +67,7 @@ export async function readProjectReplay(userId: number, projectId: number, input
     const media = (await client.query<Record<string, unknown>>(
       `/* replay:media */ select id, device_id as "deviceId", kind, mime_type as "mimeType",
               captured_at as "capturedAt", metadata_json as metadata
-       from assets where project_id = $1 and captured_at >= $2 and captured_at <= $3
+       from assets where project_id = $1 and status = 'available' and captured_at >= $2 and captured_at <= $3
        order by captured_at limit 1001`, [projectId, input.from, input.to]
     )).rows;
     const events = (await client.query<Record<string, unknown>>(

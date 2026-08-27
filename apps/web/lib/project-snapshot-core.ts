@@ -98,12 +98,24 @@ export async function readProjectSituationSnapshot(
        group by recent.device_id having count(*) >= 2`,
       [projectId]
     )).rows;
+    const liveStreams = (await client.query<Record<string, unknown>>(
+      `/* snapshot:live-streams */
+       select stream.id, stream.device_id as "deviceId", stream.stream_key as "streamKey",
+              stream.source_type as "sourceType", stream.status,
+              stream.status_reason as "statusReason", stream.started_at as "startedAt",
+              stream.last_active_at as "lastActiveAt", stream.ended_at as "endedAt"
+       from live_streams stream
+       where stream.project_id = $1
+         and stream.status in ('starting', 'live', 'degraded')
+       order by stream.started_at desc`,
+      [projectId]
+    )).rows;
     const mediaPoints = (await client.query<Record<string, unknown>>(
       `/* snapshot:media */
        select asset.id, asset.kind, asset.mime_type as "mimeType", asset.device_id as "deviceId",
               asset.task_run_id as "taskRunId", asset.captured_at as "capturedAt",
               asset.created_at as "createdAt", asset.metadata_json as metadata
-       from assets asset where asset.project_id = $1
+       from assets asset where asset.project_id = $1 and asset.status = 'available'
        order by coalesce(asset.captured_at, asset.created_at) desc limit 500`,
       [projectId]
     )).rows;
@@ -118,7 +130,7 @@ export async function readProjectSituationSnapshot(
     )).rows;
 
     const generatedAt = new Date();
-    const latest = latestTimestamp([devices, tracks, activeTasks, mediaPoints, openAlerts]);
+    const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, mediaPoints, openAlerts]);
     const snapshot: ProjectSituationSnapshot = {
       project,
       generatedAt: generatedAt.toISOString(),
@@ -126,7 +138,7 @@ export async function readProjectSituationSnapshot(
       devices,
       tracks,
       activeTasks,
-      liveStreams: [],
+      liveStreams,
       mediaPoints,
       suspectedConstruction: [],
       openAlerts,
@@ -137,7 +149,7 @@ export async function readProjectSituationSnapshot(
       },
       availability: {
         devices: "available", tasks: "available", media: "available", alerts: "available",
-        liveStreams: "not-configured", suspectedConstruction: "not-configured", regions: "not-configured"
+        liveStreams: "available", suspectedConstruction: "not-configured", regions: "not-configured"
       }
     };
     await client.query("commit");
