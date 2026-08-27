@@ -102,6 +102,13 @@ func main() {
 		},
 		workerConfig.WorkerName+":"+runID, logger,
 	)
+	djiCommandDispatcher, err := dji.NewCommandDispatcher(djiManager, nil)
+	if err != nil {
+		logger.Error("DJI command dispatcher initialization failed", "error", err.Error())
+		os.Exit(1)
+	}
+	consumer.Register("device.command.dispatch", djiCommandDispatcher.DispatchHandler)
+	consumer.Register("command.reply", djiCommandDispatcher.ReplyHandler)
 	missionProcessor := mission.NewProcessor(nil)
 	consumer.Register("task_run.transitioned", missionProcessor.Handler)
 	consumer.Register("mission.control", missionProcessor.Handler)

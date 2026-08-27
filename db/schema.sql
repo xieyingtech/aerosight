@@ -1047,7 +1047,7 @@ CREATE TABLE "device_commands" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
 	"team_id" integer NOT NULL,
-	"task_run_id" integer NOT NULL,
+	"task_run_id" integer,
 	"task_run_step_id" bigint,
 	"device_id" integer NOT NULL,
 	"command_key" text NOT NULL,
@@ -1084,6 +1084,38 @@ CREATE TABLE "command_attempts" (
 	CONSTRAINT "command_attempts_attempt_valid" CHECK (attempt > 0),
 	CONSTRAINT "command_attempts_command_attempt_unique" UNIQUE("command_id", "attempt")
 );
+--> statement-breakpoint
+CREATE TABLE "device_command_protocol_correlations" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"command_id" uuid NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"mapping_version" text NOT NULL,
+	"transaction_id" text NOT NULL,
+	"business_id" text NOT NULL,
+	"method" text NOT NULL,
+	"request_topic" text NOT NULL,
+	"request_payload_json" jsonb NOT NULL,
+	"status" text DEFAULT 'prepared' NOT NULL,
+	"reply_event_id" text,
+	"reply_result" integer,
+	"reply_payload_json" jsonb,
+	"sent_at" timestamp with time zone,
+	"replied_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_command_protocol_correlations_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_command_protocol_correlations_command_project_fk" FOREIGN KEY ("command_id", "project_id") REFERENCES "device_commands"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_command_protocol_correlations_adapter_project_fk" FOREIGN KEY ("adapter_id", "project_id") REFERENCES "device_adapters"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_command_protocol_correlations_status_valid" CHECK (status in ('prepared','sent','acknowledged','nacked')),
+	CONSTRAINT "device_command_protocol_correlations_command_unique" UNIQUE("command_id"),
+	CONSTRAINT "device_command_protocol_correlations_transaction_unique" UNIQUE("adapter_id", "transaction_id"),
+	CONSTRAINT "device_command_protocol_correlations_business_method_unique" UNIQUE("adapter_id", "business_id", "method")
+);
+--> statement-breakpoint
+CREATE INDEX "device_command_protocol_correlations_reply_idx"
+ON "device_command_protocol_correlations" ("adapter_id", "transaction_id", "business_id", "method", "status");
 --> statement-breakpoint
 CREATE TABLE "team_members" (
 	"id" serial PRIMARY KEY NOT NULL,

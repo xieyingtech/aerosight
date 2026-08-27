@@ -151,6 +151,135 @@ func TestProjectorClaimsDJITopologyIntoUnifiedDeviceQuery(t *testing.T) {
 	if telemetryType != "dji.environment" || sensorStatus != "online" || !json.Valid(sensorPayload) {
 		t.Fatalf("sensor telemetry was not written to unified realtime tables: type=%s status=%s payload=%s", telemetryType, sensorStatus, sensorPayload)
 	}
+	testCommandDispatchAndReplies(t, ctx, database, teamID, projectID, adapterID)
+}
+
+type capturedCommandPublisher struct {
+	adapterID int64
+	topic     string
+	payload   json.RawMessage
+}
+
+func (publisher *capturedCommandPublisher) Publish(_ context.Context, adapterID int64, topic string, payload []byte) error {
+	publisher.adapterID = adapterID
+	publisher.topic = topic
+	publisher.payload = append(json.RawMessage(nil), payload...)
+	return nil
+}
+
+func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *sql.DB, teamID, projectID int, adapterID int64) {
+	t.Helper()
+	publisher := &capturedCommandPublisher{}
+	dispatcher, err := NewCommandDispatcher(publisher, func() time.Time { return time.UnixMilli(1787821300000).UTC() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	var aircraftID int
+	if err := database.QueryRowContext(ctx, `select device_id from device_external_identities
+		where adapter_id=$1 and external_device_id='M3TD-DEMO-001'`, adapterID).Scan(&aircraftID); err != nil {
+		t.Fatal(err)
+	}
+	commandID := "89f050f8-77f2-4a73-a8b7-8391e3797801"
+	if _, err := database.ExecContext(ctx, `
+		insert into device_commands(
+		  id,project_id,team_id,device_id,command_key,idempotency_key,capability_code,
+		  parameters_json,safety_context_json,status,priority,deadline_at
+		) values ($1,$2,$3,$4,'return_home','integration-rth','flight.return_home','{}','{}','dispatchable',100,$5)`,
+		commandID, projectID, teamID, aircraftID, time.UnixMilli(1787821400000).UTC()); err != nil {
+		t.Fatal(err)
+	}
+	callOutboxHandler(t, ctx, database, dispatcher.DispatchHandler, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + commandID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": commandID}),
+	})
+	if publisher.adapterID != adapterID || publisher.topic != "thing/product/DOCK2-DEMO-001/services" {
+		t.Fatalf("aircraft command did not route through its dock gateway: adapter=%d topic=%s", publisher.adapterID, publisher.topic)
+	}
+	var published struct {
+		TransactionID string `json:"tid"`
+		BusinessID    string `json:"bid"`
+		Method        string `json:"method"`
+	}
+	if json.Unmarshal(publisher.payload, &published) != nil || published.TransactionID != commandID || published.BusinessID != commandID || published.Method != "return_home" {
+		t.Fatalf("published correlation was not stable: %s", publisher.payload)
+	}
+
+	unknown := routedReply(t, projectID, adapterID, "00000000-0000-4000-8000-000000000000", 0)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, unknown))
+	var status string
+	if err := database.QueryRowContext(ctx, "select status from device_commands where id=$1", commandID).Scan(&status); err != nil || status != "sent" {
+		t.Fatalf("unknown reply mutated command: status=%s err=%v", status, err)
+	}
+
+	ack := routedReply(t, projectID, adapterID, commandID, 0)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, ack))
+	var correlationStatus string
+	if err := database.QueryRowContext(ctx, `select command.status,correlation.status
+		from device_commands command join device_command_protocol_correlations correlation on correlation.command_id=command.id
+		where command.id=$1`, commandID).Scan(&status, &correlationStatus); err != nil {
+		t.Fatal(err)
+	}
+	if status != "acknowledged" || correlationStatus != "acknowledged" {
+		t.Fatalf("ACK did not update command and correlation: command=%s correlation=%s", status, correlationStatus)
+	}
+
+	nackID := "89f050f8-77f2-4a73-a8b7-8391e3797802"
+	if _, err := database.ExecContext(ctx, `
+		insert into device_commands(
+		  id,project_id,team_id,device_id,command_key,idempotency_key,capability_code,
+		  parameters_json,safety_context_json,status,priority,deadline_at
+		) values ($1,$2,$3,$4,'return_home','integration-rth-nack','flight.return_home','{}','{}','dispatchable',100,$5)`,
+		nackID, projectID, teamID, aircraftID, time.UnixMilli(1787821400000).UTC()); err != nil {
+		t.Fatal(err)
+	}
+	callOutboxHandler(t, ctx, database, dispatcher.DispatchHandler, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + nackID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": nackID}),
+	})
+	nack := routedReply(t, projectID, adapterID, nackID, 326108)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, nack))
+	if err := database.QueryRowContext(ctx, "select status from device_commands where id=$1", nackID).Scan(&status); err != nil || status != "nacked" {
+		t.Fatalf("NACK did not update command: status=%s err=%v", status, err)
+	}
+}
+
+func routedReply(t *testing.T, projectID int, adapterID int64, commandID string, result int) RoutedMessage {
+	t.Helper()
+	raw := jsonObject(map[string]any{
+		"tid": commandID, "bid": commandID, "timestamp": 1787821300100,
+		"gateway": "DOCK2-DEMO-001", "method": "return_home", "data": map[string]any{"result": result},
+	})
+	message, err := RouteMQTTMessage(RouteContext{
+		ProjectID: projectID, AdapterID: adapterID, AllowedGatewaySNs: map[string]bool{"DOCK2-DEMO-001": true},
+	}, MQTTMessage{Topic: "thing/product/DOCK2-DEMO-001/services_reply", Payload: raw, QoS: 1, ReceivedAt: time.UnixMilli(1787821300200).UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return message
+}
+
+func replyOutboxEvent(t *testing.T, teamID int, message RoutedMessage) outbox.Event {
+	t.Helper()
+	payload, err := json.Marshal(message.Envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return outbox.Event{ProjectID: message.Envelope.ProjectID, TeamID: teamID, EventID: message.Envelope.EventID, EventType: message.Envelope.EventType, Payload: payload}
+}
+
+func callOutboxHandler(t *testing.T, ctx context.Context, database *sql.DB, handler outbox.Handler, event outbox.Event) {
+	t.Helper()
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err := handler(ctx, tx, event); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func projectEvent(t *testing.T, ctx context.Context, database *sql.DB, projector *Projector, teamID int, message RoutedMessage) {

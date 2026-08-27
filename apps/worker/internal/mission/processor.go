@@ -39,14 +39,19 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		return nil
 	}
 	if payload.TaskRunID == 0 && payload.CommandID != "" {
+		var taskRunID sql.NullInt64
 		if err := tx.QueryRowContext(ctx,
 			"select task_run_id from device_commands where project_id = $1 and id::text = $2",
-			event.ProjectID, payload.CommandID).Scan(&payload.TaskRunID); err != nil {
+			event.ProjectID, payload.CommandID).Scan(&taskRunID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil
 			}
 			return err
 		}
+		if !taskRunID.Valid {
+			return nil
+		}
+		payload.TaskRunID = int(taskRunID.Int64)
 	}
 	if payload.TaskRunID <= 0 {
 		return errors.New("mission event is missing taskRunId")

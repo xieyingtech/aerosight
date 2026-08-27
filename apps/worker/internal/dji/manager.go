@@ -18,6 +18,7 @@ type MessageHandlerFactory func(AdapterLease) MQTTMessageHandler
 
 type activeAdapter struct {
 	lease   AdapterLease
+	session ManagedSession
 	cancel  context.CancelFunc
 	allDone chan struct{}
 }
@@ -93,10 +94,26 @@ func (manager *AdapterManager) start(ctx context.Context, lease AdapterLease) er
 	}
 	done := make(chan struct{})
 	manager.mu.Lock()
-	manager.active[lease.AdapterID] = activeAdapter{lease: lease, cancel: cancel, allDone: done}
+	manager.active[lease.AdapterID] = activeAdapter{lease: lease, session: session, cancel: cancel, allDone: done}
 	manager.mu.Unlock()
 	go manager.watch(sessionCtx, lease, session, done)
 	return nil
+}
+
+func (manager *AdapterManager) Publish(ctx context.Context, adapterID int64, topic string, payload []byte) error {
+	manager.mu.Lock()
+	active, exists := manager.active[adapterID]
+	manager.mu.Unlock()
+	if !exists {
+		return errors.New("DJI_ADAPTER_SESSION_NOT_ACTIVE")
+	}
+	publisher, supportsPublish := active.session.(interface {
+		Publish(context.Context, string, []byte) error
+	})
+	if !supportsPublish {
+		return errors.New("DJI_ADAPTER_SESSION_PUBLISH_UNAVAILABLE")
+	}
+	return publisher.Publish(ctx, topic, payload)
 }
 
 func (manager *AdapterManager) reconcile(ctx context.Context) error {

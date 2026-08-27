@@ -14,10 +14,12 @@ import (
 )
 
 type canonicalPayload struct {
-	Protocol  string          `json:"protocol"`
-	RouteKind string          `json:"routeKind"`
-	Method    string          `json:"method"`
-	Data      json.RawMessage `json:"data"`
+	Protocol      string          `json:"protocol"`
+	RouteKind     string          `json:"routeKind"`
+	TransactionID string          `json:"transactionId"`
+	BusinessID    string          `json:"businessId"`
+	Method        string          `json:"method"`
+	Data          json.RawMessage `json:"data"`
 }
 
 type Projector struct{}
