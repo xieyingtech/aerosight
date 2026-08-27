@@ -81,5 +81,5 @@
 - [ ] 10.3 在隔离项目以只读方式接入一套 Dock 3 + M4D/4TD，记录所有发现设备的 DeviceType/Driver、拓扑、状态、视频和传感/遥测通道证据后再验证受控命令
 - [ ] 10.4 分别完成局域网和公网端到端验收，验证设备上线、遥测/传感订阅、能力级 RBAC、航线任务/返航、至少两项机场命令、摄像头直播和停止清理
 - [x] 10.5 运行租户隔离、DeviceType/Device 范围 capability RBAC、Topic ACL、播放鉴权、秘密脱敏、重复命令和超时恢复测试，并保存无跨项目访问、越权能力或重复副作用的结果
-- [ ] 10.6 运行 `pnpm check`、`pnpm build`、Go 全量测试和 OpenSpec strict validation，修复所有失败并记录最终验证结果
-- [ ] 10.7 按功能边界提交 conventional commits，确认最终 `git status` 仅保留用户原有无关修改且提交历史可独立审查
+- [x] 10.6 运行 `pnpm check`、`pnpm build`、Go 全量测试和 OpenSpec strict validation，修复所有失败并记录最终验证结果
+- [x] 10.7 按功能边界提交 conventional commits，确认最终 `git status` 仅保留用户原有无关修改且提交历史可独立审查
