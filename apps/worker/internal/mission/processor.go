@@ -164,21 +164,13 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 			id, project_id, team_id, task_run_id, task_run_step_id, device_id, command_key,
 			idempotency_key, capability_code, parameters_json, safety_context_json, status, priority, deadline_at
 		) select $3::uuid, run.project_id, run.team_id, run.id, step.id, run.selected_device_id,
-			$4, $5, $6, '{}'::jsonb, jsonb_build_object('scheduler','mission-v1'), 'sent', $7, $8
+			$4, $5, $6, '{}'::jsonb, jsonb_build_object('scheduler','mission-v1'), 'dispatchable', $7, $8
 		  from task_runs run left join task_run_steps step on step.task_run_id = run.id and step.position = $9
 		 where run.project_id = $1 and run.id = $2
-		on conflict (device_id, idempotency_key) do update set status = 'sent', deadline_at = excluded.deadline_at
+		on conflict (device_id, idempotency_key) do update set status = 'dispatchable', deadline_at = excluded.deadline_at
 		returning id::text`, projectID, snapshot.RunID, command.ID, command.Action, command.IdempotencyKey,
 			command.CapabilityCode, command.Priority, command.Deadline, decision.StepPosition).Scan(&commandID)
 		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `insert into command_attempts (project_id, team_id, command_id, adapter_id, attempt, status, sent_at)
-			select command.project_id, command.team_id, command.id, device.adapter_id,
-			       coalesce((select max(existing.attempt) from command_attempts existing where existing.command_id = command.id), 0) + 1,
-			       'sent', $3
-			  from device_commands command join devices device on device.id = command.device_id and device.project_id = command.project_id
-			 where command.project_id = $1 and command.id::text = $2`, projectID, commandID, now); err != nil {
 			return err
 		}
 	}
