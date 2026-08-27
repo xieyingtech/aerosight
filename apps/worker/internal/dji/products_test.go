@@ -81,6 +81,11 @@ func TestDock2M3TDFixtureMapsDriverTopologyStatusCommandsAndStreams(t *testing.T
 	dockCapabilities, _ := device.CalculateEffectiveCapabilities(types.Resolve("dji.dock2", 1), device.CapabilityReport{}, device.CapabilityReport{})
 	assertCapabilityKind(t, dockCapabilities, "dock.debug.control", driver.CapabilityCommand)
 	assertCapabilityKind(t, dockCapabilities, "mission.execute", driver.CapabilityCommand)
+	for _, capability := range dockCapabilities.Capabilities {
+		if capability.Code == "dock.debug.control" && capability.Parameters["productFamily"] != "dock2" {
+			t.Fatalf("Dock 2 command profile lost its product boundary: %+v", capability)
+		}
+	}
 	aircraftCapabilities, _ := device.CalculateEffectiveCapabilities(types.Resolve("dji.matrice3td", 1), device.CapabilityReport{}, device.CapabilityReport{})
 	assertCapabilityKind(t, aircraftCapabilities, "flight.return_home", driver.CapabilityCommand)
 	assertStream(t, aircraftCapabilities, "telemetry.primary", driver.StreamTelemetry)

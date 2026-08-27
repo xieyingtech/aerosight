@@ -23,10 +23,11 @@ type ProductDescriptor struct {
 	Category          string
 	ValidatedFirmware string
 	Capabilities      []string
+	CapabilityConfig  map[string]json.RawMessage
 }
 
 var dock2Products = []ProductDescriptor{
-	{Key: ProductKey{Domain: 3, Type: 2, Subtype: 0}, Name: "DJI Dock 2", TypeKey: "dji.dock2", Category: "dock", ValidatedFirmware: "14.03.07.01", Capabilities: []string{"state.read", "mission.execute", "mission.cancel", "dock.debug.control"}},
+	{Key: ProductKey{Domain: 3, Type: 2, Subtype: 0}, Name: "DJI Dock 2", TypeKey: "dji.dock2", Category: "dock", ValidatedFirmware: "14.03.07.01", Capabilities: []string{"state.read", "mission.execute", "mission.cancel", "dock.debug.control"}, CapabilityConfig: map[string]json.RawMessage{"dock.debug.control": json.RawMessage(`{"enabled":true,"productFamily":"dock2"}`)}},
 	{Key: ProductKey{Domain: 0, Type: 91, Subtype: 0}, Name: "DJI Matrice 3D", TypeKey: "dji.matrice3d", Category: "aircraft", ValidatedFirmware: "14.03.07.01", Capabilities: []string{"state.read", "mission.execute", "mission.cancel", "flight.return_home", "stream.telemetry.read"}},
 	{Key: ProductKey{Domain: 0, Type: 91, Subtype: 1}, Name: "DJI Matrice 3TD", TypeKey: "dji.matrice3td", Category: "aircraft", ValidatedFirmware: "14.03.07.01", Capabilities: []string{"state.read", "mission.execute", "mission.cancel", "flight.return_home", "stream.telemetry.read"}},
 	{Key: ProductKey{1, 80, 0}, Name: "Matrice 3D Camera", TypeKey: "dji.matrice3d.camera", Category: "camera", Capabilities: []string{"state.read", "stream.video.read", "stream.video.control"}},
@@ -52,10 +53,18 @@ func ResolveDock2Product(key ProductKey) (ProductDescriptor, bool) {
 }
 
 func RegisterDock2DeviceTypes(registry *driver.DeviceTypeRegistry) error {
-	for _, product := range dock2Products {
+	return registerProductDeviceTypes(registry, dock2Products)
+}
+
+func registerProductDeviceTypes(registry *driver.DeviceTypeRegistry, products []ProductDescriptor) error {
+	for _, product := range products {
 		profile := make(map[string]json.RawMessage, len(product.Capabilities))
 		for _, capability := range product.Capabilities {
-			profile[capability] = json.RawMessage(`{"enabled":true}`)
+			configured := product.CapabilityConfig[capability]
+			if len(configured) == 0 {
+				configured = json.RawMessage(`{"enabled":true}`)
+			}
+			profile[capability] = configured
 		}
 		if err := registry.Register(driver.DeviceTypeDefinition{
 			TypeKey: product.TypeKey, Version: 1, DisplayName: product.Name, Category: product.Category,
@@ -112,8 +121,8 @@ type ProductNode struct {
 	Relation         string
 }
 
-func descriptorByTypeKey(typeKey string) ProductDescriptor {
-	for _, product := range dock2Products {
+func descriptorByTypeKey(products []ProductDescriptor, typeKey string) ProductDescriptor {
+	for _, product := range products {
 		if product.TypeKey == typeKey {
 			return product
 		}
@@ -143,8 +152,8 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 	}
 	nodes := []ProductNode{productNode(gatewaySN, dock, topology.ThingVersion, "", "")}
 	nodes = append(nodes,
-		productNode(gatewaySN+":camera:0", descriptorByTypeKey("dji.dock2.camera"), topology.ThingVersion, gatewaySN, "contains"),
-		productNode(gatewaySN+":environment", descriptorByTypeKey("dji.dock2.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"),
+		productNode(gatewaySN+":camera:0", descriptorByTypeKey(dock2Products, "dji.dock2.camera"), topology.ThingVersion, gatewaySN, "contains"),
+		productNode(gatewaySN+":environment", descriptorByTypeKey(dock2Products, "dji.dock2.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"),
 	)
 	for _, child := range topology.SubDevices {
 		if child.SN == "" {
@@ -161,8 +170,8 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 			cameraType = "dji.matrice3td.camera"
 		}
 		nodes = append(nodes,
-			productNode(child.SN+":camera:0", descriptorByTypeKey(cameraType), child.ThingVersion, child.SN, "mounted-on"),
-			productNode(child.SN+":vision-assist", descriptorByTypeKey("dji.matrice3.vision-assist"), child.ThingVersion, child.SN, "mounted-on"),
+			productNode(child.SN+":camera:0", descriptorByTypeKey(dock2Products, cameraType), child.ThingVersion, child.SN, "mounted-on"),
+			productNode(child.SN+":vision-assist", descriptorByTypeKey(dock2Products, "dji.matrice3.vision-assist"), child.ThingVersion, child.SN, "mounted-on"),
 		)
 	}
 	return nodes, nil
