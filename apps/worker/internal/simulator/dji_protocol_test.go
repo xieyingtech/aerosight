@@ -124,6 +124,80 @@ func TestDock2ScenariosPublishTypedTopologyAndRealtimeData(t *testing.T) {
 	}
 }
 
+func TestDock3ScenariosAndFaultInjection(t *testing.T) {
+	now := time.UnixMilli(1_787_821_200_000).UTC()
+	for _, fixture := range []struct {
+		product  string
+		aircraft string
+		subtype  int
+	}{
+		{DJIProductDock3M4D, "M4D-DEMO-001", 0},
+		{DJIProductDock3M4TD, "M4TD-DEMO-001", 1},
+	} {
+		config, err := Dock3Scenario(fixture.product, "DOCK3-DEMO-001", fixture.aircraft, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var topology struct {
+			Data struct {
+				Type       int `json:"type"`
+				SubDevices []struct {
+					Subtype int `json:"sub_type"`
+				} `json:"sub_devices"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(config.Topology, &topology); err != nil {
+			t.Fatal(err)
+		}
+		if topology.Data.Type != 3 || topology.Data.SubDevices[0].Subtype != fixture.subtype {
+			t.Fatalf("wrong Dock 3 scenario topology: %+v", topology)
+		}
+	}
+
+	config, err := Dock3Scenario(DJIProductDock3M4TD, "DOCK3-DEMO-001", "M4TD-DEMO-001", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err = InjectUnknownFirmware(config, "99.99.99.99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Now = func() time.Time { return now.Add(time.Second) }
+	config.Faults = DJIFaults{
+		NackMethods:       map[string]int{"return_home": 314001},
+		TimeoutMethods:    map[string]bool{"cover_open": true},
+		UnknownCapability: "future.autonomy.execute",
+	}
+	transport := &protocolTransportFixture{}
+	protocol, err := NewDJIProtocol(config, transport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nack := []byte(`{"tid":"nack-1","bid":"faults","timestamp":1787821202000,"method":"return_home","data":{}}`)
+	if err := protocol.HandleMessage(context.Background(), protocol.ServiceTopic(), nack); err != nil {
+		t.Fatal(err)
+	}
+	timeout := []byte(`{"tid":"timeout-1","bid":"faults","timestamp":1787821202001,"method":"cover_open","data":{}}`)
+	if err := protocol.HandleMessage(context.Background(), protocol.ServiceTopic(), timeout); err != nil {
+		t.Fatal(err)
+	}
+	if err := protocol.PublishTelemetry(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(transport.publications) != 3 {
+		t.Fatalf("timeout emitted a reply or telemetry was lost: %+v", transport.publications)
+	}
+	if !strings.Contains(string(transport.publications[0].payload), `"result":314001`) {
+		t.Fatalf("NACK result not injected: %s", transport.publications[0].payload)
+	}
+	if !strings.Contains(string(transport.publications[2].payload), "future.autonomy.execute") {
+		t.Fatalf("unknown capability not injected: %s", transport.publications[2].payload)
+	}
+	if !strings.Contains(string(config.Topology), "99.99.99.99") {
+		t.Fatal("unknown firmware not injected into topology")
+	}
+}
+
 func TestDJIProtocolPackageHasNoDatabaseOrInternalSuccessBypass(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {

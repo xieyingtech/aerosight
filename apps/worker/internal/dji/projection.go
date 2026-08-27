@@ -113,7 +113,7 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 	identityJSON := jsonObject(map[string]any{
 		"protocol": "dji-cloud-api", "productDomain": node.ProductKey.Domain,
 		"productType": node.ProductKey.Type, "productSubtype": node.ProductKey.Subtype,
-		"protocolVersion": node.ProtocolVersion, "compatibilityReason": node.CompatibilityReason,
+		"protocolVersion": node.ProtocolVersion, "firmwareVersion": node.FirmwareVersion, "compatibilityReason": node.CompatibilityReason,
 	})
 	var deviceID sql.NullInt64
 	var existingType sql.NullString
@@ -155,10 +155,10 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 		  project_id, name, type, status, last_seen_at, config_json, metadata_json, adapter_id,
 		  device_model, firmware_version, status_reason, device_type_id,
 		  status_observed_at, status_projected_at, data_freshness, raw_status_ref
-		) values ($1,$2,$3,$4,$5::timestamptz,'{}',$6,$7,$8,null,nullif($9,''),$10,$5::timestamptz,now(),$11,$12)
+		) values ($1,$2,$3,$4,$5::timestamptz,'{}',$6,$7,$8,nullif($9,''),nullif($10,''),$11,$5::timestamptz,now(),$12,$13)
 		returning id`, envelope.ProjectID, name, node.Category, status, envelope.CapturedAt,
 		jsonObject(map[string]any{"externalDeviceId": node.ExternalID, "driver": DriverKey}), envelope.AdapterID,
-		node.Name, reason, deviceTypeID, freshness, envelope.EventID).Scan(&deviceID)
+		node.Name, node.FirmwareVersion, reason, deviceTypeID, freshness, envelope.EventID).Scan(&deviceID)
 	if err != nil {
 		return 0, fmt.Errorf("insert unified DJI device: %w", err)
 	}

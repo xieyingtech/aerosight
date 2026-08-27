@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,9 +26,15 @@ func main() {
 	mqttURL := flag.String("mqtt-url", "mqtt://127.0.0.1:1883", "MQTT broker URL without inline credentials")
 	mqttUsername := flag.String("mqtt-username", "", "MQTT username")
 	mqttPasswordEnv := flag.String("mqtt-password-env", "AEROSIGHT_DJI_SIM_MQTT_PASSWORD", "environment variable containing the MQTT password")
+	nackMethod := flag.String("nack-method", "", "DJI service method that should return a NACK")
+	timeoutMethod := flag.String("timeout-method", "", "DJI service method whose reply should be dropped")
+	disconnectAfter := flag.Duration("disconnect-after", 0, "exit after this duration to simulate a device disconnect")
+	unknownFirmware := flag.String("unknown-firmware", "", "replace product firmware with an unvalidated version")
+	unknownCapability := flag.String("unknown-capability", "", "inject an unknown runtime capability in aircraft telemetry")
 	flag.Parse()
 	if *mode == "dji-mqtt" {
-		runDJIMQTT(*topologyPath, *product, *gatewaySN, *aircraftSN, *mqttURL, *mqttUsername, *mqttPasswordEnv)
+		runDJIMQTT(*topologyPath, *product, *gatewaySN, *aircraftSN, *mqttURL, *mqttUsername, *mqttPasswordEnv,
+			*nackMethod, *timeoutMethod, *disconnectAfter, *unknownFirmware, *unknownCapability)
 		return
 	}
 	if *mode != "stdout" {
@@ -60,7 +67,9 @@ func main() {
 	}
 }
 
-func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, username, passwordEnv string) {
+func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, username, passwordEnv, nackMethod, timeoutMethod string,
+	disconnectAfter time.Duration, unknownFirmware, unknownCapability string,
+) {
 	if (topologyPath == "" && product == "") || gatewaySN == "" || username == "" || passwordEnv == "" {
 		fmt.Fprintln(os.Stderr, "-gateway-sn, -mqtt-username, -mqtt-password-env, and either -topology or -product are required in dji-mqtt mode")
 		os.Exit(2)
@@ -73,10 +82,21 @@ func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, usernam
 	protocolConfig := simulator.DJIProtocolConfig{GatewaySN: gatewaySN, AircraftSN: aircraftSN}
 	if product != "" {
 		var err error
-		protocolConfig, err = simulator.Dock2Scenario(product, gatewaySN, aircraftSN, time.Now())
+		if strings.HasPrefix(product, "dock3-") {
+			protocolConfig, err = simulator.Dock3Scenario(product, gatewaySN, aircraftSN, time.Now())
+		} else {
+			protocolConfig, err = simulator.Dock2Scenario(product, gatewaySN, aircraftSN, time.Now())
+		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
+		}
+		if unknownFirmware != "" {
+			protocolConfig, err = simulator.InjectUnknownFirmware(protocolConfig, unknownFirmware)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
 		}
 	} else {
 		topology, err := os.ReadFile(topologyPath)
@@ -86,6 +106,12 @@ func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, usernam
 		}
 		protocolConfig.Topology = topology
 	}
+	protocolConfig.Faults = simulator.DJIFaults{
+		NackMethods: map[string]int{nackMethod: 1}, TimeoutMethods: map[string]bool{timeoutMethod: true},
+		UnknownCapability: unknownCapability,
+	}
+	delete(protocolConfig.Faults.NackMethods, "")
+	delete(protocolConfig.Faults.TimeoutMethods, "")
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	incoming := make(chan dji.MQTTMessage, 32)
@@ -110,12 +136,19 @@ func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, usernam
 		os.Exit(1)
 	}
 	var telemetryErrors <-chan error
+	var disconnect <-chan time.Time
+	if disconnectAfter > 0 {
+		disconnect = time.After(disconnectAfter)
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-session.Done():
 			fmt.Fprintln(os.Stderr, "DJI MQTT simulator session ended")
+			return
+		case <-disconnect:
+			fmt.Fprintln(os.Stderr, "DJI simulator: injected disconnect")
 			return
 		case err := <-telemetryErrors:
 			if err != nil && ctx.Err() == nil {

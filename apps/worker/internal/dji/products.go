@@ -98,16 +98,18 @@ func (value *enumValue) UnmarshalJSON(raw []byte) error {
 }
 
 type productTopology struct {
-	Domain       enumValue `json:"domain"`
-	Type         enumValue `json:"type"`
-	Subtype      enumValue `json:"sub_type"`
-	ThingVersion string    `json:"thing_version"`
-	SubDevices   []struct {
-		SN           string    `json:"sn"`
-		Domain       enumValue `json:"domain"`
-		Type         enumValue `json:"type"`
-		Subtype      enumValue `json:"sub_type"`
-		ThingVersion string    `json:"thing_version"`
+	Domain          enumValue `json:"domain"`
+	Type            enumValue `json:"type"`
+	Subtype         enumValue `json:"sub_type"`
+	ThingVersion    string    `json:"thing_version"`
+	FirmwareVersion string    `json:"firmware_version"`
+	SubDevices      []struct {
+		SN              string    `json:"sn"`
+		Domain          enumValue `json:"domain"`
+		Type            enumValue `json:"type"`
+		Subtype         enumValue `json:"sub_type"`
+		ThingVersion    string    `json:"thing_version"`
+		FirmwareVersion string    `json:"firmware_version"`
 	} `json:"sub_devices"`
 }
 
@@ -117,6 +119,7 @@ type ProductNode struct {
 	Name                string
 	Category            string
 	ProtocolVersion     string
+	FirmwareVersion     string
 	ParentExternalID    string
 	Relation            string
 	ProductKey          ProductKey
@@ -135,6 +138,28 @@ func descriptorByTypeKey(products []ProductDescriptor, typeKey string) ProductDe
 
 func productNode(externalID string, product ProductDescriptor, firmware, parent, relation string) ProductNode {
 	return ProductNode{ExternalID: externalID, TypeKey: product.TypeKey, Name: product.Name, Category: product.Category, ProtocolVersion: firmware, ParentExternalID: parent, Relation: relation, ProductKey: product.Key}
+}
+
+func applyProductCompatibility(node ProductNode, family string, product ProductDescriptor, firmware string) ProductNode {
+	node.FirmwareVersion = strings.TrimSpace(firmware)
+	if node.FirmwareVersion == "" {
+		return node
+	}
+	compatibility := CheckProductCompatibility(family, product.Key, node.FirmwareVersion)
+	if compatibility.ReadOnly {
+		node.ReadOnly = true
+		node.CompatibilityReason = compatibility.Reason
+	}
+	return node
+}
+
+func inheritProductCompatibility(node, parent ProductNode) ProductNode {
+	node.FirmwareVersion = parent.FirmwareVersion
+	if parent.ReadOnly {
+		node.ReadOnly = true
+		node.CompatibilityReason = parent.CompatibilityReason
+	}
+	return node
 }
 
 func unknownProductNode(externalID, protocolVersion, parent, relation string, key ProductKey) ProductNode {
@@ -168,10 +193,11 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 	if dock.TypeKey != "dji.dock2" {
 		return nil, errors.New("DJI_DOCK2_PRODUCT_UNSUPPORTED")
 	}
-	nodes := []ProductNode{productNode(gatewaySN, dock, topology.ThingVersion, "", "")}
+	dockNode := applyProductCompatibility(productNode(gatewaySN, dock, topology.ThingVersion, "", ""), "dock2", dock, topology.FirmwareVersion)
+	nodes := []ProductNode{dockNode}
 	nodes = append(nodes,
-		productNode(gatewaySN+":camera:0", descriptorByTypeKey(dock2Products, "dji.dock2.camera"), topology.ThingVersion, gatewaySN, "contains"),
-		productNode(gatewaySN+":environment", descriptorByTypeKey(dock2Products, "dji.dock2.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"),
+		inheritProductCompatibility(productNode(gatewaySN+":camera:0", descriptorByTypeKey(dock2Products, "dji.dock2.camera"), topology.ThingVersion, gatewaySN, "contains"), dockNode),
+		inheritProductCompatibility(productNode(gatewaySN+":environment", descriptorByTypeKey(dock2Products, "dji.dock2.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"), dockNode),
 	)
 	for _, child := range topology.SubDevices {
 		if child.SN == "" {
@@ -190,14 +216,15 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 		if product.Category != "aircraft" {
 			return nil, errors.New("DJI_DOCK2_AIRCRAFT_UNSUPPORTED")
 		}
-		nodes = append(nodes, productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"))
+		aircraftNode := applyProductCompatibility(productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"), "dock2", product, child.FirmwareVersion)
+		nodes = append(nodes, aircraftNode)
 		cameraType := "dji.matrice3d.camera"
 		if product.TypeKey == "dji.matrice3td" {
 			cameraType = "dji.matrice3td.camera"
 		}
 		nodes = append(nodes,
-			productNode(child.SN+":camera:0", descriptorByTypeKey(dock2Products, cameraType), child.ThingVersion, child.SN, "mounted-on"),
-			productNode(child.SN+":vision-assist", descriptorByTypeKey(dock2Products, "dji.matrice3.vision-assist"), child.ThingVersion, child.SN, "mounted-on"),
+			inheritProductCompatibility(productNode(child.SN+":camera:0", descriptorByTypeKey(dock2Products, cameraType), child.ThingVersion, child.SN, "mounted-on"), aircraftNode),
+			inheritProductCompatibility(productNode(child.SN+":vision-assist", descriptorByTypeKey(dock2Products, "dji.matrice3.vision-assist"), child.ThingVersion, child.SN, "mounted-on"), aircraftNode),
 		)
 	}
 	return nodes, nil

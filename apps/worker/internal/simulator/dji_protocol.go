@@ -21,7 +21,14 @@ type DJIProtocolConfig struct {
 	AircraftSN        string
 	Topology          json.RawMessage
 	TelemetryInterval time.Duration
+	Faults            DJIFaults
 	Now               func() time.Time
+}
+
+type DJIFaults struct {
+	NackMethods       map[string]int
+	TimeoutMethods    map[string]bool
+	UnknownCapability string
 }
 
 type DJIProtocolSimulator struct {
@@ -33,15 +40,29 @@ type DJIProtocolSimulator struct {
 const (
 	DJIProductDock2M3D  = "dock2-m3d"
 	DJIProductDock2M3TD = "dock2-m3td"
+	DJIProductDock3M4D  = "dock3-m4d"
+	DJIProductDock3M4TD = "dock3-m4td"
 )
 
 func Dock2Scenario(product, gatewaySN, aircraftSN string, now time.Time) (DJIProtocolConfig, error) {
-	subtype := -1
+	return djiScenario(product, gatewaySN, aircraftSN, now)
+}
+
+func Dock3Scenario(product, gatewaySN, aircraftSN string, now time.Time) (DJIProtocolConfig, error) {
+	return djiScenario(product, gatewaySN, aircraftSN, now)
+}
+
+func djiScenario(product, gatewaySN, aircraftSN string, now time.Time) (DJIProtocolConfig, error) {
+	dockType, aircraftType, subtype, firmware := 0, 0, -1, ""
 	switch product {
 	case DJIProductDock2M3D:
-		subtype = 0
+		dockType, aircraftType, subtype, firmware = 2, 91, 0, "14.03.07.01"
 	case DJIProductDock2M3TD:
-		subtype = 1
+		dockType, aircraftType, subtype, firmware = 2, 91, 1, "14.03.07.01"
+	case DJIProductDock3M4D:
+		dockType, aircraftType, subtype, firmware = 3, 100, 0, "14.03.00.03"
+	case DJIProductDock3M4TD:
+		dockType, aircraftType, subtype, firmware = 3, 100, 1, "14.03.00.03"
 	default:
 		return DJIProtocolConfig{}, fmt.Errorf("DJI_SIMULATOR_PRODUCT_UNSUPPORTED: %s", product)
 	}
@@ -52,10 +73,10 @@ func Dock2Scenario(product, gatewaySN, aircraftSN string, now time.Time) (DJIPro
 		"tid": "sim-topology-" + gatewaySN, "bid": "sim-discovery-" + gatewaySN,
 		"method": "update_topo", "timestamp": now.UTC().UnixMilli(),
 		"data": map[string]any{
-			"domain": "3", "type": 2, "sub_type": 0, "thing_version": "14.03.07.01",
+			"domain": "3", "type": dockType, "sub_type": 0, "thing_version": "1.0.0", "firmware_version": firmware,
 			"sub_devices": []map[string]any{{
-				"sn": aircraftSN, "domain": "0", "type": 91, "sub_type": subtype,
-				"index": "A", "thing_version": "14.03.07.01",
+				"sn": aircraftSN, "domain": "0", "type": aircraftType, "sub_type": subtype,
+				"index": "A", "thing_version": "1.0.0", "firmware_version": firmware,
 			}},
 		},
 	})
@@ -66,6 +87,34 @@ func Dock2Scenario(product, gatewaySN, aircraftSN string, now time.Time) (DJIPro
 		GatewaySN: gatewaySN, AircraftSN: aircraftSN, Topology: topology,
 		TelemetryInterval: time.Second, Now: time.Now,
 	}, nil
+}
+
+func InjectUnknownFirmware(config DJIProtocolConfig, firmware string) (DJIProtocolConfig, error) {
+	if strings.TrimSpace(firmware) == "" {
+		return DJIProtocolConfig{}, errors.New("DJI_SIMULATOR_FIRMWARE_REQUIRED")
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(config.Topology, &envelope); err != nil {
+		return DJIProtocolConfig{}, err
+	}
+	data, ok := envelope["data"].(map[string]any)
+	if !ok {
+		return DJIProtocolConfig{}, errors.New("DJI_SIMULATOR_TOPOLOGY_DATA_INVALID")
+	}
+	data["firmware_version"] = firmware
+	if children, ok := data["sub_devices"].([]any); ok {
+		for _, child := range children {
+			if object, ok := child.(map[string]any); ok {
+				object["firmware_version"] = firmware
+			}
+		}
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		return DJIProtocolConfig{}, err
+	}
+	config.Topology = raw
+	return config, nil
 }
 
 type djiServiceRequest struct {
@@ -122,6 +171,9 @@ func (simulator *DJIProtocolSimulator) PublishTelemetry(ctx context.Context) err
 		"height":    42.0, "horizontal_speed": 2.4, "vertical_speed": 0.0,
 		"battery": map[string]any{"capacity_percent": 86},
 	}
+	if simulator.config.Faults.UnknownCapability != "" {
+		aircraftData["capabilities"] = []string{simulator.config.Faults.UnknownCapability}
+	}
 	for _, publication := range []struct {
 		topic string
 		data  map[string]any
@@ -174,10 +226,20 @@ func (simulator *DJIProtocolSimulator) HandleMessage(ctx context.Context, topic 
 		request.Method == "" || request.TimestampMS <= 0 || len(request.Data) == 0 || !json.Valid(request.Data) {
 		return errors.New("DJI_SIMULATOR_SERVICE_ENVELOPE_INVALID")
 	}
+	if simulator.config.Faults.TimeoutMethods[request.Method] {
+		return nil
+	}
+	result := 0
+	if configured, exists := simulator.config.Faults.NackMethods[request.Method]; exists {
+		result = configured
+		if result == 0 {
+			result = 1
+		}
+	}
 	reply, err := json.Marshal(map[string]any{
 		"tid": request.TransactionID, "bid": request.BusinessID,
 		"timestamp": simulator.config.Now().UTC().UnixMilli(), "gateway": simulator.config.GatewaySN,
-		"method": request.Method, "data": map[string]any{"result": 0},
+		"method": request.Method, "data": map[string]any{"result": result},
 	})
 	if err != nil {
 		return err

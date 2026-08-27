@@ -58,10 +58,11 @@ func ExpandDock3Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 	if dock.TypeKey != "dji.dock3" {
 		return nil, errors.New("DJI_DOCK3_PRODUCT_UNSUPPORTED")
 	}
-	nodes := []ProductNode{productNode(gatewaySN, dock, topology.ThingVersion, "", "")}
+	dockNode := applyProductCompatibility(productNode(gatewaySN, dock, topology.ThingVersion, "", ""), "dock3", dock, topology.FirmwareVersion)
+	nodes := []ProductNode{dockNode}
 	nodes = append(nodes,
-		productNode(gatewaySN+":camera:0", descriptorByTypeKey(dock3Products, "dji.dock3.camera"), topology.ThingVersion, gatewaySN, "contains"),
-		productNode(gatewaySN+":environment", descriptorByTypeKey(dock3Products, "dji.dock3.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"),
+		inheritProductCompatibility(productNode(gatewaySN+":camera:0", descriptorByTypeKey(dock3Products, "dji.dock3.camera"), topology.ThingVersion, gatewaySN, "contains"), dockNode),
+		inheritProductCompatibility(productNode(gatewaySN+":environment", descriptorByTypeKey(dock3Products, "dji.dock3.environment-sensor"), topology.ThingVersion, gatewaySN, "contains"), dockNode),
 	)
 	for _, child := range topology.SubDevices {
 		if child.SN == "" {
@@ -79,14 +80,15 @@ func ExpandDock3Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 		if product.Category != "aircraft" {
 			return nil, errors.New("DJI_DOCK3_AIRCRAFT_UNSUPPORTED")
 		}
-		nodes = append(nodes, productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"))
+		aircraftNode := applyProductCompatibility(productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"), "dock3", product, child.FirmwareVersion)
+		nodes = append(nodes, aircraftNode)
 		cameraType := "dji.matrice4d.camera"
 		if product.TypeKey == "dji.matrice4td" {
 			cameraType = "dji.matrice4td.camera"
 		}
 		nodes = append(nodes,
-			productNode(child.SN+":camera:0", descriptorByTypeKey(dock3Products, cameraType), child.ThingVersion, child.SN, "mounted-on"),
-			productNode(child.SN+":vision-assist", descriptorByTypeKey(dock3Products, "dji.matrice4.vision-assist"), child.ThingVersion, child.SN, "mounted-on"),
+			inheritProductCompatibility(productNode(child.SN+":camera:0", descriptorByTypeKey(dock3Products, cameraType), child.ThingVersion, child.SN, "mounted-on"), aircraftNode),
+			inheritProductCompatibility(productNode(child.SN+":vision-assist", descriptorByTypeKey(dock3Products, "dji.matrice4.vision-assist"), child.ThingVersion, child.SN, "mounted-on"), aircraftNode),
 		)
 	}
 	return nodes, nil
