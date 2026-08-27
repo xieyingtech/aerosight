@@ -118,6 +118,7 @@ func main() {
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	callbackMux := http.NewServeMux()
+	callbackMux.Handle("/metrics", observability.DefaultMetrics)
 	callbackMux.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore, detectionSink))
 	callbackMux.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner))
 	callbackServer := &http.Server{
