@@ -12,6 +12,8 @@ import {
   type DeviceAdapterInput
 } from "@/lib/device-adapter-policy";
 import { requireCurrentProjectPermission } from "@/lib/data";
+import { checkDeviceNetworkConnection } from "@/lib/device-connection-check-core";
+import { createDeviceEndpointProbe } from "@/lib/device-connection-probe";
 
 type DeviceAdapterRow = {
   id: string;
@@ -37,7 +39,8 @@ async function requireAdapterManager(projectId: number) {
 export async function listDeviceAdapters(projectId: number) {
   await requireAdapterManager(projectId);
   const result = await query<DeviceAdapterRow>(
-    `select id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
+    `select adapter.id, adapter.project_id as "projectId", adapter.name,
+            adapter.adapter_type as "adapterType", adapter.vendor,
             protocol_version as "protocolVersion", status, secret_ref as "secretRef",
             config_json as config, last_health_json as "lastHealth",
             last_checked_at as "lastCheckedAt", updated_at as "updatedAt"
@@ -170,19 +173,55 @@ export async function testDeviceAdapterConnection(
   requestId?: string | null
 ) {
   const { user, access } = await requireAdapterManager(projectId);
-  const adapter = await query<DeviceAdapterRow>(
+  const adapter = await query<DeviceAdapterRow & {
+    networkProfileId: string | null;
+    networkMode: "lan" | "public" | null;
+    mqttEndpoint: string | null;
+    apiPublicBaseUrl: string | null;
+    websocketPublicUrl: string | null;
+    mediaIngestBaseUrl: string | null;
+    mediaPlaybackBaseUrl: string | null;
+    tlsRequired: boolean | null;
+    networkSecretRef: string | null;
+    networkConfig: Record<string, unknown> | null;
+  }>(
     `select id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
-            protocol_version as "protocolVersion", status, secret_ref as "secretRef",
-            config_json as config, last_health_json as "lastHealth",
-            last_checked_at as "lastCheckedAt", updated_at as "updatedAt"
-       from device_adapters where project_id = $1 and id = $2`,
+            adapter.protocol_version as "protocolVersion", adapter.status,
+            adapter.secret_ref as "secretRef", adapter.config_json as config,
+            adapter.last_health_json as "lastHealth", adapter.last_checked_at as "lastCheckedAt",
+            adapter.updated_at as "updatedAt", profile.id as "networkProfileId",
+            profile.mode as "networkMode", profile.mqtt_endpoint as "mqttEndpoint",
+            profile.api_public_base_url as "apiPublicBaseUrl",
+            profile.websocket_public_url as "websocketPublicUrl",
+            profile.media_ingest_base_url as "mediaIngestBaseUrl",
+            profile.media_playback_base_url as "mediaPlaybackBaseUrl",
+            profile.tls_required as "tlsRequired", profile.secret_ref as "networkSecretRef",
+            profile.config_json as "networkConfig"
+       from device_adapters adapter
+       left join device_network_profiles profile
+         on profile.project_id = adapter.project_id and profile.id = adapter.network_profile_id
+      where adapter.project_id = $1 and adapter.id = $2`,
     [projectId, adapterId]
   );
   const row = adapter.rows[0];
   if (!row) throw new Error("DEVICE_ADAPTER_NOT_FOUND");
-  const health = row.adapterType === "simulator"
-    ? { ok: true, code: "SIMULATOR_READY" }
-    : { ok: false, code: "CONNECTION_TEST_NOT_IMPLEMENTED" };
+  const hasCompleteProfile = row.networkProfileId && row.networkMode && row.mqttEndpoint
+    && row.apiPublicBaseUrl && row.websocketPublicUrl && row.mediaIngestBaseUrl && row.mediaPlaybackBaseUrl;
+  const health = row.adapterType === "simulator" && !hasCompleteProfile
+    ? { ok: true, code: "SIMULATOR_READY", serverVerification: "not_applicable", deviceVerification: "pending" }
+    : !hasCompleteProfile
+      ? { ok: false, code: "NETWORK_PROFILE_REQUIRED", serverVerification: "failed", deviceVerification: "pending" }
+      : await checkDeviceNetworkConnection({
+          mode: row.networkMode!,
+          mqttEndpoint: row.mqttEndpoint!,
+          apiPublicBaseUrl: row.apiPublicBaseUrl!,
+          websocketPublicUrl: row.websocketPublicUrl!,
+          mediaIngestBaseUrl: row.mediaIngestBaseUrl!,
+          mediaPlaybackBaseUrl: row.mediaPlaybackBaseUrl!,
+          tlsRequired: Boolean(row.tlsRequired),
+          mqttAnonymous: row.networkConfig?.mqttAnonymous === true,
+          secretRef: row.networkSecretRef ?? row.secretRef
+        }, { probe: createDeviceEndpointProbe() });
 
   return withAuditedProjectWrite(
     {
@@ -191,6 +230,15 @@ export async function testDeviceAdapterConnection(
       resourceId: String(adapterId), input: {}, policyResult: { permission: "device:configure" }
     },
     async (client) => {
+      if (row.networkProfileId && "status" in health) {
+        await client.query(
+          `update device_network_profiles
+              set status = $3, last_validation_json = $4,
+                  last_validated_at = now(), updated_at = now()
+            where project_id = $1 and id = $2`,
+          [projectId, row.networkProfileId, health.status, health]
+        );
+      }
       await client.query(
         `update device_adapters
             set last_health_json = $3, last_checked_at = now(), updated_at = now()
