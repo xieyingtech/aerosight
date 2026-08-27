@@ -1,5 +1,19 @@
 user __MQTT_DEVICE_USER__
 topic readwrite dji/demo/#
+topic write sys/product/+/status
+topic write thing/product/+/state
+topic write thing/product/+/osd
+topic write thing/product/+/events
+topic write thing/product/+/requests
+topic write thing/product/+/services_reply
+topic read thing/product/+/services
 
 user __MQTT_PLATFORM_USER__
 topic readwrite dji/demo/#
+topic read sys/product/+/status
+topic read thing/product/+/state
+topic read thing/product/+/osd
+topic read thing/product/+/events
+topic read thing/product/+/requests
+topic read thing/product/+/services_reply
+topic write thing/product/+/services
