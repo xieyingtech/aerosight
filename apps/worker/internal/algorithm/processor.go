@@ -98,8 +98,11 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	if status != "queued" {
 		return nil
 	}
-	if providerType != "http-json" || providerStatus != "active" {
-		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "http-json provider is not active")
+	if _, err := RequireEnabled(providerType); err != nil {
+		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", err.Error())
+	}
+	if providerStatus != "active" {
+		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "algorithm provider is not active")
 	}
 	var input Input
 	if err := json.Unmarshal(inputJSON, &input); err != nil {

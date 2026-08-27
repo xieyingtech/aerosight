@@ -1,5 +1,6 @@
 import "server-only";
 
+import { requireEnabledAlgorithmAdapter } from "@/lib/algorithm-adapter-registry";
 import { withAuditedProjectWrite } from "@/lib/audit";
 import { algorithmProviderInputSchema, publicAlgorithmProvider, type AlgorithmProviderInput } from "@/lib/algorithm-provider-policy";
 import { requireCurrentProjectPermission } from "@/lib/data";
@@ -66,10 +67,11 @@ export async function updateAlgorithmProvider(projectId: number, providerId: num
 
 export async function testAlgorithmProviderEndpoint(projectId: number, providerId: number) {
   await requireCurrentProjectPermission(projectId, "algorithm:manage");
-  const provider = (await query<{ baseUrl: string }>(
-    `select base_url as "baseUrl" from algorithm_providers where project_id = $1 and id = $2`, [projectId, providerId]
+  const provider = (await query<{ baseUrl: string; providerType: AlgorithmProviderInput["providerType"] }>(
+    `select base_url as "baseUrl", provider_type as "providerType" from algorithm_providers where project_id = $1 and id = $2`, [projectId, providerId]
   )).rows[0];
   if (!provider) throw new Error("ALGORITHM_PROVIDER_NOT_FOUND");
+  const capability = requireEnabledAlgorithmAdapter(provider.providerType);
   const target = await assertSafeOutboundUrl(provider.baseUrl, { allowedHosts: getWebRuntimeConfig().algorithmAllowedHosts });
-  return { safe: true, protocol: target.url.protocol, host: target.url.hostname, resolvedAddressCount: target.addresses.length };
+  return { safe: true, providerType: provider.providerType, capability, protocol: target.url.protocol, host: target.url.hostname, resolvedAddressCount: target.addresses.length };
 }

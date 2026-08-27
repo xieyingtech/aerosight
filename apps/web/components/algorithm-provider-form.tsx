@@ -21,7 +21,7 @@ export function AlgorithmProviderForm({ projectId }: { projectId: number }) {
   }
   return <form action={submit} className="grid gap-3 rounded-xl border p-4 md:grid-cols-2">
     <Input name="name" placeholder="服务名称" required /><Input name="baseUrl" placeholder="https://algorithm.example.test" required />
-    <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="providerType"><option value="http-json">HTTP JSON</option><option value="kserve-v2">KServe V2</option><option value="ogc-processes">OGC Processes</option><option value="ai-sdk">AI SDK</option></select>
+    <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="providerType"><option value="http-json">HTTP JSON（已启用）</option><option value="kserve-v2">KServe V2（未启用）</option><option value="ogc-processes">OGC Processes（未启用）</option><option value="ai-sdk">AI SDK（未启用）</option></select>
     <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="authType"><option value="none">无认证</option><option value="bearer">Bearer</option><option value="api-key-header">API Key Header</option><option value="basic">Basic</option><option value="signed">签名</option></select>
     <Input className="md:col-span-2" name="secretRef" placeholder="secret://projects/...（不填写密钥原文）" />
     <Input className="md:col-span-2" name="allowedHeaders" placeholder="允许的 Header 名称，以逗号分隔" />
