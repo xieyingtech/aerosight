@@ -591,6 +591,10 @@ CREATE TABLE "devices" (
 	"adapter_id" bigint,
 	"device_model" text,
 	"firmware_version" text,
+	"uav_registration_number" text,
+	"registration_valid_until" timestamp with time zone,
+	"remote_identification_code" text,
+	"responsible_user_id" integer,
 	"status" text DEFAULT 'offline' NOT NULL,
 	"status_reason" text,
 	"last_seen_at" timestamp,
@@ -933,6 +937,13 @@ CREATE TABLE "task_runs" (
 	"selected_device_id" integer,
 	"safety_policy_version_id" bigint,
 	"approval_request_id" uuid,
+	"operation_approval_reference" text,
+	"operation_approval_valid_until" timestamp with time zone,
+	"takeoff_confirmed_at" timestamp with time zone,
+	"takeoff_confirmed_by_user_id" integer,
+	"responsible_user_id" integer,
+	"incident_report_reference" text,
+	"incident_reported_at" timestamp with time zone,
 	"trigger_source" text NOT NULL,
 	"status" text DEFAULT 'queued' NOT NULL,
 	"state_version" integer DEFAULT 0 NOT NULL,
@@ -949,7 +960,9 @@ CREATE TABLE "task_runs" (
 	CONSTRAINT "task_runs_id_project_unique" UNIQUE("id", "project_id"),
 	CONSTRAINT "task_runs_status_valid" CHECK (status in ('queued','blocked','ready','dispatching','running','paused','succeeded','failed','canceling','canceled')),
 	CONSTRAINT "task_runs_state_version_valid" CHECK (state_version >= 0),
-	CONSTRAINT "task_runs_current_step_valid" CHECK (current_step_position is null or current_step_position > 0)
+	CONSTRAINT "task_runs_current_step_valid" CHECK (current_step_position is null or current_step_position > 0),
+	CONSTRAINT "task_runs_takeoff_confirmation_complete" CHECK ((takeoff_confirmed_at is null) = (takeoff_confirmed_by_user_id is null)),
+	CONSTRAINT "task_runs_incident_report_complete" CHECK ((incident_report_reference is null) = (incident_reported_at is null))
 );
 --> statement-breakpoint
 CREATE TABLE "task_run_steps" (
@@ -1436,6 +1449,7 @@ ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_device_pro
 ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_adapter_project_fk" FOREIGN KEY ("declared_by_adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("declared_by_adapter_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "devices" ADD CONSTRAINT "devices_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "devices" ADD CONSTRAINT "devices_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("adapter_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "devices" ADD CONSTRAINT "devices_responsible_user_fk" FOREIGN KEY ("responsible_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identities_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1500,6 +1514,8 @@ ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_team_fk" FOREIGN KEY (
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_device_project_fk" FOREIGN KEY ("selected_device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("selected_device_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_policy_project_fk" FOREIGN KEY ("safety_policy_version_id","project_id") REFERENCES "public"."safety_policy_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_approval_project_fk" FOREIGN KEY ("approval_request_id","project_id") REFERENCES "public"."approval_requests"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_takeoff_confirmer_fk" FOREIGN KEY ("takeoff_confirmed_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_responsible_user_fk" FOREIGN KEY ("responsible_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_step_project_fk" FOREIGN KEY ("task_step_id","project_id") REFERENCES "public"."task_steps"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -1573,6 +1589,7 @@ CREATE INDEX "device_capabilities_code_idx" ON "device_capabilities" USING btree
 CREATE UNIQUE INDEX "devices_project_name_unique" ON "devices" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "devices_project_status_idx" ON "devices" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "devices_last_seen_idx" ON "devices" USING btree ("last_seen_at");--> statement-breakpoint
+CREATE INDEX "devices_registration_number_idx" ON "devices" USING btree ("uav_registration_number") WHERE "devices"."uav_registration_number" is not null;--> statement-breakpoint
 CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "device_connections_project_status_idx" ON "device_connections" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "device_commands_dispatch_idx" ON "device_commands" USING btree ("status","priority" DESC NULLS LAST,"deadline_at");--> statement-breakpoint
@@ -1620,6 +1637,7 @@ CREATE INDEX "safety_policy_versions_restricted_gist" ON "safety_policy_versions
 CREATE INDEX "task_runs_project_created_idx" ON "task_runs" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_task_created_idx" ON "task_runs" USING btree ("task_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "task_runs_responsible_created_idx" ON "task_runs" USING btree ("responsible_user_id","created_at" DESC NULLS LAST) WHERE "task_runs"."responsible_user_id" is not null;--> statement-breakpoint
 CREATE INDEX "task_run_steps_run_status_idx" ON "task_run_steps" USING btree ("task_run_id","status","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "tasks_project_name_unique" ON "tasks" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "tasks_project_status_idx" ON "tasks" USING btree ("project_id","status");--> statement-breakpoint
