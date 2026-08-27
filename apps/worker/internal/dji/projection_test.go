@@ -279,7 +279,7 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 		t.Fatalf("DJI ACK should wait for media before live: status=%s err=%v", status, err)
 	}
 	media := &mediaInspectorFixture{}
-	coordinator, _ := NewLiveStreamHealthCoordinator(media, func() time.Time { return clock })
+	coordinator, _ := NewLiveStreamHealthCoordinator(media, "integration-worker", func() time.Time { return clock })
 	if updated, err := coordinator.ReconcileOnce(ctx, database); err != nil || updated != 0 {
 		t.Fatalf("missing media changed starting session: updated=%d err=%v", updated, err)
 	}
@@ -289,6 +289,45 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 	}
 	if err := database.QueryRowContext(ctx, "select status from live_streams where id=$1", liveStreamID).Scan(&status); err != nil || status != "live" {
 		t.Fatalf("confirmed media did not become live: status=%s err=%v", status, err)
+	}
+	if _, err := database.ExecContext(ctx, "update devices set status='offline' where id=$1", cameraID); err != nil {
+		t.Fatal(err)
+	}
+	if cleaned, err := coordinator.CleanupOnce(ctx, database); err != nil || cleaned != 1 {
+		t.Fatalf("offline DJI stream was not scheduled for cleanup: cleaned=%d err=%v", cleaned, err)
+	}
+	var stopCommandID string
+	if err := database.QueryRowContext(ctx, `select command.id::text,stream.status
+		from device_commands command join live_streams stream on stream.id=command.live_stream_id
+		where command.live_stream_id=$1 and command.command_key='stop'`, liveStreamID).Scan(&stopCommandID, &status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "stopping" {
+		t.Fatalf("offline session did not enter stopping: %s", status)
+	}
+	callOutboxHandler(t, ctx, database, dispatcher.DispatchHandler, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + stopCommandID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": stopCommandID}),
+	})
+	stopACK := routedMethodReply(t, projectID, adapterID, stopCommandID, "live_stop_push", 0)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, stopACK))
+	if err := database.QueryRowContext(ctx, "select status from live_streams where id=$1", liveStreamID).Scan(&status); err != nil || status != "stopped" {
+		t.Fatalf("DJI stop ACK did not converge session: status=%s err=%v", status, err)
+	}
+	var orphanStreamID int
+	if err := database.QueryRowContext(ctx, `insert into live_streams(
+		project_id,team_id,device_id,adapter_id,stream_key,source_type,status,ingest_ref,vendor_stream_ref,
+		lease_owner,lease_expires_at)
+		values($1,$2,$3,$4,'video.orphan','dji','stopping','demo/aerosight/orphan-live',
+		'M3TD-DEMO-001/81-0-0/normal-0','old-worker',now()-interval '1 minute') returning id`,
+		projectID, teamID, cameraID, adapterID).Scan(&orphanStreamID); err != nil {
+		t.Fatal(err)
+	}
+	if cleaned, err := coordinator.CleanupOnce(ctx, database); err != nil || cleaned != 1 {
+		t.Fatalf("expired stopping session was not recovered: cleaned=%d err=%v", cleaned, err)
+	}
+	if err := database.QueryRowContext(ctx, "select status from live_streams where id=$1", orphanStreamID).Scan(&status); err != nil || status != "stopped" {
+		t.Fatalf("expired stopping session did not converge: status=%s err=%v", status, err)
 	}
 
 	nackID := "89f050f8-77f2-4a73-a8b7-8391e3797802"

@@ -119,7 +119,9 @@ func main() {
 			logger.Error("MediaMTX inspector initialization failed", "error", mediaErr.Error())
 			os.Exit(1)
 		}
-		liveStreamHealth, mediaErr = dji.NewLiveStreamHealthCoordinator(mediaInspector, nil)
+		liveStreamHealth, mediaErr = dji.NewLiveStreamHealthCoordinator(
+			mediaInspector, workerConfig.WorkerName+":"+runID, nil,
+		)
 		if mediaErr != nil {
 			logger.Error("live stream health coordinator initialization failed", "error", mediaErr.Error())
 			os.Exit(1)

@@ -37,6 +37,9 @@ func TestMediaMTXInspectorRequiresActualReadyTrack(t *testing.T) {
 	if err != nil || !status.Ready || len(status.Tracks) != 1 {
 		t.Fatalf("ready H264 input was not detected: status=%+v err=%v", status, err)
 	}
+	if _, err := NewLiveStreamHealthCoordinator(inspector, "", nil); err == nil {
+		t.Fatal("coordinator accepted an empty lease owner")
+	}
 }
 
 func TestMediaMTXInspectorIntegration(t *testing.T) {
