@@ -1,0 +1,22 @@
+{
+  "tid": "fixture-dock2-m3td-topology",
+  "bid": "fixture-business-id",
+  "method": "update_topo",
+  "timestamp": 1787821200000,
+  "data": {
+    "domain": "3",
+    "type": 2,
+    "sub_type": 0,
+    "thing_version": "1.0.0",
+    "sub_devices": [
+      {
+        "sn": "M3TD-DEMO-001",
+        "domain": "0",
+        "type": 91,
+        "sub_type": 1,
+        "index": "A",
+        "thing_version": "1.0.0"
+      }
+    ]
+  }
+}
