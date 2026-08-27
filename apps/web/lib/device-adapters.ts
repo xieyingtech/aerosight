@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { correlationId } from "@/lib/observability";
 import { withAuditedProjectWrite } from "@/lib/audit";
 import { query } from "@/lib/db";
@@ -7,13 +9,16 @@ import {
   assertNoInlineSecrets,
   assertSupportedDeviceAdapterType,
   canManageDeviceAdapters,
+  djiAdapterSetupInputSchema,
   deviceAdapterInputSchema,
   publicDeviceAdapter,
-  type DeviceAdapterInput
+  type DeviceAdapterInput,
+  type DjiAdapterSetupInput
 } from "@/lib/device-adapter-policy";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { checkDeviceNetworkConnection } from "@/lib/device-connection-check-core";
 import { createDeviceEndpointProbe } from "@/lib/device-connection-probe";
+import { validateDeviceNetworkProfile } from "@/lib/device-network-profile";
 
 type DeviceAdapterRow = {
   id: string;
@@ -41,10 +46,11 @@ export async function listDeviceAdapters(projectId: number) {
   const result = await query<DeviceAdapterRow>(
     `select adapter.id, adapter.project_id as "projectId", adapter.name,
             adapter.adapter_type as "adapterType", adapter.vendor,
-            protocol_version as "protocolVersion", status, secret_ref as "secretRef",
-            config_json as config, last_health_json as "lastHealth",
-            last_checked_at as "lastCheckedAt", updated_at as "updatedAt"
-       from device_adapters where project_id = $1 order by name`,
+            adapter.protocol_version as "protocolVersion", adapter.status,
+            adapter.secret_ref as "secretRef", adapter.config_json as config,
+            adapter.last_health_json as "lastHealth",
+            adapter.last_checked_at as "lastCheckedAt", adapter.updated_at as "updatedAt"
+       from device_adapters adapter where adapter.project_id = $1 order by adapter.name`,
     [projectId]
   );
   return result.rows.map(publicDeviceAdapter);
@@ -85,6 +91,88 @@ export async function createDeviceAdapter(
         ]
       );
       return publicDeviceAdapter(result.rows[0]);
+    }
+  );
+}
+
+export async function createDjiAdapterSetup(
+  projectId: number,
+  rawInput: DjiAdapterSetupInput,
+  requestId?: string | null
+) {
+  const { user, access } = await requireAdapterManager(projectId);
+  const input = djiAdapterSetupInputSchema.parse(rawInput);
+  const profileInput = {
+    mode: input.mode,
+    mqttEndpoint: input.mqttEndpoint,
+    apiPublicBaseUrl: input.apiPublicBaseUrl,
+    websocketPublicUrl: input.websocketPublicUrl,
+    mediaIngestBaseUrl: input.mediaIngestBaseUrl,
+    mediaPlaybackBaseUrl: input.mediaPlaybackBaseUrl,
+    tlsRequired: input.tlsRequired,
+    mqttAnonymous: input.mqttAnonymous,
+    secretRef: input.secretRef
+  };
+  const validation = await validateDeviceNetworkProfile(profileInput);
+  if (!validation.valid) {
+    const error = new Error("NETWORK_PROFILE_INVALID");
+    Object.assign(error, { issues: validation.issues });
+    throw error;
+  }
+  const topics = input.gatewaySerials.flatMap((serial) => [
+    `sys/product/${serial}/status`,
+    `thing/product/${serial}/state`,
+    `thing/product/${serial}/osd`,
+    `thing/product/${serial}/events`,
+    `thing/product/${serial}/requests`,
+    `thing/product/${serial}/services_reply`
+  ]);
+  return withAuditedProjectWrite(
+    {
+      projectId,
+      teamId: access.teamId,
+      requestId: correlationId(requestId),
+      actorUserId: user.id,
+      action: "device_adapter.dji_setup",
+      resourceType: "device_adapter",
+      input: { ...input, secretRef: "[SECRET_REF]" },
+      policyResult: { permission: "device:configure", role: access.role, networkPolicy: "valid" }
+    },
+    async (client) => {
+      const profile = await client.query<{ id: string }>(
+        `insert into device_network_profiles (
+           project_id, team_id, name, mode, mqtt_endpoint, api_public_base_url,
+           websocket_public_url, media_ingest_base_url, media_playback_base_url,
+           tls_required, secret_ref, status, config_json, last_validation_json
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'unverified',$12,$13)
+         returning id`,
+        [
+          projectId, access.teamId, `${input.name} Network`, input.mode, input.mqttEndpoint,
+          input.apiPublicBaseUrl, input.websocketPublicUrl, input.mediaIngestBaseUrl,
+          input.mediaPlaybackBaseUrl, input.tlsRequired, input.secretRef,
+          { mqttAnonymous: input.mqttAnonymous },
+          { status: "unverified", policyIssues: [] }
+        ]
+      );
+      const adapter = await client.query<DeviceAdapterRow>(
+        `insert into device_adapters (
+           project_id, team_id, name, adapter_type, vendor, protocol_version,
+           status, secret_ref, config_json, network_profile_id
+         ) values ($1,$2,$3,'dji','dji','cloud-api-mqtt5','connecting',$4,$5,$6)
+         returning id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
+                   protocol_version as "protocolVersion", status, secret_ref as "secretRef",
+                   config_json as config, last_health_json as "lastHealth",
+                   last_checked_at as "lastCheckedAt", updated_at as "updatedAt"`,
+        [
+          projectId, access.teamId, input.name, input.secretRef,
+          { clientId: `aerosight-${randomUUID()}`, gatewaySerials: input.gatewaySerials, topics },
+          profile.rows[0].id
+        ]
+      );
+      return {
+        ...publicDeviceAdapter(adapter.rows[0]),
+        network: { mode: input.mode, status: "unverified", hasSecret: true }
+      };
     }
   );
 }
@@ -185,7 +273,8 @@ export async function testDeviceAdapterConnection(
     networkSecretRef: string | null;
     networkConfig: Record<string, unknown> | null;
   }>(
-    `select id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
+    `select adapter.id, adapter.project_id as "projectId", adapter.name,
+            adapter.adapter_type as "adapterType", adapter.vendor,
             adapter.protocol_version as "protocolVersion", adapter.status,
             adapter.secret_ref as "secretRef", adapter.config_json as config,
             adapter.last_health_json as "lastHealth", adapter.last_checked_at as "lastCheckedAt",

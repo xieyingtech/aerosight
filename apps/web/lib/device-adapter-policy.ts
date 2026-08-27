@@ -11,7 +11,22 @@ export const deviceAdapterInputSchema = z.object({
   config: z.record(z.string(), z.unknown()).default({})
 });
 
+export const djiAdapterSetupInputSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  mode: z.enum(["lan", "public"]),
+  mqttEndpoint: z.string().trim().min(1).max(500),
+  apiPublicBaseUrl: z.string().trim().min(1).max(500),
+  websocketPublicUrl: z.string().trim().min(1).max(500),
+  mediaIngestBaseUrl: z.string().trim().min(1).max(500),
+  mediaPlaybackBaseUrl: z.string().trim().min(1).max(500),
+  tlsRequired: z.boolean(),
+  mqttAnonymous: z.boolean().default(false),
+  secretRef: z.string().trim().regex(/^[a-z][a-z0-9+.-]*:\/\/.+/i),
+  gatewaySerials: z.array(z.string().trim().min(1).max(100)).min(1).max(100)
+});
+
 export type DeviceAdapterInput = z.infer<typeof deviceAdapterInputSchema>;
+export type DjiAdapterSetupInput = z.infer<typeof djiAdapterSetupInputSchema>;
 
 export function canManageDeviceAdapters(role: "owner" | "admin" | "member" | null) {
   return role === "owner" || role === "admin";

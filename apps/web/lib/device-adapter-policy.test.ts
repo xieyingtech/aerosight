@@ -5,6 +5,7 @@ import {
   assertNoInlineSecrets,
   assertSupportedDeviceAdapterType,
   canManageDeviceAdapters,
+  djiAdapterSetupInputSchema,
   publicDeviceAdapter
 } from "./device-adapter-policy.ts";
 
@@ -32,4 +33,22 @@ test("public adapter view never returns the secret reference", () => {
   const view = publicDeviceAdapter({ id: 1, name: "DJI", secretRef: "vault://aerosight/dji" });
   assert.deepEqual(view, { id: 1, name: "DJI", hasSecret: true });
   assert(!("secretRef" in view));
+});
+
+test("DJI setup accepts secret references without inline credentials", () => {
+  const setup = djiAdapterSetupInputSchema.parse({
+    name: "Dock fleet",
+    mode: "public",
+    mqttEndpoint: "mqtts://mqtt.example.com:8883",
+    apiPublicBaseUrl: "https://api.example.com",
+    websocketPublicUrl: "wss://api.example.com",
+    mediaIngestBaseUrl: "rtmps://media.example.com:443",
+    mediaPlaybackBaseUrl: "https://media.example.com",
+    tlsRequired: true,
+    mqttAnonymous: false,
+    secretRef: "vault://aerosight/dji",
+    gatewaySerials: ["DOCK-001"]
+  });
+  assert.equal(setup.secretRef, "vault://aerosight/dji");
+  assert(!("password" in setup));
 });
