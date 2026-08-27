@@ -21,7 +21,39 @@ CREATE TABLE "agent_sessions" (
 	"summary" text,
 	"started_at" timestamp DEFAULT now() NOT NULL,
 	"ended_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_sessions_id_project_unique" UNIQUE("id","project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "agent_drafts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"session_id" integer NOT NULL,
+	"created_by_user_id" integer NOT NULL,
+	"draft_type" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"title" text NOT NULL,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_drafts_type_valid" CHECK (draft_type in('inspection_task','report','issue')),
+	CONSTRAINT "agent_drafts_status_valid" CHECK (status in('draft','discarded','published')),
+	CONSTRAINT "agent_drafts_id_project_unique" UNIQUE("id","project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "agent_draft_evidence" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"agent_draft_id" uuid NOT NULL,
+	"reference_type" text NOT NULL,
+	"reference_id" text NOT NULL,
+	"reference_version" text NOT NULL,
+	"observed_at" timestamp with time zone NOT NULL,
+	"quality" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "agent_draft_evidence_type_valid" CHECK (reference_type in('asset','event','detection','track','task_run')),
+	CONSTRAINT "agent_draft_evidence_unique" UNIQUE("agent_draft_id","reference_type","reference_id","reference_version")
 );
 --> statement-breakpoint
 CREATE TABLE "agents" (
@@ -1146,6 +1178,10 @@ ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_f
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_started_by_user_id_users_id_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_session_project_fk" FOREIGN KEY ("session_id","project_id") REFERENCES "public"."agent_sessions"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_actor_team_fk" FOREIGN KEY ("team_id","created_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_draft_evidence" ADD CONSTRAINT "agent_draft_evidence_draft_fk" FOREIGN KEY ("agent_draft_id","project_id") REFERENCES "public"."agent_drafts"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agents" ADD CONSTRAINT "agents_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1312,6 +1348,9 @@ CREATE INDEX "agent_messages_session_created_idx" ON "agent_messages" USING btre
 CREATE INDEX "agent_sessions_project_created_idx" ON "agent_sessions" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "agent_sessions_issue_idx" ON "agent_sessions" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "agent_sessions_task_run_idx" ON "agent_sessions" USING btree ("task_run_id");--> statement-breakpoint
+CREATE INDEX "agent_drafts_project_created_idx" ON "agent_drafts" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "agent_drafts_session_created_idx" ON "agent_drafts" USING btree ("session_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "agent_draft_evidence_project_ref_idx" ON "agent_draft_evidence" USING btree ("project_id","reference_type","reference_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint

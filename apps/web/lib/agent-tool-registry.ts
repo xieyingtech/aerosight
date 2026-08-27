@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ProjectPermission } from "./project-permission-policy.ts";
+import { inspectionTaskDraftInputSchema, issueDraftInputSchema, reportDraftInputSchema } from "./agent-draft-tools-core.ts";
 
 export type AgentToolRisk = "read-only" | "draft" | "protected";
 export type AgentToolConfirmation = "never" | "required";
@@ -62,16 +63,23 @@ export const agentToolRegistry = Object.freeze({
   },
   draft_inspection_task: {
     description: "创建当前项目的巡检任务草案",
-    inputSchema: z.object({ objective: z.string().trim().min(1).max(500), deviceId: z.number().int().positive().optional() }).strict(),
+    inputSchema: inspectionTaskDraftInputSchema,
     risk: "draft",
     permission: "mission:operate",
     confirmation: "never"
   },
   draft_report: {
     description: "创建当前项目的报告草案",
-    inputSchema: z.object({ title: z.string().trim().min(1).max(200), eventIds: z.array(z.string().min(1)).max(100) }).strict(),
+    inputSchema: reportDraftInputSchema,
     risk: "draft",
     permission: "agent:use",
+    confirmation: "never"
+  },
+  draft_issue: {
+    description: "创建当前项目的问题草案",
+    inputSchema: issueDraftInputSchema,
+    risk: "draft",
+    permission: "event:handle",
     confirmation: "never"
   },
   request_mission_start: {

@@ -1131,7 +1131,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 23, "empty database should apply all migrations");
+    assert(first.applied.length === 24, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1178,7 +1178,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 23, "existing database should record all migrations");
+    assert(first.applied.length === 24, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1231,7 +1231,9 @@ try {
                 to_regclass('public.event_rules') as event_rules,
                 to_regclass('public.event_rule_versions') as event_rule_versions,
                 to_regclass('public.perception_events') as perception_events,
-                to_regclass('public.event_feedback') as event_feedback`
+                to_regclass('public.event_feedback') as event_feedback,
+                to_regclass('public.agent_drafts') as agent_drafts,
+                to_regclass('public.agent_draft_evidence') as agent_draft_evidence`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
@@ -1242,7 +1244,8 @@ try {
         result.rows[0].algorithm_definitions && result.rows[0].algorithm_definition_versions &&
         result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts &&
         result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members &&
-        result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback,
+        result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback &&
+        result.rows[0].agent_drafts && result.rows[0].agent_draft_evidence,
         "schema snapshot is incomplete"
       );
     } finally {
