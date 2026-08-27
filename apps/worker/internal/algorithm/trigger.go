@@ -39,6 +39,7 @@ type triggerDefinition struct {
 	Model          string
 	ExecutionMode  string
 	MappingVersion string
+	TriggerKey     string
 }
 
 func (trigger *Trigger) Handler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
@@ -71,14 +72,17 @@ func (trigger *Trigger) Handler(ctx context.Context, tx *sql.Tx, event outbox.Ev
 	}
 	rows, err := tx.QueryContext(ctx, `
 		select version.id, provider.provider_type, version.model_or_process, version.execution_mode,
-		       coalesce(version.protocol_config_json->>'mappingVersion','suspected-construction/v1')
+		       coalesce(version.protocol_config_json->>'mappingVersion','v1'),
+		       coalesce(version.protocol_config_json->'autoTrigger'->>'key', definition.capability_code)
 		from algorithm_definitions definition
 		join algorithm_definition_versions version
 		  on version.id=definition.current_published_version_id and version.project_id=definition.project_id and version.status='published'
 		join algorithm_providers provider
 		  on provider.id=definition.provider_id and provider.project_id=definition.project_id and provider.status='active'
-		where definition.project_id=$1 and definition.capability_code='perception.suspected-construction'
-		order by definition.id`, asset.ProjectID)
+		where definition.project_id=$1
+		  and version.protocol_config_json->'autoTrigger'->>'event'='asset.available'
+		  and coalesce(version.protocol_config_json->'autoTrigger'->'assetKinds','["image"]'::jsonb) ? $2
+		order by definition.id`, asset.ProjectID, asset.Kind)
 	if err != nil {
 		return err
 	}
@@ -86,7 +90,7 @@ func (trigger *Trigger) Handler(ctx context.Context, tx *sql.Tx, event outbox.Ev
 	var definitions []triggerDefinition
 	for rows.Next() {
 		var definition triggerDefinition
-		if err := rows.Scan(&definition.VersionID, &definition.ProviderType, &definition.Model, &definition.ExecutionMode, &definition.MappingVersion); err != nil {
+		if err := rows.Scan(&definition.VersionID, &definition.ProviderType, &definition.Model, &definition.ExecutionMode, &definition.MappingVersion, &definition.TriggerKey); err != nil {
 			return err
 		}
 		definitions = append(definitions, definition)
@@ -170,8 +174,8 @@ func buildTriggeredInput(runID string, asset triggerAsset, definition triggerDef
 }
 
 func triggerIdempotencyKey(asset triggerAsset, definition triggerDefinition) string {
-	return fmt.Sprintf("suspected-construction:task:%d:asset:%d:v%d:definition:%d",
-		asset.TaskRunID.Int64, asset.ID, asset.Version, definition.VersionID)
+	return fmt.Sprintf("algorithm-trigger:%s:task:%d:asset:%d:v%d:definition:%d",
+		definition.TriggerKey, asset.TaskRunID.Int64, asset.ID, asset.Version, definition.VersionID)
 }
 
 func nullableInt64(value sql.NullInt64) any {

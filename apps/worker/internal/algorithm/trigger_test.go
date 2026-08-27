@@ -14,7 +14,7 @@ func (issuer fixedAssetIssuer) IssueAssetURL(int, int, int, time.Time) (string, 
 
 func TestRepeatedMediaEventUsesOneStableTaskAssetVersionKey(t *testing.T) {
 	asset := triggerAsset{ID: 41, ProjectID: 2, TeamID: 3, Version: 7, TaskRunID: sql.NullInt64{Int64: 19, Valid: true}}
-	definition := triggerDefinition{VersionID: 11}
+	definition := triggerDefinition{VersionID: 11, TriggerKey: "inspection.generic"}
 	first := triggerIdempotencyKey(asset, definition)
 	second := triggerIdempotencyKey(asset, definition)
 	if first != second {
