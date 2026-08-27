@@ -16,4 +16,6 @@ docker compose up -d mqtt media
 
 The verification publishes an authenticated MQTT 5 QoS 1 message, then publishes an H.264 test pattern over authenticated RTMP and reads its authenticated HLS manifest. Stop the stack with `docker compose down`; add `--volumes` only when intentionally deleting generated credentials and broker persistence.
 
+For application playback, start AeroSight Web with the same `AUTH_SECRET`, `MEDIA_PUBLISH_USER`, `MEDIA_PUBLISH_PASSWORD`, `MEDIA_ADMIN_USER`, and `MEDIA_ADMIN_PASSWORD`, then set `MEDIA_AUTH_METHOD=http` and restart the media service. MediaMTX will call `/api/media-auth`; browser HLS/WebRTC URLs are accepted only while their path-scoped token is valid. Keep `internal` only for the standalone infrastructure smoke test above.
+
 LAN demo ports default to MQTT `1883`, RTMP `1935`, HLS `8888`, WebRTC HTTP `8889`, WebRTC ICE/UDP `8189`, and the MediaMTX control API `9997`. These listeners are for a trusted demo network. Public deployment requires TLS termination, per-project credentials, topic/path ACLs, and restricted API exposure.

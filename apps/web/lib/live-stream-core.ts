@@ -157,14 +157,87 @@ export class SimulatorPlaybackLocator {
   }
 }
 
-export function playbackAvailability(session: LiveStreamSession, now: Date, locatorExpiresAt: Date | null) {
+export function playbackAvailability(session: LiveStreamSession, _now: Date, _locatorExpiresAt: Date | null) {
   if (session.status !== "live" && session.status !== "degraded") return { available: false, reason: `stream-${session.status}` };
   if (!session.playbackRef) return { available: false, reason: "playback-unavailable" };
-  if (locatorExpiresAt && locatorExpiresAt.getTime() <= now.getTime()) return { available: false, reason: "locator-expired" };
   return { available: true, reason: null };
 }
 
 export function assertLiveStreamProjectScope(session: LiveStreamSession, projectId: number) {
   if (session.projectId !== projectId) throw new Error("LIVE_STREAM_NOT_FOUND");
   return session;
+}
+
+export type BrowserPlaybackProtocol = "webrtc" | "hls";
+
+type MediaPlaybackClaims = {
+  projectId: number;
+  streamId: number;
+  path: string;
+  protocols: BrowserPlaybackProtocol[];
+  exp: number;
+};
+
+export class MediaPlaybackTokenIssuer {
+  readonly #signingSecret: string;
+  readonly #now: () => Date;
+
+  constructor(signingSecret: string, now: () => Date = () => new Date()) {
+    if (signingSecret.length < 16) throw new Error("PLAYBACK_SIGNING_SECRET_TOO_SHORT");
+    this.#signingSecret = signingSecret;
+    this.#now = now;
+  }
+
+  issue(input: Omit<MediaPlaybackClaims, "exp"> & { ttlSeconds?: number }) {
+    const ttlSeconds = input.ttlSeconds ?? 60;
+    if (!Number.isInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > 300 || input.protocols.length === 0) {
+      throw new Error("INVALID_PLAYBACK_TOKEN_INPUT");
+    }
+    const claims: MediaPlaybackClaims = { projectId: input.projectId, streamId: input.streamId,
+      path: input.path, protocols: [...new Set(input.protocols)], exp: this.#now().getTime() + ttlSeconds * 1000 };
+    const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+    const signature = createHmac("sha256", this.#signingSecret).update(payload).digest("base64url");
+    return { token: `${payload}.${signature}`, expiresAt: new Date(claims.exp).toISOString() };
+  }
+
+  verify(token: string, input: { path: string; protocol: BrowserPlaybackProtocol }) {
+    const [payload, signature, extra] = token.split(".");
+    if (!payload || !signature || extra) return null;
+    const expected = Buffer.from(createHmac("sha256", this.#signingSecret).update(payload).digest("base64url"));
+    const actual = Buffer.from(signature);
+    if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+    try {
+      const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as MediaPlaybackClaims;
+      if (!Number.isSafeInteger(claims.projectId) || !Number.isSafeInteger(claims.streamId)
+          || claims.exp <= this.#now().getTime() || claims.path !== input.path
+          || !claims.protocols.includes(input.protocol)) return null;
+      return claims;
+    } catch {
+      return null;
+    }
+  }
+}
+
+export function buildPlaybackCandidates(input: {
+  path: string;
+  token: string;
+  hlsBaseURL: string | null;
+  webrtcBaseURL: string | null;
+}) {
+  const result: { protocol: BrowserPlaybackProtocol; url: string }[] = [];
+  if (input.webrtcBaseURL) {
+    result.push({ protocol: "webrtc", url: `${input.webrtcBaseURL.replace(/\/$/, "")}/${input.path}/whep?token=${encodeURIComponent(input.token)}` });
+  }
+  if (input.hlsBaseURL) {
+    result.push({ protocol: "hls", url: `${input.hlsBaseURL.replace(/\/$/, "")}/${input.path}/index.m3u8?token=${encodeURIComponent(input.token)}` });
+  }
+  if (result.length === 0) throw new Error("PLAYBACK_PROTOCOL_UNAVAILABLE");
+  return result;
+}
+
+export function nextPlaybackCandidate(
+  candidates: { protocol: BrowserPlaybackProtocol; url: string }[],
+  failedProtocols: BrowserPlaybackProtocol[]
+) {
+  return candidates.find((candidate) => !failedProtocols.includes(candidate.protocol)) ?? null;
 }

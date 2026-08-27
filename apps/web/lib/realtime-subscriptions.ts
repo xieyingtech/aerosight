@@ -5,6 +5,7 @@ import type { PoolClient } from "pg";
 import { db } from "@/lib/db";
 import {
   authorizeRealtimeSubscription, encodeRealtimeAccessRevoked, encodeRealtimeSample, parseRealtimeCursor,
+  realtimeFlowDecision,
   type RealtimeSample, type RealtimeSubscriptionGrant, type RealtimeSubscriptionTarget
 } from "@/lib/realtime-subscription-core";
 
@@ -77,7 +78,7 @@ async function readSamples(client: PoolClient, subscription: ResolvedRealtimeSub
          from device_telemetry
         where project_id=$1 and device_id=$2 and id>$3::bigint
         order by id limit $4`,
-      [projectId, subscription.deviceId, cursor, replayLimit]
+      [projectId, subscription.deviceId, cursor, replayLimit + 1]
     );
   }
   return client.query<RealtimeSample>(
@@ -87,7 +88,7 @@ async function readSamples(client: PoolClient, subscription: ResolvedRealtimeSub
       where project_id=$1 and cursor>$3::bigint
         and payload_json->>'deviceId'=$2::text
       order by cursor limit $4`,
-    [projectId, subscription.deviceId, cursor, replayLimit]
+    [projectId, subscription.deviceId, cursor, replayLimit + 1]
   );
 }
 
@@ -120,7 +121,12 @@ export function createRealtimeSubscriptionStream(input: {
             lastPermissionCheckAt = now;
           }
           const samples = await readSamples(client, subscription, input.projectId, cursor);
+          if (realtimeFlowDecision(controller.desiredSize, samples.rows.length) === "terminate") {
+            controller.enqueue(encoder.encode(`event: stream.closed\ndata: {"reason":"backpressure_limit_exceeded"}\n\n`));
+            break;
+          }
           for (const sample of samples.rows) {
+            if (realtimeFlowDecision(controller.desiredSize, samples.rows.length) === "pause") break;
             controller.enqueue(encoder.encode(encodeRealtimeSample(input.stableChannelId, sample)));
             cursor = sample.cursor;
           }

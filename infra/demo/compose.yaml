@@ -43,6 +43,10 @@ services:
     command: ["/generated/mediamtx.yml"]
     environment:
       MTX_WEBRTCADDITIONALHOSTS: ${MEDIA_WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
+      MTX_AUTHMETHOD: ${MEDIA_AUTH_METHOD:-internal}
+      MTX_AUTHHTTPADDRESS: ${MEDIA_AUTH_HTTP_ADDRESS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${MEDIA_RTMP_PORT:-1935}:1935"
       - "${MEDIA_HLS_PORT:-8888}:8888"

@@ -74,3 +74,9 @@ export function encodeRealtimeSample(channelId: string, sample: RealtimeSample) 
 export function encodeRealtimeAccessRevoked(channelId: string) {
   return `event: access.revoked\ndata: ${JSON.stringify({ channelId, reason: "capability_revoked" })}\n\n`;
 }
+
+export function realtimeFlowDecision(desiredSize: number | null, pendingSamples: number, hardLimit = 500) {
+  if (pendingSamples > hardLimit) return "terminate" as const;
+  if (desiredSize !== null && desiredSize <= 0) return "pause" as const;
+  return "deliver" as const;
+}

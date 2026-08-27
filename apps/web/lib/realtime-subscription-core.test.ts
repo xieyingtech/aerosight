@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   authorizeRealtimeSubscription, encodeRealtimeAccessRevoked, encodeRealtimeSample, parseRealtimeCursor,
+  realtimeFlowDecision,
   type RealtimeSubscriptionGrant, type RealtimeSubscriptionTarget
 } from "./realtime-subscription-core.ts";
 
@@ -45,4 +46,10 @@ test("cursor replay and samples preserve stable channel identity", () => {
 test("only stream capabilities and usable channels can be subscribed", () => {
   assert.throws(() => authorizeRealtimeSubscription({ role: "admin", target: { ...target, capabilityCode: "state.read" }, grants: [] }), /ACTION_INVALID/);
   assert.throws(() => authorizeRealtimeSubscription({ role: "admin", target: { ...target, availability: "unavailable" }, grants: [] }), /CHANNEL_UNAVAILABLE/);
+});
+
+test("slow subscribers pause without advancing the replay cursor", () => {
+  assert.equal(realtimeFlowDecision(1, 20), "deliver");
+  assert.equal(realtimeFlowDecision(0, 20), "pause");
+  assert.equal(realtimeFlowDecision(-1, 501), "terminate");
 });

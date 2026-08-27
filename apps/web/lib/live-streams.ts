@@ -11,7 +11,9 @@ import {
   assertLiveStreamConcurrency,
   assertLiveStreamProjectScope,
   buildDJIVideoID,
+  buildPlaybackCandidates,
   buildRTMPIngestURL,
+  MediaPlaybackTokenIssuer,
   createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
   playbackAvailability,
@@ -62,6 +64,12 @@ const projection = `id, project_id as "projectId", team_id as "teamId", device_i
   vendor_stream_ref as "vendorStreamRef", status,
   playback_ref as "playbackRef", playback_locator_expires_at as "playbackLocatorExpiresAt",
   last_active_at as "lastActiveAt", status_reason as "statusReason"`;
+
+const qualifiedProjection = `stream.id,stream.project_id as "projectId",stream.team_id as "teamId",
+  stream.device_id as "deviceId",stream.stream_key as "streamKey",stream.source_type as "sourceType",
+  stream.stream_channel_id as "streamChannelId",stream.vendor_stream_ref as "vendorStreamRef",stream.status,
+  stream.playback_ref as "playbackRef",stream.playback_locator_expires_at as "playbackLocatorExpiresAt",
+  stream.last_active_at as "lastActiveAt",stream.status_reason as "statusReason"`;
 
 function publicSession(row: LiveStreamRow): LiveStreamSession {
   return {
@@ -304,18 +312,54 @@ export async function stopLiveStream(projectId: number, streamId: number, reques
 }
 
 export async function getLiveStreamPlayback(projectId: number, streamId: number) {
-  await requireCurrentProjectPermission(projectId, "project:view");
-  const result = await query<LiveStreamRow>(
-    `select ${projection} from live_streams where project_id = $1 and id = $2`, [projectId, streamId]
+  const { user, access } = await requireCurrentProjectPermission(projectId, "project:view");
+  const result = await query<LiveStreamRow & {
+    deviceTypeId: string; capabilityCode: string | null; hlsBaseURL: string | null; webrtcBaseURL: string | null;
+  }>(
+    `select ${qualifiedProjection},device.device_type_id::text as "deviceTypeId",
+            channel.capability_code as "capabilityCode",
+            profile.media_playback_base_url as "hlsBaseURL",
+            profile.config_json->>'webrtcPlaybackBaseUrl' as "webrtcBaseURL"
+       from live_streams stream
+       join devices device on device.id=stream.device_id and device.project_id=stream.project_id
+       left join device_stream_channels channel on channel.id=stream.stream_channel_id and channel.project_id=stream.project_id
+       left join device_adapters adapter on adapter.id=stream.adapter_id and adapter.project_id=stream.project_id
+       left join device_network_profiles profile on profile.id=adapter.network_profile_id and profile.project_id=adapter.project_id
+      where stream.project_id = $1 and stream.id = $2`, [projectId, streamId]
   );
   const row = result.rows[0];
   if (!row) throw new Error("LIVE_STREAM_NOT_FOUND");
+  const action = row.capabilityCode ?? "camera.live";
+  if (action.startsWith("stream.")) {
+    const grantRows = await query<{ actionPattern: string; effect: "allow" | "deny" }>(
+      `select action_pattern as "actionPattern",effect from device_capability_grants
+        where project_id=$1 and team_id=$2 and user_id=$3 and (expires_at is null or expires_at>now())
+          and (scope_type='project' or (scope_type='device_type' and device_type_id=$4::bigint)
+               or (scope_type='device' and device_id=$5))`,
+      [projectId, access.teamId, user.id, row.deviceTypeId, row.deviceId]
+    );
+    authorizeCapabilityAction({ role: access.role, action,
+      grants: grantRows.rows.filter((grant) => actionPatternMatches(grant.actionPattern, action)) });
+  }
   const session = publicSession(row);
   assertLiveStreamProjectScope(session, projectId);
   const availability = playbackAvailability(session, new Date(), row.playbackLocatorExpiresAt);
   if (!availability.available) return { session, available: false, reason: availability.reason };
   if (session.sourceType !== "simulator" || !session.playbackRef) {
-    return { session, available: false, reason: "playback-adapter-unavailable" };
+    if (session.sourceType !== "dji" || !session.playbackRef) {
+      return { session, available: false, reason: "playback-adapter-unavailable" };
+    }
+    const protocols = [row.webrtcBaseURL ? "webrtc" : null, row.hlsBaseURL ? "hls" : null]
+      .filter((value): value is "webrtc" | "hls" => Boolean(value));
+    if (protocols.length === 0) return { session, available: false, reason: "playback-protocol-unavailable" };
+    const issued = new MediaPlaybackTokenIssuer(getWebRuntimeConfig().authSecret).issue({
+      projectId, streamId, path: session.playbackRef, protocols, ttlSeconds: 60
+    });
+    const candidates = buildPlaybackCandidates({ path: session.playbackRef, token: issued.token,
+      hlsBaseURL: row.hlsBaseURL, webrtcBaseURL: row.webrtcBaseURL });
+    await query(`update live_streams set playback_locator_expires_at=$3,updated_at=now()
+      where project_id=$1 and id=$2`, [projectId, streamId, issued.expiresAt]);
+    return { session, available: true, playback: { candidates, expiresAt: issued.expiresAt } };
   }
   const locator = new SimulatorPlaybackLocator(getWebRuntimeConfig().authSecret).issue({
     projectId, streamId, playbackRef: session.playbackRef, ttlSeconds: 60

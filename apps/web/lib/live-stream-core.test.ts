@@ -7,8 +7,11 @@ import {
   assertLiveStreamProjectScope,
   buildDJIVideoID,
   buildRTMPIngestURL,
+  buildPlaybackCandidates,
   createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
+  MediaPlaybackTokenIssuer,
+  nextPlaybackCandidate,
   playbackAvailability,
   planLiveStreamStop,
   SimulatorPlaybackLocator,
@@ -109,17 +112,37 @@ test("simulator locator is short lived and tamper evident", () => {
   assert.equal(issuer.verify(input), false);
 });
 
-test("failed source and expired locator expose explicit unavailability", () => {
+test("failed source is unavailable while an expired locator can be refreshed", () => {
   const now = new Date("2026-08-27T00:01:00.000Z");
   assert.deepEqual(playbackAvailability({ ...session, status: "failed" }, now, null), {
     available: false, reason: "stream-failed"
   });
   assert.deepEqual(playbackAvailability(session, now, new Date("2026-08-27T00:00:30.000Z")), {
-    available: false, reason: "locator-expired"
+    available: true, reason: null
   });
 });
 
 test("playback scope does not disclose another project stream", () => {
   assert.equal(assertLiveStreamProjectScope(session, 17), session);
   assert.throws(() => assertLiveStreamProjectScope(session, 18), /LIVE_STREAM_NOT_FOUND/);
+});
+
+test("short-lived playback token is path/protocol scoped and expires", () => {
+  let now = new Date("2026-08-27T00:00:00.000Z");
+  const issuer = new MediaPlaybackTokenIssuer("0123456789abcdef", () => now);
+  const issued = issuer.issue({ projectId: 17, streamId: 9, path: "demo/aerosight/session",
+    protocols: ["webrtc", "hls"], ttlSeconds: 30 });
+  assert.equal(issuer.verify(issued.token, { path: "demo/aerosight/session", protocol: "hls" })?.projectId, 17);
+  assert.equal(issuer.verify(issued.token, { path: "demo/aerosight/other", protocol: "hls" }), null);
+  assert.equal(issuer.verify(`${issued.token}tampered`, { path: "demo/aerosight/session", protocol: "hls" }), null);
+  now = new Date("2026-08-27T00:00:31.000Z");
+  assert.equal(issuer.verify(issued.token, { path: "demo/aerosight/session", protocol: "hls" }), null);
+});
+
+test("browser playback prefers WebRTC and falls back to HLS", () => {
+  const candidates = buildPlaybackCandidates({ path: "demo/aerosight/session", token: "signed",
+    webrtcBaseURL: "https://media.example/webrtc", hlsBaseURL: "https://media.example/hls" });
+  assert.equal(nextPlaybackCandidate(candidates, [])?.protocol, "webrtc");
+  assert.equal(nextPlaybackCandidate(candidates, ["webrtc"])?.protocol, "hls");
+  assert.equal(nextPlaybackCandidate(candidates, ["webrtc", "hls"]), null);
 });
