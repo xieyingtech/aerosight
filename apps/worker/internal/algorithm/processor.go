@@ -210,8 +210,12 @@ func (processor *Processor) finishSucceeded(
 	if err != nil {
 		return processor.failRun(ctx, tx, runID, "raw_result_storage_failed", err.Error())
 	}
+	result := outcome.Result
+	if result.Kind == "" {
+		result = CanonicalResult{Kind: ResultDetection, Detections: outcome.Detections}
+	}
 	canonical, err := json.Marshal(map[string]any{
-		"kind": "completed", "detections": outcome.Detections,
+		"kind": result.Kind, "result": result,
 		"mappingDiagnostics": outcome.MappingDiagnostics,
 		"rawResult":          map[string]any{"objectKey": object.Key, "checksumSha256": object.ChecksumSHA256, "contentType": "application/json"},
 	})

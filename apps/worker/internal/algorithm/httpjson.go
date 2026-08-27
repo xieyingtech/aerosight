@@ -52,11 +52,13 @@ type Input struct {
 }
 
 type Mapping struct {
-	DetectionsPath string `json:"detectionsPath"`
-	KeyPath        string `json:"keyPath"`
-	LabelPath      string `json:"labelPath"`
-	ConfidencePath string `json:"confidencePath"`
-	GeometryPath   string `json:"geometryPath"`
+	Kind           CanonicalKind `json:"kind,omitempty"`
+	ResultPath     string        `json:"resultPath,omitempty"`
+	DetectionsPath string        `json:"detectionsPath"`
+	KeyPath        string        `json:"keyPath"`
+	LabelPath      string        `json:"labelPath"`
+	ConfidencePath string        `json:"confidencePath"`
+	GeometryPath   string        `json:"geometryPath"`
 }
 
 type Request struct {
@@ -76,12 +78,13 @@ type Detection struct {
 }
 
 type Outcome struct {
-	Kind               string      `json:"kind"`
-	ExternalJobID      string      `json:"externalJobId,omitempty"`
-	NextPollAt         time.Time   `json:"nextPollAt,omitempty"`
-	Detections         []Detection `json:"detections,omitempty"`
-	Raw                []byte      `json:"-"`
-	MappingDiagnostics []string    `json:"mappingDiagnostics,omitempty"`
+	Kind               string          `json:"kind"`
+	ExternalJobID      string          `json:"externalJobId,omitempty"`
+	NextPollAt         time.Time       `json:"nextPollAt,omitempty"`
+	Detections         []Detection     `json:"detections,omitempty"`
+	Result             CanonicalResult `json:"result,omitempty"`
+	Raw                []byte          `json:"-"`
+	MappingDiagnostics []string        `json:"mappingDiagnostics,omitempty"`
 }
 
 type Attempt struct {
@@ -353,6 +356,13 @@ func acceptedOutcome(raw []byte, headers http.Header, now time.Time) (Outcome, e
 }
 
 func mapCompleted(raw []byte, mapping Mapping) (Outcome, error) {
+	if mapping.Kind != "" {
+		result, err := MapCanonicalResult(raw, CanonicalMapping{Kind: mapping.Kind, ResultPath: mapping.ResultPath})
+		if err != nil {
+			return Outcome{Raw: raw, MappingDiagnostics: []string{err.Error()}}, err
+		}
+		return Outcome{Kind: "completed", Result: result, Detections: result.Detections, Raw: raw}, nil
+	}
 	var payload any
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return Outcome{Raw: raw, MappingDiagnostics: []string{"response is not valid JSON"}}, fmt.Errorf("%w: invalid JSON", ErrFormatDrift)
