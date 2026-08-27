@@ -6,7 +6,6 @@ import { withAuditedProjectWrite } from "@/lib/audit";
 import {
   algorithmDefinitionInputSchema,
   algorithmDefinitionVersionInputSchema,
-  type AlgorithmDefinitionInput,
   type AlgorithmDefinitionVersionInput
 } from "@/lib/algorithm-definition-schema";
 import { requireCurrentProjectPermission } from "@/lib/data";
@@ -21,7 +20,7 @@ async function managedWrite<T>(projectId: number, action: string, resourceId: st
   }, (client) => write(client, user.id));
 }
 
-export async function createAlgorithmDefinition(projectId: number, rawDefinition: AlgorithmDefinitionInput, rawVersion: AlgorithmDefinitionVersionInput, requestId?: string | null) {
+export async function createAlgorithmDefinition(projectId: number, rawDefinition: unknown, rawVersion: unknown, requestId?: string | null) {
   const definition = algorithmDefinitionInputSchema.parse(rawDefinition);
   const version = algorithmDefinitionVersionInputSchema.parse(rawVersion);
   return managedWrite(projectId, "algorithm_definition.create", undefined, { definition, version }, requestId, async (client, actorUserId) => {
@@ -53,7 +52,7 @@ async function insertVersion(client: PoolClient, projectId: number, teamId: numb
   )).rows[0];
 }
 
-export async function createAlgorithmDefinitionVersion(projectId: number, definitionId: number, rawVersion: AlgorithmDefinitionVersionInput, requestId?: string | null) {
+export async function createAlgorithmDefinitionVersion(projectId: number, definitionId: number, rawVersion: unknown, requestId?: string | null) {
   const version = algorithmDefinitionVersionInputSchema.parse(rawVersion);
   return managedWrite(projectId, "algorithm_definition.version.create", String(definitionId), version, requestId, async (client, actorUserId) => {
     const definition = (await client.query<{ teamId: number }>(
