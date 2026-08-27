@@ -109,6 +109,7 @@ func main() {
 	}
 	consumer.Register("device.command.dispatch", djiCommandDispatcher.DispatchHandler)
 	consumer.Register("command.reply", djiCommandDispatcher.ReplyHandler)
+	consumer.Register("device.event", djiCommandDispatcher.EventHandler)
 	missionProcessor := mission.NewProcessor(nil)
 	consumer.Register("task_run.transitioned", missionProcessor.Handler)
 	consumer.Register("mission.control", missionProcessor.Handler)

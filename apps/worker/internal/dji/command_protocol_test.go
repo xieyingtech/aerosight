@@ -14,6 +14,7 @@ func TestVersionedCommandMappingsBuildOfficialServiceMessages(t *testing.T) {
 		parameters string
 		method     string
 	}{
+		{"mission.execute", "prepare", `{"flight_id":"flight-1","task_type":0,"execute_time":1787821305000,"file":{"url":"https://example.invalid/route.kmz","fingerprint":"sha256:demo"}}`, "flighttask_prepare"},
 		{"mission.execute", "execute", `{"flight_id":"flight-1"}`, "flighttask_execute"},
 		{"mission.cancel", "cancel", `{"flight_ids":["flight-1"]}`, "flighttask_undo"},
 		{"flight.return_home", "return_home", `{}`, "return_home"},

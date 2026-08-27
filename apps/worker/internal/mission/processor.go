@@ -95,7 +95,7 @@ func loadSnapshot(ctx context.Context, tx *sql.Tx, projectID, runID int) (Snapsh
 		return Snapshot{}, 0, err
 	}
 	rows, err := tx.QueryContext(ctx, `
-		select run_step.position, run_step.status, step.capability_code, step.action,
+		select run_step.position, run_step.status, step.capability_code, step.action, step.parameters_json,
 		       coalesce((step.failure_policy_json->>'maxRetries')::int, 0),
 		       coalesce((step.failure_policy_json->>'retryBackoffSeconds')::int, 1),
 		       coalesce((step.failure_policy_json->>'timeoutSeconds')::int, 30),
@@ -121,7 +121,7 @@ func loadSnapshot(ctx context.Context, tx *sql.Tx, projectID, runID int) (Snapsh
 		var safe, pause bool
 		var commandID, commandStatus sql.NullString
 		var deadline sql.NullTime
-		if err := rows.Scan(&step.Position, &step.Status, &step.CapabilityCode, &step.Action,
+		if err := rows.Scan(&step.Position, &step.Status, &step.CapabilityCode, &step.Action, &step.Parameters,
 			&retries, &backoff, &timeout, &safe, &pause, &commandID, &commandStatus, &deadline, &attempts); err != nil {
 			return Snapshot{}, 0, err
 		}
@@ -169,13 +169,22 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 			id, project_id, team_id, task_run_id, task_run_step_id, device_id, command_key,
 			idempotency_key, capability_code, parameters_json, safety_context_json, status, priority, deadline_at
 		) select $3::uuid, run.project_id, run.team_id, run.id, step.id, run.selected_device_id,
-			$4, $5, $6, '{}'::jsonb, jsonb_build_object('scheduler','mission-v1'), 'dispatchable', $7, $8
-		  from task_runs run left join task_run_steps step on step.task_run_id = run.id and step.position = $9
+			$4, $5, $6, $7, jsonb_build_object('scheduler','mission-v1'), 'dispatchable', $8, $9
+		  from task_runs run left join task_run_steps step on step.task_run_id = run.id and step.position = $10
 		 where run.project_id = $1 and run.id = $2
 		on conflict (device_id, idempotency_key) do update set status = 'dispatchable', deadline_at = excluded.deadline_at
 		returning id::text`, projectID, snapshot.RunID, command.ID, command.Action, command.IdempotencyKey,
-			command.CapabilityCode, command.Priority, command.Deadline, decision.StepPosition).Scan(&commandID)
+			command.CapabilityCode, command.Parameters, command.Priority, command.Deadline, decision.StepPosition).Scan(&commandID)
 		if err != nil {
+			return err
+		}
+		dispatchPayload, err := json.Marshal(map[string]any{"commandId": commandID})
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+			values($1,$2,$3,'device.command.dispatch',$4) on conflict(event_id) do nothing`,
+			projectID, teamID, "device.command.dispatch:"+commandID, dispatchPayload); err != nil {
 			return err
 		}
 	}

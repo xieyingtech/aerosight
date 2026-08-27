@@ -2,6 +2,7 @@ package mission
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -48,6 +49,7 @@ type Command struct {
 	Attempts       int
 	Deadline       time.Time
 	Priority       int
+	Parameters     json.RawMessage
 }
 
 type Step struct {
@@ -56,6 +58,7 @@ type Step struct {
 	CapabilityCode string
 	Action         string
 	FailurePolicy  FailurePolicy
+	Parameters     json.RawMessage
 	Command        *Command
 }
 
@@ -119,9 +122,13 @@ func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error)
 	}
 	if step.Command == nil {
 		id, key := stableCommand(snapshot.RunID, step.Position)
+		parameters := step.Parameters
+		if len(parameters) == 0 {
+			parameters = json.RawMessage(`{}`)
+		}
 		command := &Command{
 			ID: id, IdempotencyKey: key, CapabilityCode: step.CapabilityCode, Action: step.Action,
-			Status: CommandSent, Attempts: 1, Deadline: now.Add(step.FailurePolicy.Timeout),
+			Status: CommandSent, Attempts: 1, Deadline: now.Add(step.FailurePolicy.Timeout), Parameters: parameters,
 		}
 		return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning, IssueCommand: command, Reason: "step_dispatched"}, nil
 	}
@@ -206,7 +213,7 @@ func Control(snapshot Snapshot, action ControlAction, now time.Time) (Decision, 
 		command := &Command{ID: stableUUID(fmt.Sprintf("task-run:%d:control:%s", snapshot.RunID, action)),
 			IdempotencyKey: fmt.Sprintf("task-run:%d:control:%s", snapshot.RunID, action),
 			CapabilityCode: actionName, Action: actionName, Status: CommandSent, Attempts: 1,
-			Deadline: now.Add(15 * time.Second), Priority: priority}
+			Deadline: now.Add(15 * time.Second), Priority: priority, Parameters: json.RawMessage(`{}`)}
 		return Decision{RunStatus: RunCanceling, IssueCommand: command, RevokeOrdinary: true,
 			SafetyUnknown: !snapshot.DeviceConnected, Reason: string(action)}, nil
 	default:

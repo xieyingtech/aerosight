@@ -42,9 +42,34 @@ const (
 )
 
 var commandMappings = []CommandMapping{
+	{CapabilityCode: "mission.execute", CommandKey: "prepare", Method: "flighttask_prepare", Validate: validateFlightTaskPrepare},
 	{CapabilityCode: "mission.execute", CommandKey: "execute", Method: "flighttask_execute", Validate: requireString("flight_id")},
 	{CapabilityCode: "mission.cancel", CommandKey: "cancel", Method: "flighttask_undo", Validate: requireStringArray("flight_ids")},
 	{CapabilityCode: "flight.return_home", CommandKey: "return_home", Method: "return_home", Validate: requireObject},
+	{CapabilityCode: "flight.return_home", CommandKey: "flight.return_home", Method: "return_home", Validate: requireObject},
+}
+
+func validateFlightTaskPrepare(raw json.RawMessage) error {
+	var parameters struct {
+		FlightID    string `json:"flight_id"`
+		ExecuteTime *int64 `json:"execute_time"`
+		TaskType    *int   `json:"task_type"`
+		File        struct {
+			URL         string `json:"url"`
+			Fingerprint string `json:"fingerprint"`
+		} `json:"file"`
+	}
+	if json.Unmarshal(raw, &parameters) != nil {
+		return errors.New("DJI_COMMAND_PARAMETERS_OBJECT_REQUIRED")
+	}
+	if strings.TrimSpace(parameters.FlightID) == "" || parameters.TaskType == nil || *parameters.TaskType < 0 || *parameters.TaskType > 2 ||
+		strings.TrimSpace(parameters.File.URL) == "" || strings.TrimSpace(parameters.File.Fingerprint) == "" {
+		return errors.New("DJI_FLIGHTTASK_PREPARE_PARAMETERS_REQUIRED")
+	}
+	if (*parameters.TaskType == 0 || *parameters.TaskType == 1) && parameters.ExecuteTime == nil {
+		return errors.New("DJI_FLIGHTTASK_EXECUTE_TIME_REQUIRED")
+	}
+	return nil
 }
 
 func ResolveCommandMapping(capabilityCode, commandKey string) (CommandMapping, bool) {

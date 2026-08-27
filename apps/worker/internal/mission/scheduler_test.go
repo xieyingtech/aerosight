@@ -1,6 +1,7 @@
 package mission
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -12,6 +13,21 @@ func fixture() Snapshot {
 		{Position: 2, Status: StepPending, CapabilityCode: "camera.capture", Action: "camera.capture",
 			FailurePolicy: FailurePolicy{SafeToRetry: false, Timeout: 5 * time.Second}},
 	}}
+}
+
+func TestMissionCommandRetainsPublishedStepParameters(t *testing.T) {
+	now := time.Date(2026, 8, 27, 8, 0, 0, 0, time.UTC)
+	parameters := json.RawMessage(`{"flight_id":"flight-demo","task_type":0}`)
+	decision, err := Advance(Snapshot{
+		RunID: 41, Status: RunDispatching, DeviceConnected: true,
+		Steps: []Step{{Position: 1, Status: StepPending, CapabilityCode: "mission.execute", Action: "prepare", Parameters: parameters, FailurePolicy: FailurePolicy{Timeout: time.Minute}}},
+	}, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.IssueCommand == nil || string(decision.IssueCommand.Parameters) != string(parameters) {
+		t.Fatalf("published step parameters did not reach command ledger: %+v", decision.IssueCommand)
+	}
 }
 
 func TestSimulatorSuccessAdvancesSequentially(t *testing.T) {
@@ -38,6 +54,17 @@ func TestNackFailsOrPausesByPinnedPolicy(t *testing.T) {
 	decision, _ := Advance(snapshot, &Signal{CommandID: command.IssueCommand.ID, Outcome: "nack"}, now)
 	if decision.RunStatus != RunFailed || decision.StepStatus != StepFailed {
 		t.Fatalf("nack did not follow failure policy: %#v", decision)
+	}
+}
+
+func TestUnknownReplyCannotAdvanceMission(t *testing.T) {
+	now := time.Now()
+	snapshot := fixture()
+	dispatched, _ := Advance(snapshot, nil, now)
+	snapshot.Status, snapshot.Steps[0].Status, snapshot.Steps[0].Command = RunRunning, StepRunning, dispatched.IssueCommand
+	decision, err := Advance(snapshot, &Signal{CommandID: "another-command", Outcome: "ack"}, now.Add(time.Second))
+	if err != nil || decision.Reason != "unknown_ack_ignored" || decision.StepStatus != StepRunning || decision.RunStatus != RunRunning {
+		t.Fatalf("unknown reply advanced mission: decision=%+v err=%v", decision, err)
 	}
 }
 
