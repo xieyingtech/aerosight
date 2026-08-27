@@ -2020,3 +2020,12 @@ CREATE INDEX "device_capability_grants_lookup_idx" ON "device_capability_grants"
 CREATE INDEX "driver_definitions_status_idx" ON "driver_definitions" ("status", "driver_key");
 --> statement-breakpoint
 CREATE INDEX "device_types_driver_idx" ON "device_types" ("driver_definition_id", "status", "type_key");
+--> statement-breakpoint
+ALTER TABLE "devices"
+	ADD COLUMN "status_observed_at" timestamp with time zone,
+	ADD COLUMN "status_projected_at" timestamp with time zone DEFAULT now() NOT NULL,
+	ADD COLUMN "data_freshness" text DEFAULT 'unknown' NOT NULL,
+	ADD COLUMN "raw_status_ref" text;
+--> statement-breakpoint
+ALTER TABLE "devices" ADD CONSTRAINT "devices_data_freshness_valid"
+CHECK ("data_freshness" in ('fresh', 'stale', 'expired', 'unknown'));

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"aerosight/worker/internal/device"
 )
 
 type Clock interface {
@@ -31,6 +33,7 @@ type Signal struct {
 	HeartbeatIntervalSecond int
 	LinkQuality             *float64
 	ReportedDegraded        bool
+	RawStatusReference      string
 }
 
 type Projector struct {
@@ -46,32 +49,8 @@ func NewProjector(db *sql.DB, clock Clock) *Projector {
 }
 
 func Evaluate(now time.Time, lastHeartbeat, closedAt *time.Time, interval time.Duration, linkQuality *float64, reportedDegraded bool) Projection {
-	if closedAt != nil {
-		return Projection{Status: "offline", Reason: "session_closed"}
-	}
-	if lastHeartbeat == nil {
-		return Projection{Status: "unknown", Reason: "awaiting_heartbeat"}
-	}
-	if interval < 5*time.Second {
-		interval = 30 * time.Second
-	}
-	age := now.Sub(*lastHeartbeat)
-	if age < -interval {
-		return Projection{Status: "degraded", Reason: "heartbeat_clock_skew"}
-	}
-	if age > 4*interval {
-		return Projection{Status: "offline", Reason: "heartbeat_timeout"}
-	}
-	if age > 2*interval {
-		return Projection{Status: "degraded", Reason: "heartbeat_stale"}
-	}
-	if reportedDegraded {
-		return Projection{Status: "degraded", Reason: "device_reported_degraded"}
-	}
-	if linkQuality != nil && *linkQuality < 0.25 {
-		return Projection{Status: "degraded", Reason: "low_link_quality"}
-	}
-	return Projection{Status: "online", Reason: "heartbeat_fresh"}
+	status := device.EvaluateStatus(now, lastHeartbeat, closedAt, interval, linkQuality, reportedDegraded, "")
+	return Projection{Status: string(status.Status), Reason: status.Reason}
 }
 
 func (projector *Projector) Record(ctx context.Context, signal Signal) error {
@@ -98,6 +77,9 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 	defer tx.Rollback()
 	projection := Evaluate(projector.clock.Now(), &signal.ReceivedAt, nil,
 		time.Duration(signal.HeartbeatIntervalSecond)*time.Second, signal.LinkQuality, signal.ReportedDegraded)
+	statusProjection := device.EvaluateStatus(projector.clock.Now(), &signal.ReceivedAt, nil,
+		time.Duration(signal.HeartbeatIntervalSecond)*time.Second, signal.LinkQuality,
+		signal.ReportedDegraded, signal.RawStatusReference)
 	var connectionID int64
 	err = tx.QueryRowContext(ctx, `
 		insert into device_connections (
@@ -125,12 +107,23 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 	}
 	if _, err := tx.ExecContext(ctx, `
 		update devices set status = $3, status_reason = $4,
-		  last_seen_at = greatest(coalesce(last_seen_at, $5), $5), updated_at = now()
+		  last_seen_at = greatest(coalesce(last_seen_at, $5), $5),
+		  status_observed_at = greatest(coalesce(status_observed_at, $5), $5),
+		  status_projected_at = $6, data_freshness = $7, raw_status_ref = $8,
+		  updated_at = now()
 		where id = $1 and project_id = $2`, signal.DeviceID, signal.ProjectID,
-		projection.Status, projection.Reason, signal.ReceivedAt); err != nil {
+		projection.Status, projection.Reason, signal.ReceivedAt, statusProjection.ProjectedAt,
+		statusProjection.Freshness, nullableRawReference(signal.RawStatusReference)); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func nullableRawReference(reference string) any {
+	if reference == "" {
+		return nil
+	}
+	return reference
 }
 
 func (projector *Projector) Sweep(ctx context.Context) error {
@@ -176,7 +169,8 @@ func (projector *Projector) Sweep(ctx context.Context) error {
 		if item.quality.Valid {
 			quality = &item.quality.Float64
 		}
-		projection := Evaluate(now, last, closed, time.Duration(item.interval)*time.Second, quality, item.reportedDegraded)
+		statusProjection := device.EvaluateStatus(now, last, closed, time.Duration(item.interval)*time.Second, quality, item.reportedDegraded, "")
+		projection := Projection{Status: string(statusProjection.Status), Reason: statusProjection.Reason}
 		result, err := projector.db.ExecContext(ctx, `
 			update device_connections set status = $2, status_reason = $3, status_projected_at = $4
 			where id = $1 and (status <> $2 or status_reason is distinct from $3)`,
@@ -188,7 +182,8 @@ func (projector *Projector) Sweep(ctx context.Context) error {
 			continue
 		}
 		if _, err := projector.db.ExecContext(ctx, `
-			update devices set status = $3, status_reason = $4, updated_at = now()
+			update devices set status = $3, status_reason = $4,
+			  status_projected_at = $6, data_freshness = $7, updated_at = now()
 			where id = $1 and project_id = $2
 			  and not exists (
 			    select 1 from device_connections newer
@@ -196,7 +191,8 @@ func (projector *Projector) Sweep(ctx context.Context) error {
 			      and newer.id <> $5 and newer.opened_at >
 			          (select opened_at from device_connections where id = $5)
 			      and newer.closed_at is null
-			  )`, item.deviceID, item.projectID, projection.Status, projection.Reason, item.id); err != nil {
+			  )`, item.deviceID, item.projectID, projection.Status, projection.Reason, item.id,
+			statusProjection.ProjectedAt, statusProjection.Freshness); err != nil {
 			return err
 		}
 	}
