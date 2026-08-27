@@ -15,10 +15,12 @@ var ErrModelUnavailable = errors.New("model unavailable")
 type Request struct {
 	RunID, PerceptionEventID string
 	ProjectID, TeamID        int
+	Mode                     string
 }
 
 type Result struct {
 	OutputReferences []map[string]string `json:"outputReferences"`
+	Drafts           []Draft             `json:"drafts"`
 }
 
 type Generator interface {
@@ -50,9 +52,15 @@ func (processor Processor) Handler(ctx context.Context, tx *sql.Tx, event outbox
 	if payload.AutomationRunID == "" || payload.PerceptionEventID == "" {
 		return errors.New("alert automation event is missing identifiers")
 	}
+	var mode string
+	if err := tx.QueryRowContext(ctx, `select version.mode from alert_automation_runs run
+		join alert_automation_policy_versions version on version.id=run.policy_version_id and version.project_id=run.project_id
+		where run.id=$1 and run.project_id=$2`, payload.AutomationRunID, event.ProjectID).Scan(&mode); err != nil {
+		return err
+	}
 	recorder := sqlRunRecorder{tx: tx, projectID: event.ProjectID}
 	return Process(ctx, Request{RunID: payload.AutomationRunID, PerceptionEventID: payload.PerceptionEventID,
-		ProjectID: event.ProjectID, TeamID: event.TeamID}, processor.Generator, recorder, time.Now().UTC())
+		ProjectID: event.ProjectID, TeamID: event.TeamID, Mode: mode}, processor.Generator, recorder, time.Now().UTC())
 }
 
 type sqlRunRecorder struct {
@@ -61,6 +69,26 @@ type sqlRunRecorder struct {
 }
 
 func (recorder sqlRunRecorder) Succeeded(ctx context.Context, runID string, result Result, now time.Time) error {
+	for _, draft := range result.Drafts {
+		if draft.Status != "draft" || draft.ExternalEffect != "none" {
+			return errors.New("automation output violated draft-only boundary")
+		}
+		payload, err := json.Marshal(draft.Payload)
+		if err != nil {
+			return err
+		}
+		evidence, err := json.Marshal(draft.Evidence)
+		if err != nil {
+			return err
+		}
+		var draftID string
+		if err := recorder.tx.QueryRowContext(ctx, `insert into alert_automation_drafts(project_id,team_id,automation_run_id,perception_event_id,draft_type,status,title,payload_json,evidence_refs_json)
+			select run.project_id,run.team_id,run.id,run.perception_event_id,$3,'draft',$4,$5,$6 from alert_automation_runs run where run.id=$1 and run.project_id=$2
+			on conflict(automation_run_id,draft_type) do update set title=excluded.title returning id`, runID, recorder.projectID, draft.Type, draft.Title, payload, evidence).Scan(&draftID); err != nil {
+			return err
+		}
+		result.OutputReferences = append(result.OutputReferences, map[string]string{"type": draft.Type, "id": draftID, "status": "draft"})
+	}
 	output, err := json.Marshal(result.OutputReferences)
 	if err != nil {
 		return err

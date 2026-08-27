@@ -1262,6 +1262,26 @@ CREATE TABLE "alert_automation_runs" (
 	CONSTRAINT "alert_automation_runs_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE "alert_automation_drafts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"automation_run_id" uuid NOT NULL,
+	"perception_event_id" uuid NOT NULL,
+	"draft_type" text NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"title" text NOT NULL,
+	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"evidence_refs_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "alert_automation_drafts_type_valid" CHECK(draft_type in('report','issue','follow-up-task')),
+	CONSTRAINT "alert_automation_drafts_status_valid" CHECK(status in('draft','discarded','published')),
+	CONSTRAINT "alert_automation_drafts_run_type_unique" UNIQUE("automation_run_id","draft_type"),
+	CONSTRAINT "alert_automation_drafts_run_project_fk" FOREIGN KEY("automation_run_id","project_id") REFERENCES "alert_automation_runs"("id","project_id") ON DELETE cascade,
+	CONSTRAINT "alert_automation_drafts_event_project_fk" FOREIGN KEY("perception_event_id","project_id") REFERENCES "perception_events"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "alert_automation_drafts_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1449,6 +1469,7 @@ CREATE UNIQUE INDEX "alert_automation_policy_versions_one_draft_idx" ON "alert_a
 CREATE INDEX "alert_automation_policy_versions_project_status_idx" ON "alert_automation_policy_versions" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "alert_automation_runs_claim_idx" ON "alert_automation_runs" USING btree ("status","queued_at") WHERE "alert_automation_runs"."status"='queued';--> statement-breakpoint
 CREATE INDEX "alert_automation_runs_project_event_idx" ON "alert_automation_runs" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "alert_automation_drafts_project_event_idx" ON "alert_automation_drafts" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint
