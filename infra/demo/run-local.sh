@@ -20,6 +20,7 @@ set +a
 : "${POSTGRES_DB:=aerosight}"
 : "${AUTH_SECRET:?set AUTH_SECRET in infra/demo/.env}"
 : "${WEB_PORT:=3100}"
+: "${ALGORITHM_DEMO_PORT:=8090}"
 : "${MQTT_PORT:=1883}"
 : "${MEDIA_RTMP_PORT:=1935}"
 : "${MEDIA_HLS_PORT:=8888}"
@@ -53,10 +54,11 @@ web_pid=""
 worker_pid=""
 dock2_pid=""
 dock3_pid=""
+algorithm_pid=""
 
 cleanup() {
   trap - EXIT INT TERM
-  for process_id in "$dock3_pid" "$dock2_pid" "$worker_pid" "$web_pid"; do
+  for process_id in "$dock3_pid" "$dock2_pid" "$worker_pid" "$web_pid" "$algorithm_pid"; do
     if [ -n "$process_id" ]; then
       kill -INT "$process_id" 2>/dev/null || true
     fi
@@ -69,6 +71,15 @@ trap cleanup EXIT INT TERM
 
 MEDIA_AUTH_METHOD=http MEDIA_AUTH_HTTP_ADDRESS="$MEDIA_AUTH_HTTP_ADDRESS" \
 docker compose --env-file "$env_file" -f "$demo_dir/compose.yaml" up -d database mqtt media
+
+ALGORITHM_DEMO_PORT="$ALGORITHM_DEMO_PORT" node "$demo_dir/algorithm-server.mjs" &
+algorithm_pid="$!"
+attempt=0
+until curl -fsS "http://127.0.0.1:$ALGORITHM_DEMO_PORT/healthz" >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 20 ]; then echo "Generic algorithm demo did not become ready." >&2; exit 1; fi
+  sleep 1
+done
 
 attempt=0
 until docker compose --env-file "$env_file" -f "$demo_dir/compose.yaml" exec -T database \
@@ -99,6 +110,13 @@ until curl -fsS "$web_base_url/login" >/dev/null 2>&1; do
   sleep 1
 done
 
+object_root="$workspace_dir/.aerosight-objects"
+algorithm_asset_key="demo/generic-ocr-input.json"
+mkdir -p "$object_root/demo"
+cp "$demo_dir/algorithm-input.json" "$object_root/$algorithm_asset_key"
+algorithm_asset_checksum=$(shasum -a 256 "$demo_dir/algorithm-input.json" | awk '{print $1}')
+algorithm_asset_size=$(wc -c < "$demo_dir/algorithm-input.json" | tr -d ' ')
+
 project_id=$(psql "$database_url" -X -qAt \
   -v mqtt_endpoint="$mqtt_endpoint" \
   -v web_base_url="$web_base_url" \
@@ -106,6 +124,10 @@ project_id=$(psql "$database_url" -X -qAt \
   -v media_ingest_url="$media_ingest_url" \
   -v media_playback_url="$media_playback_url" \
   -v webrtc_playback_url="$webrtc_playback_url" \
+  -v algorithm_base_url="http://127.0.0.1:$ALGORITHM_DEMO_PORT/infer" \
+  -v algorithm_asset_key="$algorithm_asset_key" \
+  -v algorithm_asset_checksum="$algorithm_asset_checksum" \
+  -v algorithm_asset_size="$algorithm_asset_size" \
   -f "$demo_dir/bootstrap.sql" | tail -n 1)
 
 cd "$workspace_dir/apps/worker"
@@ -115,6 +137,7 @@ MEDIA_API_BASE_URL="http://127.0.0.1:${MEDIA_API_PORT:-9997}" \
 MEDIA_ADMIN_USER="$MEDIA_ADMIN_USER" MEDIA_ADMIN_PASSWORD="$MEDIA_ADMIN_PASSWORD" \
 OBJECT_STORAGE_LOCAL_ROOT="$workspace_dir/.aerosight-objects" \
 CALLBACK_LISTEN_ADDRESS="127.0.0.1:8081" \
+CALLBACK_PUBLIC_BASE_URL="https://127.0.0.1:8081" \
 go run ./cmd/worker &
 worker_pid="$!"
 
@@ -146,7 +169,7 @@ echo "Open: $web_base_url/projects/$project_id/realtime"
 echo "Login: admin@example.com / admin"
 echo "Press Ctrl-C to stop app processes; run infra/demo/stop-local.sh to stop infrastructure."
 
-while kill -0 "$web_pid" 2>/dev/null && kill -0 "$worker_pid" 2>/dev/null \
+while kill -0 "$web_pid" 2>/dev/null && kill -0 "$worker_pid" 2>/dev/null && kill -0 "$algorithm_pid" 2>/dev/null \
   && kill -0 "$dock2_pid" 2>/dev/null && kill -0 "$dock3_pid" 2>/dev/null; do
   sleep 2
 done

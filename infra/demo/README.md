@@ -20,6 +20,8 @@ Open the printed URL and sign in with the printed local seed account. The script
 
 Use the device tree to verify `dji.cloud` Driver binding and effective capabilities. Select a camera and use **启动直播**; the selected simulated camera emits a distinct test pattern through authenticated RTMP and is played through token-protected WebRTC. Use **停止直播** to verify DJI stop acknowledgement and media cleanup. Select a controllable aircraft or dock to exercise return-home and capability-driven dock actions. Sensor and telemetry channels appear in the same real-time panel without device-category UI branches.
 
+Open **算法服务** and find **通用文档 OCR**. Its server-provided help text shows the seeded input asset ID. Enter that ID, optionally set `language`, and click **运行**. The request goes through the normal outbox, Worker, local HTTP-JSON Provider, immutable definition version, canonical OCR mapping, and raw-result storage path. It is a generic `perception.ocr` definition and contains no hard-coded inspection category.
+
 Press Ctrl-C to stop Web, Worker, and simulator processes. Then stop infrastructure with:
 
 ```sh

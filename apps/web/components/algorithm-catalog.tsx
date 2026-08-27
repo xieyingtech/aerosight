@@ -38,6 +38,7 @@ export function AlgorithmCatalog({ projectId, entries, canRun }: { projectId: nu
   return <div className="grid gap-3 md:grid-cols-2">{entries.map((entry) => <Card key={entry.versionId}>
     <CardHeader><CardTitle>{entry.name}</CardTitle><CardDescription>{entry.capabilityCode} · v{entry.version} · {entry.execution.modelOrProcess}</CardDescription></CardHeader>
     <CardContent className="space-y-3"><p className="text-sm text-muted-foreground">{entry.description ?? "由服务端 schema 描述的通用算法"}</p>
+      {typeof entry.display.helpText === "string" && <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">{entry.display.helpText}</p>}
       {canRun ? <form action={(data) => run(entry, data)} className="space-y-2"><Input min="1" name="assetId" placeholder="输入资产 ID" required type="number" />
         {Object.entries(parameterProperties(entry.schemas.parameters)).map(([key, property]) => <label className="grid gap-1 text-xs" key={key}><span>{String(property.title ?? key)}</span>
           {property.type === "boolean" ? <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name={key}><option value="">默认</option><option value="true">是</option><option value="false">否</option></select>

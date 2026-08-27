@@ -98,6 +98,100 @@ on conflict (project_id, name) do update set
   config_json = excluded.config_json, network_profile_id = excluded.network_profile_id,
   lease_owner = null, lease_expires_at = null, updated_at = now();
 
+with demo as (
+  select project.id as project_id, project.team_id
+    from projects project where project.name = 'DJI Local Demo'
+   order by project.id limit 1
+)
+insert into assets (
+  project_id, team_id, kind, mime_type, storage_key, size_bytes, checksum,
+  checksum_sha256, logical_key, version, status, available_at, metadata_json
+)
+select project_id, team_id, 'document', 'application/json', :'algorithm_asset_key',
+       :'algorithm_asset_size'::bigint, :'algorithm_asset_checksum', :'algorithm_asset_checksum',
+       'demo/generic-ocr-input', 1, 'available', now(),
+       '{"purpose":"generic-algorithm-demo"}'::jsonb
+  from demo
+on conflict (project_id, logical_key, version) do nothing;
+
+with demo as (
+  select project.id as project_id, project.team_id, member.user_id
+    from projects project
+    join team_members member on member.team_id = project.team_id and member.role = 'owner'
+   where project.name = 'DJI Local Demo'
+   order by project.id, member.user_id limit 1
+)
+insert into algorithm_providers (
+  project_id, team_id, name, provider_type, base_url, auth_type, timeout_seconds,
+  concurrency_limit, rate_limit_per_minute, status, health_json, created_by_user_id
+)
+select project_id, team_id, 'Local Generic Algorithm', 'http-json', :'algorithm_base_url',
+       'none', 10, 2, 120, 'active', '{"status":"local_demo"}'::jsonb, user_id
+  from demo
+on conflict (project_id, name) do update set
+  base_url = excluded.base_url, status = 'active', health_json = excluded.health_json,
+  updated_at = now();
+
+with demo as (
+  select project.id as project_id, project.team_id, member.user_id,
+         provider.id as provider_id
+    from projects project
+    join team_members member on member.team_id = project.team_id and member.role = 'owner'
+    join algorithm_providers provider on provider.project_id = project.id
+      and provider.name = 'Local Generic Algorithm'
+   where project.name = 'DJI Local Demo'
+   order by project.id, member.user_id limit 1
+)
+insert into algorithm_definitions (
+  project_id, team_id, provider_id, name, capability_code, description, created_by_user_id
+)
+select project_id, team_id, provider_id, '通用文档 OCR', 'perception.ocr',
+       '由动态 schema 定义的通用 OCR 演示，不绑定违建或其他业务类别。', user_id
+  from demo
+on conflict (project_id, name) do nothing;
+
+with demo as (
+  select definition.project_id, definition.team_id, definition.id as definition_id,
+         member.user_id, asset.id as asset_id
+    from algorithm_definitions definition
+    join projects project on project.id = definition.project_id and project.name = 'DJI Local Demo'
+    join team_members member on member.team_id = definition.team_id and member.role = 'owner'
+    join assets asset on asset.project_id = definition.project_id
+      and asset.logical_key = 'demo/generic-ocr-input' and asset.version = 1
+   where definition.name = '通用文档 OCR'
+   order by definition.id, member.user_id limit 1
+)
+insert into algorithm_definition_versions (
+  project_id, team_id, algorithm_definition_id, version, status, execution_mode,
+  model_or_process, input_requirements_json, parameters_schema_json,
+  protocol_config_json, output_mapping_json, label_mapping_json,
+  output_schema_json, display_metadata_json, publish_threshold,
+  created_by_user_id, published_by_user_id, published_at
+)
+select project_id, team_id, definition_id, 1, 'published', 'synchronous', 'demo-ocr-v1',
+       '{"type":"object","required":["assetId"]}'::jsonb,
+       '{"type":"object","properties":{"language":{"type":"string","title":"识别语言","description":"例如 zh-CN"}}}'::jsonb,
+       '{"mappingVersion":"v1"}'::jsonb,
+       '{"kind":"ocr","resultPath":"result"}'::jsonb,
+       '{}'::jsonb,
+       '{"type":"object","properties":{"text":{"type":"string"},"blocks":{"type":"array"}}}'::jsonb,
+       jsonb_build_object('helpText', '本地演示输入资产 ID：' || asset_id::text),
+       0, user_id, user_id, now()
+  from demo
+ where not exists (
+   select 1 from algorithm_definition_versions version
+    where version.algorithm_definition_id = demo.definition_id and version.version = 1
+ );
+
+update algorithm_definitions definition
+   set current_published_version_id = version.id, updated_at = now()
+  from algorithm_definition_versions version, projects project
+ where definition.project_id = project.id and project.name = 'DJI Local Demo'
+   and definition.name = '通用文档 OCR'
+   and version.algorithm_definition_id = definition.id and version.version = 1
+   and version.status = 'published'
+   and definition.current_published_version_id is distinct from version.id;
+
 update live_streams set status = 'stopped', status_reason = 'LOCAL_DEMO_RESTART',
        ended_at = now(), playback_ref = null, playback_locator_expires_at = null,
        lease_owner = null, lease_expires_at = null, updated_at = now()
