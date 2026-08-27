@@ -81,7 +81,7 @@
 ## 9. 时空大模型与安全调度
 
 - [x] 9.1 引入 Vercel AI SDK `ai` 和选定 provider packages，建立 provider registry 与部署配置校验，并通过至少一个模拟 provider 的流式调用测试验证可替换性。
-- [ ] 9.2 定义服务端 `AgentExecutionContext` 和会话绑定，禁止从模型参数获取用户/团队/项目 scope，并通过伪造 `projectId` / `userId` tool args 测试验证。
+- [x] 9.2 定义服务端 `AgentExecutionContext` 和会话绑定，禁止从模型参数获取用户/团队/项目 scope，并通过伪造 `projectId` / `userId` tool args 测试验证。
 - [ ] 9.3 建立白名单 tool registry、输入 schema、风险级别、所需 permission 和确认策略，通过 registry 快照测试验证不存在直连设备 adapter 的工具。
 - [ ] 9.4 实现设备、任务、告警、资产、轨迹和地图上下文的只读工具，返回稳定引用、时间、质量和新鲜度，并通过跨项目注入与大结果截断测试验证。
 - [ ] 9.5 实现巡检任务、报告和 issue 的草案工具，复用领域 schema 与证据引用，并通过提示注入测试验证不会绕过发布校验。
