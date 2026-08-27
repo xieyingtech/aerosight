@@ -1354,6 +1354,105 @@ CREATE TABLE "generated_report_evidence" (
 	CONSTRAINT "generated_report_evidence_asset_project_fk" FOREIGN KEY("asset_id","project_id") REFERENCES "assets"("id","project_id") ON DELETE restrict
 );
 --> statement-breakpoint
+CREATE TABLE "retention_policies" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"policy_key" text NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"retention_days" integer NOT NULL,
+	"derivative_retention_days" integer NOT NULL,
+	"is_default" boolean DEFAULT false NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "retention_policies_status_valid" CHECK(status in('draft','published','retired')),
+	CONSTRAINT "retention_policies_duration_valid" CHECK(retention_days>0 and derivative_retention_days>0),
+	CONSTRAINT "retention_policies_version_valid" CHECK(version>0),
+	CONSTRAINT "retention_policies_key_version_unique" UNIQUE("project_id","policy_key","version"),
+	CONSTRAINT "retention_policies_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "retention_policies_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade,
+	CONSTRAINT "retention_policies_created_by_fk" FOREIGN KEY("created_by_user_id") REFERENCES "users"("id") ON DELETE set null,
+	CONSTRAINT "retention_policies_published_by_fk" FOREIGN KEY("published_by_user_id") REFERENCES "users"("id") ON DELETE set null
+);
+--> statement-breakpoint
+CREATE TABLE "retention_holds" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"asset_id" integer NOT NULL,
+	"reason" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"hold_until" timestamp with time zone,
+	"created_by_user_id" integer,
+	"released_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"released_at" timestamp with time zone,
+	CONSTRAINT "retention_holds_status_valid" CHECK(status in('active','released')),
+	CONSTRAINT "retention_holds_release_complete" CHECK((status='active' and released_at is null) or (status='released' and released_at is not null)),
+	CONSTRAINT "retention_holds_reason_present" CHECK(length(trim(reason))>0),
+	CONSTRAINT "retention_holds_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade,
+	CONSTRAINT "retention_holds_asset_project_fk" FOREIGN KEY("asset_id","project_id") REFERENCES "assets"("id","project_id") ON DELETE cascade,
+	CONSTRAINT "retention_holds_created_by_fk" FOREIGN KEY("created_by_user_id") REFERENCES "users"("id") ON DELETE set null,
+	CONSTRAINT "retention_holds_released_by_fk" FOREIGN KEY("released_by_user_id") REFERENCES "users"("id") ON DELETE set null
+);
+--> statement-breakpoint
+CREATE TABLE "retention_cleanup_runs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"retention_policy_id" bigint NOT NULL,
+	"mode" text DEFAULT 'dry_run' NOT NULL,
+	"status" text DEFAULT 'planned' NOT NULL,
+	"plan_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"candidate_count" integer DEFAULT 0 NOT NULL,
+	"deleted_count" integer DEFAULT 0 NOT NULL,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	"error_code" text,
+	CONSTRAINT "retention_cleanup_runs_mode_valid" CHECK(mode in('dry_run','execute')),
+	CONSTRAINT "retention_cleanup_runs_status_valid" CHECK(status in('planned','running','completed','failed')),
+	CONSTRAINT "retention_cleanup_runs_counts_valid" CHECK(candidate_count>=0 and deleted_count>=0 and deleted_count<=candidate_count),
+	CONSTRAINT "retention_cleanup_runs_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "retention_cleanup_runs_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade,
+	CONSTRAINT "retention_cleanup_runs_policy_project_fk" FOREIGN KEY("retention_policy_id","project_id") REFERENCES "retention_policies"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "retention_cleanup_runs_created_by_fk" FOREIGN KEY("created_by_user_id") REFERENCES "users"("id") ON DELETE set null
+);
+--> statement-breakpoint
+CREATE TABLE "retention_deletion_tombstones" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"cleanup_run_id" uuid NOT NULL,
+	"retention_policy_id" bigint NOT NULL,
+	"asset_id" integer NOT NULL,
+	"storage_key_hash" text NOT NULL,
+	"checksum_sha256" text,
+	"reason_code" text NOT NULL,
+	"deleted_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "retention_tombstones_storage_hash_valid" CHECK(storage_key_hash ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "retention_tombstones_checksum_valid" CHECK(checksum_sha256 is null or checksum_sha256 ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "retention_tombstones_asset_unique" UNIQUE("asset_id"),
+	CONSTRAINT "retention_tombstones_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade,
+	CONSTRAINT "retention_tombstones_run_project_fk" FOREIGN KEY("cleanup_run_id","project_id") REFERENCES "retention_cleanup_runs"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "retention_tombstones_policy_project_fk" FOREIGN KEY("retention_policy_id","project_id") REFERENCES "retention_policies"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "retention_tombstones_asset_project_fk" FOREIGN KEY("asset_id","project_id") REFERENCES "assets"("id","project_id") ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE FUNCTION protect_published_retention_policy() RETURNS trigger LANGUAGE plpgsql AS $$
+begin
+  if old.status='published' then
+    raise exception 'published retention policy is immutable' using errcode='55000';
+  end if;
+  return case when tg_op='DELETE' then old else new end;
+end;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER retention_policies_published_immutable BEFORE UPDATE OR DELETE ON retention_policies FOR EACH ROW EXECUTE FUNCTION protect_published_retention_policy();
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1548,6 +1647,10 @@ CREATE INDEX "alert_automation_drafts_project_event_idx" ON "alert_automation_dr
 CREATE UNIQUE INDEX "generated_report_versions_one_draft_idx" ON "generated_report_versions" USING btree ("generated_report_id") WHERE "generated_report_versions"."status"='draft';--> statement-breakpoint
 CREATE INDEX "generated_reports_project_updated_idx" ON "generated_reports" USING btree ("project_id","updated_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "generated_report_evidence_asset_idx" ON "generated_report_evidence" USING btree ("project_id","asset_id") WHERE "generated_report_evidence"."asset_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "retention_policies_one_default_idx" ON "retention_policies" USING btree ("project_id") WHERE "retention_policies"."status" = 'published' and "retention_policies"."is_default";--> statement-breakpoint
+CREATE UNIQUE INDEX "retention_holds_one_active_asset_idx" ON "retention_holds" USING btree ("project_id","asset_id") WHERE "retention_holds"."status" = 'active';--> statement-breakpoint
+CREATE INDEX "retention_cleanup_runs_project_created_idx" ON "retention_cleanup_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "retention_tombstones_project_deleted_idx" ON "retention_deletion_tombstones" USING btree ("project_id","deleted_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint
