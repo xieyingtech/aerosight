@@ -35,6 +35,123 @@ CREATE TABLE "agents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "algorithm_providers" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"provider_type" text NOT NULL,
+	"base_url" text NOT NULL,
+	"secret_ref" text,
+	"auth_type" text DEFAULT 'none' NOT NULL,
+	"allowed_headers_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"timeout_seconds" integer DEFAULT 30 NOT NULL,
+	"concurrency_limit" integer DEFAULT 1 NOT NULL,
+	"rate_limit_per_minute" integer DEFAULT 60 NOT NULL,
+	"status" text DEFAULT 'disabled' NOT NULL,
+	"health_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "algorithm_providers_type_valid" CHECK (provider_type in ('http-json','kserve-v2','ogc-processes','ai-sdk')),
+	CONSTRAINT "algorithm_providers_auth_valid" CHECK (auth_type in ('none','bearer','api-key-header','basic','signed')),
+	CONSTRAINT "algorithm_providers_status_valid" CHECK (status in ('disabled','testing','active','degraded','failed')),
+	CONSTRAINT "algorithm_providers_limits_valid" CHECK (timeout_seconds between 1 and 3600 and concurrency_limit > 0 and rate_limit_per_minute > 0),
+	CONSTRAINT "algorithm_providers_project_name_unique" UNIQUE("project_id", "name"),
+	CONSTRAINT "algorithm_providers_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "algorithm_definitions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"provider_id" bigint NOT NULL,
+	"name" text NOT NULL,
+	"capability_code" text NOT NULL,
+	"description" text,
+	"current_published_version_id" bigint,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "algorithm_definitions_project_name_unique" UNIQUE("project_id", "name"),
+	CONSTRAINT "algorithm_definitions_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "algorithm_definition_versions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"algorithm_definition_id" bigint NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"execution_mode" text NOT NULL,
+	"model_or_process" text NOT NULL,
+	"input_requirements_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"parameters_schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"protocol_config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"output_mapping_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"label_mapping_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"publish_threshold" double precision DEFAULT 0 NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "algorithm_definition_versions_status_valid" CHECK (status in ('draft','published','retired')),
+	CONSTRAINT "algorithm_definition_versions_mode_valid" CHECK (execution_mode in ('synchronous','asynchronous','callback')),
+	CONSTRAINT "algorithm_definition_versions_threshold_valid" CHECK (publish_threshold between 0 and 1),
+	CONSTRAINT "algorithm_definition_versions_version_valid" CHECK (version > 0),
+	CONSTRAINT "algorithm_definition_versions_definition_version_unique" UNIQUE("algorithm_definition_id", "version"),
+	CONSTRAINT "algorithm_definition_versions_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "algorithm_runs" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"algorithm_definition_version_id" bigint NOT NULL,
+	"input_asset_id" integer NOT NULL,
+	"task_run_id" integer,
+	"device_id" integer,
+	"idempotency_key" text NOT NULL,
+	"status" text DEFAULT 'queued' NOT NULL,
+	"parameters_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"input_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"external_job_id" text,
+	"callback_token_hash" text,
+	"raw_result_object_key" text,
+	"raw_result_checksum_sha256" text,
+	"canonical_result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"started_at" timestamp with time zone,
+	"finished_at" timestamp with time zone,
+	"error_code" text,
+	"error_message" text,
+	CONSTRAINT "algorithm_runs_status_valid" CHECK (status in ('queued','running','polling','waiting_callback','succeeded','failed','canceled','timed_out')),
+	CONSTRAINT "algorithm_runs_checksum_valid" CHECK (raw_result_checksum_sha256 is null or raw_result_checksum_sha256 ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "algorithm_runs_project_idempotency_unique" UNIQUE("project_id", "idempotency_key"),
+	CONSTRAINT "algorithm_runs_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "algorithm_run_attempts" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"algorithm_run_id" uuid NOT NULL,
+	"attempt" integer NOT NULL,
+	"status" text NOT NULL,
+	"request_hash" text NOT NULL,
+	"response_status" integer,
+	"external_job_id" text,
+	"duration_ms" integer,
+	"error_category" text,
+	"billing_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"finished_at" timestamp with time zone,
+	CONSTRAINT "algorithm_run_attempts_status_valid" CHECK (status in ('running','succeeded','failed','timed_out','rate_limited')),
+	CONSTRAINT "algorithm_run_attempts_attempt_valid" CHECK (attempt > 0 and (duration_ms is null or duration_ms >= 0)),
+	CONSTRAINT "algorithm_run_attempts_run_attempt_unique" UNIQUE("algorithm_run_id", "attempt")
+);
+--> statement-breakpoint
 CREATE TABLE "approval_requests" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
@@ -819,6 +936,20 @@ CREATE TRIGGER safety_policy_versions_published_immutable
 BEFORE UPDATE OR DELETE ON safety_policy_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_safety_policy_version();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_algorithm_definition_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF OLD.status IN ('published','retired') THEN
+		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER algorithm_definition_versions_published_immutable
+BEFORE UPDATE OR DELETE ON algorithm_definition_versions
+FOR EACH ROW EXECUTE FUNCTION protect_published_algorithm_definition_version();
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION validate_approval_decision()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE request approval_requests%ROWTYPE;
@@ -868,6 +999,23 @@ ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_task_run_id_task_run
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_started_by_user_id_users_id_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agents" ADD CONSTRAINT "agents_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definitions" ADD CONSTRAINT "algorithm_definitions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definitions" ADD CONSTRAINT "algorithm_definitions_provider_project_fk" FOREIGN KEY ("provider_id","project_id") REFERENCES "public"."algorithm_providers"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definitions" ADD CONSTRAINT "algorithm_definitions_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definitions" ADD CONSTRAINT "algorithm_definitions_current_version_project_fk" FOREIGN KEY ("current_published_version_id","project_id") REFERENCES "public"."algorithm_definition_versions"("id","project_id") ON DELETE SET NULL ("current_published_version_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definition_versions" ADD CONSTRAINT "algorithm_definition_versions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definition_versions" ADD CONSTRAINT "algorithm_definition_versions_definition_project_fk" FOREIGN KEY ("algorithm_definition_id","project_id") REFERENCES "public"."algorithm_definitions"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definition_versions" ADD CONSTRAINT "algorithm_definition_versions_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_definition_versions" ADD CONSTRAINT "algorithm_definition_versions_publisher_fk" FOREIGN KEY ("published_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_version_project_fk" FOREIGN KEY ("algorithm_definition_version_id","project_id") REFERENCES "public"."algorithm_definition_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_asset_project_fk" FOREIGN KEY ("input_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("device_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_requester_member_fk" FOREIGN KEY ("team_id","requested_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approvals" ADD CONSTRAINT "approvals_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -993,6 +1141,13 @@ CREATE INDEX "agent_sessions_issue_idx" ON "agent_sessions" USING btree ("issue_
 CREATE INDEX "agent_sessions_task_run_idx" ON "agent_sessions" USING btree ("task_run_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "algorithm_definitions_project_provider_idx" ON "algorithm_definitions" USING btree ("project_id","provider_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "algorithm_definition_versions_one_draft_idx" ON "algorithm_definition_versions" USING btree ("algorithm_definition_id") WHERE "algorithm_definition_versions"."status" = 'draft';--> statement-breakpoint
+CREATE INDEX "algorithm_definition_versions_project_status_idx" ON "algorithm_definition_versions" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "algorithm_runs_claim_idx" ON "algorithm_runs" USING btree ("status","created_at");--> statement-breakpoint
+CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "algorithm_run_attempts_run_idx" ON "algorithm_run_attempts" USING btree ("algorithm_run_id","attempt");--> statement-breakpoint
 CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
 CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id","created_at");--> statement-breakpoint

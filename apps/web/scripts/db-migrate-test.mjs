@@ -958,6 +958,79 @@ async function assertTaskRunCommandSchema(connectionString) {
   }
 }
 
+async function assertAlgorithmRuntimeSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const projects = await client.query(
+      `select project.id, project.team_id, project.name, actor.id as user_id
+         from projects project
+         join team_members member on member.team_id = project.team_id and member.role = 'owner'
+         join users actor on actor.id = member.user_id
+        where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = projects.rows.find((row) => row.name === "北区巡检");
+    const south = projects.rows.find((row) => row.name === "南区巡检");
+    const asset = await client.query("select id from assets where project_id = $1 and status = 'available' limit 1", [north.id]);
+    const provider = await client.query(
+      `insert into algorithm_providers (
+         project_id, team_id, name, provider_type, base_url, created_by_user_id
+       ) values ($1, $2, 'fixture-http', 'http-json', 'https://algorithm.example.test', $3) returning id`,
+      [north.id, north.team_id, north.user_id]
+    );
+    await client.query(
+      `insert into algorithm_definitions (project_id, team_id, provider_id, name, capability_code)
+       values ($1, $2, $3, 'cross-project', 'vision.detect')`,
+      [south.id, south.team_id, provider.rows[0].id]
+    ).then(
+      () => assert(false, "cross-project algorithm provider binding should fail"),
+      (error) => assert(error.code === "23503", "cross-project algorithm binding failed unexpectedly")
+    );
+    const definition = await client.query(
+      `insert into algorithm_definitions (
+         project_id, team_id, provider_id, name, capability_code, created_by_user_id
+       ) values ($1, $2, $3, 'fixture-detection', 'vision.detect', $4) returning id`,
+      [north.id, north.team_id, provider.rows[0].id, north.user_id]
+    );
+    const version = await client.query(
+      `insert into algorithm_definition_versions (
+         project_id, team_id, algorithm_definition_id, version, status, execution_mode,
+         model_or_process, output_mapping_json, created_by_user_id
+       ) values ($1, $2, $3, 1, 'draft', 'synchronous', 'model-v1',
+                 '{"label":"$.label"}'::jsonb, $4) returning id`,
+      [north.id, north.team_id, definition.rows[0].id, north.user_id]
+    );
+    await client.query(
+      `update algorithm_definition_versions set status = 'published', published_by_user_id = $2, published_at = now()
+        where id = $1`, [version.rows[0].id, north.user_id]
+    );
+    await client.query(
+      "update algorithm_definition_versions set model_or_process = 'changed' where id = $1",
+      [version.rows[0].id]
+    ).then(
+      () => assert(false, "published algorithm definition version should be immutable"),
+      (error) => assert(error.code === "55000", "published algorithm mutation failed unexpectedly")
+    );
+    await client.query(
+      `insert into algorithm_runs (
+         id, project_id, team_id, algorithm_definition_version_id, input_asset_id, idempotency_key
+       ) values ('20000000-0000-4000-8000-000000000001', $1, $2, $3, $4, 'asset:fixture:v1')`,
+      [north.id, north.team_id, version.rows[0].id, asset.rows[0].id]
+    );
+    await client.query(
+      `insert into algorithm_runs (
+         id, project_id, team_id, algorithm_definition_version_id, input_asset_id, idempotency_key
+       ) values ('20000000-0000-4000-8000-000000000002', $1, $2, $3, $4, 'asset:fixture:v1')`,
+      [north.id, north.team_id, version.rows[0].id, asset.rows[0].id]
+    ).then(
+      () => assert(false, "duplicate algorithm run idempotency key should fail"),
+      (error) => assert(error.code === "23505", "duplicate algorithm run failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -974,7 +1047,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 18, "empty database should apply all migrations");
+    assert(first.applied.length === 19, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -993,6 +1066,7 @@ try {
     await assertSafetyPolicySchema(connectionString);
     await assertApprovalSchema(connectionString);
     await assertTaskRunCommandSchema(connectionString);
+    await assertAlgorithmRuntimeSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -1018,7 +1092,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 18, "existing database should record all migrations");
+    assert(first.applied.length === 19, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1059,14 +1133,21 @@ try {
                 to_regclass('public.approvals') as approvals,
                 to_regclass('public.task_run_steps') as task_run_steps,
                 to_regclass('public.device_commands') as device_commands,
-                to_regclass('public.command_attempts') as command_attempts`
+                to_regclass('public.command_attempts') as command_attempts,
+                to_regclass('public.algorithm_providers') as algorithm_providers,
+                to_regclass('public.algorithm_definitions') as algorithm_definitions,
+                to_regclass('public.algorithm_definition_versions') as algorithm_definition_versions,
+                to_regclass('public.algorithm_runs') as algorithm_runs,
+                to_regclass('public.algorithm_run_attempts') as algorithm_run_attempts`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
         result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
         result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions &&
         result.rows[0].approvals && result.rows[0].task_run_steps && result.rows[0].device_commands &&
-        result.rows[0].command_attempts,
+        result.rows[0].command_attempts && result.rows[0].algorithm_providers &&
+        result.rows[0].algorithm_definitions && result.rows[0].algorithm_definition_versions &&
+        result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts,
         "schema snapshot is incomplete"
       );
     } finally {
