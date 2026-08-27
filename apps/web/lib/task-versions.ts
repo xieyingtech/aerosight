@@ -90,8 +90,14 @@ export async function publishTaskDraft(projectId: number, versionId: number, req
       );
       const row = version.rows[0];
       if (!row) throw new Error("TASK_VERSION_NOT_FOUND");
-      const steps = await client.query<{ position: number; stepKey: string; action: string }>(
-        `select position, step_key as "stepKey", action from task_steps
+      const steps = await client.query<{
+        position: number; stepKey: string; name: string; capabilityCode: string; action: string;
+        parameters: Record<string, unknown>; failurePolicy: Record<string, unknown>;
+        mediaRequirements: Record<string, unknown>;
+      }>(
+        `select position, step_key as "stepKey", name, capability_code as "capabilityCode", action,
+                parameters_json as parameters, failure_policy_json as "failurePolicy",
+                media_requirements_json as "mediaRequirements" from task_steps
           where project_id = $1 and task_version_id = $2 order by position`, [projectId, versionId]
       );
       assertDraftPublishable({ ...row, steps: steps.rows });

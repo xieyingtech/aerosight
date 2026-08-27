@@ -1,10 +1,23 @@
+import { validateInspectionMissionDefinition } from "./inspection-mission-schema.ts";
+
 export type TaskVersionStatus = "draft" | "published" | "retired";
+
+type PublishableTaskStep = {
+  position: number;
+  stepKey: string;
+  name: string;
+  capabilityCode: string;
+  action: string;
+  parameters: Record<string, unknown>;
+  failurePolicy: Record<string, unknown>;
+  mediaRequirements: Record<string, unknown>;
+};
 
 export function assertDraftPublishable(input: {
   status: TaskVersionStatus;
   definition: Record<string, unknown>;
   script: string;
-  steps: Array<{ position: number; stepKey: string; action: string }>;
+  steps: PublishableTaskStep[];
 }) {
   if (input.status !== "draft") throw new Error("TASK_VERSION_NOT_DRAFT");
   if (!input.script.trim()) throw new Error("TASK_VERSION_SCRIPT_REQUIRED");
@@ -20,4 +33,5 @@ export function assertDraftPublishable(input: {
     positions.add(step.position);
     keys.add(step.stepKey);
   }
+  validateInspectionMissionDefinition({ ...input.definition, steps: input.steps });
 }
