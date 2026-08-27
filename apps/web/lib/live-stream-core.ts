@@ -63,7 +63,37 @@ export function assertLiveStreamConcurrency(input: { activeCount: number; maxCon
 }
 
 export function createLiveStreamIngestRef() {
-  return `aerosight/${randomBytes(24).toString("base64url")}`;
+  return `demo/aerosight/${randomBytes(24).toString("base64url")}`;
+}
+
+export function buildRTMPIngestURL(input: {
+  baseURL: string;
+  ingestRef: string;
+  username: string;
+  password: string;
+}) {
+  const url = new URL(input.baseURL);
+  if (url.protocol !== "rtmp:" && url.protocol !== "rtmps:") throw new Error("LIVE_STREAM_RTMP_URL_REQUIRED");
+  if (url.username || url.password || !input.username || !input.password) throw new Error("LIVE_STREAM_PUBLISH_CREDENTIALS_INVALID");
+  url.pathname = `${url.pathname.replace(/\/$/, "")}/${input.ingestRef}`;
+  url.searchParams.set("user", input.username);
+  url.searchParams.set("pass", input.password);
+  return url.toString();
+}
+
+export function buildDJIVideoID(input: {
+  sourceExternalId: string;
+  cameraType: number;
+  cameraSubtype: number;
+  videoIndex?: string;
+}) {
+  if (!input.sourceExternalId.trim() || !Number.isInteger(input.cameraType) || input.cameraType <= 0
+      || !Number.isInteger(input.cameraSubtype) || input.cameraSubtype < 0) {
+    throw new Error("DJI_LIVE_VIDEO_IDENTITY_INVALID");
+  }
+  const videoIndex = input.videoIndex?.trim() || "normal-0";
+  if (!/^[a-z0-9-]{1,32}$/i.test(videoIndex)) throw new Error("DJI_LIVE_VIDEO_INDEX_INVALID");
+  return `${input.sourceExternalId}/${input.cameraType}-${input.cameraSubtype}-0/${videoIndex}`;
 }
 
 export function planLiveStreamStop(status: LiveStreamStatus, sourceType: string) {

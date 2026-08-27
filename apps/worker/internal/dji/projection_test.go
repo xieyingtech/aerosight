@@ -239,6 +239,58 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 		t.Fatalf("ACK did not update command and correlation: command=%s correlation=%s", status, correlationStatus)
 	}
 
+	var cameraID int
+	if err := database.QueryRowContext(ctx, `select device_id from device_external_identities
+		where adapter_id=$1 and external_device_id='M3TD-DEMO-001:camera:0'`, adapterID).Scan(&cameraID); err != nil {
+		t.Fatal(err)
+	}
+	var liveStreamID int
+	if err := database.QueryRowContext(ctx, `insert into live_streams(
+		project_id,team_id,device_id,adapter_id,stream_key,source_type,status,ingest_ref,vendor_stream_ref,
+		lease_owner,lease_expires_at)
+		values($1,$2,$3,$4,'video.primary','dji','requested','demo/aerosight/integration-live',
+		'M3TD-DEMO-001/81-0-0/normal-0','integration',now()+interval '45 seconds') returning id`,
+		projectID, teamID, cameraID, adapterID).Scan(&liveStreamID); err != nil {
+		t.Fatal(err)
+	}
+	liveCommandID := "89f050f8-77f2-4a73-a8b7-8391e3797810"
+	if _, err := database.ExecContext(ctx, `insert into device_commands(
+		id,project_id,team_id,device_id,live_stream_id,command_key,idempotency_key,capability_code,
+		parameters_json,safety_context_json,status,priority,deadline_at)
+		values($1,$2,$3,$4,$5,'start','integration-live-start','stream.video.control',$6,'{}','dispatchable',20,$7)`,
+		liveCommandID, projectID, teamID, cameraID, liveStreamID,
+		jsonObject(map[string]any{"url_type": 1, "url": "rtmp://media/demo/aerosight/integration-live", "video_id": "M3TD-DEMO-001/81-0-0/normal-0", "video_quality": 3}),
+		time.UnixMilli(1787821400000).UTC()); err != nil {
+		t.Fatal(err)
+	}
+	callOutboxHandler(t, ctx, database, dispatcher.DispatchHandler, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + liveCommandID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": liveCommandID}),
+	})
+	if publisher.topic != "thing/product/DOCK2-DEMO-001/services" {
+		t.Fatalf("camera live command did not route through dock ancestor: %s", publisher.topic)
+	}
+	if json.Unmarshal(publisher.payload, &published) != nil || published.Method != "live_start_push" {
+		t.Fatalf("DJI live start mapping was not published: %s", publisher.payload)
+	}
+	liveACK := routedMethodReply(t, projectID, adapterID, liveCommandID, "live_start_push", 0)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, liveACK))
+	if err := database.QueryRowContext(ctx, "select status from live_streams where id=$1", liveStreamID).Scan(&status); err != nil || status != "starting" {
+		t.Fatalf("DJI ACK should wait for media before live: status=%s err=%v", status, err)
+	}
+	media := &mediaInspectorFixture{}
+	coordinator, _ := NewLiveStreamHealthCoordinator(media, func() time.Time { return clock })
+	if updated, err := coordinator.ReconcileOnce(ctx, database); err != nil || updated != 0 {
+		t.Fatalf("missing media changed starting session: updated=%d err=%v", updated, err)
+	}
+	media.ready = true
+	if updated, err := coordinator.ReconcileOnce(ctx, database); err != nil || updated != 1 {
+		t.Fatalf("ready media did not promote session: updated=%d err=%v", updated, err)
+	}
+	if err := database.QueryRowContext(ctx, "select status from live_streams where id=$1", liveStreamID).Scan(&status); err != nil || status != "live" {
+		t.Fatalf("confirmed media did not become live: status=%s err=%v", status, err)
+	}
+
 	nackID := "89f050f8-77f2-4a73-a8b7-8391e3797802"
 	if _, err := database.ExecContext(ctx, `
 		insert into device_commands(
@@ -320,10 +372,14 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 }
 
 func routedReply(t *testing.T, projectID int, adapterID int64, commandID string, result int) RoutedMessage {
+	return routedMethodReply(t, projectID, adapterID, commandID, "return_home", result)
+}
+
+func routedMethodReply(t *testing.T, projectID int, adapterID int64, commandID, method string, result int) RoutedMessage {
 	t.Helper()
 	raw := jsonObject(map[string]any{
 		"tid": commandID, "bid": commandID, "timestamp": 1787821300100,
-		"gateway": "DOCK2-DEMO-001", "method": "return_home", "data": map[string]any{"result": result},
+		"gateway": "DOCK2-DEMO-001", "method": method, "data": map[string]any{"result": result},
 	})
 	message, err := RouteMQTTMessage(RouteContext{
 		ProjectID: projectID, AdapterID: adapterID, AllowedGatewaySNs: map[string]bool{"DOCK2-DEMO-001": true},
@@ -332,6 +388,15 @@ func routedReply(t *testing.T, projectID int, adapterID int64, commandID string,
 		t.Fatal(err)
 	}
 	return message
+}
+
+type mediaInspectorFixture struct{ ready bool }
+
+func (fixture *mediaInspectorFixture) Inspect(context.Context, string) (MediaPathStatus, error) {
+	if fixture.ready {
+		return MediaPathStatus{Ready: true, Tracks: []string{"H264"}}, nil
+	}
+	return MediaPathStatus{}, nil
 }
 
 func replyOutboxEvent(t *testing.T, teamID int, message RoutedMessage) outbox.Event {

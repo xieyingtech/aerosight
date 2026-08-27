@@ -43,3 +43,14 @@ func TestLoadRejectsInsecureCallbackPublicURL(t *testing.T) {
 		t.Fatalf("expected callback public URL error, got %v", err)
 	}
 }
+
+func TestLoadRequiresCompleteMediaGatewayConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://database.example/aerosight")
+	t.Setenv("MEDIA_API_BASE_URL", "http://media:9997")
+	t.Setenv("MEDIA_ADMIN_USER", "")
+	t.Setenv("MEDIA_ADMIN_PASSWORD", "")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "must be configured together") {
+		t.Fatalf("expected complete media gateway error, got %v", err)
+	}
+}

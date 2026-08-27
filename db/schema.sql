@@ -504,6 +504,7 @@ CREATE TABLE "live_streams" (
 	"playback_ref" text,
 	"playback_locator_expires_at" timestamp with time zone,
 	"status_reason" text,
+	"vendor_stream_ref" text,
 	"started_by_user_id" integer,
 	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_active_at" timestamp with time zone,
@@ -2162,6 +2163,13 @@ ALTER TABLE "live_streams"
 CREATE UNIQUE INDEX "live_streams_ingest_ref_unique" ON "live_streams" ("ingest_ref") WHERE "ingest_ref" is not null;
 --> statement-breakpoint
 CREATE INDEX "live_streams_expired_lease_idx" ON "live_streams" ("lease_expires_at") WHERE "status" in ('requested', 'starting', 'live', 'degraded', 'stopping');
+--> statement-breakpoint
+ALTER TABLE "device_commands" ADD COLUMN "live_stream_id" bigint;
+--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_live_stream_project_fk"
+FOREIGN KEY ("live_stream_id", "project_id") REFERENCES "live_streams"("id", "project_id") ON DELETE SET NULL ("live_stream_id");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "device_commands_live_stream_action_unique" ON "device_commands" ("live_stream_id", "command_key") WHERE "live_stream_id" is not null;
 --> statement-breakpoint
 ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_channel_project_fk"
 FOREIGN KEY ("stream_channel_id", "project_id") REFERENCES "device_stream_channels"("id", "project_id") ON DELETE SET NULL ("stream_channel_id");

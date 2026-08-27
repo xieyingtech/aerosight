@@ -15,6 +15,9 @@ type Config struct {
 	CallbackListenAddress  string
 	CallbackPublicBaseURL  string
 	AssetURLSigningSecret  string
+	MediaAPIBaseURL        string
+	MediaAPIUser           string
+	MediaAPIPassword       string
 }
 
 func Load() (Config, error) {
@@ -26,6 +29,9 @@ func Load() (Config, error) {
 		CallbackListenAddress:  valueOrDefault("CALLBACK_LISTEN_ADDRESS", "127.0.0.1:8081"),
 		CallbackPublicBaseURL:  strings.TrimRight(strings.TrimSpace(os.Getenv("CALLBACK_PUBLIC_BASE_URL")), "/"),
 		AssetURLSigningSecret:  strings.TrimSpace(os.Getenv("AUTH_SECRET")),
+		MediaAPIBaseURL:        strings.TrimRight(strings.TrimSpace(os.Getenv("MEDIA_API_BASE_URL")), "/"),
+		MediaAPIUser:           strings.TrimSpace(os.Getenv("MEDIA_ADMIN_USER")),
+		MediaAPIPassword:       strings.TrimSpace(os.Getenv("MEDIA_ADMIN_PASSWORD")),
 	}
 
 	var problems []error
@@ -43,6 +49,15 @@ func Load() (Config, error) {
 	}
 	if config.CallbackPublicBaseURL != "" && !strings.HasPrefix(config.CallbackPublicBaseURL, "https://") {
 		problems = append(problems, errors.New("CALLBACK_PUBLIC_BASE_URL must use HTTPS"))
+	}
+	mediaValues := 0
+	for _, value := range []string{config.MediaAPIBaseURL, config.MediaAPIUser, config.MediaAPIPassword} {
+		if value != "" {
+			mediaValues++
+		}
+	}
+	if mediaValues != 0 && mediaValues != 3 {
+		problems = append(problems, errors.New("MEDIA_API_BASE_URL, MEDIA_ADMIN_USER, and MEDIA_ADMIN_PASSWORD must be configured together"))
 	}
 
 	if len(problems) > 0 {

@@ -110,6 +110,21 @@ func main() {
 	consumer.Register("device.command.dispatch", djiCommandDispatcher.DispatchHandler)
 	consumer.Register("command.reply", djiCommandDispatcher.ReplyHandler)
 	consumer.Register("device.event", djiCommandDispatcher.EventHandler)
+	var liveStreamHealth *dji.LiveStreamHealthCoordinator
+	if workerConfig.MediaAPIBaseURL != "" {
+		mediaInspector, mediaErr := dji.NewMediaMTXInspector(
+			workerConfig.MediaAPIBaseURL, workerConfig.MediaAPIUser, workerConfig.MediaAPIPassword, nil,
+		)
+		if mediaErr != nil {
+			logger.Error("MediaMTX inspector initialization failed", "error", mediaErr.Error())
+			os.Exit(1)
+		}
+		liveStreamHealth, mediaErr = dji.NewLiveStreamHealthCoordinator(mediaInspector, nil)
+		if mediaErr != nil {
+			logger.Error("live stream health coordinator initialization failed", "error", mediaErr.Error())
+			os.Exit(1)
+		}
+	}
 	missionProcessor := mission.NewProcessor(nil)
 	consumer.Register("task_run.transitioned", missionProcessor.Handler)
 	consumer.Register("mission.control", missionProcessor.Handler)
@@ -176,6 +191,9 @@ func main() {
 	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
 	go func() { runErrors <- djiManager.Run(runContext) }()
 	go func() { runErrors <- djiCommandDispatcher.RunTimeoutReconciler(runContext, database, time.Second) }()
+	if liveStreamHealth != nil {
+		go func() { runErrors <- liveStreamHealth.Run(runContext, database, 2*time.Second) }()
+	}
 	go func() {
 		logger.Info("algorithm callback endpoint started", "address", workerConfig.CallbackListenAddress)
 		err := callbackServer.ListenAndServe()

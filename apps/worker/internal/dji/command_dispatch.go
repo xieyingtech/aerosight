@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"aerosight/worker/internal/adapter"
@@ -52,8 +53,9 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 	err := tx.QueryRowContext(ctx, `
 		select command.id::text,command.capability_code,command.command_key,command.parameters_json,
 		       command.deadline_at,command.priority,device.adapter_id,
-		       coalesce(device_type.capability_profile_json->'dock.debug.control'->>'productFamily',''),
-		       coalesce(gateway_identity.external_device_id,target_identity.external_device_id)
+		       coalesce(device_type.capability_profile_json->'dock.debug.control'->>'productFamily',
+		         case gateway.type_key when 'dji.dock2' then 'dock2' when 'dji.dock3' then 'dock3' else '' end),
+		       coalesce(gateway.external_device_id,target_identity.external_device_id)
 		from device_commands command
 		join devices device on device.id=command.device_id and device.project_id=command.project_id
 		join device_types device_type on device_type.id=device.device_type_id
@@ -61,13 +63,24 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		join device_external_identities target_identity
 		  on target_identity.device_id=device.id and target_identity.adapter_id=device.adapter_id
 		left join lateral (
-		  select relation.from_device_id from device_relationships relation
-		  where relation.project_id=command.project_id and relation.to_device_id=device.id
-		    and relation.relation_type='docked-aircraft' and relation.valid_until is null
-		  order by relation.valid_from desc limit 1
+		  with recursive ancestors(device_id,depth) as (
+		    select device.id,0
+		    union all
+		    select relation.from_device_id,ancestors.depth+1
+		    from ancestors join device_relationships relation
+		      on relation.project_id=command.project_id and relation.to_device_id=ancestors.device_id
+		     and relation.valid_until is null
+		    where ancestors.depth<3
+		  )
+		  select identity.external_device_id,candidate_type.type_key
+		  from ancestors
+		  join devices candidate on candidate.id=ancestors.device_id and candidate.project_id=command.project_id
+		  join device_types candidate_type on candidate_type.id=candidate.device_type_id
+		  join device_external_identities identity
+		    on identity.device_id=candidate.id and identity.adapter_id=device.adapter_id
+		  where candidate_type.category='dock'
+		  order by ancestors.depth limit 1
 		) gateway on true
-		left join device_external_identities gateway_identity
-		  on gateway_identity.device_id=gateway.from_device_id and gateway_identity.adapter_id=device.adapter_id
 		where command.project_id=$1 and command.id=$2::uuid and command.status='dispatchable'
 		for update of command`, event.ProjectID, request.CommandID).Scan(
 		&command.ID, &command.CapabilityCode, &command.CommandKey, &command.Parameters,
@@ -153,12 +166,17 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 	if err != nil {
 		return err
 	}
-	var commandID, status string
+	var commandID, status, commandKey string
+	var liveStreamID sql.NullInt64
 	err = tx.QueryRowContext(ctx, `
-		select command_id::text,status from device_command_protocol_correlations
-		where project_id=$1 and adapter_id=$2 and transaction_id=$3 and business_id=$4 and method=$5
-		for update`, event.ProjectID, envelope.AdapterID, reply.TransactionID, reply.BusinessID, reply.Method,
-	).Scan(&commandID, &status)
+		select correlation.command_id::text,correlation.status,command.command_key,command.live_stream_id
+		from device_command_protocol_correlations correlation
+		join device_commands command on command.id=correlation.command_id
+		where correlation.project_id=$1 and correlation.adapter_id=$2 and correlation.transaction_id=$3
+		  and correlation.business_id=$4 and correlation.method=$5
+		for update of correlation,command`, event.ProjectID, envelope.AdapterID,
+		reply.TransactionID, reply.BusinessID, reply.Method,
+	).Scan(&commandID, &status, &commandKey, &liveStreamID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -201,6 +219,31 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 		  and attempt=(select max(candidate.attempt) from command_attempts candidate where candidate.command_id=$2::uuid)`,
 		event.ProjectID, commandID, commandStatus, now, fmt.Sprintf("DJI_RESULT_%d", reply.Result), payload.Data); err != nil {
 		return err
+	}
+	if liveStreamID.Valid && (commandKey == "start" || commandKey == "stop") {
+		streamStatus, reason := "failed", fmt.Sprintf("DJI_LIVE_%s_RESULT_%d", strings.ToUpper(commandKey), reply.Result)
+		if reply.Outcome() == ReplyAcknowledged {
+			streamStatus, reason = "starting", ""
+			if commandKey == "stop" {
+				streamStatus = "stopped"
+			}
+		}
+		if _, err := tx.ExecContext(ctx, `update live_streams set status=$3,status_reason=nullif($4,''),
+			ended_at=case when $3 in ('failed','stopped') then $5::timestamptz else null end,
+			playback_ref=case when $3 in ('failed','stopped') then null else playback_ref end,
+			lease_owner=case when $3 in ('failed','stopped') then null else lease_owner end,
+			lease_expires_at=case when $3 in ('failed','stopped') then null else $5::timestamptz+interval '45 seconds' end,
+			updated_at=now() where project_id=$1 and id=$2`,
+			event.ProjectID, liveStreamID.Int64, streamStatus, reason, now); err != nil {
+			return err
+		}
+		streamEventID := fmt.Sprintf("live-stream:%d:%s:%s", liveStreamID.Int64, commandKey, reply.TransactionID)
+		if _, err := tx.ExecContext(ctx, `insert into project_events(project_id,team_id,event_id,event_type,payload_json)
+			values($1,$2,$3,'live_stream.status_changed',$4) on conflict(event_id) do nothing`,
+			event.ProjectID, event.TeamID, streamEventID,
+			jsonObject(map[string]any{"streamId": liveStreamID.Int64, "status": streamStatus, "reason": reason})); err != nil {
+			return err
+		}
 	}
 	ackPayload := jsonObject(map[string]any{"commandId": commandID, "outcome": outcome})
 	_, err = tx.ExecContext(ctx, `

@@ -5,6 +5,8 @@ import {
   assertStreamCanStart,
   assertLiveStreamConcurrency,
   assertLiveStreamProjectScope,
+  buildDJIVideoID,
+  buildRTMPIngestURL,
   createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
   playbackAvailability,
@@ -59,8 +61,19 @@ test("stream concurrency rejects conflicts at the driver declared limit", () => 
 test("each session receives a random opaque ingest reference", () => {
   const first = createLiveStreamIngestRef();
   const second = createLiveStreamIngestRef();
-  assert.match(first, /^aerosight\/[A-Za-z0-9_-]{32}$/);
+  assert.match(first, /^demo\/aerosight\/[A-Za-z0-9_-]{32}$/);
   assert.notEqual(first, second);
+});
+
+test("DJI RTMP destination and video id are derived from server-owned topology", () => {
+  const destination = buildRTMPIngestURL({
+    baseURL: "rtmp://media.lan:1935", ingestRef: "demo/aerosight/opaque",
+    username: "publisher", password: "secret"
+  });
+  assert.equal(destination, "rtmp://media.lan:1935/demo/aerosight/opaque?user=publisher&pass=secret");
+  assert.equal(buildDJIVideoID({ sourceExternalId: "AIRCRAFT-SN", cameraType: 98, cameraSubtype: 0 }),
+    "AIRCRAFT-SN/98-0-0/normal-0");
+  assert.throws(() => buildRTMPIngestURL({ baseURL: "https://media.lan", ingestRef: "x", username: "u", password: "p" }), /RTMP_URL_REQUIRED/);
 });
 
 test("DJI stop enters stopping and repeated stop is idempotent", () => {

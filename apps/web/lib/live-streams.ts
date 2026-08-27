@@ -10,6 +10,8 @@ import {
   assertStreamCanStart,
   assertLiveStreamConcurrency,
   assertLiveStreamProjectScope,
+  buildDJIVideoID,
+  buildRTMPIngestURL,
   createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
   playbackAvailability,
@@ -30,6 +32,7 @@ type LiveStreamRow = {
   streamKey: string;
   sourceType: string;
   streamChannelId: string | null;
+  vendorStreamRef: string | null;
   status: LiveStreamStatus;
   playbackRef: string | null;
   playbackLocatorExpiresAt: Date | null;
@@ -37,8 +40,26 @@ type LiveStreamRow = {
   statusReason: string | null;
 };
 
+function mediaPublishCredentials(secretRef: string | null) {
+  let referenced: Record<string, unknown> = {};
+  if (secretRef && process.env[secretRef]) {
+    try {
+      referenced = JSON.parse(process.env[secretRef]!) as Record<string, unknown>;
+    } catch {
+      throw new Error("LIVE_STREAM_NETWORK_SECRET_INVALID");
+    }
+  }
+  const username = typeof referenced.mediaPublishUser === "string"
+    ? referenced.mediaPublishUser : process.env.MEDIA_PUBLISH_USER;
+  const password = typeof referenced.mediaPublishPassword === "string"
+    ? referenced.mediaPublishPassword : process.env.MEDIA_PUBLISH_PASSWORD;
+  if (!username || !password) throw new Error("LIVE_STREAM_PUBLISH_CREDENTIALS_REQUIRED");
+  return { username, password };
+}
+
 const projection = `id, project_id as "projectId", team_id as "teamId", device_id as "deviceId",
-  stream_key as "streamKey", source_type as "sourceType", stream_channel_id as "streamChannelId", status,
+  stream_key as "streamKey", source_type as "sourceType", stream_channel_id as "streamChannelId",
+  vendor_stream_ref as "vendorStreamRef", status,
   playback_ref as "playbackRef", playback_locator_expires_at as "playbackLocatorExpiresAt",
   last_active_at as "lastActiveAt", status_reason as "statusReason"`;
 
@@ -72,7 +93,8 @@ export async function startLiveStream(
     async (client) => {
       const deviceResult = await client.query<{
         status: string; adapterId: string | null; adapterType: string | null; capabilities: string[];
-        deviceTypeId: string; maxConcurrentSessions: number;
+        deviceTypeId: string; maxConcurrentSessions: number; mediaIngestBaseUrl: string | null;
+        networkSecretRef: string | null;
       }>(
         `select device.status, device.adapter_id as "adapterId", adapter.adapter_type as "adapterType",
                 device.device_type_id::text as "deviceTypeId",
@@ -88,10 +110,14 @@ export async function startLiveStream(
                              and capability.capability_code in ('stream.video.control','camera.live')
                              and capability.availability='available'
                            order by capability.capability_code='stream.video.control' desc limit 1), 1)::int
-                  as "maxConcurrentSessions"
+                  as "maxConcurrentSessions",
+                profile.media_ingest_base_url as "mediaIngestBaseUrl",
+                profile.secret_ref as "networkSecretRef"
            from devices device
            left join device_adapters adapter
              on adapter.id = device.adapter_id and adapter.project_id = device.project_id
+           left join device_network_profiles profile
+             on profile.id=adapter.network_profile_id and profile.project_id=adapter.project_id
           where device.project_id = $1 and device.id = $2
           for update of device`,
         [projectId, deviceId]
@@ -125,7 +151,7 @@ export async function startLiveStream(
       const existing = await client.query<LiveStreamRow>(
         `select ${projection} from live_streams
           where project_id = $1 and device_id = $2 and stream_key = $3
-            and status in ('starting', 'live', 'degraded', 'stopping')
+            and status in ('requested', 'starting', 'live', 'degraded', 'stopping')
           limit 1`,
         [projectId, deviceId, streamKey]
       );
@@ -142,22 +168,64 @@ export async function startLiveStream(
       const sourceType = device.adapterType === "dji" ? "dji" : "simulator";
       const status: LiveStreamStatus = sourceType === "dji" ? "requested" : "live";
       const ingestRef = createLiveStreamIngestRef();
+      let vendorStreamRef: string | null = null;
+      let vendorIngestURL: string | null = null;
+      if (sourceType === "dji") {
+        const topology = await client.query<{
+          sourceExternalId: string; cameraType: number; cameraSubtype: number;
+        }>(
+          `select parent_identity.external_device_id as "sourceExternalId",
+                  (camera_identity.identity_json->>'productType')::int as "cameraType",
+                  (camera_identity.identity_json->>'productSubtype')::int as "cameraSubtype"
+             from device_external_identities camera_identity
+             join device_relationships relation
+               on relation.project_id=camera_identity.project_id and relation.to_device_id=camera_identity.device_id
+                 and relation.valid_until is null and relation.relation_type in ('contains','mounted-on')
+             join device_external_identities parent_identity
+               on parent_identity.project_id=relation.project_id and parent_identity.adapter_id=camera_identity.adapter_id
+                 and parent_identity.device_id=relation.from_device_id
+            where camera_identity.project_id=$1 and camera_identity.device_id=$2
+            order by relation.valid_from desc limit 1`, [projectId, deviceId]
+        );
+        const source = topology.rows[0];
+        if (!source) throw new Error("DJI_LIVE_TOPOLOGY_NOT_FOUND");
+        vendorStreamRef = buildDJIVideoID(source);
+        if (!device.mediaIngestBaseUrl) throw new Error("LIVE_STREAM_MEDIA_INGEST_PROFILE_REQUIRED");
+        vendorIngestURL = buildRTMPIngestURL({ baseURL: device.mediaIngestBaseUrl, ingestRef,
+          ...mediaPublishCredentials(device.networkSecretRef) });
+      }
       const started = await client.query<LiveStreamRow>(
         `insert into live_streams (
            project_id, team_id, device_id, task_run_id, adapter_id, stream_key,
-           stream_channel_id, source_type, status, ingest_ref, playback_ref, started_by_user_id,
+           stream_channel_id, source_type, status, ingest_ref, vendor_stream_ref, playback_ref, started_by_user_id,
            last_active_at, lease_owner, lease_expires_at
-         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
-                   case when $9='live' then now() else null end,$13,now()+interval '45 seconds')
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,
+                   case when $9='live' then now() else null end,$14,now()+interval '45 seconds')
          returning ${projection}`,
         [
           projectId, access.teamId, deviceId, input.taskRunId ?? null, device.adapterId,
-          streamKey, channel?.id ?? null, sourceType, status, ingestRef,
+          streamKey, channel?.id ?? null, sourceType, status, ingestRef, vendorStreamRef,
           sourceType === "simulator" ? `simulator://devices/${deviceId}/${streamKey}` : null,
           user.id, `web:${randomUUID()}`
         ]
       );
       const session = publicSession(started.rows[0]);
+      if (sourceType === "dji") {
+        const commandId = randomUUID();
+        await client.query(
+          `insert into device_commands(
+             id,project_id,team_id,device_id,live_stream_id,command_key,idempotency_key,
+             capability_code,parameters_json,safety_context_json,status,priority,deadline_at,requested_by_user_id
+           ) values($1,$2,$3,$4,$5,'start',$6,'stream.video.control',$7,$8,'dispatchable',20,now()+interval '30 seconds',$9)`,
+          [commandId, projectId, access.teamId, deviceId, session.id, `live-stream:${session.id}:start`,
+            { url_type: 1, url: vendorIngestURL, video_id: vendorStreamRef, video_quality: 3 },
+            { liveStreamId: session.id, serverDerivedDestination: true }, user.id]
+        );
+        await publishProjectEvent(client, {
+          projectId, teamId: access.teamId, eventId: `device.command.dispatch:${commandId}`,
+          eventType: "device.command.dispatch", payload: { commandId }, enqueue: true
+        });
+      }
       await publishProjectEvent(client, {
         projectId, teamId: access.teamId, eventId: randomUUID(),
         eventType: status === "requested" ? "live_stream.requested" : "live_stream.started",
@@ -208,8 +276,26 @@ export async function stopLiveStream(projectId: number, streamId: number, reques
         return { session: publicSession(existing.rows[0]), replayed: true };
       }
       const session = publicSession(result.rows[0]);
+      if (session.status === "stopping") {
+        if (!result.rows[0].vendorStreamRef) throw new Error("DJI_LIVE_VIDEO_ID_MISSING");
+        const commandId = randomUUID();
+        await client.query(
+          `insert into device_commands(
+             id,project_id,team_id,device_id,live_stream_id,command_key,idempotency_key,
+             capability_code,parameters_json,safety_context_json,status,priority,deadline_at,requested_by_user_id
+           ) values($1,$2,$3,$4,$5,'stop',$6,'stream.video.control',$7,$8,'dispatchable',30,now()+interval '30 seconds',$9)
+           on conflict(live_stream_id,command_key) where live_stream_id is not null do nothing`,
+          [commandId, projectId, access.teamId, session.deviceId, streamId, `live-stream:${streamId}:stop`,
+            { video_id: result.rows[0].vendorStreamRef }, { liveStreamId: streamId }, user.id]
+        );
+        await publishProjectEvent(client, {
+          projectId, teamId: access.teamId, eventId: `device.command.dispatch:${commandId}`,
+          eventType: "device.command.dispatch", payload: { commandId }, enqueue: true
+        });
+      }
       await publishProjectEvent(client, {
-        projectId, teamId: access.teamId, eventId: randomUUID(), eventType: "live_stream.stopped",
+        projectId, teamId: access.teamId, eventId: randomUUID(),
+        eventType: session.status === "stopping" ? "live_stream.stop_requested" : "live_stream.stopped",
         payload: { streamId, deviceId: session.deviceId, status: session.status }, enqueue: false
       });
       return { session, replayed: false };
