@@ -53,9 +53,15 @@ func (processor Processor) Handler(ctx context.Context, tx *sql.Tx, event outbox
 		return errors.New("alert automation event is missing identifiers")
 	}
 	var mode string
-	if err := tx.QueryRowContext(ctx, `select version.mode from alert_automation_runs run
+	var enabled bool
+	if err := tx.QueryRowContext(ctx, `select version.mode,flags.automatic_ai_enabled from alert_automation_runs run
 		join alert_automation_policy_versions version on version.id=run.policy_version_id and version.project_id=run.project_id
-		where run.id=$1 and run.project_id=$2`, payload.AutomationRunID, event.ProjectID).Scan(&mode); err != nil {
+		join project_feature_flags flags on flags.project_id=run.project_id
+		where run.id=$1 and run.project_id=$2`, payload.AutomationRunID, event.ProjectID).Scan(&mode, &enabled); err != nil {
+		return err
+	}
+	if !ShouldContinueAutomation(enabled) {
+		_, err := tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATIC_AI_DISABLED',finished_at=now() where id=$1 and project_id=$2`, payload.AutomationRunID, event.ProjectID)
 		return err
 	}
 	recorder := sqlRunRecorder{tx: tx, projectID: event.ProjectID}
@@ -69,6 +75,14 @@ type sqlRunRecorder struct {
 }
 
 func (recorder sqlRunRecorder) Succeeded(ctx context.Context, runID string, result Result, now time.Time) error {
+	var enabled bool
+	if err := recorder.tx.QueryRowContext(ctx, `select coalesce(flags.automatic_ai_enabled,false) from alert_automation_runs run left join project_feature_flags flags on flags.project_id=run.project_id where run.id=$1 and run.project_id=$2`, runID, recorder.projectID).Scan(&enabled); err != nil {
+		return err
+	}
+	if !ShouldContinueAutomation(enabled) {
+		_, err := recorder.tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATIC_AI_DISABLED',finished_at=$3 where id=$1 and project_id=$2`, runID, recorder.projectID, now)
+		return err
+	}
 	for _, draft := range result.Drafts {
 		if draft.Status != "draft" || draft.ExternalEffect != "none" {
 			return errors.New("automation output violated draft-only boundary")

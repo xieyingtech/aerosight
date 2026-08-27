@@ -169,6 +169,7 @@ func enqueueAlertAutomation(ctx context.Context, tx *sql.Tx, projectID, teamID i
 	var mode string
 	err := tx.QueryRowContext(ctx, `select version.id,version.mode from alert_automation_policies policy
 		join alert_automation_policy_versions version on version.id=policy.current_published_version_id and version.project_id=policy.project_id
+		join project_feature_flags flags on flags.project_id=policy.project_id and flags.automatic_ai_enabled=true
 		where policy.project_id=$1 and version.status='published' and (version.event_rule_version_id=$2 or version.event_rule_version_id is null)
 		order by (version.event_rule_version_id=$2) desc,version.id desc limit 1`, projectID, ruleVersionID).Scan(&policyVersionID, &mode)
 	if errors.Is(err, sql.ErrNoRows) || mode == "manual" || mode == "agent-on-demand" {
