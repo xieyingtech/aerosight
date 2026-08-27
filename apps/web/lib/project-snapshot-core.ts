@@ -119,13 +119,21 @@ export async function readProjectSituationSnapshot(
        order by coalesce(asset.captured_at, asset.created_at) desc limit 500`,
       [projectId]
     )).rows;
+    const suspectedConstruction = (await client.query<Record<string, unknown>>(
+      `/* snapshot:suspected-construction */
+       select group_row.id, group_row.project_id as "projectId", '疑似违建' as label,
+              group_row.status, group_row.location_quality as "locationQuality",
+              group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
+       from detection_groups group_row where group_row.project_id=$1 and group_row.status='active'
+       order by group_row.last_detected_at desc limit 500`,[projectId]
+    )).rows;
     const openAlerts = (await client.query<Record<string, unknown>>(
       `/* snapshot:alerts */
-       select issue.id, issue.number, issue.title, issue.status, issue.priority,
-              issue.source_type as "sourceType", issue.source_id as "sourceId",
-              issue.created_at as "createdAt", issue.updated_at as "updatedAt"
-       from issues issue where issue.project_id = $1 and issue.status <> 'closed'
-       order by issue.updated_at desc limit 500`,
+       select event.id,event.project_id as "projectId",'疑似违建' as title,event.status,event.severity,
+              event.last_detected_at as "updatedAt",ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
+       from perception_events event join detection_groups group_row on group_row.id=event.detection_group_id and group_row.project_id=event.project_id
+       where event.project_id=$1 and event.status in('open','acknowledged','investigating')
+       order by event.last_detected_at desc limit 500`,
       [projectId]
     )).rows;
 
@@ -140,7 +148,7 @@ export async function readProjectSituationSnapshot(
       activeTasks,
       liveStreams,
       mediaPoints,
-      suspectedConstruction: [],
+      suspectedConstruction,
       openAlerts,
       regions: [],
       freshness: {
@@ -149,7 +157,7 @@ export async function readProjectSituationSnapshot(
       },
       availability: {
         devices: "available", tasks: "available", media: "available", alerts: "available",
-        liveStreams: "available", suspectedConstruction: "not-configured", regions: "not-configured"
+        liveStreams: "available", suspectedConstruction: "available", regions: "not-configured"
       }
     };
     await client.query("commit");
