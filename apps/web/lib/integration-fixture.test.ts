@@ -6,7 +6,13 @@ type Fixture = {
   projects: Array<{
     key: string;
     owner: { email: string };
-    devices: Array<{ externalId: string; type: string; capabilities: string[] }>;
+    devices: Array<{
+      externalId: string;
+      type: string;
+      deviceTypeKey: string;
+      driverKey: string;
+      capabilities: string[];
+    }>;
   }>;
 };
 
@@ -23,4 +29,6 @@ test("air-ground integration fixture contains two isolated project identities", 
   );
   assert(fixture.projects.some((project) => project.devices.some((device) => device.type === "drone")));
   assert(fixture.projects.some((project) => project.devices.some((device) => device.type === "ground_robot")));
+  assert(fixture.projects.every((project) => project.devices.every((device) => device.deviceTypeKey.length > 0)));
+  assert(fixture.projects.every((project) => project.devices.every((device) => device.driverKey.length > 0)));
 });

@@ -119,12 +119,25 @@ export async function bindDiscoveredDevice(
       if (!identity) throw new Error("DEVICE_IDENTITY_NOT_FOUND");
       if (identity.deviceId) return { deviceId: identity.deviceId, replayed: true };
 
+      const requestedTypeKey = typeof identity.identity.deviceTypeKey === "string"
+        ? identity.identity.deviceTypeKey
+        : "legacy.device";
+
       const device = await client.query<{ id: number }>(
-        `insert into devices (project_id, adapter_id, name, type, status, metadata_json)
-         values ($1, $2, $3, $4, 'unknown', jsonb_build_object('identityId', $5::bigint))
+        `with selected_type as (
+           select id from device_types
+            where status = 'active' and type_key in ($6, 'legacy.device')
+            order by case when type_key = $6 then 0 else 1 end, version desc
+            limit 1
+         )
+         insert into devices (project_id, adapter_id, device_type_id, name, type, status, metadata_json)
+         select $1, $2, selected_type.id, $3, $4, 'unknown',
+                jsonb_build_object('identityId', $5::bigint, 'requestedDeviceTypeKey', $6::text)
+           from selected_type
          returning id`,
-        [projectId, identity.adapterId, name, deviceType, identityId]
+        [projectId, identity.adapterId, name, deviceType, identityId, requestedTypeKey]
       );
+      if (!device.rows[0]) throw new Error("DEVICE_TYPE_NOT_AVAILABLE");
       await client.query(
         `update device_external_identities set device_id = $3, bound_at = now()
           where project_id = $1 and id = $2`,

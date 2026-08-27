@@ -10,6 +10,8 @@
           "externalId": "sim-drone-north-01",
           "name": "北区模拟无人机 01",
           "type": "drone",
+          "deviceTypeKey": "legacy.device",
+          "driverKey": "legacy.static",
           "capabilities": ["flight.route", "camera.live", "camera.capture"]
         }
       ]
@@ -24,6 +26,8 @@
           "externalId": "sim-ground-south-01",
           "name": "南区模拟地面设备 01",
           "type": "ground_robot",
+          "deviceTypeKey": "legacy.device",
+          "driverKey": "legacy.static",
           "capabilities": ["mobility.pose", "camera.capture"]
         }
       ]

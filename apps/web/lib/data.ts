@@ -154,7 +154,17 @@ export async function requireCurrentProjectPermission(
 }
 
 const projectItemQueries = {
-  devices: `select id, name, type, status, last_seen_at as "lastSeenAt", updated_at as "updatedAt" from devices where project_id = $1 order by updated_at desc`,
+  devices: `select device.id, device.name, device.type, device.status,
+                   device.last_seen_at as "lastSeenAt", device.updated_at as "updatedAt",
+                   device_type.id as "deviceTypeId", device_type.type_key as "typeKey",
+                   device_type.version as "typeVersion", device_type.display_name as "typeName",
+                   device_type.category, device_type.vendor, device_type.model,
+                   driver.driver_key as "driverKey", driver.version as "driverVersion",
+                   driver.status as "driverStatus"
+              from devices device
+              join device_types device_type on device_type.id = device.device_type_id
+              join driver_definitions driver on driver.id = device_type.driver_definition_id
+             where device.project_id = $1 order by device.updated_at desc`,
   agents: `select id, name, description, status, updated_at as "updatedAt" from agents where project_id = $1 order by updated_at desc`,
   tasks: `select id, name, description, trigger_type as "triggerType", status, updated_at as "updatedAt" from tasks where project_id = $1 order by updated_at desc`,
   issues: `select id, number, title, status, priority, updated_at as "updatedAt" from issues where project_id = $1 order by updated_at desc`,
@@ -168,7 +178,17 @@ export async function listProjectItems(projectId: number, kind: keyof typeof pro
 }
 
 const projectItemByIdQueries = {
-  devices: `select id, project_id as "projectId", name, type, status, last_seen_at as "lastSeenAt", updated_at as "updatedAt" from devices where project_id = $1 and id = $2`,
+  devices: `select device.id, device.project_id as "projectId", device.name, device.type, device.status,
+                   device.last_seen_at as "lastSeenAt", device.updated_at as "updatedAt",
+                   device_type.id as "deviceTypeId", device_type.type_key as "typeKey",
+                   device_type.version as "typeVersion", device_type.display_name as "typeName",
+                   device_type.category, device_type.vendor, device_type.model,
+                   driver.driver_key as "driverKey", driver.version as "driverVersion",
+                   driver.status as "driverStatus"
+              from devices device
+              join device_types device_type on device_type.id = device.device_type_id
+              join driver_definitions driver on driver.id = device_type.driver_definition_id
+             where device.project_id = $1 and device.id = $2`,
   agents: `select id, project_id as "projectId", name, description, status, updated_at as "updatedAt" from agents where project_id = $1 and id = $2`,
   tasks: `select id, project_id as "projectId", name, description, trigger_type as "triggerType", status, updated_at as "updatedAt" from tasks where project_id = $1 and id = $2`,
   issues: `select id, project_id as "projectId", number, title, status, priority, updated_at as "updatedAt" from issues where project_id = $1 and id = $2`,

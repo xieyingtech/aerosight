@@ -31,6 +31,9 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   for (const marker of ["snapshot:devices", "snapshot:tracks", "snapshot:active-tasks", "snapshot:live-streams", "snapshot:media", "snapshot:suspected-construction", "snapshot:alerts"]) {
     assert(client.statements.some((statement) => statement.includes(marker)));
   }
+  const deviceStatement = client.statements.find((statement) => statement.includes("snapshot:devices"));
+  assert.match(deviceStatement ?? "", /join device_types/i);
+  assert.match(deviceStatement ?? "", /join driver_definitions/i);
   assert(client.released);
 });
 

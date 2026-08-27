@@ -10,9 +10,15 @@ import {
 } from "@/lib/agent-read-tools-core";
 
 const sql: Record<AgentReadToolName, string> = {
-  query_devices: `select device.id,device.name,device.type,device.status,device.last_seen_at as "observedAt",
+  query_devices: `select device.id,device.name,device.type,device.status,
+    device_type.type_key as "typeKey",device_type.version as "typeVersion",
+    driver.driver_key as "driverKey",driver.version as "driverVersion",
+    device.last_seen_at as "observedAt",
     coalesce(pose.spatial_quality,'unlocated') as quality
-    from devices device left join lateral(select spatial_quality from poses where project_id=$1 and device_id=device.id order by captured_at desc limit 1) pose on true
+    from devices device
+    join device_types device_type on device_type.id=device.device_type_id
+    join driver_definitions driver on driver.id=device_type.driver_definition_id
+    left join lateral(select spatial_quality from poses where project_id=$1 and device_id=device.id order by captured_at desc limit 1) pose on true
     where device.project_id=$1 order by device.updated_at desc limit 101`,
   query_missions: `select run.id,task.name,run.status,run.state_reason as reason,
     coalesce(run.finished_at,run.started_at,run.created_at) as "observedAt",'platform-state' as quality

@@ -32,4 +32,7 @@ test("replay uses one scoped transaction and leaks nothing cross-project", async
   const replay = await readProjectReplay(1, 7, input, async () => allowed as never);
   assert.equal(replay?.mode, "replay");
   for (const marker of ["replay:poses", "replay:media", "replay:events"]) assert(allowed.statements.some((statement) => statement.includes(marker)));
+  const poseStatement = allowed.statements.find((statement) => statement.includes("replay:poses"));
+  assert.match(poseStatement ?? "", /join device_types/i);
+  assert.match(poseStatement ?? "", /join driver_definitions/i);
 });

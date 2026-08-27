@@ -51,13 +51,17 @@ export async function readProjectReplay(userId: number, projectId: number, input
     const poses = (await client.query<Record<string, unknown>>(
       `/* replay:poses */
        select pose.observation_id as id, pose.device_id as "deviceId", device.name as "deviceName",
-              device.type as "deviceType", pose.captured_at as "capturedAt", pose.spatial_quality as "spatialQuality",
+              device.type as "deviceType", device_type.type_key as "deviceTypeKey",
+              device_type.version as "deviceTypeVersion", driver.driver_key as "driverKey",
+              pose.captured_at as "capturedAt", pose.spatial_quality as "spatialQuality",
               ST_X(pose.standard_position) as longitude, ST_Y(pose.standard_position) as latitude,
               ST_Z(pose.standard_position) as "altitudeMeters"
        from poses pose join devices device on device.id = pose.device_id and device.project_id = pose.project_id
+       join device_types device_type on device_type.id = device.device_type_id
+       join driver_definitions driver on driver.id = device_type.driver_definition_id
        where pose.project_id = $1 and pose.captured_at >= $2 and pose.captured_at <= $3
          and pose.standard_position is not null
-         and (cardinality($4::text[]) = 0 or device.type = any($4::text[]))
+         and (cardinality($4::text[]) = 0 or device.type = any($4::text[]) or device_type.type_key = any($4::text[]))
          and ($5::double precision[] is null or ST_Intersects(
            pose.standard_position,
            ST_MakeEnvelope(($5::double precision[])[1], ($5::double precision[])[2], ($5::double precision[])[3], ($5::double precision[])[4], 4326)

@@ -171,8 +171,9 @@ async function assertProjectIsolationFixture(connectionString) {
       );
       for (const device of project.devices) {
         await client.query(
-          `insert into devices (project_id, name, type, status, metadata_json)
-           values ($1, $2, $3, 'offline', jsonb_build_object('externalId', $4::text))`,
+          `insert into devices (project_id, device_type_id, name, type, status, metadata_json)
+           values ($1, (select id from device_types where type_key='legacy.device' and version=1),
+                   $2, $3, 'offline', jsonb_build_object('externalId', $4::text))`,
           [insertedProject.rows[0].id, device.name, device.type, device.externalId]
         );
       }
@@ -419,6 +420,143 @@ async function assertDeviceConnectivityConstraints(connectionString) {
       [northDevice.rows[0].id, north.id, northAdapter.rows[0].id]
     );
     assert(changed.rows[0].version_number === 2, "capability declaration version did not advance");
+  } finally {
+    await client.end();
+  }
+}
+
+async function assertUnifiedDeviceDriverSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const projects = await client.query(
+      `select project.id, project.team_id, project.name, owner.id as owner_id
+         from projects project
+         join team_members membership on membership.team_id = project.team_id and membership.role = 'owner'
+         join users owner on owner.id = membership.user_id
+        where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = projects.rows.find((project) => project.name === "北区巡检");
+    const south = projects.rows.find((project) => project.name === "南区巡检");
+    const typed = await client.query(
+      `select count(*)::int as total,
+              count(device_type.id)::int as typed,
+              count(driver.id)::int as driven
+         from devices device
+         left join device_types device_type on device_type.id = device.device_type_id
+         left join driver_definitions driver on driver.id = device_type.driver_definition_id`
+    );
+    assert(typed.rows[0].total === typed.rows[0].typed, "a device was not backfilled with a DeviceType");
+    assert(typed.rows[0].total === typed.rows[0].driven, "a DeviceType was not bound to a Driver");
+
+    await client.query(
+      "insert into devices (project_id, name, type) values ($1, 'missing-type', 'sensor')",
+      [north.id]
+    ).then(
+      () => assert(false, "device without DeviceType should fail"),
+      (error) => assert(error.code === "23502", "missing DeviceType failed unexpectedly")
+    );
+
+    const legacyType = await client.query(
+      "select id from device_types where type_key='legacy.device' and version=1"
+    );
+    const northSensor = await client.query(
+      `insert into devices (project_id, device_type_id, name, type)
+       values ($1, $2, 'north-sensor', 'sensor') returning id`,
+      [north.id, legacyType.rows[0].id]
+    );
+    const southSensor = await client.query(
+      `insert into devices (project_id, device_type_id, name, type)
+       values ($1, $2, 'south-sensor', 'sensor') returning id`,
+      [south.id, legacyType.rows[0].id]
+    );
+    const northGateway = await client.query(
+      "select id from devices where project_id=$1 and id<>$2 limit 1",
+      [north.id, northSensor.rows[0].id]
+    );
+    await client.query(
+      `insert into device_relationships (
+         project_id, team_id, from_device_id, to_device_id, relation_type, source_type
+       ) values ($1, $2, $3, $4, 'mounted-on', 'discovery')`,
+      [north.id, north.team_id, northSensor.rows[0].id, northGateway.rows[0].id]
+    );
+    await client.query(
+      `insert into device_relationships (
+         project_id, team_id, from_device_id, to_device_id, relation_type, source_type
+       ) values ($1, $2, $3, $4, 'mounted-on', 'discovery')`,
+      [north.id, north.team_id, northSensor.rows[0].id, southSensor.rows[0].id]
+    ).then(
+      () => assert(false, "cross-project device relationship should fail"),
+      (error) => assert(error.code === "23503", "cross-project relationship failed unexpectedly")
+    );
+
+    const capability = await client.query(
+      `insert into device_capabilities (device_id, project_id, capability_code)
+       values ($1, $2, 'stream.sensor.read')
+       returning id, device_type_id, driver_definition_id`,
+      [northSensor.rows[0].id, north.id]
+    );
+    assert(capability.rows[0].device_type_id, "capability trigger did not resolve DeviceType");
+    assert(capability.rows[0].driver_definition_id, "capability trigger did not resolve Driver");
+    await client.query(
+      `insert into device_stream_channels (
+         project_id, team_id, device_id, capability_code, channel_key, display_name, data_type, unit
+       ) values ($1, $2, $3, 'stream.sensor.read', 'temperature', '温度', 'sensor', 'celsius')`,
+      [north.id, north.team_id, northSensor.rows[0].id]
+    );
+
+    await client.query(
+      `insert into device_capability_grants (
+         project_id, team_id, user_id, scope_type, action_pattern, granted_by_user_id
+       ) values ($1, $2, $3, 'project', 'stream.sensor.read', $3)`,
+      [north.id, north.team_id, north.owner_id]
+    );
+    await client.query(
+      `insert into device_capability_grants (
+         project_id, team_id, user_id, scope_type, action_pattern
+       ) values ($1, $2, $3, 'project', 'stream.sensor.read')`,
+      [north.id, north.team_id, south.owner_id]
+    ).then(
+      () => assert(false, "cross-team capability grant should fail"),
+      (error) => assert(error.code === "23503", "cross-team capability grant failed unexpectedly")
+    );
+    await client.query(
+      `insert into device_capability_grants (
+         project_id, team_id, user_id, scope_type, device_id, action_pattern
+       ) values ($1, $2, $3, 'project', $4, 'stream.sensor.read')`,
+      [north.id, north.team_id, north.owner_id, northSensor.rows[0].id]
+    ).then(
+      () => assert(false, "invalid capability scope should fail"),
+      (error) => assert(error.code === "23514", "invalid capability scope failed unexpectedly")
+    );
+
+    await client.query(
+      `insert into device_network_profiles (project_id, team_id, name, mode)
+       values ($1, $2, 'unsafe-public', 'public')`,
+      [north.id, north.team_id]
+    ).then(
+      () => assert(false, "public profile without TLS should fail"),
+      (error) => assert(error.code === "23514", "public TLS constraint failed unexpectedly")
+    );
+    const profile = await client.query(
+      `insert into device_network_profiles (project_id, team_id, name, mode, tls_required)
+       values ($1, $2, 'north-public', 'public', true) returning id`,
+      [north.id, north.team_id]
+    );
+    await client.query(
+      "update device_adapters set network_profile_id=$1 where project_id=$2",
+      [profile.rows[0].id, south.id]
+    ).then(
+      () => assert(false, "cross-project Adapter network profile should fail"),
+      (error) => assert(error.code === "23503", "cross-project network profile failed unexpectedly")
+    );
+
+    const algorithmColumns = await client.query(
+      `select column_name from information_schema.columns
+        where table_schema='public' and table_name='algorithm_definition_versions'
+          and column_name in ('output_schema_json','display_metadata_json')`
+    );
+    assert(algorithmColumns.rowCount === 2, "algorithm version schema metadata columns are missing");
   } finally {
     await client.end();
   }
@@ -903,8 +1041,9 @@ async function assertTaskRunCommandSchema(connectionString) {
       [row.id, row.team_id]
     );
     const device = await client.query(
-      `insert into devices (project_id, name, type, adapter_id, status)
-       values ($1, 'mission-drone', 'drone', $2, 'online') returning id`,
+      `insert into devices (project_id, device_type_id, name, type, adapter_id, status)
+       values ($1, (select id from device_types where type_key='legacy.device' and version=1),
+               'mission-drone', 'drone', $2, 'online') returning id`,
       [row.id, adapter.rows[0].id]
     );
     const run = await client.query(
@@ -1131,7 +1270,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 31, "empty database should apply all migrations");
+    assert(first.applied.length === 32, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1141,6 +1280,7 @@ try {
     await assertConcurrentIdempotency(connectionString);
     await assertProjectEventCursorAndDurability(connectionString);
     await assertDeviceConnectivityConstraints(connectionString);
+    await assertUnifiedDeviceDriverSchema(connectionString);
     await assertTelemetryIngestionSemantics(connectionString);
     await assertHeartbeatProjectionSchema(connectionString);
     await assertSpatiotemporalSchema(connectionString);
@@ -1178,7 +1318,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 31, "existing database should record all migrations");
+    assert(first.applied.length === 32, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1209,6 +1349,12 @@ try {
       const result = await client.query(
         `select to_regclass('public.users') as users,
                 to_regclass('public.device_adapters') as adapters,
+                to_regclass('public.driver_definitions') as driver_definitions,
+                to_regclass('public.device_types') as device_types,
+                to_regclass('public.device_relationships') as device_relationships,
+                to_regclass('public.device_stream_channels') as device_stream_channels,
+                to_regclass('public.device_capability_grants') as device_capability_grants,
+                to_regclass('public.device_network_profiles') as device_network_profiles,
                 to_regclass('public.device_telemetry') as telemetry,
                 to_regclass('public.asset_upload_intents') as upload_intents,
                 to_regclass('public.evidence_links') as evidence_links,
@@ -1244,7 +1390,10 @@ try {
                 to_regclass('public.generated_report_evidence') as generated_report_evidence`
       );
       assert(
-        result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
+        result.rows[0].users && result.rows[0].adapters && result.rows[0].driver_definitions &&
+        result.rows[0].device_types && result.rows[0].device_relationships &&
+        result.rows[0].device_stream_channels && result.rows[0].device_capability_grants &&
+        result.rows[0].device_network_profiles && result.rows[0].telemetry &&
         result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
         result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions &&
         result.rows[0].approvals && result.rows[0].task_run_steps && result.rows[0].device_commands &&

@@ -64,6 +64,10 @@ export async function readProjectSituationSnapshot(
     const devices = (await client.query<Record<string, unknown>>(
       `/* snapshot:devices */
        select device.id, device.name, device.type, device.status,
+              device_type.type_key as "typeKey", device_type.version as "typeVersion",
+              device_type.display_name as "typeName", device_type.category,
+              driver.driver_key as "driverKey", driver.version as "driverVersion",
+              driver.status as "driverStatus",
               device.status_reason as "statusReason", device.last_seen_at as "lastSeenAt",
               case when pose.observation_id is null then null else json_build_object(
                 'longitude', ST_X(pose.standard_position),
@@ -74,6 +78,8 @@ export async function readProjectSituationSnapshot(
                 'horizontalAccuracyMeters', pose.horizontal_accuracy_m
               ) end as pose
        from devices device
+       join device_types device_type on device_type.id = device.device_type_id
+       join driver_definitions driver on driver.id = device_type.driver_definition_id
        left join lateral (
          select observation_id, standard_position, captured_at, spatial_quality, horizontal_accuracy_m
          from poses where poses.project_id = $1 and poses.device_id = device.id

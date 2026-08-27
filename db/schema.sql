@@ -1779,3 +1779,244 @@ END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
 CREATE TRIGGER project_events_notify AFTER INSERT ON project_events FOR EACH ROW EXECUTE FUNCTION notify_aerosight_project_event();
+--> statement-breakpoint
+CREATE TABLE "driver_definitions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"driver_key" text NOT NULL,
+	"version" text NOT NULL,
+	"display_name" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"manifest_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "driver_definitions_key_version_unique" UNIQUE("driver_key", "version"),
+	CONSTRAINT "driver_definitions_status_valid" CHECK (status in ('active', 'disabled', 'retired')),
+	CONSTRAINT "driver_definitions_manifest_object" CHECK (jsonb_typeof(manifest_json) = 'object')
+);
+--> statement-breakpoint
+CREATE TABLE "device_types" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"type_key" text NOT NULL,
+	"version" integer NOT NULL,
+	"display_name" text NOT NULL,
+	"category" text NOT NULL,
+	"vendor" text,
+	"model" text,
+	"driver_definition_id" bigint NOT NULL,
+	"driver_version_constraint" text DEFAULT '*' NOT NULL,
+	"capability_profile_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_types_key_version_unique" UNIQUE("type_key", "version"),
+	CONSTRAINT "device_types_version_positive" CHECK (version > 0),
+	CONSTRAINT "device_types_status_valid" CHECK (status in ('active', 'retired')),
+	CONSTRAINT "device_types_capability_profile_object" CHECK (jsonb_typeof(capability_profile_json) = 'object')
+);
+--> statement-breakpoint
+INSERT INTO "driver_definitions" ("driver_key", "version", "display_name", "manifest_json")
+VALUES ('legacy.static', '1.0.0', 'Legacy static device driver',
+        '{"protocols":[],"capabilities":{"state.read":{"risk":"low"}},"streamHandlers":[],"commandHandlers":[]}'::jsonb);
+--> statement-breakpoint
+INSERT INTO "device_types" (
+	"type_key", "version", "display_name", "category", "driver_definition_id",
+	"driver_version_constraint", "capability_profile_json"
+)
+SELECT 'legacy.device', 1, 'Legacy device', 'unknown', "id", '=1.0.0',
+       '{"capabilities":{"state.read":{}}}'::jsonb
+FROM "driver_definitions" WHERE "driver_key" = 'legacy.static' AND "version" = '1.0.0';
+--> statement-breakpoint
+ALTER TABLE "devices" ADD COLUMN "device_type_id" bigint;
+--> statement-breakpoint
+UPDATE "devices" SET "device_type_id" = (
+	SELECT "id" FROM "device_types" WHERE "type_key" = 'legacy.device' AND "version" = 1
+) WHERE "device_type_id" IS NULL;
+--> statement-breakpoint
+ALTER TABLE "devices" ALTER COLUMN "device_type_id" SET NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "devices" ADD CONSTRAINT "devices_device_type_fk"
+FOREIGN KEY ("device_type_id") REFERENCES "device_types"("id") ON DELETE restrict;
+--> statement-breakpoint
+ALTER TABLE "devices" DROP CONSTRAINT "devices_connectivity_status_valid";
+--> statement-breakpoint
+ALTER TABLE "devices" ADD CONSTRAINT "devices_connectivity_status_valid"
+CHECK (status in ('online', 'degraded', 'offline', 'unknown', 'unavailable'));
+--> statement-breakpoint
+CREATE TABLE "device_relationships" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"from_device_id" integer NOT NULL,
+	"to_device_id" integer NOT NULL,
+	"relation_type" text NOT NULL,
+	"source_type" text DEFAULT 'manual' NOT NULL,
+	"valid_from" timestamp with time zone DEFAULT now() NOT NULL,
+	"valid_until" timestamp with time zone,
+	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_relationships_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_relationships_from_project_fk" FOREIGN KEY ("from_device_id", "project_id") REFERENCES "devices"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_relationships_to_project_fk" FOREIGN KEY ("to_device_id", "project_id") REFERENCES "devices"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_relationships_not_self" CHECK (from_device_id <> to_device_id),
+	CONSTRAINT "device_relationships_valid_range" CHECK (valid_until is null or valid_until > valid_from),
+	CONSTRAINT "device_relationships_source_valid" CHECK (source_type in ('driver', 'discovery', 'manual', 'migration')),
+	CONSTRAINT "device_relationships_unique" UNIQUE("project_id", "from_device_id", "to_device_id", "relation_type", "valid_from"),
+	CONSTRAINT "device_relationships_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+ALTER TABLE "device_capabilities"
+	ADD COLUMN "device_type_id" bigint,
+	ADD COLUMN "driver_definition_id" bigint,
+	ADD COLUMN "availability" text DEFAULT 'available' NOT NULL,
+	ADD COLUMN "availability_reason" text,
+	ADD COLUMN "input_schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	ADD COLUMN "output_schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	ADD COLUMN "risk_level" text DEFAULT 'low' NOT NULL,
+	ADD COLUMN "source_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+--> statement-breakpoint
+UPDATE "device_capabilities" capability
+SET "device_type_id" = device."device_type_id"
+FROM "devices" device WHERE device."id" = capability."device_id";
+--> statement-breakpoint
+UPDATE "device_capabilities" capability
+SET "driver_definition_id" = device_type."driver_definition_id"
+FROM "device_types" device_type WHERE device_type."id" = capability."device_type_id";
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION populate_device_capability_type_driver()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF NEW.device_type_id IS NULL OR NEW.driver_definition_id IS NULL THEN
+		SELECT device.device_type_id, device_type.driver_definition_id
+		INTO NEW.device_type_id, NEW.driver_definition_id
+		FROM devices device
+		JOIN device_types device_type ON device_type.id = device.device_type_id
+		WHERE device.id = NEW.device_id AND device.project_id = NEW.project_id;
+	END IF;
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER device_capabilities_populate_type_driver
+BEFORE INSERT OR UPDATE OF device_id, project_id, device_type_id, driver_definition_id
+ON device_capabilities
+FOR EACH ROW EXECUTE FUNCTION populate_device_capability_type_driver();
+--> statement-breakpoint
+ALTER TABLE "device_capabilities"
+	ALTER COLUMN "device_type_id" SET NOT NULL,
+	ALTER COLUMN "driver_definition_id" SET NOT NULL,
+	ADD CONSTRAINT "device_capabilities_device_type_fk" FOREIGN KEY ("device_type_id") REFERENCES "device_types"("id") ON DELETE restrict,
+	ADD CONSTRAINT "device_capabilities_driver_fk" FOREIGN KEY ("driver_definition_id") REFERENCES "driver_definitions"("id") ON DELETE restrict,
+	ADD CONSTRAINT "device_capabilities_availability_valid" CHECK (availability in ('available', 'degraded', 'unavailable')),
+	ADD CONSTRAINT "device_capabilities_risk_valid" CHECK (risk_level in ('low', 'medium', 'high', 'critical'));
+--> statement-breakpoint
+CREATE TABLE "device_network_profiles" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"mode" text NOT NULL,
+	"mqtt_endpoint" text,
+	"api_public_base_url" text,
+	"websocket_public_url" text,
+	"media_ingest_base_url" text,
+	"media_playback_base_url" text,
+	"tls_required" boolean DEFAULT false NOT NULL,
+	"secret_ref" text,
+	"status" text DEFAULT 'unverified' NOT NULL,
+	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"last_validation_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"last_validated_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_network_profiles_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_network_profiles_mode_valid" CHECK (mode in ('lan', 'public')),
+	CONSTRAINT "device_network_profiles_status_valid" CHECK (status in ('unverified', 'valid', 'invalid', 'degraded')),
+	CONSTRAINT "device_network_profiles_public_tls" CHECK (mode <> 'public' or tls_required),
+	CONSTRAINT "device_network_profiles_project_name_unique" UNIQUE("project_id", "name"),
+	CONSTRAINT "device_network_profiles_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+ALTER TABLE "device_adapters" ADD COLUMN "network_profile_id" bigint;
+--> statement-breakpoint
+ALTER TABLE "device_adapters" ADD CONSTRAINT "device_adapters_network_profile_project_fk"
+FOREIGN KEY ("network_profile_id", "project_id") REFERENCES "device_network_profiles"("id", "project_id") ON DELETE SET NULL ("network_profile_id");
+--> statement-breakpoint
+CREATE TABLE "device_stream_channels" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"device_id" integer NOT NULL,
+	"capability_code" text NOT NULL,
+	"channel_key" text NOT NULL,
+	"display_name" text NOT NULL,
+	"data_type" text NOT NULL,
+	"schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"unit" text,
+	"protocol" text,
+	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"availability" text DEFAULT 'available' NOT NULL,
+	"availability_reason" text,
+	"source_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_stream_channels_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_stream_channels_device_project_fk" FOREIGN KEY ("device_id", "project_id") REFERENCES "devices"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_stream_channels_capability_fk" FOREIGN KEY ("device_id", "capability_code") REFERENCES "device_capabilities"("device_id", "capability_code") ON DELETE cascade,
+	CONSTRAINT "device_stream_channels_data_type_valid" CHECK (data_type in ('video', 'audio', 'telemetry', 'sensor', 'events')),
+	CONSTRAINT "device_stream_channels_availability_valid" CHECK (availability in ('available', 'degraded', 'unavailable')),
+	CONSTRAINT "device_stream_channels_device_key_unique" UNIQUE("device_id", "channel_key"),
+	CONSTRAINT "device_stream_channels_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "device_capability_grants" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"user_id" integer NOT NULL,
+	"scope_type" text NOT NULL,
+	"device_type_id" bigint,
+	"device_id" integer,
+	"action_pattern" text NOT NULL,
+	"effect" text DEFAULT 'allow' NOT NULL,
+	"granted_by_user_id" integer,
+	"expires_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_capability_grants_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_capability_grants_team_member_fk" FOREIGN KEY ("team_id", "user_id") REFERENCES "team_members"("team_id", "user_id") ON DELETE cascade,
+	CONSTRAINT "device_capability_grants_type_fk" FOREIGN KEY ("device_type_id") REFERENCES "device_types"("id") ON DELETE cascade,
+	CONSTRAINT "device_capability_grants_device_project_fk" FOREIGN KEY ("device_id", "project_id") REFERENCES "devices"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_capability_grants_granter_fk" FOREIGN KEY ("granted_by_user_id") REFERENCES "users"("id") ON DELETE set null,
+	CONSTRAINT "device_capability_grants_scope_valid" CHECK ((scope_type = 'project' and device_type_id is null and device_id is null) or (scope_type = 'device_type' and device_type_id is not null and device_id is null) or (scope_type = 'device' and device_type_id is null and device_id is not null)),
+	CONSTRAINT "device_capability_grants_effect_valid" CHECK (effect in ('allow', 'deny')),
+	CONSTRAINT "device_capability_grants_action_nonempty" CHECK (length(trim(action_pattern)) > 0)
+);
+--> statement-breakpoint
+ALTER TABLE "live_streams"
+	ADD COLUMN "stream_channel_id" bigint,
+	ADD COLUMN "ingest_ref" text,
+	ADD COLUMN "lease_expires_at" timestamp with time zone;
+--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_channel_project_fk"
+FOREIGN KEY ("stream_channel_id", "project_id") REFERENCES "device_stream_channels"("id", "project_id") ON DELETE SET NULL ("stream_channel_id");
+--> statement-breakpoint
+ALTER TABLE "algorithm_definition_versions"
+	ADD COLUMN "output_schema_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	ADD COLUMN "display_metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL;
+--> statement-breakpoint
+CREATE INDEX "devices_project_type_idx" ON "devices" ("project_id", "device_type_id");
+--> statement-breakpoint
+CREATE INDEX "device_relationships_from_idx" ON "device_relationships" ("from_device_id", "relation_type", "valid_from" DESC);
+--> statement-breakpoint
+CREATE INDEX "device_relationships_to_idx" ON "device_relationships" ("to_device_id", "relation_type", "valid_from" DESC);
+--> statement-breakpoint
+CREATE INDEX "device_capabilities_type_code_idx" ON "device_capabilities" ("device_type_id", "capability_code");
+--> statement-breakpoint
+CREATE INDEX "device_stream_channels_project_type_idx" ON "device_stream_channels" ("project_id", "data_type", "availability");
+--> statement-breakpoint
+CREATE UNIQUE INDEX "device_capability_grants_unique" ON "device_capability_grants" ("project_id", "user_id", "scope_type", "device_type_id", "device_id", "action_pattern") NULLS NOT DISTINCT;
+--> statement-breakpoint
+CREATE INDEX "device_capability_grants_lookup_idx" ON "device_capability_grants" ("project_id", "user_id", "action_pattern", "expires_at");
+--> statement-breakpoint
+CREATE INDEX "driver_definitions_status_idx" ON "driver_definitions" ("status", "driver_key");
+--> statement-breakpoint
+CREATE INDEX "device_types_driver_idx" ON "device_types" ("driver_definition_id", "status", "type_key");
