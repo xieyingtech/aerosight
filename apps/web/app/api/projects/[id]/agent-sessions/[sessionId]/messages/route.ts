@@ -1,0 +1,3 @@
+import { NextResponse } from "next/server";
+import { appendAgentMessage } from "@/lib/agent-sessions";
+export async function POST(request:Request,{params}:{params:Promise<{id:string;sessionId:string}>}){const {id,sessionId}=await params;const body=await request.json() as {content?:string};if(!body.content?.trim())return NextResponse.json({error:"AGENT_MESSAGE_INVALID"},{status:400});try{return NextResponse.json(await appendAgentMessage({projectId:Number(id),sessionId:Number(sessionId),role:"user",content:body.content,requestId:request.headers.get("x-request-id")}),{status:201})}catch(error){const code=error instanceof Error?error.message:"AGENT_MESSAGE_FAILED";return NextResponse.json({error:code},{status:code==="PROJECT_ACCESS_DENIED"?403:404})}}
