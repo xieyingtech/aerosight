@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"time"
 )
 
@@ -25,7 +26,7 @@ type Event struct {
 type Handler func(context.Context, *sql.Tx, Event) error
 
 type Repository interface {
-	Claim(context.Context, string, int, time.Duration) ([]Event, error)
+	Claim(context.Context, string, []string, int, time.Duration) ([]Event, error)
 	Process(context.Context, string, Event, Handler) error
 	Complete(context.Context, string, int64) error
 	Fail(context.Context, string, Event, error, time.Duration) (string, error)
@@ -39,27 +40,28 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (store *Store) Claim(ctx context.Context, workerID string, limit int, lease time.Duration) ([]Event, error) {
+func (store *Store) Claim(ctx context.Context, workerID string, eventTypes []string, limit int, lease time.Duration) ([]Event, error) {
 	rows, err := store.db.QueryContext(ctx, `
 		with candidates as (
 			select id
 			from outbox_events
 			where attempts < max_attempts
+			  and event_type = any($1::text[])
 			  and available_at <= now()
 			  and (status = 'pending' or (status = 'processing' and locked_until < now()))
 			order by available_at, id
 			for update skip locked
-			limit $1
+			limit $2
 		)
 		update outbox_events event
 		set status = 'processing', attempts = event.attempts + 1,
-		    locked_by = $2, locked_until = now() + ($3 * interval '1 millisecond'),
+		    locked_by = $3, locked_until = now() + ($4 * interval '1 millisecond'),
 		    last_error = null
 		from candidates
 		where event.id = candidates.id
 		returning event.id, event.project_id, event.team_id, event.event_id,
 		          event.event_type, event.payload_json, event.attempts, event.max_attempts`,
-		limit, workerID, lease.Milliseconds())
+		eventTypes, limit, workerID, lease.Milliseconds())
 	if err != nil {
 		return nil, err
 	}
@@ -174,16 +176,19 @@ func (consumer *Consumer) Register(eventType string, handler Handler) {
 }
 
 func (consumer *Consumer) ConsumeOnce(ctx context.Context) (int, error) {
-	events, err := consumer.repository.Claim(ctx, consumer.workerID, consumer.batchSize, consumer.lease)
+	eventTypes := make([]string, 0, len(consumer.handlers))
+	for eventType := range consumer.handlers {
+		eventTypes = append(eventTypes, eventType)
+	}
+	slices.Sort(eventTypes)
+	events, err := consumer.repository.Claim(ctx, consumer.workerID, eventTypes, consumer.batchSize, consumer.lease)
 	if err != nil {
 		return 0, err
 	}
 	for _, event := range events {
 		handler, ok := consumer.handlers[event.EventType]
 		if !ok {
-			handler = func(context.Context, *sql.Tx, Event) error {
-				return fmt.Errorf("no handler registered for event type %q", event.EventType)
-			}
+			return 0, fmt.Errorf("repository claimed unregistered event type %q", event.EventType)
 		}
 		if err := consumer.repository.Process(ctx, consumer.name, event, handler); err != nil {
 			retryAfter := retryDelay(event.Attempts)

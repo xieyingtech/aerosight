@@ -23,6 +23,7 @@
     "test:security": "node scripts/test-security-acceptance.mjs",
     "benchmark:load": "pnpm --dir apps/web benchmark:load",
     "drill:fresh-environment": "node scripts/fresh-environment-drill.mjs",
+    "drill:upgrade-rollback": "pnpm --dir apps/web drill:upgrade-rollback",
     "typecheck": "pnpm --dir apps/web typecheck",
     "check": "pnpm typecheck && pnpm test"
   },

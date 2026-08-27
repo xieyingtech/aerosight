@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 )
@@ -19,8 +20,11 @@ type fakeRepository struct {
 	lastFailure error
 }
 
-func (repository *fakeRepository) Claim(context.Context, string, int, time.Duration) ([]Event, error) {
+func (repository *fakeRepository) Claim(_ context.Context, _ string, eventTypes []string, _ int, _ time.Duration) ([]Event, error) {
 	if repository.dead {
+		return nil, nil
+	}
+	if !slices.Contains(eventTypes, repository.event.EventType) {
 		return nil, nil
 	}
 	repository.claims++
@@ -99,5 +103,19 @@ func TestPoisonEventBecomesDead(t *testing.T) {
 func TestRetryDelayIsBounded(t *testing.T) {
 	if retryDelay(1) != time.Second || retryDelay(20) != 5*time.Minute {
 		t.Fatalf("unexpected retry delays: first=%s capped=%s", retryDelay(1), retryDelay(20))
+	}
+}
+
+func TestUnknownEventIsNotClaimed(t *testing.T) {
+	repository := &fakeRepository{event: Event{ID: 3, EventID: "future-event", EventType: "future.evidence.sealed", MaxAttempts: 3}}
+	consumer := testConsumer(repository)
+	consumer.Register("known", func(context.Context, *sql.Tx, Event) error { return nil })
+
+	claimed, err := consumer.ConsumeOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed != 0 || repository.claims != 0 || repository.completed != 0 || repository.lastFailure != nil {
+		t.Fatalf("unknown event was mutated: %#v", repository)
 	}
 }

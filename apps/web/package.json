@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/db-migrate.mjs",
     "test:migrations": "node scripts/db-migrate-test.mjs",
     "benchmark:load": "node scripts/benchmark-load.mjs",
+    "drill:upgrade-rollback": "node scripts/upgrade-rollback-drill.mjs",
     "test:unit": "node --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
