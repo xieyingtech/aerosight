@@ -11,10 +11,11 @@ import (
 const CommandMappingVersion = "dji-cloud-api/2026-08-v1"
 
 type CommandMapping struct {
-	CapabilityCode string
-	CommandKey     string
-	Method         string
-	Validate       func(json.RawMessage) error
+	CapabilityCode  string
+	CommandKey      string
+	Method          string
+	Validate        func(json.RawMessage) error
+	ProductFamilies map[string]bool
 }
 
 type ServiceCommand struct {
@@ -47,7 +48,20 @@ var commandMappings = []CommandMapping{
 	{CapabilityCode: "mission.cancel", CommandKey: "cancel", Method: "flighttask_undo", Validate: requireStringArray("flight_ids")},
 	{CapabilityCode: "flight.return_home", CommandKey: "return_home", Method: "return_home", Validate: requireObject},
 	{CapabilityCode: "flight.return_home", CommandKey: "flight.return_home", Method: "return_home", Validate: requireObject},
+	{CapabilityCode: "dock.debug.control", CommandKey: "debug.open", Method: "debug_mode_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "debug.close", Method: "debug_mode_close", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "cover.open", Method: "cover_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "cover.close", Method: "cover_close", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "aircraft.power_on", Method: "drone_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "aircraft.power_off", Method: "drone_close", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "charge.start", Method: "charge_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "charge.stop", Method: "charge_close", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "alarm.enable", Method: "alarm_state_switch", Validate: requireIntValue("action", 1), ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "alarm.disable", Method: "alarm_state_switch", Validate: requireIntValue("action", 0), ProductFamilies: dockFamilies()},
+	{CapabilityCode: "dock.debug.control", CommandKey: "reboot", Method: "device_reboot", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
 }
+
+func dockFamilies() map[string]bool { return map[string]bool{"dock2": true, "dock3": true} }
 
 func validateFlightTaskPrepare(raw json.RawMessage) error {
 	var parameters struct {
@@ -81,13 +95,16 @@ func ResolveCommandMapping(capabilityCode, commandKey string) (CommandMapping, b
 	return CommandMapping{}, false
 }
 
-func BuildServiceCommand(gatewaySN, commandID, businessID, capabilityCode, commandKey string, parameters json.RawMessage, now time.Time) (ServiceCommand, error) {
+func BuildServiceCommand(gatewaySN, commandID, businessID, productFamily, capabilityCode, commandKey string, parameters json.RawMessage, now time.Time) (ServiceCommand, error) {
 	if strings.TrimSpace(gatewaySN) == "" || strings.TrimSpace(commandID) == "" || strings.TrimSpace(businessID) == "" || now.IsZero() {
 		return ServiceCommand{}, errors.New("DJI_COMMAND_IDENTITY_REQUIRED")
 	}
 	mapping, exists := ResolveCommandMapping(capabilityCode, commandKey)
 	if !exists {
 		return ServiceCommand{}, errors.New("DJI_COMMAND_MAPPING_UNKNOWN")
+	}
+	if len(mapping.ProductFamilies) > 0 && !mapping.ProductFamilies[productFamily] {
+		return ServiceCommand{}, errors.New("DJI_COMMAND_PRODUCT_FAMILY_UNSUPPORTED")
 	}
 	if err := mapping.Validate(parameters); err != nil {
 		return ServiceCommand{}, err
@@ -132,6 +149,28 @@ func requireObject(raw json.RawMessage) error {
 		return errors.New("DJI_COMMAND_PARAMETERS_OBJECT_REQUIRED")
 	}
 	return nil
+}
+
+func requireEmptyObject(raw json.RawMessage) error {
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil || len(object) != 0 {
+		return errors.New("DJI_COMMAND_EMPTY_PARAMETERS_REQUIRED")
+	}
+	return nil
+}
+
+func requireIntValue(field string, expected int) func(json.RawMessage) error {
+	return func(raw json.RawMessage) error {
+		var object map[string]json.RawMessage
+		if json.Unmarshal(raw, &object) != nil || len(object) != 1 {
+			return errors.New("DJI_COMMAND_PARAMETERS_OBJECT_REQUIRED")
+		}
+		var value int
+		if json.Unmarshal(object[field], &value) != nil || value != expected {
+			return fmt.Errorf("DJI_COMMAND_PARAMETER_INVALID: %s", field)
+		}
+		return nil
+	}
 }
 
 func requireString(field string) func(json.RawMessage) error {

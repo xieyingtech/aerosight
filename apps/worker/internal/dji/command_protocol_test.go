@@ -20,7 +20,7 @@ func TestVersionedCommandMappingsBuildOfficialServiceMessages(t *testing.T) {
 		{"flight.return_home", "return_home", `{}`, "return_home"},
 	}
 	for _, fixture := range tests {
-		command, err := BuildServiceCommand("DOCK2-DEMO-001", "tid-1", "bid-1", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now)
+		command, err := BuildServiceCommand("DOCK2-DEMO-001", "tid-1", "bid-1", "dock2", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -45,7 +45,7 @@ func TestCommandMappingRejectsUnknownOrMalformedCommands(t *testing.T) {
 		{"mission.execute", "execute", `{}`},
 		{"mission.cancel", "cancel", `{"flight_ids":[]}`},
 	} {
-		if _, err := BuildServiceCommand("dock", "tid", "bid", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now); err == nil {
+		if _, err := BuildServiceCommand("dock", "tid", "bid", "dock2", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now); err == nil {
 			t.Fatalf("unsafe mapping unexpectedly accepted: %+v", fixture)
 		}
 	}
@@ -65,5 +65,46 @@ func TestServiceReplyClassifiesAckNackAndErrors(t *testing.T) {
 	}
 	if _, err := DecodeServiceReply(json.RawMessage(`{"result":0}`), "", "bid", "return_home"); err == nil {
 		t.Fatal("reply without complete correlation was accepted")
+	}
+}
+
+func TestDock2AndDock3DebugWhitelistMapsOnlySupportedActions(t *testing.T) {
+	now := time.UnixMilli(1787821300000).UTC()
+	actions := []struct {
+		key        string
+		parameters string
+		method     string
+	}{
+		{"debug.open", `{}`, "debug_mode_open"},
+		{"debug.close", `{}`, "debug_mode_close"},
+		{"cover.open", `{}`, "cover_open"},
+		{"cover.close", `{}`, "cover_close"},
+		{"aircraft.power_on", `{}`, "drone_open"},
+		{"aircraft.power_off", `{}`, "drone_close"},
+		{"charge.start", `{}`, "charge_open"},
+		{"charge.stop", `{}`, "charge_close"},
+		{"alarm.enable", `{"action":1}`, "alarm_state_switch"},
+		{"alarm.disable", `{"action":0}`, "alarm_state_switch"},
+		{"reboot", `{}`, "device_reboot"},
+	}
+	for _, family := range []string{"dock2", "dock3"} {
+		for _, action := range actions {
+			command, err := BuildServiceCommand("dock", "tid", "bid", family, "dock.debug.control", action.key, json.RawMessage(action.parameters), now)
+			if err != nil || command.Method != action.method {
+				t.Fatalf("%s action %s did not map to %s: command=%+v err=%v", family, action.key, action.method, command, err)
+			}
+		}
+	}
+	for _, fixture := range []struct {
+		family, key, parameters string
+	}{
+		{"dock1", "cover.open", `{}`},
+		{"dock2", "shell.execute", `{}`},
+		{"dock2", "alarm.enable", `{"action":0}`},
+		{"dock3", "reboot", `{"force":true}`},
+	} {
+		if _, err := BuildServiceCommand("dock", "tid", "bid", fixture.family, "dock.debug.control", fixture.key, json.RawMessage(fixture.parameters), now); err == nil {
+			t.Fatalf("non-whitelisted debug action accepted: %+v", fixture)
+		}
 	}
 }

@@ -47,10 +47,12 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		Priority       int
 		AdapterID      int64
 		GatewaySN      string
+		ProductFamily  string
 	}
 	err := tx.QueryRowContext(ctx, `
 		select command.id::text,command.capability_code,command.command_key,command.parameters_json,
 		       command.deadline_at,command.priority,device.adapter_id,
+		       coalesce(device_type.capability_profile_json->'dock.debug.control'->>'productFamily',''),
 		       coalesce(gateway_identity.external_device_id,target_identity.external_device_id)
 		from device_commands command
 		join devices device on device.id=command.device_id and device.project_id=command.project_id
@@ -69,7 +71,7 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		where command.project_id=$1 and command.id=$2::uuid and command.status='dispatchable'
 		for update of command`, event.ProjectID, request.CommandID).Scan(
 		&command.ID, &command.CapabilityCode, &command.CommandKey, &command.Parameters,
-		&command.Deadline, &command.Priority, &command.AdapterID, &command.GatewaySN,
+		&command.Deadline, &command.Priority, &command.AdapterID, &command.ProductFamily, &command.GatewaySN,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -86,7 +88,7 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 			where project_id=$1 and id=$2::uuid and status='dispatchable'`, event.ProjectID, command.ID, now)
 		return err
 	}
-	service, err := BuildServiceCommand(command.GatewaySN, command.ID, command.ID,
+	service, err := BuildServiceCommand(command.GatewaySN, command.ID, command.ID, command.ProductFamily,
 		command.CapabilityCode, command.CommandKey, command.Parameters, now)
 	if err != nil {
 		return err
