@@ -81,7 +81,7 @@ export async function readProjectSituationSnapshot(
        select run.id, run.status, run.started_at as "startedAt", run.created_at as "createdAt",
               task.id as "taskId", task.name as "taskName", run.input_snapshot_json as input
        from task_runs run join tasks task on task.id = run.task_id and task.project_id = run.project_id
-       where run.project_id = $1 and run.status in ('queued', 'running', 'paused')
+       where run.project_id = $1 and run.status in ('queued', 'blocked', 'ready', 'dispatching', 'running', 'paused', 'canceling')
        order by run.created_at desc`,
       [projectId]
     )).rows;
