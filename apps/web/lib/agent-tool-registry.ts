@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ProjectPermission } from "./project-permission-policy.ts";
 import { inspectionTaskDraftInputSchema, issueDraftInputSchema, reportDraftInputSchema } from "./agent-draft-tools-core.ts";
+import { agentMissionStartInputSchema } from "./agent-mission-start-core.ts";
 
 export type AgentToolRisk = "read-only" | "draft" | "protected";
 export type AgentToolConfirmation = "never" | "required";
@@ -84,7 +85,7 @@ export const agentToolRegistry = Object.freeze({
   },
   request_mission_start: {
     description: "通过平台安全控制面请求启动已发布任务",
-    inputSchema: z.object({ taskVersionId: z.number().int().positive(), idempotencyKey: z.string().uuid() }).strict(),
+    inputSchema: agentMissionStartInputSchema,
     risk: "protected",
     permission: "mission:operate",
     confirmation: "required"

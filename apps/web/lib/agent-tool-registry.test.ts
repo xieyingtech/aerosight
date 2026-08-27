@@ -24,6 +24,6 @@ test("whitelist has no direct device adapter tool", () => {
 
 test("tool schemas reject undeclared scope and invalid protected requests", () => {
   assert.throws(() => parseAgentToolInput("query_devices", { projectId: 999 }));
-  assert.throws(() => parseAgentToolInput("request_mission_start", { taskVersionId: 3, idempotencyKey: "not-a-uuid" }));
+  assert.throws(() => parseAgentToolInput("request_mission_start", { taskVersionId: 3, approvalRequestId: "missing", idempotencyKey: "not-a-uuid" }));
   assert.deepEqual(parseAgentToolInput("query_devices", { deviceIds: [3] }), { deviceIds: [3] });
 });
