@@ -5,17 +5,17 @@
 ## ADDED Requirements
 
 ### Requirement: 支持两代机场产品族
-DJI Adapter SHALL 支持 Dock 2 + Matrice 3D/3TD 与 Dock 3 + Matrice 4D/4TD，并根据设备上报的产品标识和协议版本映射拓扑、能力与状态；未知型号 MUST 以受限能力接入而非套用错误型号配置。
+DJI Driver SHALL 支持 Dock 2 + Matrice 3D/3TD 与 Dock 3 + Matrice 4D/4TD，并为机场、飞行器、可独立识别相机和传感器映射对应 DeviceType、设备拓扑、能力与状态；未知型号 MUST 以受限能力接入而非套用错误型号配置。
 
 #### Scenario: 发现 Dock 2 拓扑
 - **GIVEN** 兼容固件的 Dock 2 与 Matrice 3D 或 3TD 连接到项目 Adapter
 - **WHEN** Adapter 收到有效拓扑和状态数据
-- **THEN** 系统发现机场与飞行器、映射各自能力并允许管理员认领
+- **THEN** 系统发现机场、飞行器及可识别相机/传感器设备，绑定 DJI Driver 类型、映射各自能力并允许管理员认领
 
 #### Scenario: 发现 Dock 3 拓扑
 - **GIVEN** 兼容固件的 Dock 3 与 Matrice 4D 或 4TD 连接到项目 Adapter
 - **WHEN** Adapter 收到有效拓扑和状态数据
-- **THEN** 系统发现机场与飞行器、映射该产品族特有能力且不误用 Dock 2 枚举
+- **THEN** 系统发现机场、飞行器及可识别相机/传感器设备，绑定 DJI Driver 类型、映射该产品族特有能力且不误用 Dock 2 枚举
 
 #### Scenario: 未知或不兼容固件
 - **GIVEN** 产品型号或 Cloud API 版本不在兼容矩阵中
@@ -41,22 +41,22 @@ DJI Adapter SHALL 支持 Dock 2 + Matrice 3D/3TD 与 Dock 3 + Matrice 4D/4TD，�
 - **THEN** 系统 SHALL 阻止启用并逐项返回脱敏的失败原因
 
 ### Requirement: DJI 会话与上行消息摄取
-Adapter SHALL 建立可恢复的 DJI MQTT 会话，摄取设备拓扑、属性、事件、请求和服务回复，并使用设备序列号、消息标识和时间信息进行身份解析、幂等处理与统一事件映射。
+DJI Driver SHALL 通过项目 Adapter 实例建立可恢复的 MQTT 会话，摄取设备拓扑、属性、事件、请求和服务回复，并使用设备序列号、消息标识和时间信息进行身份解析、幂等处理与统一事件映射。
 
 #### Scenario: 正常状态摄取
 - **GIVEN** 已绑定设备通过认证会话发送有效状态或事件
-- **WHEN** Adapter 接收消息
+- **WHEN** Driver 通过 Adapter 会话接收消息
 - **THEN** 系统保存原始协议引用、更新统一设备状态并发布项目级实时事件
 
 #### Scenario: 重复、乱序或伪造消息
 - **GIVEN** 消息已处理、序列明显回退或会话身份与设备绑定不一致
-- **WHEN** Adapter 处理消息
+- **WHEN** Driver 处理消息
 - **THEN** 系统 SHALL 幂等忽略或隔离消息，不得覆盖更新状态，并记录诊断信息
 
 #### Scenario: MQTT 会话中断后恢复
 - **GIVEN** Broker 或网络暂时不可用
 - **WHEN** 连接恢复
-- **THEN** Adapter 自动重连、重新订阅并重新同步当前状态，未确认命令保持可审计的未知或重试状态
+- **THEN** Driver 通过 Adapter 自动重连、重新订阅并重新同步当前状态，未确认命令保持可审计的未知或重试状态
 
 ### Requirement: DJI 最小飞行控制闭环
 系统 SHALL 通过统一任务与命令入口支持兼容设备的航线任务下发、开始、取消和安全返航，并将 DJI 服务回复和进度事件关联到原命令及任务运行；本变更 MUST 不开放未纳入安全策略的任意连续摇杆控制。

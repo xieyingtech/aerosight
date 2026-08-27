@@ -4,25 +4,25 @@ AeroSight 现有 DJI 代码尚未连接真实 Cloud API，设备与直播也没�
 
 ## What Changes
 
-- 建立统一设备层：无人机、机场、机场摄像头及未来机器人/传感器均作为项目级设备管理，通过父子拓扑、设备类型、外部身份、能力声明和 Adapter 绑定表达差异；业务表和 UI 不为 DJI 型号建立写死专表。
+- 建立统一设备层：无人机、机场、摄像头、机器人、传感器及其他可独立识别实体均作为项目级设备管理，不再使用特殊组件模型；每个 Device 必须引用一个 DeviceType，DeviceType 绑定版本化 Driver，Driver 决定基础能力和协议实现，设备拓扑只表达设备之间的父子、挂载、网关或停靠关系。
 - 实现 DJI Cloud API Adapter，覆盖 Dock 2 + Matrice 3D/3TD 与 Dock 3 + Matrice 4D/4TD 的发现、状态/遥测、能力映射、命令下发、回复关联、掉线与降级处理。
 - 交付最小安全控制集：任务投递/取消、返航及经过权限和安全确认的机场远程调试命令；所有命令进入统一命令账本，不允许 UI 直接发布厂商 Topic。
-- 建立通用直播会话和媒体网关，允许从无人机相机或机场相机启动/停止 DJI 推流，并经 RTMP 接入后转换为浏览器可播放的 HLS/WebRTC；直播源仍按统一设备能力发现，不写死摄像头位置。
+- 建立通用实时流能力：支持设备通过 `stream.video`、`stream.telemetry`、`stream.sensor` 等能力暴露实时通道；视频经媒体网关摄取并转换为浏览器可播放的 HLS/WebRTC，遥测和传感数据使用统一实时订阅，页面不写死无人机、机器人、摄像头或传感器展示类型。
 - 同时支持局域网和公网部署拓扑，分别提供可配置的 MQTT、HTTPS、WebSocket、RTMP 与播放地址、TLS/鉴权要求和连通性检查，不把开发机地址暴露为生产默认值。
 - 将算法服务重构为通用 Provider、Definition、Version、Run 和结果映射模型；UI 从服务端能力目录渲染，不写死“违建”算法，违建识别仅作为可选示例定义/模板。
 - 增加可在无实机时运行的 DJI 协议级演示器，模拟 Dock 2/3 拓扑、遥测、命令回复和双路视频源；实机验收仍要求合法 DJI 开发者配置、兼容固件与可达网络。
 - 保持现有项目、设备、任务、资产、事件和算法数据兼容；仅使用增量迁移，并为历史设备/算法记录提供默认类型或回填策略。
 - 非目标：本变更不实现任意摇杆/DRC 连续飞控、全量 DJI Cloud API、视频编解码器自研、自动绕过现场安全检查、其他厂商生产 Adapter 或算法训练平台。
 
-用户将能够在同一个设备目录中查看机场与无人机拓扑和实时状态，安全地下发最小控制命令，分别观看无人机/机场直播，并从通用算法目录配置和运行不同识别服务。
+用户将能够在同一个设备目录中查看机场、无人机、机器人、摄像头和传感器的拓扑与实时状态；系统依据设备类型所绑定 Driver 的能力动态提供控制、视频或实时数据入口，并从通用算法目录配置和运行不同识别服务。
 
 ## Capabilities
 
 ### New Capabilities
 
-- `unified-device-platform`: 项目级统一设备、父子拓扑、外部身份、能力目录、Adapter 绑定、状态投影及厂商无关的命令入口。
+- `unified-device-platform`: 项目级统一设备、DeviceType → Driver 绑定、设备拓扑、外部身份、有效能力、能力级 RBAC、状态投影及厂商无关的命令入口。
 - `dji-cloud-control`: Dock 2/3 与配套飞行器的 Cloud API 连接、遥测摄取、命令映射、回复关联、安全控制和协议级模拟验收。
-- `live-stream-gateway`: 厂商无关的视频源发现、直播会话、DJI 推流控制、RTMP 摄取及 HLS/WebRTC 浏览器播放。
+- `live-stream-gateway`: 厂商无关的实时通道发现与授权订阅，包括视频直播、DJI 推流控制、RTMP 摄取、HLS/WebRTC 播放以及遥测/传感数据实时查看。
 - `algorithm-service-platform`: 通用算法 Provider、算法定义与版本、输入输出契约、运行调度、结果映射和动态 UI 能力目录。
 
 ### Modified Capabilities
@@ -31,9 +31,9 @@ AeroSight 现有 DJI 代码尚未连接真实 Cloud API，设备与直播也没�
 
 ## Impact
 
-- 数据库：增量调整设备类型/拓扑/能力/外部身份与 Adapter 配置，补齐 DJI 会话与直播源/会话信息，并确保算法 Provider、Definition、Version、Run 不依赖业务类别；所有资源继续携带并校验 `project_id`。
+- 数据库：增量建立 Driver 定义、版本化 DeviceType、设备拓扑、有效能力、外部身份、能力级授权与 Adapter 实例绑定，补齐 DJI 会话和实时通道/直播会话信息，并确保算法 Provider、Definition、Version、Run 不依赖业务类别；项目资源继续携带并校验 `project_id`。
 - Worker：新增 DJI MQTT 长连接、Topic 路由、HTTPS/WebSocket 辅助接口、命令回复处理、连接恢复、直播控制和协议模拟器；沿用 outbox、幂等和命令账本边界。
-- Web/API：新增通用设备拓扑与能力驱动操作、DJI 连接向导、直播播放器和通用算法管理/运行界面；所有敏感操作重新校验团队成员资格及项目权限。
+- Web/API：新增通用设备拓扑、Driver/DeviceType 管理、能力驱动操作、DJI 连接向导、视频/遥测/传感实时面板和通用算法管理/运行界面；所有查看、订阅和控制操作按项目、设备范围与 capability/action 重新鉴权。
 - 基础设施：开发/演示部署增加 MQTT Broker 和 MediaMTX 等媒体网关；公网部署要求域名、TLS、受限端口、秘密引用和设备可达性检查，局域网部署允许显式配置可路由的内网地址。
 - 外部依赖：需要 DJI Cloud API 应用配置、支持的 Dock/飞行器固件和账号授权；兼容官方 Dock 2/Matrice 3D 系列与 Dock 3/Matrice 4D 系列的产品枚举和能力差异。
-- 兼容性：已有设备和算法记录不删除，旧类型通过迁移映射到通用模型；尚未配置 MQTT/媒体依赖的部署显示 `unavailable` 或 `degraded`，不伪装为已连接。
+- 兼容性：已有设备和算法记录不删除，旧设备类型迁移为绑定兼容 Driver 的版本化 DeviceType；无法解析类型或 Driver 的设备以 `unavailable`/只读状态保留，尚未配置 MQTT/媒体依赖的部署显示 `unavailable` 或 `degraded`，不伪装为已连接。
