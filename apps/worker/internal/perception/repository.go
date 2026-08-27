@@ -155,8 +155,40 @@ func evaluatePublishedRules(ctx context.Context, tx *sql.Tx, projectID, teamID i
 		if _, err = tx.ExecContext(ctx, `insert into project_events(project_id,team_id,event_id,event_type,payload_json) values($1,$2,$3,$4,jsonb_build_object('eventId',$5::text,'detectionGroupId',$6::bigint)) on conflict(event_id) do nothing`, projectID, teamID, projectEventID, eventType, eventID, groupID); err != nil {
 			return err
 		}
+		if created {
+			if err := enqueueAlertAutomation(ctx, tx, projectID, teamID, rule.id, eventID); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+func enqueueAlertAutomation(ctx context.Context, tx *sql.Tx, projectID, teamID int, ruleVersionID int64, eventID string) error {
+	var policyVersionID int64
+	var mode string
+	err := tx.QueryRowContext(ctx, `select version.id,version.mode from alert_automation_policies policy
+		join alert_automation_policy_versions version on version.id=policy.current_published_version_id and version.project_id=policy.project_id
+		where policy.project_id=$1 and version.status='published' and (version.event_rule_version_id=$2 or version.event_rule_version_id is null)
+		order by (version.event_rule_version_id=$2) desc,version.id desc limit 1`, projectID, ruleVersionID).Scan(&policyVersionID, &mode)
+	if errors.Is(err, sql.ErrNoRows) || mode == "manual" || mode == "agent-on-demand" {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var runID string
+	err = tx.QueryRowContext(ctx, `insert into alert_automation_runs(project_id,team_id,policy_version_id,perception_event_id,trigger_reason,input_scope_json)
+		values($1,$2,$3,$4,'event-created',jsonb_build_object('projectId',$1::int,'eventId',$4::text,'policyVersionId',$3::bigint)) returning id`,
+		projectID, teamID, policyVersionID, eventID).Scan(&runID)
+	if err != nil {
+		return err
+	}
+	outboxEventID := "alert.automation.requested:" + runID
+	_, err = tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+		values($1,$2,$3,'alert.automation.requested',jsonb_build_object('automationRunId',$4::text,'perceptionEventId',$5::text)) on conflict(event_id) do nothing`,
+		projectID, teamID, outboxEventID, runID, eventID)
+	return err
 }
 
 func nullableTaskRun(value sql.NullInt64) any {
