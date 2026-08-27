@@ -21,6 +21,7 @@
     "test:web": "pnpm --dir apps/web test:unit",
     "test:worker": "cd apps/worker && go test ./...",
     "test:security": "node scripts/test-security-acceptance.mjs",
+    "test:all": "pnpm test && pnpm test:migrations && pnpm test:security",
     "benchmark:load": "pnpm --dir apps/web benchmark:load",
     "drill:fresh-environment": "node scripts/fresh-environment-drill.mjs",
     "drill:upgrade-rollback": "pnpm --dir apps/web drill:upgrade-rollback",

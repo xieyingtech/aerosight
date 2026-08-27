@@ -116,4 +116,4 @@
 - [x] 12.4 编写基准负载脚本，验证目标负载下遥测到地图/时间线 P95 ≤ 2 秒、canonical detection 到告警 P95 ≤ 5 秒且无重复副作用，并保存参数和结果。
 - [x] 12.5 编写部署、迁移、对象存储、秘密管理、算法 provider、AI provider、功能开关、kill switch、回滚和现场安全处置文档，并通过全新环境演练验证。
 - [x] 12.6 对现有数据快照执行升级与应用回滚演练，验证旧页面/数据继续可用、新证据不被删除、旧 worker 安全忽略未知事件。
-- [ ] 12.7 运行 `pnpm check`、完整测试套件、`pnpm build` 和 `pnpm exec openspec validate build-air-ground-inspection-mvp --strict`，记录结果并修复全部阻断项后才允许试点开启。
+- [x] 12.7 运行 `pnpm check`、完整测试套件、`pnpm build` 和 `pnpm exec openspec validate build-air-ground-inspection-mvp --strict`，记录结果并修复全部阻断项后才允许试点开启。
