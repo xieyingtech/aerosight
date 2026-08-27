@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"aerosight/worker/internal/algorithm"
 	"aerosight/worker/internal/config"
 	"aerosight/worker/internal/heartbeat"
 	"aerosight/worker/internal/media"
@@ -19,6 +21,20 @@ import (
 	"aerosight/worker/internal/wakeup"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+type algorithmRawStore struct {
+	storage *media.LocalObjectStorage
+}
+
+func (store algorithmRawStore) PutRawResult(
+	ctx context.Context, key string, reader io.Reader, contentType string,
+) (algorithm.RawResultObject, error) {
+	object, err := store.storage.PutObject(ctx, key, reader, contentType)
+	if err != nil {
+		return algorithm.RawResultObject{}, err
+	}
+	return algorithm.RawResultObject{Key: object.Key, ChecksumSHA256: object.ChecksumSHA256}, nil
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -53,6 +69,7 @@ func main() {
 	consumer.Register("task_run.transitioned", missionProcessor.Handler)
 	consumer.Register("mission.control", missionProcessor.Handler)
 	consumer.Register("command.ack", missionProcessor.Handler)
+	var rawStore algorithm.RawResultStore
 	if workerConfig.ObjectStorageLocalRoot == "" {
 		consumer.Register("asset.available", func(context.Context, *sql.Tx, outbox.Event) error {
 			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")
@@ -66,7 +83,10 @@ func main() {
 		}
 		processor := media.NewProcessor(storage, media.NewSQLRepository())
 		consumer.Register("asset.available", processor.Handler)
+		rawStore = algorithmRawStore{storage: storage}
 	}
+	algorithmProcessor := algorithm.NewProcessor(algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore)
+	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
