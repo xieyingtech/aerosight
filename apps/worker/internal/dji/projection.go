@@ -134,6 +134,9 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 		if existingType.Valid && existingType.String != node.TypeKey {
 			return 0, fmt.Errorf("DJI_IDENTITY_TYPE_IMMUTABLE: %s is %s, discovered as %s", node.ExternalID, existingType.String, node.TypeKey)
 		}
+		if err := projector.materializeCapabilities(ctx, tx, teamID, envelope, int(deviceID.Int64), node.ExternalID, node.TypeKey, node.ReadOnly, node.CompatibilityReason); err != nil {
+			return 0, err
+		}
 		return int(deviceID.Int64), nil
 	}
 	var deviceTypeID int64
@@ -166,13 +169,13 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 		deviceID.Int64, envelope.CapturedAt, envelope.AdapterID, node.ExternalID); err != nil {
 		return 0, fmt.Errorf("bind DJI external identity: %w", err)
 	}
-	if err := projector.materializeCapabilities(ctx, tx, teamID, envelope, int(deviceID.Int64), node.TypeKey, node.ReadOnly, node.CompatibilityReason); err != nil {
+	if err := projector.materializeCapabilities(ctx, tx, teamID, envelope, int(deviceID.Int64), node.ExternalID, node.TypeKey, node.ReadOnly, node.CompatibilityReason); err != nil {
 		return 0, err
 	}
 	return int(deviceID.Int64), nil
 }
 
-func (projector *Projector) materializeCapabilities(ctx context.Context, tx *sql.Tx, teamID int, envelope adapter.UpstreamEnvelope, deviceID int, typeKey string, readOnly bool, reason string) error {
+func (projector *Projector) materializeCapabilities(ctx context.Context, tx *sql.Tx, teamID int, envelope adapter.UpstreamEnvelope, deviceID int, externalID, typeKey string, readOnly bool, reason string) error {
 	var profileJSON json.RawMessage
 	if err := tx.QueryRowContext(ctx, `
 		select capability_profile_json from device_types where type_key=$1 and version=1`, typeKey,
@@ -213,17 +216,20 @@ func (projector *Projector) materializeCapabilities(ctx context.Context, tx *sql
 		if !selected[stream.CapabilityCode] {
 			continue
 		}
+		stableChannelID := fmt.Sprintf("dji-cloud:%d:%s:%s", envelope.AdapterID, externalID, stream.ChannelKey)
+		quality := jsonObject(map[string]any{"source": "dji-cloud-api", "qos": 1, "ordering": "capturedAt+sequence", "freshness": "device-status"})
 		if _, err := tx.ExecContext(ctx, `
 			insert into device_stream_channels (
-			  project_id, team_id, device_id, capability_code, channel_key, display_name,
-			  data_type, schema_json, unit, protocol, source_json
-			) values ($1,$2,$3,$4,$5,$6,$7,$8,nullif($9,''),'mqtt5',$10)
+			  project_id, team_id, device_id, stable_channel_id, capability_code, channel_key, display_name,
+			  data_type, schema_json, unit, protocol, quality_json, source_json
+			) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,nullif($10,''),'mqtt5',$11,$12)
 			on conflict (device_id, channel_key) do update
-			set capability_code=excluded.capability_code, schema_json=excluded.schema_json,
-			    protocol=excluded.protocol, source_json=excluded.source_json, updated_at=now()`,
-			envelope.ProjectID, teamID, deviceID, stream.CapabilityCode, stream.ChannelKey,
+			set stable_channel_id=excluded.stable_channel_id,capability_code=excluded.capability_code,
+			    schema_json=excluded.schema_json,unit=excluded.unit,protocol=excluded.protocol,
+			    quality_json=excluded.quality_json,source_json=excluded.source_json,updated_at=now()`,
+			envelope.ProjectID, teamID, deviceID, stableChannelID, stream.CapabilityCode, stream.ChannelKey,
 			strings.ReplaceAll(stream.ChannelKey, ".", " "), stream.DataType, jsonOrObject(stream.Schema),
-			stream.Unit, jsonObject(map[string]any{"driver": DriverKey})); err != nil {
+			stream.Unit, quality, jsonObject(map[string]any{"driver": DriverKey, "externalDeviceId": externalID})); err != nil {
 			return err
 		}
 	}

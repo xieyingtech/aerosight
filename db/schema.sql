@@ -1958,6 +1958,15 @@ SET display_name = excluded.display_name, category = excluded.category, vendor =
 	driver_version_constraint = excluded.driver_version_constraint,
 	capability_profile_json = excluded.capability_profile_json, updated_at = now();
 --> statement-breakpoint
+UPDATE driver_definitions
+SET manifest_json = jsonb_set(manifest_json, '{streams}', '[
+  {"channelKey":"telemetry.primary","capabilityCode":"stream.telemetry.read","dataType":"telemetry","unit":"mixed","schema":{"type":"object","properties":{"seq":{"type":"integer"},"latitude":{"type":"number","x-unit":"degree"},"longitude":{"type":"number","x-unit":"degree"},"height":{"type":"number","x-unit":"m"},"horizontal_speed":{"type":"number","x-unit":"m/s"},"vertical_speed":{"type":"number","x-unit":"m/s"}}}},
+  {"channelKey":"sensor.primary","capabilityCode":"stream.sensor.read","dataType":"sensor","unit":"mixed","schema":{"type":"object","properties":{"samples":{"type":"object","additionalProperties":{"type":"object","required":["value","unit"],"properties":{"value":{},"unit":{"type":"string"}}}}},"required":["samples"]}},
+  {"channelKey":"video.primary","capabilityCode":"stream.video.read","dataType":"video","schema":{"type":"object","properties":{"sessionId":{"type":"string"},"state":{"type":"string"},"playback":{"type":"object"}}}},
+  {"channelKey":"events.primary","capabilityCode":"stream.events.read","dataType":"events","schema":{"type":"object"}}
+]'::jsonb, true), updated_at=now()
+WHERE driver_key='dji.cloud' and version='1.0.0';
+--> statement-breakpoint
 ALTER TABLE "devices" ADD COLUMN "device_type_id" bigint;
 --> statement-breakpoint
 UPDATE "devices" SET "device_type_id" = (
@@ -2078,6 +2087,7 @@ CREATE TABLE "device_stream_channels" (
 	"project_id" integer NOT NULL,
 	"team_id" integer NOT NULL,
 	"device_id" integer NOT NULL,
+	"stable_channel_id" text NOT NULL,
 	"capability_code" text NOT NULL,
 	"channel_key" text NOT NULL,
 	"display_name" text NOT NULL,
@@ -2097,8 +2107,23 @@ CREATE TABLE "device_stream_channels" (
 	CONSTRAINT "device_stream_channels_data_type_valid" CHECK (data_type in ('video', 'audio', 'telemetry', 'sensor', 'events')),
 	CONSTRAINT "device_stream_channels_availability_valid" CHECK (availability in ('available', 'degraded', 'unavailable')),
 	CONSTRAINT "device_stream_channels_device_key_unique" UNIQUE("device_id", "channel_key"),
+	CONSTRAINT "device_stream_channels_project_stable_unique" UNIQUE("project_id", "stable_channel_id"),
 	CONSTRAINT "device_stream_channels_id_project_unique" UNIQUE("id", "project_id")
 );
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION populate_device_stream_channel_stable_id()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF NEW.stable_channel_id IS NULL OR length(trim(NEW.stable_channel_id)) = 0 THEN
+		NEW.stable_channel_id := 'device:' || NEW.project_id || ':' || NEW.device_id || ':' || NEW.channel_key;
+	END IF;
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER device_stream_channels_populate_stable_id
+BEFORE INSERT OR UPDATE OF project_id, device_id, channel_key, stable_channel_id
+ON device_stream_channels FOR EACH ROW EXECUTE FUNCTION populate_device_stream_channel_stable_id();
 --> statement-breakpoint
 CREATE TABLE "device_capability_grants" (
 	"id" bigserial PRIMARY KEY NOT NULL,

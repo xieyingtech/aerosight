@@ -39,9 +39,9 @@ func Manifest() driver.Manifest {
 		DriverKey: DriverKey, Version: DriverVersion, DisplayName: "DJI Cloud API",
 		Protocols: []string{"mqtt5"}, Capabilities: capabilities,
 		Streams: []driver.StreamDefinition{
-			{ChannelKey: "telemetry.primary", CapabilityCode: "stream.telemetry.read", DataType: driver.StreamTelemetry, Schema: json.RawMessage(`{"type":"object"}`)},
-			{ChannelKey: "sensor.primary", CapabilityCode: "stream.sensor.read", DataType: driver.StreamSensor, Schema: json.RawMessage(`{"type":"object"}`)},
-			{ChannelKey: "video.primary", CapabilityCode: "stream.video.read", DataType: driver.StreamVideo, Schema: json.RawMessage(`{"type":"object"}`)},
+			{ChannelKey: "telemetry.primary", CapabilityCode: "stream.telemetry.read", DataType: driver.StreamTelemetry, Unit: "mixed", Schema: json.RawMessage(`{"type":"object","properties":{"seq":{"type":"integer"},"latitude":{"type":"number","x-unit":"degree"},"longitude":{"type":"number","x-unit":"degree"},"height":{"type":"number","x-unit":"m"},"horizontal_speed":{"type":"number","x-unit":"m/s"},"vertical_speed":{"type":"number","x-unit":"m/s"}}}`)},
+			{ChannelKey: "sensor.primary", CapabilityCode: "stream.sensor.read", DataType: driver.StreamSensor, Unit: "mixed", Schema: json.RawMessage(`{"type":"object","properties":{"samples":{"type":"object","additionalProperties":{"type":"object","required":["value","unit"],"properties":{"value":{},"unit":{"type":"string"}}}}},"required":["samples"]}`)},
+			{ChannelKey: "video.primary", CapabilityCode: "stream.video.read", DataType: driver.StreamVideo, Schema: json.RawMessage(`{"type":"object","properties":{"sessionId":{"type":"string"},"state":{"type":"string"},"playback":{"type":"object"}}}`)},
 			{ChannelKey: "events.primary", CapabilityCode: "stream.events.read", DataType: driver.StreamEvents, Schema: json.RawMessage(`{"type":"object"}`)},
 		},
 	}

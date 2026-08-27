@@ -129,6 +129,19 @@ func TestProjectorClaimsDJITopologyIntoUnifiedDeviceQuery(t *testing.T) {
 	if relationships != 10 || channels < 10 {
 		t.Fatalf("topology was not materialized with relationships/streams: relationships=%d channels=%d", relationships, channels)
 	}
+	var stableChannels, djiStableChannels, mixedUnitChannels, qualityChannels int
+	if err := database.QueryRowContext(ctx, `select count(distinct stable_channel_id),
+		count(*) filter(where stable_channel_id like 'dji-cloud:%'),
+		count(*) filter(where unit='mixed'),count(*) filter(where quality_json->>'qos'='1')
+		from device_stream_channels where project_id=$1`, projectID).Scan(
+		&stableChannels, &djiStableChannels, &mixedUnitChannels, &qualityChannels,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if stableChannels != channels || djiStableChannels != channels || mixedUnitChannels < 4 || qualityChannels != channels {
+		t.Fatalf("realtime channels lost stable ids, units, or quality: total=%d stable=%d dji=%d mixed=%d quality=%d",
+			channels, stableChannels, djiStableChannels, mixedUnitChannels, qualityChannels)
+	}
 
 	osd := []byte(`{"tid":"fixture-dock-osd","timestamp":1787821202000,"gateway":"DOCK2-DEMO-001","data":{"seq":2,"environment_temperature":24.5,"temperature":31.2,"humidity":58,"wind_speed":3.2,"rainfall":0}}`)
 	realtime, err := RouteMQTTMessage(RouteContext{
