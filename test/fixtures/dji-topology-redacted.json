@@ -1,0 +1,6 @@
+{
+  "devices": [
+    {"sn":"SANDBOX-DOCK-001","name":"测试机巢","domain":"dock","type":"dock-sandbox","firmware_version":"0.0.test","parent_sn":""},
+    {"sn":"SANDBOX-UAV-001","name":"测试无人机","domain":"device","type":"uav-sandbox","firmware_version":"0.0.test","parent_sn":"SANDBOX-DOCK-001"}
+  ]
+}

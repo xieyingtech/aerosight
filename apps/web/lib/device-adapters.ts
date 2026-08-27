@@ -95,7 +95,7 @@ export async function bindDiscoveredDevice(
   const { user, access } = await requireAdapterManager(projectId);
   const name = input.name.trim();
   const deviceType = input.deviceType.trim();
-  if (!name || !["drone", "ground_robot", "fixed_sensor", "other"].includes(deviceType)) {
+  if (!name || !["drone", "dock", "ground_robot", "fixed_sensor", "other"].includes(deviceType)) {
     throw new Error("INVALID_DEVICE_BINDING");
   }
 
