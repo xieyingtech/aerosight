@@ -226,7 +226,7 @@ export function buildPlaybackCandidates(input: {
 }) {
   const result: { protocol: BrowserPlaybackProtocol; url: string }[] = [];
   if (input.webrtcBaseURL) {
-    result.push({ protocol: "webrtc", url: `${input.webrtcBaseURL.replace(/\/$/, "")}/${input.path}/whep?token=${encodeURIComponent(input.token)}` });
+    result.push({ protocol: "webrtc", url: `${input.webrtcBaseURL.replace(/\/$/, "")}/${input.path}?token=${encodeURIComponent(input.token)}` });
   }
   if (input.hlsBaseURL) {
     result.push({ protocol: "hls", url: `${input.hlsBaseURL.replace(/\/$/, "")}/${input.path}/index.m3u8?token=${encodeURIComponent(input.token)}` });

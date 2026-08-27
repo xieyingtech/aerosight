@@ -12,6 +12,7 @@ export type ProjectSituationSnapshot = {
   tracks: Array<Record<string, unknown>>;
   activeTasks: Array<Record<string, unknown>>;
   liveStreams: Array<Record<string, unknown>>;
+  realtimeChannels?: Array<Record<string, unknown>>;
   mediaPoints: Array<Record<string, unknown>>;
   suspectedConstruction: Array<Record<string, unknown>>;
   openAlerts: Array<Record<string, unknown>>;
@@ -122,6 +123,19 @@ export async function readProjectSituationSnapshot(
        order by stream.started_at desc`,
       [projectId]
     )).rows;
+    const realtimeChannels = (await client.query<Record<string, unknown>>(
+      `/* snapshot:realtime-channels */
+       select channel.stable_channel_id as "stableChannelId",channel.device_id as "deviceId",
+              channel.channel_key as "channelKey",channel.display_name as "displayName",
+              channel.data_type as "dataType",channel.schema_json as schema,channel.unit,
+              channel.quality_json as quality,channel.availability,channel.availability_reason as "availabilityReason",
+              telemetry.payload_json as "latestPayload",telemetry.captured_at as "latestCapturedAt",
+              telemetry.quality_json as "latestQuality"
+         from device_stream_channels channel
+         left join device_latest_telemetry telemetry
+           on telemetry.project_id=channel.project_id and telemetry.device_id=channel.device_id
+        where channel.project_id=$1 order by channel.device_id,channel.channel_key`, [projectId]
+    )).rows;
     const mediaPoints = (await client.query<Record<string, unknown>>(
       `/* snapshot:media */
        select asset.id, asset.kind, asset.mime_type as "mimeType", asset.device_id as "deviceId",
@@ -150,7 +164,7 @@ export async function readProjectSituationSnapshot(
     )).rows;
 
     const generatedAt = new Date();
-    const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, mediaPoints, openAlerts]);
+    const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, realtimeChannels, mediaPoints, openAlerts]);
     const health = evaluateProjectHealth(dependencyHealthFromRecord(project.dependencyHealth));
     const snapshot: ProjectSituationSnapshot = {
       project,
@@ -160,6 +174,7 @@ export async function readProjectSituationSnapshot(
       tracks,
       activeTasks,
       liveStreams,
+      realtimeChannels,
       mediaPoints,
       suspectedConstruction,
       openAlerts,

@@ -10,7 +10,13 @@ const fixture = (overrides: Partial<RealtimeChannel>): RealtimeChannel => ({
 });
 
 test("camera, aircraft telemetry and environment sensor select renderers from channel metadata", () => {
-  assert.equal(buildRealtimeChannelView(fixture({ dataType: "video", channelKey: "video.primary" })).renderer, "media");
+  const aircraftVideo = buildRealtimeChannelView(fixture({ stableChannelId: "dji:aircraft:video",
+    dataType: "video", channelKey: "video.primary", displayName: "飞行器画面" }));
+  const dockVideo = buildRealtimeChannelView(fixture({ stableChannelId: "dji:dock:video",
+    dataType: "video", channelKey: "video.primary", displayName: "机场画面" }));
+  assert.equal(aircraftVideo.renderer, "media");
+  assert.equal(dockVideo.renderer, "media");
+  assert.notEqual(aircraftVideo.id, dockVideo.id);
   const telemetry = buildRealtimeChannelView(fixture({ dataType: "telemetry", unit: "mixed",
     schema: { type: "object", properties: { latitude: { type: "number" }, height: { type: "number" } } } }));
   assert.equal(telemetry.renderer, "time-series");
