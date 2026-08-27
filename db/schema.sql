@@ -1282,6 +1282,65 @@ CREATE TABLE "alert_automation_drafts" (
 	CONSTRAINT "alert_automation_drafts_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
 );
 --> statement-breakpoint
+CREATE TABLE "generated_reports" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"source_type" text NOT NULL,
+	"source_id" text NOT NULL,
+	"title" text NOT NULL,
+	"current_published_version_id" uuid,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "generated_reports_source_type_valid" CHECK(source_type in('task_run','perception_event')),
+	CONSTRAINT "generated_reports_project_source_unique" UNIQUE("project_id","source_type","source_id"),
+	CONSTRAINT "generated_reports_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "generated_reports_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE "generated_report_versions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"generated_report_id" uuid NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"completeness" text NOT NULL,
+	"content_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"data_gaps_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "generated_report_versions_status_valid" CHECK(status in('draft','published','retired')),
+	CONSTRAINT "generated_report_versions_completeness_valid" CHECK(completeness in('complete','incomplete','failed')),
+	CONSTRAINT "generated_report_versions_version_positive" CHECK(version>0),
+	CONSTRAINT "generated_report_versions_report_version_unique" UNIQUE("generated_report_id","version"),
+	CONSTRAINT "generated_report_versions_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "generated_report_versions_report_project_fk" FOREIGN KEY("generated_report_id","project_id") REFERENCES "generated_reports"("id","project_id") ON DELETE cascade,
+	CONSTRAINT "generated_report_versions_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
+ALTER TABLE "generated_reports" ADD CONSTRAINT "generated_reports_current_version_project_fk" FOREIGN KEY("current_published_version_id","project_id") REFERENCES "generated_report_versions"("id","project_id") ON DELETE set null;
+--> statement-breakpoint
+CREATE TABLE "generated_report_evidence" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"report_version_id" uuid NOT NULL,
+	"evidence_type" text NOT NULL,
+	"evidence_id" text NOT NULL,
+	"evidence_version" text NOT NULL,
+	"asset_id" integer,
+	"checksum_sha256" text,
+	"href" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "generated_report_evidence_type_valid" CHECK(evidence_type in('task_run','task_version','device','track','step','event','feedback','asset')),
+	CONSTRAINT "generated_report_evidence_version_unique" UNIQUE("report_version_id","evidence_type","evidence_id","evidence_version"),
+	CONSTRAINT "generated_report_evidence_report_project_fk" FOREIGN KEY("report_version_id","project_id") REFERENCES "generated_report_versions"("id","project_id") ON DELETE cascade,
+	CONSTRAINT "generated_report_evidence_asset_project_fk" FOREIGN KEY("asset_id","project_id") REFERENCES "assets"("id","project_id") ON DELETE restrict
+);
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1470,6 +1529,9 @@ CREATE INDEX "alert_automation_policy_versions_project_status_idx" ON "alert_aut
 CREATE INDEX "alert_automation_runs_claim_idx" ON "alert_automation_runs" USING btree ("status","queued_at") WHERE "alert_automation_runs"."status"='queued';--> statement-breakpoint
 CREATE INDEX "alert_automation_runs_project_event_idx" ON "alert_automation_runs" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "alert_automation_drafts_project_event_idx" ON "alert_automation_drafts" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "generated_report_versions_one_draft_idx" ON "generated_report_versions" USING btree ("generated_report_id") WHERE "generated_report_versions"."status"='draft';--> statement-breakpoint
+CREATE INDEX "generated_reports_project_updated_idx" ON "generated_reports" USING btree ("project_id","updated_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "generated_report_evidence_asset_idx" ON "generated_report_evidence" USING btree ("project_id","asset_id") WHERE "generated_report_evidence"."asset_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint

@@ -1131,7 +1131,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 28, "empty database should apply all migrations");
+    assert(first.applied.length === 29, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1178,7 +1178,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 28, "existing database should record all migrations");
+    assert(first.applied.length === 29, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1238,7 +1238,10 @@ try {
                 to_regclass('public.alert_automation_policies') as alert_automation_policies,
                 to_regclass('public.alert_automation_policy_versions') as alert_automation_policy_versions,
                 to_regclass('public.alert_automation_runs') as alert_automation_runs,
-                to_regclass('public.alert_automation_drafts') as alert_automation_drafts`
+                to_regclass('public.alert_automation_drafts') as alert_automation_drafts,
+                to_regclass('public.generated_reports') as generated_reports,
+                to_regclass('public.generated_report_versions') as generated_report_versions,
+                to_regclass('public.generated_report_evidence') as generated_report_evidence`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
@@ -1251,7 +1254,8 @@ try {
         result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members &&
         result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback &&
         result.rows[0].agent_drafts && result.rows[0].agent_draft_evidence && result.rows[0].agent_tool_jobs &&
-        result.rows[0].alert_automation_policies && result.rows[0].alert_automation_policy_versions && result.rows[0].alert_automation_runs && result.rows[0].alert_automation_drafts,
+        result.rows[0].alert_automation_policies && result.rows[0].alert_automation_policy_versions && result.rows[0].alert_automation_runs && result.rows[0].alert_automation_drafts &&
+        result.rows[0].generated_reports && result.rows[0].generated_report_versions && result.rows[0].generated_report_evidence,
         "schema snapshot is incomplete"
       );
     } finally {

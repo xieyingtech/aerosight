@@ -6,7 +6,8 @@ export const PROJECT_PERMISSIONS = [
   "device:configure",
   "safety:manage",
   "algorithm:manage",
-  "agent:use"
+  "agent:use",
+  "report:export"
 ] as const;
 
 export type ProjectPermission = (typeof PROJECT_PERMISSIONS)[number];
