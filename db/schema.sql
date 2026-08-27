@@ -603,18 +603,48 @@ CREATE TABLE "safety_policy_versions" (
 CREATE TABLE "task_runs" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
 	"task_id" integer NOT NULL,
 	"task_version_id" bigint,
+	"selected_device_id" integer,
+	"safety_policy_version_id" bigint,
+	"approval_request_id" uuid,
 	"trigger_source" text NOT NULL,
 	"status" text DEFAULT 'queued' NOT NULL,
+	"state_version" integer DEFAULT 0 NOT NULL,
+	"current_step_position" integer,
 	"input_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"preflight_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"output_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"state_reason" text,
 	"error_message" text,
 	"started_at" timestamp,
 	"finished_at" timestamp,
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "task_runs_id_project_unique" UNIQUE("id", "project_id")
+	CONSTRAINT "task_runs_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "task_runs_status_valid" CHECK (status in ('queued','blocked','ready','dispatching','running','paused','succeeded','failed','canceling','canceled')),
+	CONSTRAINT "task_runs_state_version_valid" CHECK (state_version >= 0),
+	CONSTRAINT "task_runs_current_step_valid" CHECK (current_step_position is null or current_step_position > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "task_run_steps" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"task_run_id" integer NOT NULL,
+	"task_step_id" bigint NOT NULL,
+	"position" integer NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"attempt_count" integer DEFAULT 0 NOT NULL,
+	"result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"started_at" timestamp with time zone,
+	"finished_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "task_run_steps_status_valid" CHECK (status in ('pending','dispatching','running','succeeded','failed','skipped','paused')),
+	CONSTRAINT "task_run_steps_position_valid" CHECK (position > 0 and attempt_count >= 0),
+	CONSTRAINT "task_run_steps_run_position_unique" UNIQUE("task_run_id", "position"),
+	CONSTRAINT "task_run_steps_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "tasks" (
@@ -672,7 +702,50 @@ CREATE TABLE "task_steps" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "task_steps_position_positive" CHECK (position > 0),
 	CONSTRAINT "task_steps_version_position_unique" UNIQUE("task_version_id", "position"),
-	CONSTRAINT "task_steps_version_key_unique" UNIQUE("task_version_id", "step_key")
+	CONSTRAINT "task_steps_version_key_unique" UNIQUE("task_version_id", "step_key"),
+	CONSTRAINT "task_steps_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "device_commands" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"task_run_id" integer NOT NULL,
+	"task_run_step_id" bigint,
+	"device_id" integer NOT NULL,
+	"command_key" text NOT NULL,
+	"idempotency_key" text NOT NULL,
+	"capability_code" text NOT NULL,
+	"parameters_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"safety_context_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"priority" integer DEFAULT 0 NOT NULL,
+	"deadline_at" timestamp with time zone NOT NULL,
+	"requested_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	"result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "device_commands_status_valid" CHECK (status in ('pending','dispatchable','sent','acknowledged','nacked','timed_out','canceled','unknown')),
+	CONSTRAINT "device_commands_priority_valid" CHECK (priority between 0 and 100),
+	CONSTRAINT "device_commands_device_idempotency_unique" UNIQUE("device_id", "idempotency_key"),
+	CONSTRAINT "device_commands_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "command_attempts" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"command_id" uuid NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"attempt" integer NOT NULL,
+	"status" text NOT NULL,
+	"sent_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"acknowledged_at" timestamp with time zone,
+	"error_code" text,
+	"result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	CONSTRAINT "command_attempts_status_valid" CHECK (status in ('sent','acknowledged','nacked','timed_out','transport_error')),
+	CONSTRAINT "command_attempts_attempt_valid" CHECK (attempt > 0),
+	CONSTRAINT "command_attempts_command_attempt_unique" UNIQUE("command_id", "attempt")
 );
 --> statement-breakpoint
 CREATE TABLE "team_members" (
@@ -841,6 +914,14 @@ ALTER TABLE "device_external_identities" ADD CONSTRAINT "device_external_identit
 ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_connections" ADD CONSTRAINT "device_connections_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_run_step_project_fk" FOREIGN KEY ("task_run_step_id","project_id") REFERENCES "public"."task_run_steps"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "device_commands" ADD CONSTRAINT "device_commands_requester_fk" FOREIGN KEY ("requested_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "command_attempts" ADD CONSTRAINT "command_attempts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "command_attempts" ADD CONSTRAINT "command_attempts_command_project_fk" FOREIGN KEY ("command_id","project_id") REFERENCES "public"."device_commands"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "command_attempts" ADD CONSTRAINT "command_attempts_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_telemetry" ADD CONSTRAINT "device_telemetry_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -887,6 +968,13 @@ ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_id_projects_id_fk" FOR
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_version_project_fk" FOREIGN KEY ("task_version_id","project_id") REFERENCES "public"."task_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_device_project_fk" FOREIGN KEY ("selected_device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("selected_device_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_policy_project_fk" FOREIGN KEY ("safety_policy_version_id","project_id") REFERENCES "public"."safety_policy_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_approval_project_fk" FOREIGN KEY ("approval_request_id","project_id") REFERENCES "public"."approval_requests"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "task_run_steps" ADD CONSTRAINT "task_run_steps_step_project_fk" FOREIGN KEY ("task_step_id","project_id") REFERENCES "public"."task_steps"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -930,6 +1018,9 @@ CREATE INDEX "devices_project_status_idx" ON "devices" USING btree ("project_id"
 CREATE INDEX "devices_last_seen_idx" ON "devices" USING btree ("last_seen_at");--> statement-breakpoint
 CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "device_connections_project_status_idx" ON "device_connections" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "device_commands_dispatch_idx" ON "device_commands" USING btree ("status","priority" DESC NULLS LAST,"deadline_at");--> statement-breakpoint
+CREATE INDEX "device_commands_run_created_idx" ON "device_commands" USING btree ("task_run_id","created_at");--> statement-breakpoint
+CREATE INDEX "command_attempts_command_idx" ON "command_attempts" USING btree ("command_id","attempt");--> statement-breakpoint
 CREATE INDEX "device_connections_device_opened_idx" ON "device_connections" USING btree ("device_id","opened_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "device_connections_open_heartbeat_idx" ON "device_connections" USING btree ("last_heartbeat_at") WHERE "device_connections"."closed_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "device_telemetry_source_event_unique" ON "device_telemetry" USING btree ("adapter_id","event_id","captured_at");--> statement-breakpoint
@@ -972,6 +1063,7 @@ CREATE INDEX "safety_policy_versions_restricted_gist" ON "safety_policy_versions
 CREATE INDEX "task_runs_project_created_idx" ON "task_runs" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_task_created_idx" ON "task_runs" USING btree ("task_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "task_run_steps_run_status_idx" ON "task_run_steps" USING btree ("task_run_id","status","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "tasks_project_name_unique" ON "tasks" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "tasks_project_status_idx" ON "tasks" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "tasks_trigger_type_idx" ON "tasks" USING btree ("trigger_type");--> statement-breakpoint

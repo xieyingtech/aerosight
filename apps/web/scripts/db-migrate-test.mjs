@@ -882,6 +882,82 @@ async function assertApprovalSchema(connectionString) {
   }
 }
 
+async function assertTaskRunCommandSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select project.id, project.team_id, actor.id as user_id,
+              task.id as task_id, version.id as version_id, step.id as step_id
+         from projects project
+         join users actor on actor.email = 'legacy@example.test'
+         join tasks task on task.project_id = project.id and task.name = 'versioned-task'
+         join task_versions version on version.task_id = task.id
+         join task_steps step on step.task_version_id = version.id
+        where project.name = 'legacy-project' limit 1`
+    );
+    const row = scope.rows[0];
+    const adapter = await client.query(
+      `insert into device_adapters (project_id, team_id, name, adapter_type)
+       values ($1, $2, 'mission-simulator', 'simulator') returning id`,
+      [row.id, row.team_id]
+    );
+    const device = await client.query(
+      `insert into devices (project_id, name, type, adapter_id, status)
+       values ($1, 'mission-drone', 'drone', $2, 'online') returning id`,
+      [row.id, adapter.rows[0].id]
+    );
+    const run = await client.query(
+      `insert into task_runs (
+         project_id, team_id, task_id, task_version_id, selected_device_id, trigger_source, created_by_user_id
+       ) values ($1, $2, $3, $4, $5, 'manual', $6) returning id, state_version`,
+      [row.id, row.team_id, row.task_id, row.version_id, device.rows[0].id, row.user_id]
+    );
+    const runStep = await client.query(
+      `insert into task_run_steps (project_id, team_id, task_run_id, task_step_id, position)
+       values ($1, $2, $3, $4, 1) returning id`,
+      [row.id, row.team_id, run.rows[0].id, row.step_id]
+    );
+    await client.query(
+      `insert into device_commands (
+         id, project_id, team_id, task_run_id, task_run_step_id, device_id,
+         command_key, idempotency_key, capability_code, status, deadline_at, requested_by_user_id
+       ) values ('10000000-0000-4000-8000-000000000001', $1, $2, $3, $4, $5,
+                 'step-1', 'run-step-1', 'camera.capture', 'sent', now() + interval '1 minute', $6)`,
+      [row.id, row.team_id, run.rows[0].id, runStep.rows[0].id, device.rows[0].id, row.user_id]
+    );
+    await client.query(
+      `insert into command_attempts (project_id, team_id, command_id, adapter_id, attempt, status)
+       values ($1, $2, '10000000-0000-4000-8000-000000000001', $3, 1, 'sent')`,
+      [row.id, row.team_id, adapter.rows[0].id]
+    );
+    await client.query(
+      `insert into device_commands (
+         id, project_id, team_id, task_run_id, device_id, command_key, idempotency_key,
+         capability_code, deadline_at
+       ) values ('10000000-0000-4000-8000-000000000002', $1, $2, $3, $4,
+                 'duplicate', 'run-step-1', 'camera.capture', now() + interval '1 minute')`,
+      [row.id, row.team_id, run.rows[0].id, device.rows[0].id]
+    ).then(
+      () => assert(false, "duplicate physical command idempotency key should fail"),
+      (error) => assert(error.code === "23505", "duplicate command failed unexpectedly")
+    );
+    const advanced = await client.query(
+      `update task_runs set status = 'ready', state_version = state_version + 1, state_reason = 'preflight passed'
+        where id = $1 and project_id = $2 and state_version = 0 returning state_version`,
+      [run.rows[0].id, row.id]
+    );
+    const stale = await client.query(
+      `update task_runs set status = 'dispatching', state_version = state_version + 1
+        where id = $1 and project_id = $2 and state_version = 0 returning state_version`,
+      [run.rows[0].id, row.id]
+    );
+    assert(advanced.rows[0].state_version === 1 && stale.rowCount === 0, "task run optimistic version did not prevent stale update");
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -898,7 +974,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 17, "empty database should apply all migrations");
+    assert(first.applied.length === 18, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -916,6 +992,7 @@ try {
     await assertTaskVersionSchema(connectionString);
     await assertSafetyPolicySchema(connectionString);
     await assertApprovalSchema(connectionString);
+    await assertTaskRunCommandSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -941,7 +1018,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 17, "existing database should record all migrations");
+    assert(first.applied.length === 18, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -979,13 +1056,17 @@ try {
                 to_regclass('public.task_versions') as task_versions,
                 to_regclass('public.task_steps') as task_steps,
                 to_regclass('public.safety_policy_versions') as safety_policy_versions,
-                to_regclass('public.approvals') as approvals`
+                to_regclass('public.approvals') as approvals,
+                to_regclass('public.task_run_steps') as task_run_steps,
+                to_regclass('public.device_commands') as device_commands,
+                to_regclass('public.command_attempts') as command_attempts`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
         result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
         result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions &&
-        result.rows[0].approvals,
+        result.rows[0].approvals && result.rows[0].task_run_steps && result.rows[0].device_commands &&
+        result.rows[0].command_attempts,
         "schema snapshot is incomplete"
       );
     } finally {
