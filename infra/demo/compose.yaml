@@ -1,0 +1,81 @@
+name: aerosight-demo
+
+services:
+  auth-init:
+    image: eclipse-mosquitto:2.1.2-alpine
+    entrypoint: ["/bin/sh", "/templates/init-auth.sh"]
+    environment:
+      MQTT_DEVICE_USER: ${MQTT_DEVICE_USER:?set MQTT_DEVICE_USER in infra/demo/.env}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD:?set MQTT_DEVICE_PASSWORD in infra/demo/.env}
+      MQTT_PLATFORM_USER: ${MQTT_PLATFORM_USER:?set MQTT_PLATFORM_USER in infra/demo/.env}
+      MQTT_PLATFORM_PASSWORD: ${MQTT_PLATFORM_PASSWORD:?set MQTT_PLATFORM_PASSWORD in infra/demo/.env}
+      MEDIA_PUBLISH_USER: ${MEDIA_PUBLISH_USER:?set MEDIA_PUBLISH_USER in infra/demo/.env}
+      MEDIA_PUBLISH_PASSWORD: ${MEDIA_PUBLISH_PASSWORD:?set MEDIA_PUBLISH_PASSWORD in infra/demo/.env}
+      MEDIA_READ_USER: ${MEDIA_READ_USER:?set MEDIA_READ_USER in infra/demo/.env}
+      MEDIA_READ_PASSWORD: ${MEDIA_READ_PASSWORD:?set MEDIA_READ_PASSWORD in infra/demo/.env}
+      MEDIA_ADMIN_USER: ${MEDIA_ADMIN_USER:?set MEDIA_ADMIN_USER in infra/demo/.env}
+      MEDIA_ADMIN_PASSWORD: ${MEDIA_ADMIN_PASSWORD:?set MEDIA_ADMIN_PASSWORD in infra/demo/.env}
+    volumes:
+      - ./init-auth.sh:/templates/init-auth.sh:ro
+      - ./mosquitto.acl.template:/templates/mosquitto.acl.template:ro
+      - ./mediamtx.yml.template:/templates/mediamtx.yml.template:ro
+      - generated-auth:/generated
+    restart: "no"
+
+  mqtt:
+    image: eclipse-mosquitto:2.1.2-alpine
+    depends_on:
+      auth-init:
+        condition: service_completed_successfully
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - generated-auth:/generated:ro
+      - mqtt-data:/mosquitto/data
+    restart: unless-stopped
+
+  media:
+    image: bluenviron/mediamtx:1.20.1
+    depends_on:
+      auth-init:
+        condition: service_completed_successfully
+    command: ["/generated/mediamtx.yml"]
+    environment:
+      MTX_WEBRTCADDITIONALHOSTS: ${MEDIA_WEBRTC_ADDITIONAL_HOSTS:-127.0.0.1}
+    ports:
+      - "${MEDIA_RTMP_PORT:-1935}:1935"
+      - "${MEDIA_HLS_PORT:-8888}:8888"
+      - "${MEDIA_WEBRTC_PORT:-8889}:8889"
+      - "${MEDIA_API_PORT:-9997}:9997"
+      - "${MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp"
+    volumes:
+      - generated-auth:/generated:ro
+    restart: unless-stopped
+
+  mqtt-tools:
+    image: eclipse-mosquitto:2.1.2-alpine
+    profiles: ["tools"]
+    environment:
+      MQTT_DEVICE_USER: ${MQTT_DEVICE_USER}
+      MQTT_DEVICE_PASSWORD: ${MQTT_DEVICE_PASSWORD}
+      MQTT_PLATFORM_USER: ${MQTT_PLATFORM_USER}
+      MQTT_PLATFORM_PASSWORD: ${MQTT_PLATFORM_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+
+  media-tools:
+    image: bluenviron/mediamtx:1.20.1-ffmpeg
+    profiles: ["tools"]
+    entrypoint: ["ffmpeg"]
+
+  media-check:
+    image: alpine:3.22
+    profiles: ["tools"]
+    environment:
+      MEDIA_READ_USER: ${MEDIA_READ_USER}
+      MEDIA_READ_PASSWORD: ${MEDIA_READ_PASSWORD}
+    entrypoint: ["/bin/sh", "-c"]
+
+volumes:
+  generated-auth:
+  mqtt-data:

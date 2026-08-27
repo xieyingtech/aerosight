@@ -1,0 +1,32 @@
+logLevel: info
+authMethod: internal
+authInternalUsers:
+  - user: __MEDIA_PUBLISH_USER__
+    pass: __MEDIA_PUBLISH_PASSWORD__
+    permissions:
+      - action: publish
+        path: ~^demo/[A-Za-z0-9._/-]+$
+  - user: __MEDIA_READ_USER__
+    pass: __MEDIA_READ_PASSWORD__
+    permissions:
+      - action: read
+        path: ~^demo/[A-Za-z0-9._/-]+$
+      - action: playback
+        path: ~^demo/[A-Za-z0-9._/-]+$
+  - user: __MEDIA_ADMIN_USER__
+    pass: __MEDIA_ADMIN_PASSWORD__
+    permissions:
+      - action: api
+
+api: true
+apiAddress: :9997
+rtsp: true
+rtspTransports: [tcp]
+rtmp: true
+hls: true
+hlsVariant: fmp4
+webrtc: true
+webrtcLocalUDPAddress: :8189
+
+paths:
+  ~^demo/[A-Za-z0-9._/-]+$: {}

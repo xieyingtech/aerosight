@@ -1,0 +1,5 @@
+user __MQTT_DEVICE_USER__
+topic readwrite dji/demo/#
+
+user __MQTT_PLATFORM_USER__
+topic readwrite dji/demo/#
