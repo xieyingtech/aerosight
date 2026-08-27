@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 
 	"aerosight/worker/internal/config"
 	"aerosight/worker/internal/heartbeat"
+	"aerosight/worker/internal/media"
 	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/outbox"
 	"aerosight/worker/internal/wakeup"
@@ -46,6 +48,20 @@ func main() {
 	}
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
+	if workerConfig.ObjectStorageLocalRoot == "" {
+		consumer.Register("asset.available", func(context.Context, *sql.Tx, outbox.Event) error {
+			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")
+		})
+		logger.Warn("media derivative processing unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
+	} else {
+		storage, err := media.NewLocalObjectStorage(workerConfig.ObjectStorageLocalRoot)
+		if err != nil {
+			logger.Error("object storage initialization failed", "error", err.Error())
+			os.Exit(1)
+		}
+		processor := media.NewProcessor(storage, media.NewSQLRepository())
+		consumer.Register("asset.available", processor.Handler)
+	}
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()

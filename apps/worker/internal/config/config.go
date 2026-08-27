@@ -8,16 +8,18 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	LogLevel    string
-	WorkerName  string
+	DatabaseURL            string
+	LogLevel               string
+	WorkerName             string
+	ObjectStorageLocalRoot string
 }
 
 func Load() (Config, error) {
 	config := Config{
-		DatabaseURL: strings.TrimSpace(os.Getenv("DATABASE_URL")),
-		LogLevel:    valueOrDefault("LOG_LEVEL", "info"),
-		WorkerName:  valueOrDefault("WORKER_NAME", "aerosight-worker"),
+		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		LogLevel:               valueOrDefault("LOG_LEVEL", "info"),
+		WorkerName:             valueOrDefault("WORKER_NAME", "aerosight-worker"),
+		ObjectStorageLocalRoot: strings.TrimSpace(os.Getenv("OBJECT_STORAGE_LOCAL_ROOT")),
 	}
 
 	var problems []error

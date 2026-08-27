@@ -15,6 +15,7 @@ apps/web/tsconfig.tsbuildinfo
 
 # Package managers
 node_modules/
+.aerosight-objects/
 
 # Logs
 *.log
