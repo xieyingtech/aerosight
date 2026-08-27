@@ -66,6 +66,64 @@ func TestDJIProtocolPublishesTopologyAndCorrelatedReplyThroughTransport(t *testi
 	}
 }
 
+func TestDock2ScenariosPublishTypedTopologyAndRealtimeData(t *testing.T) {
+	for _, fixture := range []struct {
+		product  string
+		aircraft string
+		subtype  int
+	}{
+		{DJIProductDock2M3D, "M3D-DEMO-001", 0},
+		{DJIProductDock2M3TD, "M3TD-DEMO-001", 1},
+	} {
+		t.Run(fixture.product, func(t *testing.T) {
+			now := time.UnixMilli(1_787_821_200_000).UTC()
+			config, err := Dock2Scenario(fixture.product, "DOCK2-DEMO-001", fixture.aircraft, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config.Now = func() time.Time { return now.Add(time.Second) }
+			transport := &protocolTransportFixture{}
+			protocol, err := NewDJIProtocol(config, transport)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := protocol.PublishTopology(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if err := protocol.PublishTelemetry(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if len(transport.publications) != 3 {
+				t.Fatalf("got %d publications, want topology plus dock and aircraft OSD", len(transport.publications))
+			}
+			var topology struct {
+				Data struct {
+					Type       int `json:"type"`
+					SubDevices []struct {
+						SN      string `json:"sn"`
+						Subtype int    `json:"sub_type"`
+					} `json:"sub_devices"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(transport.publications[0].payload, &topology); err != nil {
+				t.Fatal(err)
+			}
+			if topology.Data.Type != 2 || len(topology.Data.SubDevices) != 1 ||
+				topology.Data.SubDevices[0].SN != fixture.aircraft || topology.Data.SubDevices[0].Subtype != fixture.subtype {
+				t.Fatalf("scenario emitted wrong product topology: %+v", topology)
+			}
+			if transport.publications[1].topic != "thing/product/DOCK2-DEMO-001/osd" ||
+				transport.publications[2].topic != "thing/product/"+fixture.aircraft+"/osd" {
+				t.Fatalf("scenario emitted wrong realtime topics: %+v", transport.publications)
+			}
+			if !strings.Contains(string(transport.publications[1].payload), "environment_temperature") ||
+				!strings.Contains(string(transport.publications[2].payload), "latitude") {
+				t.Fatal("dock sensor or aircraft telemetry sample is missing")
+			}
+		})
+	}
+}
+
 func TestDJIProtocolPackageHasNoDatabaseOrInternalSuccessBypass(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {

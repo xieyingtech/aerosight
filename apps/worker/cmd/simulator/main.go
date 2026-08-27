@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"aerosight/worker/internal/dji"
 	"aerosight/worker/internal/simulator"
@@ -18,13 +19,15 @@ func main() {
 	scenarioPath := flag.String("scenario", "", "path to a simulator scenario JSON file")
 	realtime := flag.Bool("realtime", false, "respect step offsets in wall-clock time")
 	topologyPath := flag.String("topology", "", "DJI topology fixture path (dji-mqtt mode)")
+	product := flag.String("product", "", "built-in DJI product scenario, for example dock2-m3td")
 	gatewaySN := flag.String("gateway-sn", "", "DJI gateway serial number (dji-mqtt mode)")
+	aircraftSN := flag.String("aircraft-sn", "", "DJI aircraft serial number for a built-in scenario")
 	mqttURL := flag.String("mqtt-url", "mqtt://127.0.0.1:1883", "MQTT broker URL without inline credentials")
 	mqttUsername := flag.String("mqtt-username", "", "MQTT username")
 	mqttPasswordEnv := flag.String("mqtt-password-env", "AEROSIGHT_DJI_SIM_MQTT_PASSWORD", "environment variable containing the MQTT password")
 	flag.Parse()
 	if *mode == "dji-mqtt" {
-		runDJIMQTT(*topologyPath, *gatewaySN, *mqttURL, *mqttUsername, *mqttPasswordEnv)
+		runDJIMQTT(*topologyPath, *product, *gatewaySN, *aircraftSN, *mqttURL, *mqttUsername, *mqttPasswordEnv)
 		return
 	}
 	if *mode != "stdout" {
@@ -57,9 +60,9 @@ func main() {
 	}
 }
 
-func runDJIMQTT(topologyPath, gatewaySN, brokerURL, username, passwordEnv string) {
-	if topologyPath == "" || gatewaySN == "" || username == "" || passwordEnv == "" {
-		fmt.Fprintln(os.Stderr, "-topology, -gateway-sn, -mqtt-username, and -mqtt-password-env are required in dji-mqtt mode")
+func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, username, passwordEnv string) {
+	if (topologyPath == "" && product == "") || gatewaySN == "" || username == "" || passwordEnv == "" {
+		fmt.Fprintln(os.Stderr, "-gateway-sn, -mqtt-username, -mqtt-password-env, and either -topology or -product are required in dji-mqtt mode")
 		os.Exit(2)
 	}
 	password := os.Getenv(passwordEnv)
@@ -67,10 +70,21 @@ func runDJIMQTT(topologyPath, gatewaySN, brokerURL, username, passwordEnv string
 		fmt.Fprintf(os.Stderr, "MQTT password environment variable %s is empty\n", passwordEnv)
 		os.Exit(2)
 	}
-	topology, err := os.ReadFile(topologyPath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	protocolConfig := simulator.DJIProtocolConfig{GatewaySN: gatewaySN, AircraftSN: aircraftSN}
+	if product != "" {
+		var err error
+		protocolConfig, err = simulator.Dock2Scenario(product, gatewaySN, aircraftSN, time.Now())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	} else {
+		topology, err := os.ReadFile(topologyPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		protocolConfig.Topology = topology
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -90,17 +104,23 @@ func runDJIMQTT(topologyPath, gatewaySN, brokerURL, username, passwordEnv string
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	protocol, err := simulator.NewDJIProtocol(simulator.DJIProtocolConfig{GatewaySN: gatewaySN, Topology: topology}, session)
+	protocol, err := simulator.NewDJIProtocol(protocolConfig, session)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	var telemetryErrors <-chan error
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-session.Done():
 			fmt.Fprintln(os.Stderr, "DJI MQTT simulator session ended")
+			return
+		case err := <-telemetryErrors:
+			if err != nil && ctx.Err() == nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
 			return
 		case message := <-incoming:
 			if err := protocol.HandleMessage(ctx, message.Topic, message.Payload); err != nil {
@@ -111,6 +131,11 @@ func runDJIMQTT(topologyPath, gatewaySN, brokerURL, username, passwordEnv string
 			if event.State == "connected" {
 				if err := protocol.PublishTopology(ctx); err != nil {
 					fmt.Fprintln(os.Stderr, err)
+				}
+				if protocolConfig.TelemetryInterval > 0 && telemetryErrors == nil {
+					channel := make(chan error, 1)
+					telemetryErrors = channel
+					go func() { channel <- protocol.RunTelemetry(ctx) }()
 				}
 			}
 		}
