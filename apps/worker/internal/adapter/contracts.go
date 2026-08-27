@@ -18,6 +18,12 @@ var upstreamEventTypes = map[string]bool{
 	"live.status":       true,
 	"media.reference":   true,
 	"command.ack":       true,
+	"device.topology":   true,
+	"device.state":      true,
+	"device.telemetry":  true,
+	"device.event":      true,
+	"device.request":    true,
+	"command.reply":     true,
 }
 
 type UpstreamEnvelope struct {

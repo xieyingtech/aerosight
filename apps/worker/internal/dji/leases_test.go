@@ -15,7 +15,7 @@ func (fixture secretFixture) ResolveMQTT(context.Context, string) (MQTTCredentia
 func TestBuildMQTTConfigUsesSecretReferenceAndStableAdapterIdentity(t *testing.T) {
 	config, err := BuildMQTTConfig(context.Background(), AdapterLease{
 		AdapterID: 7, ProjectID: 3, BrokerURL: "mqtt://broker.example.test:1883", SecretRef: "secret://adapter/7",
-		ConfigJSON: json.RawMessage(`{"topics":["dji/project-3/GW001/#"]}`),
+		ConfigJSON: json.RawMessage(`{"topics":["dji/project-3/GW001/#"],"gatewaySerials":["GW001"]}`),
 	}, secretFixture{credentials: MQTTCredentials{Username: "adapter-7", Password: "not-inline"}})
 	if err != nil {
 		t.Fatal(err)

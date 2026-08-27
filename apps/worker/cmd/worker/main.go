@@ -83,16 +83,18 @@ func main() {
 		logger.Error("DJI driver registration failed", "error", err.Error())
 		os.Exit(1)
 	}
+	djiIngestor := dji.NewMessageIngestor(dji.NewSQLIngressStore(database))
 	djiManager := dji.NewAdapterManager(
 		dji.NewSQLLeaseRepository(database), dji.EnvironmentSecretResolver{},
 		func(ctx context.Context, config dji.MQTTConfig, handler dji.MQTTMessageHandler) (dji.ManagedSession, error) {
 			return dji.StartMQTTSession(ctx, config, handler)
 		},
 		func(lease dji.AdapterLease) dji.MQTTMessageHandler {
-			return func(_ context.Context, message dji.MQTTMessage) error {
-				logger.Debug("DJI MQTT message received", "adapter_id", lease.AdapterID, "topic", message.Topic)
-				return nil
+			scope, err := dji.RouteContextFromLease(lease)
+			if err != nil {
+				return func(context.Context, dji.MQTTMessage) error { return err }
 			}
+			return djiIngestor.Handle(scope)
 		},
 		workerConfig.WorkerName+":"+runID, logger,
 	)

@@ -120,6 +120,9 @@ func StartMQTTSession(ctx context.Context, config MQTTConfig, handler MQTTMessag
 					Topic: packet.Topic, Payload: append([]byte(nil), packet.Payload...), QoS: packet.QoS,
 					Retained: packet.Retain, Duplicate: packet.Duplicate(), ReceivedAt: time.Now().UTC(),
 				})
+				if IsPermanentIngressError(err) {
+					return true, nil
+				}
 				return err == nil, err
 			}},
 		},

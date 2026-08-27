@@ -146,23 +146,51 @@ func (EnvironmentSecretResolver) ResolveMQTT(_ context.Context, reference string
 }
 
 type adapterSessionConfig struct {
-	ClientID string   `json:"clientId"`
-	Topics   []string `json:"topics"`
+	ClientID       string   `json:"clientId"`
+	Topics         []string `json:"topics"`
+	GatewaySerials []string `json:"gatewaySerials"`
+}
+
+func adapterConfig(lease AdapterLease) (adapterSessionConfig, error) {
+	var configured adapterSessionConfig
+	if err := json.Unmarshal(lease.ConfigJSON, &configured); err != nil {
+		return adapterSessionConfig{}, errors.New("DJI_ADAPTER_CONFIG_INVALID")
+	}
+	if len(configured.Topics) == 0 {
+		return adapterSessionConfig{}, errors.New("DJI_ADAPTER_TOPICS_REQUIRED")
+	}
+	if len(configured.GatewaySerials) == 0 {
+		return adapterSessionConfig{}, errors.New("DJI_ADAPTER_GATEWAYS_REQUIRED")
+	}
+	return configured, nil
+}
+
+func RouteContextFromLease(lease AdapterLease) (RouteContext, error) {
+	configured, err := adapterConfig(lease)
+	if err != nil {
+		return RouteContext{}, err
+	}
+	allowed := make(map[string]bool, len(configured.GatewaySerials))
+	for _, gatewaySN := range configured.GatewaySerials {
+		gatewaySN = strings.TrimSpace(gatewaySN)
+		if gatewaySN == "" {
+			return RouteContext{}, errors.New("DJI_ADAPTER_GATEWAYS_REQUIRED")
+		}
+		allowed[gatewaySN] = true
+	}
+	return RouteContext{ProjectID: lease.ProjectID, AdapterID: lease.AdapterID, AllowedGatewaySNs: allowed}, nil
 }
 
 func BuildMQTTConfig(ctx context.Context, lease AdapterLease, resolver SecretResolver) (MQTTConfig, error) {
 	if resolver == nil {
 		return MQTTConfig{}, errors.New("DJI_SECRET_RESOLVER_REQUIRED")
 	}
-	var configured adapterSessionConfig
-	if err := json.Unmarshal(lease.ConfigJSON, &configured); err != nil {
-		return MQTTConfig{}, errors.New("DJI_ADAPTER_CONFIG_INVALID")
+	configured, err := adapterConfig(lease)
+	if err != nil {
+		return MQTTConfig{}, err
 	}
 	if configured.ClientID == "" {
 		configured.ClientID = fmt.Sprintf("aerosight-%d-%d", lease.ProjectID, lease.AdapterID)
-	}
-	if len(configured.Topics) == 0 {
-		return MQTTConfig{}, errors.New("DJI_ADAPTER_TOPICS_REQUIRED")
 	}
 	credentials, err := resolver.ResolveMQTT(ctx, lease.SecretRef)
 	if err != nil {

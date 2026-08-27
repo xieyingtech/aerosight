@@ -1181,6 +1181,48 @@ CREATE INDEX "device_adapters_lease_claim_idx"
 ON "device_adapters" ("adapter_type", "status", "lease_expires_at")
 WHERE "status" in ('connecting', 'connected', 'degraded');
 --> statement-breakpoint
+CREATE TABLE "device_protocol_messages" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"gateway_sn" text NOT NULL,
+	"device_sn" text NOT NULL,
+	"topic" text NOT NULL,
+	"route_kind" text NOT NULL,
+	"transaction_id" text NOT NULL,
+	"business_id" text,
+	"method" text,
+	"timestamp_ms" bigint NOT NULL,
+	"sequence_number" bigint,
+	"qos" smallint NOT NULL,
+	"duplicate_flag" boolean DEFAULT false NOT NULL,
+	"payload_json" jsonb NOT NULL,
+	"disposition" text DEFAULT 'accepted' NOT NULL,
+	"disposition_reason" text,
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_protocol_messages_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_protocol_messages_adapter_project_fk" FOREIGN KEY ("adapter_id", "project_id") REFERENCES "device_adapters"("id", "project_id") ON DELETE cascade,
+	CONSTRAINT "device_protocol_messages_route_valid" CHECK ("route_kind" in ('topology', 'state', 'telemetry', 'event', 'request', 'service_reply')),
+	CONSTRAINT "device_protocol_messages_disposition_valid" CHECK ("disposition" in ('accepted', 'out_of_order')),
+	CONSTRAINT "device_protocol_messages_adapter_topic_tid_unique" UNIQUE("adapter_id", "topic", "transaction_id")
+);
+--> statement-breakpoint
+CREATE INDEX "device_protocol_messages_project_time_idx" ON "device_protocol_messages" ("project_id", "received_at" DESC);
+--> statement-breakpoint
+CREATE TABLE "device_protocol_cursors" (
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"adapter_id" bigint NOT NULL,
+	"route_key" text NOT NULL,
+	"last_timestamp_ms" bigint NOT NULL,
+	"last_transaction_id" text NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "device_protocol_cursors_pk" PRIMARY KEY("adapter_id", "route_key"),
+	CONSTRAINT "device_protocol_cursors_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
+	CONSTRAINT "device_protocol_cursors_adapter_project_fk" FOREIGN KEY ("adapter_id", "project_id") REFERENCES "device_adapters"("id", "project_id") ON DELETE cascade
+);
+--> statement-breakpoint
 CREATE TRIGGER algorithm_definition_versions_published_immutable
 BEFORE UPDATE OR DELETE ON algorithm_definition_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_algorithm_definition_version();
