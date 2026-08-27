@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, VideoOffIcon } from "lucide-react";
+import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
@@ -56,6 +56,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
 }) {
   const model = useMemo(() => createLiveStreamPanelModel({ snapshot, selection, mode, cursor }), [snapshot, selection, mode, cursor]);
   const [playback, setPlayback] = useState<PlaybackState>({ status: "idle" });
+  const [stopState, setStopState] = useState<"idle" | "stopping" | "error">("idle");
   const streamId = model.mode === "live" ? Number(model.stream?.id) || null : null;
   const selectedDeviceId = selection?.lane.includes("device") ? Number(selection.entityId)
     : Number(model.stream?.deviceId) || null;
@@ -135,6 +136,16 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
 
   const sourceType = String(model.stream.sourceType ?? "unknown");
   const status = String(model.stream.status);
+  const stopStream = async () => {
+    if (!streamId || stopState === "stopping") return;
+    setStopState("stopping");
+    const response = await fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/stop`, {
+      method: "POST"
+    });
+    if (!response.ok) { setStopState("error"); return; }
+    setPlayback({ status: "idle" });
+    window.location.reload();
+  };
   const lastActive = model.stream.lastActiveAt ? Date.parse(String(model.stream.lastActiveAt)) : NaN;
   const latencySeconds = Number.isFinite(lastActive) ? Math.max(0, Math.round((Date.now() - lastActive) / 1000)) : null;
   return <div className="space-y-3 p-4">
@@ -149,10 +160,19 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
             ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
             ? <video autoPlay className="h-full w-full object-contain" controls muted onError={() => setPlayback((current) => current.status === "ready" && current.index + 1 < current.candidates.length ? { ...current, index: current.index + 1 } : { status: "error" })} src={playback.candidates[playback.index].url} />
-            : <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>}
+            : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "simulator"
+              ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
+              : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}
     </div>
     <p className="text-xs text-muted-foreground">{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`} · {sourceType}</p>
     {playback.status === "ready" && playback.index + 1 < playback.candidates.length && <button className="rounded-md border px-2.5 py-1 text-xs" onClick={() => setPlayback({ ...playback, index: playback.index + 1 })} type="button">切换备用协议</button>}
+    <div className="flex items-center gap-2">
+      <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs disabled:opacity-50" disabled={stopState === "stopping"} onClick={stopStream} type="button">
+        {stopState === "stopping" ? <RefreshCwIcon className="size-3.5 animate-spin" /> : <SquareIcon className="size-3.5" />}
+        {stopState === "stopping" ? "正在停止" : "停止直播"}
+      </button>
+      {stopState === "error" && <span className="text-xs text-destructive">停止失败，请重试</span>}
+    </div>
     {realtimeData}
   </div>;
 }
