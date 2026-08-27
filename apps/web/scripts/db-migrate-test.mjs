@@ -676,6 +676,48 @@ async function assertMediaEvidenceSchema(connectionString) {
   }
 }
 
+async function assertLiveStreamSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select project.id, project.team_id, project.name, device.id as device_id,
+              (select adapter.id from device_adapters adapter
+                where adapter.project_id = project.id limit 1) as adapter_id
+         from projects project
+         join devices device on device.project_id = project.id
+        where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = scope.rows.find((row) => row.name === "北区巡检" && row.adapter_id);
+    const south = scope.rows.find((row) => row.name === "南区巡检");
+    const stream = await client.query(
+      `insert into live_streams (
+         project_id, team_id, device_id, adapter_id, stream_key, source_type, status, playback_ref
+       ) values ($1, $2, $3, $4, 'camera.main', 'simulator', 'live', 'simulator://camera.main')
+       returning id`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id, team_id, device_id, adapter_id, stream_key, source_type, status
+       ) values ($1, $2, $3, $4, 'camera.main', 'simulator', 'starting')`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    ).then(
+      () => assert(false, "a device stream key should have one active session"),
+      (error) => assert(error.code === "23505", "duplicate active stream failed unexpectedly")
+    );
+    await client.query(
+      "update live_streams set device_id = $3 where project_id = $1 and id = $2",
+      [north.id, stream.rows[0].id, south.device_id]
+    ).then(
+      () => assert(false, "cross-project live stream device should fail"),
+      (error) => assert(error.code === "23503", "cross-project live stream failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -692,7 +734,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 13, "empty database should apply all migrations");
+    assert(first.applied.length === 14, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -706,6 +748,7 @@ try {
     await assertHeartbeatProjectionSchema(connectionString);
     await assertSpatiotemporalSchema(connectionString);
     await assertMediaEvidenceSchema(connectionString);
+    await assertLiveStreamSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -719,7 +762,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 13, "existing database should record all migrations");
+    assert(first.applied.length === 14, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
@@ -738,11 +781,12 @@ try {
                 to_regclass('public.device_adapters') as adapters,
                 to_regclass('public.device_telemetry') as telemetry,
                 to_regclass('public.asset_upload_intents') as upload_intents,
-                to_regclass('public.evidence_links') as evidence_links`
+                to_regclass('public.evidence_links') as evidence_links,
+                to_regclass('public.live_streams') as live_streams`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
-        result.rows[0].upload_intents && result.rows[0].evidence_links,
+        result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams,
         "schema snapshot is incomplete"
       );
     } finally {

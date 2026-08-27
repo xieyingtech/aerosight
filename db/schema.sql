@@ -133,6 +133,29 @@ CREATE TABLE "evidence_links" (
 	CONSTRAINT "evidence_links_unique" UNIQUE("project_id", "target_type", "target_id", "asset_id", "start_offset_ms", "end_offset_ms")
 );
 --> statement-breakpoint
+CREATE TABLE "live_streams" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"device_id" integer NOT NULL,
+	"task_run_id" integer,
+	"adapter_id" bigint,
+	"stream_key" text NOT NULL,
+	"source_type" text NOT NULL,
+	"status" text DEFAULT 'starting' NOT NULL,
+	"playback_ref" text,
+	"playback_locator_expires_at" timestamp with time zone,
+	"status_reason" text,
+	"started_by_user_id" integer,
+	"started_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_active_at" timestamp with time zone,
+	"ended_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "live_streams_status_valid" CHECK (status in ('starting', 'live', 'degraded', 'failed', 'stopping', 'stopped')),
+	CONSTRAINT "live_streams_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
 CREATE OR REPLACE FUNCTION protect_published_evidence_link()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
@@ -608,6 +631,11 @@ ALTER TABLE "asset_derivatives" ADD CONSTRAINT "asset_derivatives_derived_projec
 ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_asset_project_fk" FOREIGN KEY ("asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("adapter_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_started_by_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -683,6 +711,9 @@ CREATE INDEX "assets_retention_idx" ON "assets" USING btree ("project_id","reten
 CREATE INDEX "asset_upload_intents_expiry_idx" ON "asset_upload_intents" USING btree ("status","expires_at");--> statement-breakpoint
 CREATE INDEX "asset_derivatives_source_idx" ON "asset_derivatives" USING btree ("project_id","source_asset_id");--> statement-breakpoint
 CREATE INDEX "evidence_links_target_idx" ON "evidence_links" USING btree ("project_id","target_type","target_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "live_streams_one_active_device_key_idx" ON "live_streams" USING btree ("project_id","device_id","stream_key") WHERE "live_streams"."status" in ('starting', 'live', 'degraded', 'stopping');--> statement-breakpoint
+CREATE INDEX "live_streams_project_status_idx" ON "live_streams" USING btree ("project_id","status","started_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "live_streams_device_started_idx" ON "live_streams" USING btree ("device_id","started_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "audit_events_project_created_idx" ON "audit_events" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "audit_events_request_idx" ON "audit_events" USING btree ("request_id");--> statement-breakpoint
 CREATE INDEX "audit_events_resource_idx" ON "audit_events" USING btree ("project_id","resource_type","resource_id");--> statement-breakpoint
