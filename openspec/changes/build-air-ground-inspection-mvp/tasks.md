@@ -91,7 +91,7 @@
 
 ## 10. 告警自动化策略与报告
 
-- [ ] 10.1 创建版本化 `alert_automation_policies` 和自动化运行记录，支持 `manual`、`agent-on-demand`、`agent-auto-draft`、`follow-up-draft`，并通过默认 `manual` 与历史版本测试验证。
+- [x] 10.1 创建版本化 `alert_automation_policies` 和自动化运行记录，支持 `manual`、`agent-on-demand`、`agent-auto-draft`、`follow-up-draft`，并通过默认 `manual` 与历史版本测试验证。
 - [ ] 10.2 实现告警事实事务与 AI outbox 解耦，确保模型失败不回滚或隐藏告警，并通过模型超时/不可用故障注入测试验证。
 - [ ] 10.3 实现按需智能体总结和报告草稿，记录模型、提示模板、工具调用和证据版本，并通过证据修订后旧草稿过期提示测试验证。
 - [ ] 10.4 实现自动报告/工单/后续任务草案，不自动发布或执行，并通过 `agent-auto-draft` 与 `follow-up-draft` 场景测试验证只产生草案。

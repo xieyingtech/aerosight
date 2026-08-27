@@ -1193,6 +1193,69 @@ $$;
 CREATE TRIGGER approvals_project_request_status
 AFTER INSERT ON approvals FOR EACH ROW EXECUTE FUNCTION project_approval_request_status();
 --> statement-breakpoint
+CREATE TABLE "alert_automation_policies" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"current_published_version_id" bigint,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "alert_automation_policies_project_name_unique" UNIQUE("project_id","name"),
+	CONSTRAINT "alert_automation_policies_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "alert_automation_policies_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE "alert_automation_policy_versions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"alert_automation_policy_id" bigint NOT NULL,
+	"event_rule_version_id" bigint,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"mode" text DEFAULT 'manual' NOT NULL,
+	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "alert_automation_policy_versions_status_valid" CHECK(status in('draft','published','retired')),
+	CONSTRAINT "alert_automation_policy_versions_mode_valid" CHECK(mode in('manual','agent-on-demand','agent-auto-draft','follow-up-draft')),
+	CONSTRAINT "alert_automation_policy_versions_version_positive" CHECK(version>0),
+	CONSTRAINT "alert_automation_policy_versions_policy_version_unique" UNIQUE("alert_automation_policy_id","version"),
+	CONSTRAINT "alert_automation_policy_versions_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "alert_automation_policy_versions_policy_project_fk" FOREIGN KEY("alert_automation_policy_id","project_id") REFERENCES "alert_automation_policies"("id","project_id") ON DELETE cascade,
+	CONSTRAINT "alert_automation_policy_versions_rule_project_fk" FOREIGN KEY("event_rule_version_id","project_id") REFERENCES "event_rule_versions"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "alert_automation_policy_versions_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
+ALTER TABLE "alert_automation_policies" ADD CONSTRAINT "alert_automation_policies_current_version_project_fk" FOREIGN KEY("current_published_version_id","project_id") REFERENCES "alert_automation_policy_versions"("id","project_id") ON DELETE set null;
+--> statement-breakpoint
+CREATE TABLE "alert_automation_runs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"policy_version_id" bigint NOT NULL,
+	"perception_event_id" uuid NOT NULL,
+	"trigger_reason" text NOT NULL,
+	"status" text DEFAULT 'queued' NOT NULL,
+	"input_scope_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"output_refs_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"failure_code" text,
+	"failure_message" text,
+	"queued_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"started_at" timestamp with time zone,
+	"finished_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "alert_automation_runs_status_valid" CHECK(status in('queued','running','succeeded','failed','canceled')),
+	CONSTRAINT "alert_automation_runs_id_project_unique" UNIQUE("id","project_id"),
+	CONSTRAINT "alert_automation_runs_policy_project_fk" FOREIGN KEY("policy_version_id","project_id") REFERENCES "alert_automation_policy_versions"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "alert_automation_runs_event_project_fk" FOREIGN KEY("perception_event_id","project_id") REFERENCES "perception_events"("id","project_id") ON DELETE restrict,
+	CONSTRAINT "alert_automation_runs_project_team_fk" FOREIGN KEY("project_id","team_id") REFERENCES "projects"("id","team_id") ON DELETE cascade
+);
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1376,6 +1439,10 @@ CREATE INDEX "agent_drafts_session_created_idx" ON "agent_drafts" USING btree ("
 CREATE INDEX "agent_draft_evidence_project_ref_idx" ON "agent_draft_evidence" USING btree ("project_id","reference_type","reference_id");--> statement-breakpoint
 CREATE INDEX "agent_tool_jobs_claim_idx" ON "agent_tool_jobs" USING btree ("status","created_at") WHERE "agent_tool_jobs"."status"='queued';--> statement-breakpoint
 CREATE INDEX "agent_tool_jobs_session_idx" ON "agent_tool_jobs" USING btree ("session_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "alert_automation_policy_versions_one_draft_idx" ON "alert_automation_policy_versions" USING btree ("alert_automation_policy_id") WHERE "alert_automation_policy_versions"."status"='draft';--> statement-breakpoint
+CREATE INDEX "alert_automation_policy_versions_project_status_idx" ON "alert_automation_policy_versions" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "alert_automation_runs_claim_idx" ON "alert_automation_runs" USING btree ("status","queued_at") WHERE "alert_automation_runs"."status"='queued';--> statement-breakpoint
+CREATE INDEX "alert_automation_runs_project_event_idx" ON "alert_automation_runs" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint
