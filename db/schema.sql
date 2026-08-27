@@ -739,7 +739,7 @@ CREATE TABLE "issue_links" (
 	"project_id" integer NOT NULL,
 	"issue_id" integer NOT NULL,
 	"link_type" text NOT NULL,
-	"target_id" integer NOT NULL,
+	"target_id" text NOT NULL,
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );

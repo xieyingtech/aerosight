@@ -1109,6 +1109,9 @@ async function assertPerceptionEventSchema(connectionString) {
     const advanced=await client.query(`update perception_events set status='acknowledged',state_version=state_version+1 where id=$1 and state_version=$2 returning state_version`,[event.rows[0].id,event.rows[0].state_version]);
     const stale=await client.query(`update perception_events set status='investigating',state_version=state_version+1 where id=$1 and state_version=$2 returning state_version`,[event.rows[0].id,event.rows[0].state_version]);
     assert(advanced.rows[0].state_version===1&&stale.rowCount===0,"perception event optimistic concurrency failed");
+    await client.query(`insert into event_feedback(project_id,team_id,perception_event_id,action,reason,actor_user_id) values($1,$2,$3,'confirm','fixture confirmation',$4)`,[scope.project_id,scope.team_id,event.rows[0].id,scope.user_id]);
+    const issue=(await client.query(`select id from issues where project_id=$1 limit 1`,[scope.project_id])).rows[0];
+    if(issue)await client.query(`insert into issue_links(project_id,issue_id,link_type,target_id,created_by_user_id) values($1,$2,'perception_event',$3,$4)`,[scope.project_id,issue.id,event.rows[0].id,scope.user_id]);
   } finally { await client.end(); }
 }
 
@@ -1128,7 +1131,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 22, "empty database should apply all migrations");
+    assert(first.applied.length === 23, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1175,7 +1178,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 22, "existing database should record all migrations");
+    assert(first.applied.length === 23, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
