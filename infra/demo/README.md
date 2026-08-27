@@ -2,6 +2,8 @@
 
 This isolated Compose stack provides the protocol dependencies for the DJI demo path. It is intentionally not exposed through the root `package.json`.
 
+LAN and public endpoint examples, firewall rules, TLS requirements, Topic ACLs and media permissions are documented in [the device network profile guide](../../docs/operations/device-network-profiles.md).
+
 1. Copy `.env.example` to `.env` and replace every password with a random value. Credentials are used only to generate files inside a Docker volume and are not committed.
 2. Set `MEDIA_WEBRTC_ADDITIONAL_HOSTS` to the LAN address that browsers use to reach this machine.
 3. Start and verify:

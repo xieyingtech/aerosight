@@ -1,0 +1,11 @@
+{
+  "mode": "public",
+  "mqttEndpoint": "mqtts://mqtt.aerosight.example.test:8883",
+  "apiPublicBaseUrl": "https://api.aerosight.example.test",
+  "websocketPublicUrl": "wss://api.aerosight.example.test/device-events",
+  "mediaIngestBaseUrl": "rtmps://ingest.aerosight.example.test:1936",
+  "mediaPlaybackBaseUrl": "https://media.aerosight.example.test",
+  "tlsRequired": true,
+  "mqttAnonymous": false,
+  "secretRef": "secret://projects/1/device-networks/public-dji"
+}
