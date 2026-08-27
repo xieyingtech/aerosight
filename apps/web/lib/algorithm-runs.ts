@@ -7,11 +7,65 @@ import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
 import { correlationId } from "@/lib/observability";
 import { publishProjectEvent } from "@/lib/project-events";
+import { startAlgorithmRunInputSchema } from "@/lib/algorithm-run-input";
 
 type AlgorithmRunRow = AlgorithmRunViewRow & {
   definitionName: string; definitionVersion: number; providerName: string; providerType: string;
   inputAssetId: number; taskRunId: number | null; deviceId: number | null; externalJobId: string | null;
 };
+
+export async function startAlgorithmRun(projectId: number, rawInput: unknown, requestId?: string | null) {
+  const input = startAlgorithmRunInputSchema.parse(rawInput);
+  const { user, access } = await requireCurrentProjectPermission(projectId, "algorithm:manage");
+  const runId = randomUUID();
+  return withAuditedProjectWrite({
+    projectId, teamId: access.teamId, actorUserId: user.id, requestId: correlationId(requestId),
+    action: "algorithm_run.create", resourceType: "algorithm_definition_version", resourceId: String(input.definitionVersionId),
+    input, policyResult: { permission: "algorithm:manage", catalogVersionRequired: true }
+  }, async (client) => {
+    const source = (await client.query<{
+      teamId: number; definitionVersionId: string; providerType: string; modelOrProcess: string;
+      executionMode: string; mappingVersion: string; assetId: number; assetVersion: number;
+      checksumSha256: string; mimeType: string;
+    }>(`select definition.team_id as "teamId", version.id as "definitionVersionId",
+              provider.provider_type as "providerType", version.model_or_process as "modelOrProcess",
+              version.execution_mode as "executionMode",
+              coalesce(version.protocol_config_json->>'mappingVersion','v1') as "mappingVersion",
+              asset.id as "assetId", asset.version as "assetVersion",
+              coalesce(asset.checksum_sha256,asset.checksum,'') as "checksumSha256",
+              coalesce(asset.mime_type,'application/octet-stream') as "mimeType"
+         from algorithm_definition_versions version
+         join algorithm_definitions definition
+           on definition.id=version.algorithm_definition_id and definition.project_id=version.project_id
+          and definition.current_published_version_id=version.id
+         join algorithm_providers provider
+           on provider.id=definition.provider_id and provider.project_id=definition.project_id and provider.status='active'
+         join assets asset on asset.project_id=version.project_id and asset.id=$3 and asset.status='available'
+        where version.project_id=$1 and version.id=$2 and version.status='published'`,
+      [projectId, input.definitionVersionId, input.assetId])).rows[0];
+    if (!source) throw new Error("ALGORITHM_RUN_SOURCE_NOT_AVAILABLE");
+    if (!/^[a-f0-9]{64}$/.test(source.checksumSha256)) throw new Error("ALGORITHM_INPUT_ASSET_CHECKSUM_REQUIRED");
+    const snapshot = {
+      schemaVersion: "aerosight.algorithm.input/v1", runId, projectId,
+      definition: {
+        definitionVersionId: Number(source.definitionVersionId), providerType: source.providerType,
+        modelOrProcess: source.modelOrProcess, executionMode: source.executionMode, mappingVersion: source.mappingVersion
+      },
+      inputAsset: {
+        assetId: source.assetId, version: source.assetVersion, checksumSha256: source.checksumSha256,
+        mimeType: source.mimeType, accessUrl: "", accessExpiresAt: new Date(0).toISOString()
+      },
+      context: { requestedByUserId: user.id, requestedAt: new Date().toISOString() }, parameters: input.parameters
+    };
+    await client.query(`insert into algorithm_runs (
+      id,project_id,team_id,algorithm_definition_version_id,input_asset_id,idempotency_key,parameters_json,input_snapshot_json
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [runId, projectId, source.teamId, source.definitionVersionId,
+      source.assetId, `catalog:${source.definitionVersionId}:asset:${source.assetId}:${runId}`, input.parameters, snapshot]);
+    await publishProjectEvent(client, { projectId, teamId: source.teamId, eventId: `algorithm-run-requested:${runId}`,
+      eventType: "algorithm.run.requested", payload: { runId } });
+    return { runId };
+  });
+}
 
 const runProjection = `run.id, run.status, run.input_asset_id as "inputAssetId", run.task_run_id as "taskRunId",
   run.device_id as "deviceId", run.input_snapshot_json as "inputSnapshot", run.canonical_result_json as "canonicalResult",
