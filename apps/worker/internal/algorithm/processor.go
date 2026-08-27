@@ -3,12 +3,17 @@ package algorithm
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"aerosight/worker/internal/outbox"
@@ -24,13 +29,18 @@ type RawResultStore interface {
 }
 
 type Processor struct {
-	client  HTTPDoer
-	breaker *CircuitBreaker
-	store   RawResultStore
+	client          HTTPDoer
+	breaker         *CircuitBreaker
+	store           RawResultStore
+	callbackBaseURL string
 }
 
-func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore) *Processor {
-	return &Processor{client: client, breaker: breaker, store: store}
+func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL ...string) *Processor {
+	baseURL := ""
+	if len(callbackBaseURL) > 0 {
+		baseURL = strings.TrimRight(callbackBaseURL[0], "/")
+	}
+	return &Processor{client: client, breaker: breaker, store: store, callbackBaseURL: baseURL}
 }
 
 type transactionRecorder struct {
@@ -108,6 +118,16 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
 		return processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", err.Error())
 	}
+	if input.Definition.ExecutionMode == "callback" {
+		var tokenHash string
+		input, tokenHash, err = issueCallbackCredentials(input, processor.callbackBaseURL)
+		if err != nil {
+			return processor.failRun(ctx, tx, payload.RunID, "callback_unavailable", err.Error())
+		}
+		if _, err := tx.ExecContext(ctx, `update algorithm_runs set callback_token_hash=$2 where id=$1`, payload.RunID, tokenHash); err != nil {
+			return err
+		}
+	}
 	var mapping Mapping
 	if err := json.Unmarshal(mappingJSON, &mapping); err != nil {
 		return processor.failRun(ctx, tx, payload.RunID, "invalid_output_mapping", err.Error())
@@ -135,13 +155,35 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		}
 		return processor.finishFailed(ctx, tx, event.ProjectID, payload.RunID, terminalStatus, code, executeErr.Error(), outcome)
 	}
-	if outcome.Kind == "accepted" {
+	if outcome.Kind == "accepted" || outcome.Kind == "waiting_callback" {
+		nextStatus := "polling"
+		if outcome.Kind == "waiting_callback" {
+			nextStatus = "waiting_callback"
+		}
 		_, err := tx.ExecContext(ctx, `
-			update algorithm_runs set status = 'polling', external_job_id = $2
-			where id = $1 and status = 'running'`, payload.RunID, outcome.ExternalJobID)
+			update algorithm_runs set status = $2, external_job_id = $3
+			where id = $1 and status = 'running'`, payload.RunID, nextStatus, outcome.ExternalJobID)
 		return err
 	}
 	return processor.finishSucceeded(ctx, tx, event.ProjectID, payload.RunID, outcome)
+}
+
+func issueCallbackCredentials(input Input, callbackBaseURL string) (Input, string, error) {
+	callbackBaseURL = strings.TrimRight(callbackBaseURL, "/")
+	if callbackBaseURL == "" || !strings.HasPrefix(callbackBaseURL, "https://") {
+		return Input{}, "", errors.New("CALLBACK_PUBLIC_BASE_URL must be configured with HTTPS for callback runs")
+	}
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		return Input{}, "", fmt.Errorf("generate callback token: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(random)
+	digest := sha256.Sum256([]byte(token))
+	input.Callback = map[string]string{
+		"url":   callbackBaseURL + "/callbacks/algorithms/" + input.RunID,
+		"token": token,
+	}
+	return input, hex.EncodeToString(digest[:]), nil
 }
 
 func (processor *Processor) finishSucceeded(
@@ -163,7 +205,7 @@ func (processor *Processor) finishSucceeded(
 		update algorithm_runs
 		set status = 'succeeded', raw_result_object_key = $2, raw_result_checksum_sha256 = $3,
 		    canonical_result_json = $4, finished_at = now()
-		where id = $1 and status = 'running'`, runID, object.Key, object.ChecksumSHA256, canonical)
+		where id = $1 and status in ('running', 'polling', 'waiting_callback')`, runID, object.Key, object.ChecksumSHA256, canonical)
 	return err
 }
 

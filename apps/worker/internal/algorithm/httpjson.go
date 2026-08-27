@@ -280,6 +280,9 @@ func (adapter *HTTPJSONAdapter) executeAttempt(
 		if parseErr != nil {
 			return Outcome{Raw: raw}, false, adapter.finish(attempt, "failed", "format_drift", nil), parseErr
 		}
+		if request.Input.Definition.ExecutionMode == "callback" {
+			outcome.Kind = "waiting_callback"
+		}
 		return outcome, false, adapter.finish(attempt, "succeeded", "", &outcome), nil
 	}
 	outcome, parseErr := mapCompleted(raw, request.Mapping)

@@ -23,7 +23,7 @@ func TestHTTPJSONCapabilityMatchesTestedContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(capability.ExecutionModes, []string{"synchronous", "asynchronous"}) || capability.SupportsPolling || capability.SupportsSignedCallbacks {
+	if !reflect.DeepEqual(capability.ExecutionModes, []string{"synchronous", "asynchronous", "callback"}) || capability.SupportsPolling || !capability.SupportsSignedCallbacks {
 		t.Fatalf("http-json overclaims protocol support: %+v", capability)
 	}
 }

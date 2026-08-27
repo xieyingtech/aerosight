@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -85,19 +86,39 @@ func main() {
 		consumer.Register("asset.available", processor.Handler)
 		rawStore = algorithmRawStore{storage: storage}
 	}
-	algorithmProcessor := algorithm.NewProcessor(algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore)
+	algorithmProcessor := algorithm.NewProcessor(
+		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
+		workerConfig.CallbackPublicBaseURL,
+	)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
-	errors := make(chan error, 2)
-	go func() { errors <- consumer.RunWithWake(runContext, wake) }()
-	go func() { errors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
-	if err := <-errors; err != nil {
+	callbackServer := &http.Server{
+		Addr: workerConfig.CallbackListenAddress, Handler: algorithm.NewCallbackHandler(database, rawStore),
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
+		IdleTimeout: 60 * time.Second,
+	}
+	runErrors := make(chan error, 3)
+	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
+	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
+	go func() {
+		logger.Info("algorithm callback endpoint started", "address", workerConfig.CallbackListenAddress)
+		err := callbackServer.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		runErrors <- err
+	}()
+	if err := <-runErrors; err != nil {
 		cancelRun()
+		_ = callbackServer.Shutdown(context.Background())
 		logger.Error("worker stopped unexpectedly", "error", err.Error())
 		os.Exit(1)
 	}
 	cancelRun()
+	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelShutdown()
+	_ = callbackServer.Shutdown(shutdownContext)
 	logger.Info("worker stopped")
 }

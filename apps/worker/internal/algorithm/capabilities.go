@@ -20,8 +20,9 @@ type Capability struct {
 var capabilities = map[string]Capability{
 	"http-json": {
 		ProviderType: "http-json", ImplementationStatus: "enabled",
-		ExecutionModes:  []string{"synchronous", "asynchronous"},
-		ContractVersion: InputSchemaVersionV1,
+		ExecutionModes:          []string{"synchronous", "asynchronous", "callback"},
+		SupportsSignedCallbacks: true,
+		ContractVersion:         InputSchemaVersionV1,
 	},
 	"kserve-v2": {
 		ProviderType: "kserve-v2", ImplementationStatus: "unavailable",

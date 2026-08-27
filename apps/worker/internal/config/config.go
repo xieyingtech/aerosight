@@ -12,6 +12,8 @@ type Config struct {
 	LogLevel               string
 	WorkerName             string
 	ObjectStorageLocalRoot string
+	CallbackListenAddress  string
+	CallbackPublicBaseURL  string
 }
 
 func Load() (Config, error) {
@@ -20,6 +22,8 @@ func Load() (Config, error) {
 		LogLevel:               valueOrDefault("LOG_LEVEL", "info"),
 		WorkerName:             valueOrDefault("WORKER_NAME", "aerosight-worker"),
 		ObjectStorageLocalRoot: strings.TrimSpace(os.Getenv("OBJECT_STORAGE_LOCAL_ROOT")),
+		CallbackListenAddress:  valueOrDefault("CALLBACK_LISTEN_ADDRESS", "127.0.0.1:8081"),
+		CallbackPublicBaseURL:  strings.TrimRight(strings.TrimSpace(os.Getenv("CALLBACK_PUBLIC_BASE_URL")), "/"),
 	}
 
 	var problems []error
@@ -31,6 +35,12 @@ func Load() (Config, error) {
 	}
 	if config.WorkerName == "" {
 		problems = append(problems, errors.New("WORKER_NAME must not be empty"))
+	}
+	if config.CallbackListenAddress == "" || !strings.Contains(config.CallbackListenAddress, ":") {
+		problems = append(problems, errors.New("CALLBACK_LISTEN_ADDRESS must be a host:port address"))
+	}
+	if config.CallbackPublicBaseURL != "" && !strings.HasPrefix(config.CallbackPublicBaseURL, "https://") {
+		problems = append(problems, errors.New("CALLBACK_PUBLIC_BASE_URL must use HTTPS"))
 	}
 
 	if len(problems) > 0 {

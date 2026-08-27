@@ -97,6 +97,24 @@ func TestHTTPJSONAdapterAcceptsAsynchronousJob(t *testing.T) {
 	}
 }
 
+func TestHTTPJSONAdapterWaitsForSignedCallback(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusAccepted)
+		_, _ = writer.Write([]byte(`{"externalJobId":"callback-job-7"}`))
+	}))
+	defer server.Close()
+	request := validRequest(server.URL)
+	request.Input.Definition.ExecutionMode = "callback"
+	request.Input.Callback = map[string]string{"url": "https://aerosight.example.test/callbacks/algorithms/run", "token": strings.Repeat("t", 32)}
+	outcome, err := NewHTTPJSONAdapter(server.Client(), nil, nil).Execute(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Kind != "waiting_callback" || outcome.ExternalJobID != "callback-job-7" {
+		t.Fatalf("unexpected callback outcome: %+v", outcome)
+	}
+}
+
 func TestHTTPJSONAdapterAuditsTimeout(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		time.Sleep(80 * time.Millisecond)

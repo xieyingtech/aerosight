@@ -152,6 +152,22 @@ CREATE TABLE "algorithm_run_attempts" (
 	CONSTRAINT "algorithm_run_attempts_run_attempt_unique" UNIQUE("algorithm_run_id", "attempt")
 );
 --> statement-breakpoint
+CREATE TABLE "algorithm_callback_receipts" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"algorithm_run_id" uuid NOT NULL,
+	"provider_id" bigint NOT NULL,
+	"callback_id" text NOT NULL,
+	"external_job_id" text NOT NULL,
+	"payload_hash" text NOT NULL,
+	"disposition" text DEFAULT 'verified' NOT NULL,
+	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "algorithm_callback_receipts_hash_valid" CHECK (payload_hash ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "algorithm_callback_receipts_disposition_valid" CHECK (disposition in ('verified','applied')),
+	CONSTRAINT "algorithm_callback_receipts_provider_callback_unique" UNIQUE("provider_id", "callback_id")
+);
+--> statement-breakpoint
 CREATE TABLE "approval_requests" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
@@ -1016,6 +1032,9 @@ ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_task_run_project_fk"
 ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("device_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_provider_project_fk" FOREIGN KEY ("provider_id","project_id") REFERENCES "public"."algorithm_providers"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_requester_member_fk" FOREIGN KEY ("team_id","requested_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approvals" ADD CONSTRAINT "approvals_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1148,6 +1167,7 @@ CREATE INDEX "algorithm_definition_versions_project_status_idx" ON "algorithm_de
 CREATE INDEX "algorithm_runs_claim_idx" ON "algorithm_runs" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "algorithm_run_attempts_run_idx" ON "algorithm_run_attempts" USING btree ("algorithm_run_id","attempt");--> statement-breakpoint
+CREATE INDEX "algorithm_callback_receipts_run_idx" ON "algorithm_callback_receipts" USING btree ("algorithm_run_id","received_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
 CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id","created_at");--> statement-breakpoint

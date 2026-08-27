@@ -65,7 +65,7 @@
 - [x] 7.4 定义算法 adapter 接口与 canonical result schema，覆盖输入资产/时空上下文、同步/轮询/callback、原始结果和版本化 mapping，并通过 JSON Schema 契约测试验证。
 - [x] 7.5 实现 MVP `http-json` adapter，使用预签名资产 URL、退避、熔断和 attempt 审计，并通过模拟同步、异步、超时、限流和格式漂移服务测试验证。
 - [x] 7.6 为 `kserve-v2`、`ogc-processes`、`ai-sdk` 注册明确 capability 与实现状态，已启用 adapter 通过协议契约测试，未启用 adapter 通过显式不可用测试验证不误报成功。
-- [ ] 7.7 实现签名 callback 与 run 状态机，校验 provider、token、签名、重复回调和终态，并通过伪造、重放与乱序 callback 测试验证。
+- [x] 7.7 实现签名 callback 与 run 状态机，校验 provider、token、签名、重复回调和终态，并通过伪造、重放与乱序 callback 测试验证。
 - [ ] 7.8 实现算法运行页和详情页，展示输入、状态、耗时、版本、mapping 诊断、原始结果引用与重试权限，并通过失败运行可诊断性 UI 测试验证。
 
 ## 8. 疑似违建识别与告警事件

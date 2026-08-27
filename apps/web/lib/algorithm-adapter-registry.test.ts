@@ -13,9 +13,9 @@ test("every declared provider protocol has explicit capabilities and implementat
 
 test("enabled http-json adapter declares only protocol behavior covered by contract tests", () => {
   const capability = requireEnabledAlgorithmAdapter("http-json");
-  assert.deepEqual(capability.executionModes, ["synchronous", "asynchronous"]);
+  assert.deepEqual(capability.executionModes, ["synchronous", "asynchronous", "callback"]);
   assert.equal(capability.supportsPolling, false);
-  assert.equal(capability.supportsSignedCallbacks, false);
+  assert.equal(capability.supportsSignedCallbacks, true);
 });
 
 test("unimplemented adapters fail explicitly and cannot report a successful probe", () => {

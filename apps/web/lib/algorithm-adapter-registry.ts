@@ -14,8 +14,8 @@ export type AlgorithmAdapterCapability = {
 const registry = {
   "http-json": {
     providerType: "http-json", implementationStatus: "enabled",
-    executionModes: ["synchronous", "asynchronous"], supportsPolling: false,
-    supportsSignedCallbacks: false, contractVersion: "aerosight.algorithm.input/v1", unavailableReason: null
+    executionModes: ["synchronous", "asynchronous", "callback"], supportsPolling: false,
+    supportsSignedCallbacks: true, contractVersion: "aerosight.algorithm.input/v1", unavailableReason: null
   },
   "kserve-v2": {
     providerType: "kserve-v2", implementationStatus: "unavailable", executionModes: [],

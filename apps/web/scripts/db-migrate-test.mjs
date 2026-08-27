@@ -1026,6 +1026,21 @@ async function assertAlgorithmRuntimeSchema(connectionString) {
       () => assert(false, "duplicate algorithm run idempotency key should fail"),
       (error) => assert(error.code === "23505", "duplicate algorithm run failed unexpectedly")
     );
+    await client.query(
+      `insert into algorithm_callback_receipts (
+         project_id, team_id, algorithm_run_id, provider_id, callback_id, external_job_id, payload_hash
+       ) values ($1, $2, '20000000-0000-4000-8000-000000000001', $3, 'callback-1', 'job-1', $4)`,
+      [north.id, north.team_id, provider.rows[0].id, "a".repeat(64)]
+    );
+    await client.query(
+      `insert into algorithm_callback_receipts (
+         project_id, team_id, algorithm_run_id, provider_id, callback_id, external_job_id, payload_hash
+       ) values ($1, $2, '20000000-0000-4000-8000-000000000001', $3, 'callback-1', 'job-1', $4)`,
+      [north.id, north.team_id, provider.rows[0].id, "a".repeat(64)]
+    ).then(
+      () => assert(false, "replayed provider callback id should fail"),
+      (error) => assert(error.code === "23505", "callback replay constraint failed unexpectedly")
+    );
   } finally {
     await client.end();
   }
@@ -1047,7 +1062,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 19, "empty database should apply all migrations");
+    assert(first.applied.length === 20, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1092,7 +1107,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 19, "existing database should record all migrations");
+    assert(first.applied.length === 20, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
