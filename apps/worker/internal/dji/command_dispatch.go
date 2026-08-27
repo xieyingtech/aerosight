@@ -44,12 +44,13 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		CommandKey     string
 		Parameters     json.RawMessage
 		Deadline       time.Time
+		Priority       int
 		AdapterID      int64
 		GatewaySN      string
 	}
 	err := tx.QueryRowContext(ctx, `
 		select command.id::text,command.capability_code,command.command_key,command.parameters_json,
-		       command.deadline_at,device.adapter_id,
+		       command.deadline_at,command.priority,device.adapter_id,
 		       coalesce(gateway_identity.external_device_id,target_identity.external_device_id)
 		from device_commands command
 		join devices device on device.id=command.device_id and device.project_id=command.project_id
@@ -68,13 +69,16 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		where command.project_id=$1 and command.id=$2::uuid and command.status='dispatchable'
 		for update of command`, event.ProjectID, request.CommandID).Scan(
 		&command.ID, &command.CapabilityCode, &command.CommandKey, &command.Parameters,
-		&command.Deadline, &command.AdapterID, &command.GatewaySN,
+		&command.Deadline, &command.Priority, &command.AdapterID, &command.GatewaySN,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
+	}
+	if command.CapabilityCode == "flight.return_home" && command.Priority < 90 {
+		return errors.New("DJI_RETURN_HOME_PRIORITY_TOO_LOW")
 	}
 	now := dispatcher.now().UTC()
 	if !now.Before(command.Deadline) {
@@ -162,6 +166,13 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 	if status == "acknowledged" || status == "nacked" {
 		return nil
 	}
+	if status == "unknown" {
+		_, err := tx.ExecContext(ctx, `update device_command_protocol_correlations
+			set reply_event_id=$2,reply_result=$3,reply_payload_json=$4,replied_at=$5,updated_at=now()
+			where command_id=$1::uuid and status='unknown'`,
+			commandID, envelope.EventID, reply.Result, payload.Data, dispatcher.now().UTC())
+		return err
+	}
 	protocolStatus, commandStatus, outcome := "nacked", "nacked", "nack"
 	if reply.Outcome() == ReplyAcknowledged {
 		protocolStatus, commandStatus, outcome = "acknowledged", "acknowledged", "ack"
@@ -195,4 +206,82 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 		values ($1,$2,$3,'command.ack',$4) on conflict(event_id) do nothing`,
 		event.ProjectID, event.TeamID, "command.ack:"+commandID+":"+reply.TransactionID, ackPayload)
 	return err
+}
+
+func (dispatcher *CommandDispatcher) ExpireUnknown(ctx context.Context, database *sql.DB) (int64, error) {
+	now := dispatcher.now().UTC()
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `
+		select command.id::text,command.project_id,command.team_id
+		from device_commands command
+		join device_command_protocol_correlations correlation on correlation.command_id=command.id
+		where command.status='sent' and correlation.status='sent' and command.deadline_at <= $1
+		order by command.deadline_at for update of command,correlation skip locked`, now)
+	if err != nil {
+		return 0, err
+	}
+	type expiredCommand struct {
+		ID        string
+		ProjectID int
+		TeamID    int
+	}
+	var expired []expiredCommand
+	for rows.Next() {
+		var command expiredCommand
+		if err := rows.Scan(&command.ID, &command.ProjectID, &command.TeamID); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		expired = append(expired, command)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	for _, command := range expired {
+		if _, err := tx.ExecContext(ctx, `update device_commands
+			set status='unknown',completed_at=$2,result_json=result_json||'{"reason":"DJI_REPLY_TIMEOUT"}'::jsonb
+			where id=$1::uuid and status='sent'`, command.ID, now); err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx, `update device_command_protocol_correlations
+			set status='unknown',updated_at=now() where command_id=$1::uuid and status='sent'`, command.ID); err != nil {
+			return 0, err
+		}
+		if _, err := tx.ExecContext(ctx, `update command_attempts set status='timed_out',error_code='DJI_REPLY_TIMEOUT'
+			where command_id=$1::uuid and status='sent'`, command.ID); err != nil {
+			return 0, err
+		}
+		payload := jsonObject(map[string]any{"commandId": command.ID, "outcome": "timeout"})
+		if _, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+			values($1,$2,$3,'command.ack',$4) on conflict(event_id) do nothing`,
+			command.ProjectID, command.TeamID, "command.ack:"+command.ID+":timeout", payload); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return int64(len(expired)), nil
+}
+
+func (dispatcher *CommandDispatcher) RunTimeoutReconciler(ctx context.Context, database *sql.DB, interval time.Duration) error {
+	if interval <= 0 {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			if _, err := dispatcher.ExpireUnknown(ctx, database); err != nil && ctx.Err() == nil {
+				return err
+			}
+		}
+	}
 }

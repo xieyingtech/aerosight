@@ -1108,7 +1108,7 @@ CREATE TABLE "device_command_protocol_correlations" (
 	CONSTRAINT "device_command_protocol_correlations_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
 	CONSTRAINT "device_command_protocol_correlations_command_project_fk" FOREIGN KEY ("command_id", "project_id") REFERENCES "device_commands"("id", "project_id") ON DELETE cascade,
 	CONSTRAINT "device_command_protocol_correlations_adapter_project_fk" FOREIGN KEY ("adapter_id", "project_id") REFERENCES "device_adapters"("id", "project_id") ON DELETE cascade,
-	CONSTRAINT "device_command_protocol_correlations_status_valid" CHECK (status in ('prepared','sent','acknowledged','nacked')),
+	CONSTRAINT "device_command_protocol_correlations_status_valid" CHECK (status in ('prepared','sent','acknowledged','nacked','unknown')),
 	CONSTRAINT "device_command_protocol_correlations_command_unique" UNIQUE("command_id"),
 	CONSTRAINT "device_command_protocol_correlations_transaction_unique" UNIQUE("adapter_id", "transaction_id"),
 	CONSTRAINT "device_command_protocol_correlations_business_method_unique" UNIQUE("adapter_id", "business_id", "method")

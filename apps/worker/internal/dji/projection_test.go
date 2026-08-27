@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -158,19 +159,21 @@ type capturedCommandPublisher struct {
 	adapterID int64
 	topic     string
 	payload   json.RawMessage
+	err       error
 }
 
 func (publisher *capturedCommandPublisher) Publish(_ context.Context, adapterID int64, topic string, payload []byte) error {
 	publisher.adapterID = adapterID
 	publisher.topic = topic
 	publisher.payload = append(json.RawMessage(nil), payload...)
-	return nil
+	return publisher.err
 }
 
 func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *sql.DB, teamID, projectID int, adapterID int64) {
 	t.Helper()
 	publisher := &capturedCommandPublisher{}
-	dispatcher, err := NewCommandDispatcher(publisher, func() time.Time { return time.UnixMilli(1787821300000).UTC() })
+	clock := time.UnixMilli(1787821300000).UTC()
+	dispatcher, err := NewCommandDispatcher(publisher, func() time.Time { return clock })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,6 +243,66 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, nack))
 	if err := database.QueryRowContext(ctx, "select status from device_commands where id=$1", nackID).Scan(&status); err != nil || status != "nacked" {
 		t.Fatalf("NACK did not update command: status=%s err=%v", status, err)
+	}
+
+	timeoutID := "89f050f8-77f2-4a73-a8b7-8391e3797803"
+	if _, err := database.ExecContext(ctx, `
+		insert into device_commands(
+		  id,project_id,team_id,device_id,command_key,idempotency_key,capability_code,
+		  parameters_json,safety_context_json,status,priority,deadline_at
+		) values ($1,$2,$3,$4,'flight.return_home','integration-rth-timeout','flight.return_home','{}','{}','dispatchable',90,$5)`,
+		timeoutID, projectID, teamID, aircraftID, clock.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	callOutboxHandler(t, ctx, database, dispatcher.DispatchHandler, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + timeoutID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": timeoutID}),
+	})
+	clock = clock.Add(2 * time.Second)
+	if expired, err := dispatcher.ExpireUnknown(ctx, database); err != nil || expired != 1 {
+		t.Fatalf("sent return-home timeout was not reconciled as unknown: expired=%d err=%v", expired, err)
+	}
+	late := routedReply(t, projectID, adapterID, timeoutID, 0)
+	callOutboxHandler(t, ctx, database, dispatcher.ReplyHandler, replyOutboxEvent(t, teamID, late))
+	if err := database.QueryRowContext(ctx, `select command.status,correlation.status
+		from device_commands command join device_command_protocol_correlations correlation on correlation.command_id=command.id
+		where command.id=$1`, timeoutID).Scan(&status, &correlationStatus); err != nil {
+		t.Fatal(err)
+	}
+	if status != "unknown" || correlationStatus != "unknown" {
+		t.Fatalf("late ACK converted physically unknown return-home into success: command=%s correlation=%s", status, correlationStatus)
+	}
+
+	disconnectedID := "89f050f8-77f2-4a73-a8b7-8391e3797804"
+	if _, err := database.ExecContext(ctx, `
+		insert into device_commands(
+		  id,project_id,team_id,device_id,command_key,idempotency_key,capability_code,
+		  parameters_json,safety_context_json,status,priority,deadline_at
+		) values ($1,$2,$3,$4,'flight.return_home','integration-rth-disconnected','flight.return_home','{}','{}','dispatchable',90,$5)`,
+		disconnectedID, projectID, teamID, aircraftID, clock.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	publisher.err = errors.New("connection unavailable")
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatchErr := dispatcher.DispatchHandler(ctx, tx, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + disconnectedID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": disconnectedID}),
+	})
+	_ = tx.Rollback()
+	if dispatchErr == nil {
+		t.Fatal("disconnected publisher reported a sent return-home command")
+	}
+	var correlationCount int
+	if err := database.QueryRowContext(ctx, `select command.status,
+		(select count(*) from device_command_protocol_correlations where command_id=command.id)
+		from device_commands command where command.id=$1`, disconnectedID).Scan(&status, &correlationCount); err != nil {
+		t.Fatal(err)
+	}
+	if status != "dispatchable" || correlationCount != 0 {
+		t.Fatalf("disconnected publish left a false sent correlation: status=%s correlations=%d", status, correlationCount)
 	}
 }
 

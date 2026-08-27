@@ -171,10 +171,11 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
 		IdleTimeout: 60 * time.Second,
 	}
-	runErrors := make(chan error, 4)
+	runErrors := make(chan error, 5)
 	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
 	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
 	go func() { runErrors <- djiManager.Run(runContext) }()
+	go func() { runErrors <- djiCommandDispatcher.RunTimeoutReconciler(runContext, database, time.Second) }()
 	go func() {
 		logger.Info("algorithm callback endpoint started", "address", workerConfig.CallbackListenAddress)
 		err := callbackServer.ListenAndServe()
