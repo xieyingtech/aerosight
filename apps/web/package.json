@@ -9,6 +9,7 @@
     "start": "next start",
     "db:migrate": "node scripts/db-migrate.mjs",
     "test:migrations": "node scripts/db-migrate-test.mjs",
+    "benchmark:load": "node scripts/benchmark-load.mjs",
     "test:unit": "node --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
