@@ -224,6 +224,82 @@ CREATE TABLE "detection_group_members" (
 	CONSTRAINT "detection_group_members_pk" PRIMARY KEY("detection_group_id", "detection_id")
 );
 --> statement-breakpoint
+CREATE TABLE "event_rules" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"name" text NOT NULL,
+	"status" text DEFAULT 'disabled' NOT NULL,
+	"current_published_version_id" bigint,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "event_rules_status_valid" CHECK (status in ('disabled','active','retired')),
+	CONSTRAINT "event_rules_project_name_unique" UNIQUE("project_id","name"),
+	CONSTRAINT "event_rules_id_project_unique" UNIQUE("id","project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "event_rule_versions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"event_rule_id" bigint NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"label" text NOT NULL,
+	"minimum_confidence" double precision NOT NULL,
+	"severity" text NOT NULL,
+	"deduplication_window_seconds" integer DEFAULT 3600 NOT NULL,
+	"conditions_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "event_rule_versions_status_valid" CHECK (status in ('draft','published','retired')),
+	CONSTRAINT "event_rule_versions_confidence_valid" CHECK (minimum_confidence between 0 and 1),
+	CONSTRAINT "event_rule_versions_severity_valid" CHECK (severity in ('low','medium','high','critical')),
+	CONSTRAINT "event_rule_versions_window_valid" CHECK (deduplication_window_seconds > 0),
+	CONSTRAINT "event_rule_versions_rule_version_unique" UNIQUE("event_rule_id","version"),
+	CONSTRAINT "event_rule_versions_id_project_unique" UNIQUE("id","project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "perception_events" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"event_rule_version_id" bigint NOT NULL,
+	"detection_group_id" bigint NOT NULL,
+	"deduplication_key" text NOT NULL,
+	"title" text DEFAULT '疑似违建' NOT NULL,
+	"severity" text NOT NULL,
+	"status" text DEFAULT 'open' NOT NULL,
+	"occurrence_count" integer DEFAULT 1 NOT NULL,
+	"state_version" integer DEFAULT 0 NOT NULL,
+	"assigned_user_id" integer,
+	"first_detected_at" timestamp with time zone NOT NULL,
+	"last_detected_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp with time zone,
+	CONSTRAINT "perception_events_severity_valid" CHECK (severity in ('low','medium','high','critical')),
+	CONSTRAINT "perception_events_status_valid" CHECK (status in ('open','acknowledged','investigating','resolved','dismissed')),
+	CONSTRAINT "perception_events_counts_valid" CHECK (occurrence_count > 0 and state_version >= 0 and last_detected_at >= first_detected_at),
+	CONSTRAINT "perception_events_id_project_unique" UNIQUE("id","project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "event_feedback" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"perception_event_id" uuid NOT NULL,
+	"action" text NOT NULL,
+	"value_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"reason" text NOT NULL,
+	"actor_user_id" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "event_feedback_action_valid" CHECK (action in ('confirm','false_positive','category_correction','assign','acknowledge','investigate','dismiss','resolve'))
+);
+--> statement-breakpoint
 CREATE TABLE "approval_requests" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
@@ -1099,6 +1175,20 @@ ALTER TABLE "detection_groups" ADD CONSTRAINT "detection_groups_project_team_fk"
 ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_group_project_fk" FOREIGN KEY ("detection_group_id","project_id") REFERENCES "public"."detection_groups"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_detection_project_fk" FOREIGN KEY ("detection_id","project_id") REFERENCES "public"."detections"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rules" ADD CONSTRAINT "event_rules_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rules" ADD CONSTRAINT "event_rules_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rules" ADD CONSTRAINT "event_rules_current_version_project_fk" FOREIGN KEY ("current_published_version_id","project_id") REFERENCES "public"."event_rule_versions"("id","project_id") ON DELETE SET NULL ("current_published_version_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rule_versions" ADD CONSTRAINT "event_rule_versions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rule_versions" ADD CONSTRAINT "event_rule_versions_rule_project_fk" FOREIGN KEY ("event_rule_id","project_id") REFERENCES "public"."event_rules"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rule_versions" ADD CONSTRAINT "event_rule_versions_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_rule_versions" ADD CONSTRAINT "event_rule_versions_publisher_fk" FOREIGN KEY ("published_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "perception_events" ADD CONSTRAINT "perception_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "perception_events" ADD CONSTRAINT "perception_events_rule_version_project_fk" FOREIGN KEY ("event_rule_version_id","project_id") REFERENCES "public"."event_rule_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "perception_events" ADD CONSTRAINT "perception_events_group_project_fk" FOREIGN KEY ("detection_group_id","project_id") REFERENCES "public"."detection_groups"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "perception_events" ADD CONSTRAINT "perception_events_assignee_fk" FOREIGN KEY ("assigned_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_feedback" ADD CONSTRAINT "event_feedback_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_feedback" ADD CONSTRAINT "event_feedback_event_project_fk" FOREIGN KEY ("perception_event_id","project_id") REFERENCES "public"."perception_events"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_feedback" ADD CONSTRAINT "event_feedback_actor_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_requester_member_fk" FOREIGN KEY ("team_id","requested_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approvals" ADD CONSTRAINT "approvals_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1236,6 +1326,10 @@ CREATE INDEX "detections_project_captured_idx" ON "detections" USING btree ("pro
 CREATE INDEX "detections_geometry_gist" ON "detections" USING gist ("geographic_geometry");--> statement-breakpoint
 CREATE INDEX "detection_groups_project_time_idx" ON "detection_groups" USING btree ("project_id","last_detected_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "detection_groups_geometry_gist" ON "detection_groups" USING gist ("geographic_geometry");--> statement-breakpoint
+CREATE UNIQUE INDEX "event_rule_versions_one_draft_idx" ON "event_rule_versions" USING btree ("event_rule_id") WHERE "event_rule_versions"."status" = 'draft';--> statement-breakpoint
+CREATE UNIQUE INDEX "perception_events_active_dedup_idx" ON "perception_events" USING btree ("project_id","deduplication_key") WHERE "perception_events"."status" in ('open','acknowledged','investigating');--> statement-breakpoint
+CREATE INDEX "perception_events_project_status_idx" ON "perception_events" USING btree ("project_id","status","last_detected_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "event_feedback_event_created_idx" ON "event_feedback" USING btree ("perception_event_id","created_at");--> statement-breakpoint
 CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
 CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id","created_at");--> statement-breakpoint
@@ -1315,6 +1409,17 @@ CREATE INDEX "task_versions_project_status_idx" ON "task_versions" USING btree (
 CREATE INDEX "task_steps_version_position_idx" ON "task_steps" USING btree ("task_version_id","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "team_members_single_owner_unique" ON "team_members" USING btree ("team_id") WHERE "team_members"."role" = 'owner';--> statement-breakpoint
 CREATE INDEX "team_members_user_idx" ON "team_members" USING btree ("user_id");
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_event_rule_version() RETURNS trigger AS $$
+BEGIN
+	IF OLD.status IN ('published','retired') THEN
+		RAISE EXCEPTION 'published event rule versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER event_rule_versions_published_immutable BEFORE UPDATE OR DELETE ON event_rule_versions FOR EACH ROW EXECUTE FUNCTION protect_published_event_rule_version();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION notify_aerosight_outbox() RETURNS trigger AS $$
 BEGIN

@@ -1086,6 +1086,32 @@ async function assertDetectionSchema(connectionString) {
   }
 }
 
+async function assertPerceptionEventSchema(connectionString) {
+  const client = new Client({ connectionString }); await client.connect();
+  try {
+    const scope = (await client.query(`select group_row.id as group_id,group_row.project_id,group_row.team_id,member.user_id
+      from detection_groups group_row join team_members member on member.team_id=group_row.team_id and member.role='owner' limit 1`)).rows[0];
+    const rule = await client.query(`insert into event_rules(project_id,team_id,name,status,created_by_user_id) values($1,$2,'fixture-rule','active',$3) returning id`,[scope.project_id,scope.team_id,scope.user_id]);
+    const version = await client.query(`insert into event_rule_versions(project_id,team_id,event_rule_id,version,status,label,minimum_confidence,severity,published_by_user_id,published_at)
+      values($1,$2,$3,1,'draft','suspected-construction',0.7,'high',$4,now()) returning id`,[scope.project_id,scope.team_id,rule.rows[0].id,scope.user_id]);
+    await client.query(`update event_rule_versions set status='published' where id=$1`,[version.rows[0].id]);
+    await client.query(`update event_rules set current_published_version_id=$2 where id=$1`,[rule.rows[0].id,version.rows[0].id]);
+    await client.query(`update event_rule_versions set severity='low' where id=$1`,[version.rows[0].id]).then(
+      ()=>assert(false,"published event rule version should be immutable"),
+      (error)=>assert(error.code==="55000","published event rule mutation failed unexpectedly")
+    );
+    const event = await client.query(`insert into perception_events(id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,severity,first_detected_at,last_detected_at)
+      values('30000000-0000-4000-8000-000000000001',$1,$2,$3,$4,'rule-version:fixture:group:fixture','high',now(),now()) returning id,state_version`,[scope.project_id,scope.team_id,version.rows[0].id,scope.group_id]);
+    await client.query(`insert into perception_events(id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,severity,first_detected_at,last_detected_at)
+      values('30000000-0000-4000-8000-000000000002',$1,$2,$3,$4,'rule-version:fixture:group:fixture','high',now(),now())`,[scope.project_id,scope.team_id,version.rows[0].id,scope.group_id]).then(
+      ()=>assert(false,"active perception event deduplication should fail"),(error)=>assert(error.code==="23505","event dedup constraint failed unexpectedly")
+    );
+    const advanced=await client.query(`update perception_events set status='acknowledged',state_version=state_version+1 where id=$1 and state_version=$2 returning state_version`,[event.rows[0].id,event.rows[0].state_version]);
+    const stale=await client.query(`update perception_events set status='investigating',state_version=state_version+1 where id=$1 and state_version=$2 returning state_version`,[event.rows[0].id,event.rows[0].state_version]);
+    assert(advanced.rows[0].state_version===1&&stale.rowCount===0,"perception event optimistic concurrency failed");
+  } finally { await client.end(); }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -1102,7 +1128,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 21, "empty database should apply all migrations");
+    assert(first.applied.length === 22, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1123,6 +1149,7 @@ try {
     await assertTaskRunCommandSchema(connectionString);
     await assertAlgorithmRuntimeSchema(connectionString);
     await assertDetectionSchema(connectionString);
+    await assertPerceptionEventSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -1148,7 +1175,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 21, "existing database should record all migrations");
+    assert(first.applied.length === 22, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1197,7 +1224,11 @@ try {
                 to_regclass('public.algorithm_run_attempts') as algorithm_run_attempts,
                 to_regclass('public.detections') as detections,
                 to_regclass('public.detection_groups') as detection_groups,
-                to_regclass('public.detection_group_members') as detection_group_members`
+                to_regclass('public.detection_group_members') as detection_group_members,
+                to_regclass('public.event_rules') as event_rules,
+                to_regclass('public.event_rule_versions') as event_rule_versions,
+                to_regclass('public.perception_events') as perception_events,
+                to_regclass('public.event_feedback') as event_feedback`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
@@ -1207,7 +1238,8 @@ try {
         result.rows[0].command_attempts && result.rows[0].algorithm_providers &&
         result.rows[0].algorithm_definitions && result.rows[0].algorithm_definition_versions &&
         result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts &&
-        result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members,
+        result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members &&
+        result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback,
         "schema snapshot is incomplete"
       );
     } finally {
