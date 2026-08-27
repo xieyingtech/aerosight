@@ -35,6 +35,39 @@ CREATE TABLE "agents" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "approval_requests" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"resource_type" text NOT NULL,
+	"resource_id" text NOT NULL,
+	"action" text NOT NULL,
+	"requested_by_user_id" integer NOT NULL,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"required_approvals" integer DEFAULT 1 NOT NULL,
+	"require_separation" boolean DEFAULT true NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"context_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"decided_at" timestamp with time zone,
+	CONSTRAINT "approval_requests_status_valid" CHECK (status in ('pending', 'approved', 'rejected', 'expired')),
+	CONSTRAINT "approval_requests_required_valid" CHECK (required_approvals > 0),
+	CONSTRAINT "approval_requests_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "approvals" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"approval_request_id" uuid NOT NULL,
+	"approver_user_id" integer NOT NULL,
+	"decision" text NOT NULL,
+	"reason" text NOT NULL,
+	"decided_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "approvals_decision_valid" CHECK (decision in ('approved', 'rejected')),
+	CONSTRAINT "approvals_request_approver_unique" UNIQUE("approval_request_id", "approver_user_id")
+);
+--> statement-breakpoint
 CREATE TABLE "assets" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
@@ -713,6 +746,48 @@ CREATE TRIGGER safety_policy_versions_published_immutable
 BEFORE UPDATE OR DELETE ON safety_policy_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_safety_policy_version();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION validate_approval_decision()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE request approval_requests%ROWTYPE;
+BEGIN
+	SELECT * INTO request FROM approval_requests WHERE id = NEW.approval_request_id FOR UPDATE;
+	IF request.status <> 'pending' THEN
+		RAISE EXCEPTION 'approval request is not pending' USING ERRCODE = '55000';
+	END IF;
+	IF request.expires_at <= NEW.decided_at THEN
+		RAISE EXCEPTION 'approval request expired' USING ERRCODE = '55000';
+	END IF;
+	IF request.require_separation AND request.requested_by_user_id = NEW.approver_user_id THEN
+		RAISE EXCEPTION 'requester cannot approve own request' USING ERRCODE = '42501';
+	END IF;
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER approvals_validate_decision
+BEFORE INSERT ON approvals FOR EACH ROW EXECUTE FUNCTION validate_approval_decision();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION project_approval_request_status()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE required_count integer;
+DECLARE approved_count integer;
+BEGIN
+	IF NEW.decision = 'rejected' THEN
+		UPDATE approval_requests SET status = 'rejected', decided_at = NEW.decided_at WHERE id = NEW.approval_request_id;
+		RETURN NEW;
+	END IF;
+	SELECT required_approvals INTO required_count FROM approval_requests WHERE id = NEW.approval_request_id;
+	SELECT count(*) INTO approved_count FROM approvals WHERE approval_request_id = NEW.approval_request_id AND decision = 'approved';
+	IF approved_count >= required_count THEN
+		UPDATE approval_requests SET status = 'approved', decided_at = NEW.decided_at WHERE id = NEW.approval_request_id;
+	END IF;
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER approvals_project_request_status
+AFTER INSERT ON approvals FOR EACH ROW EXECUTE FUNCTION project_approval_request_status();
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -720,6 +795,11 @@ ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_task_run_id_task_run
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_started_by_user_id_users_id_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agents" ADD CONSTRAINT "agents_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_requester_member_fk" FOREIGN KEY ("team_id","requested_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approvals" ADD CONSTRAINT "approvals_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approvals" ADD CONSTRAINT "approvals_request_project_fk" FOREIGN KEY ("approval_request_id","project_id") REFERENCES "public"."approval_requests"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "approvals" ADD CONSTRAINT "approvals_approver_member_fk" FOREIGN KEY ("team_id","approver_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -825,6 +905,8 @@ CREATE INDEX "agent_sessions_issue_idx" ON "agent_sessions" USING btree ("issue_
 CREATE INDEX "agent_sessions_task_run_idx" ON "agent_sessions" USING btree ("task_run_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
+CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
+CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
 CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "assets_task_run_idx" ON "assets" USING btree ("task_run_id");--> statement-breakpoint
 CREATE INDEX "assets_issue_idx" ON "assets" USING btree ("issue_id");--> statement-breakpoint

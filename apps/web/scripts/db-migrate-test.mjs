@@ -817,6 +817,71 @@ async function assertSafetyPolicySchema(connectionString) {
   }
 }
 
+async function assertApprovalSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select project.id, project.team_id, actor.id as user_id
+         from projects project join users actor on actor.email = 'legacy@example.test'
+        where project.name = 'legacy-project'`
+    );
+    const row = scope.rows[0];
+    const approver = await client.query(
+      "insert into users (name, email) values ('approver', 'approver@example.test') returning id"
+    );
+    await client.query(
+      "insert into team_members (team_id, user_id, role) values ($1, $2, 'admin')",
+      [row.team_id, approver.rows[0].id]
+    );
+    await client.query(
+      `insert into approval_requests (
+         id, project_id, team_id, resource_type, resource_id, action,
+         requested_by_user_id, required_approvals, expires_at
+       ) values ('00000000-0000-4000-8000-000000000001', $1, $2, 'task_run', '1', 'start', $3, 2, now() + interval '1 hour')`,
+      [row.id, row.team_id, row.user_id]
+    );
+    await client.query(
+      `insert into approvals (project_id, team_id, approval_request_id, approver_user_id, decision, reason)
+       values ($1, $2, '00000000-0000-4000-8000-000000000001', $3, 'approved', 'self')`,
+      [row.id, row.team_id, row.user_id]
+    ).then(
+      () => assert(false, "requester self-approval should fail"),
+      (error) => assert(error.code === "42501", "self-approval failed unexpectedly")
+    );
+    await client.query(
+      `insert into approvals (project_id, team_id, approval_request_id, approver_user_id, decision, reason)
+       values ($1, $2, '00000000-0000-4000-8000-000000000001', $3, 'approved', 'reviewed')`,
+      [row.id, row.team_id, approver.rows[0].id]
+    );
+    await client.query(
+      `insert into approvals (project_id, team_id, approval_request_id, approver_user_id, decision, reason)
+       values ($1, $2, '00000000-0000-4000-8000-000000000001', $3, 'approved', 'duplicate')`,
+      [row.id, row.team_id, approver.rows[0].id]
+    ).then(
+      () => assert(false, "duplicate approver should fail"),
+      (error) => assert(error.code === "23505", "duplicate approval failed unexpectedly")
+    );
+    await client.query(
+      `insert into approval_requests (
+         id, project_id, team_id, resource_type, resource_id, action,
+         requested_by_user_id, expires_at
+       ) values ('00000000-0000-4000-8000-000000000002', $1, $2, 'task_run', '2', 'start', $3, now() - interval '1 hour')`,
+      [row.id, row.team_id, row.user_id]
+    );
+    await client.query(
+      `insert into approvals (project_id, team_id, approval_request_id, approver_user_id, decision, reason)
+       values ($1, $2, '00000000-0000-4000-8000-000000000002', $3, 'approved', 'late')`,
+      [row.id, row.team_id, approver.rows[0].id]
+    ).then(
+      () => assert(false, "expired approval should fail"),
+      (error) => assert(error.code === "55000", "expired approval failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -833,7 +898,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 16, "empty database should apply all migrations");
+    assert(first.applied.length === 17, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -850,6 +915,7 @@ try {
     await assertLiveStreamSchema(connectionString);
     await assertTaskVersionSchema(connectionString);
     await assertSafetyPolicySchema(connectionString);
+    await assertApprovalSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -875,7 +941,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 16, "existing database should record all migrations");
+    assert(first.applied.length === 17, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -912,12 +978,14 @@ try {
                 to_regclass('public.live_streams') as live_streams,
                 to_regclass('public.task_versions') as task_versions,
                 to_regclass('public.task_steps') as task_steps,
-                to_regclass('public.safety_policy_versions') as safety_policy_versions`
+                to_regclass('public.safety_policy_versions') as safety_policy_versions,
+                to_regclass('public.approvals') as approvals`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
         result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
-        result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions,
+        result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions &&
+        result.rows[0].approvals,
         "schema snapshot is incomplete"
       );
     } finally {
