@@ -47,8 +47,15 @@ func ExpandDock3Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 	if err := json.Unmarshal(payload, &topology); err != nil {
 		return nil, fmt.Errorf("DJI_TOPOLOGY_INVALID: %w", err)
 	}
-	dock, exists := ResolveDock3Product(ProductKey{Domain: int(topology.Domain), Type: int(topology.Type), Subtype: int(topology.Subtype)})
-	if !exists || dock.TypeKey != "dji.dock3" {
+	gatewayKey := ProductKey{Domain: int(topology.Domain), Type: int(topology.Type), Subtype: int(topology.Subtype)}
+	dock, exists := ResolveDock3Product(gatewayKey)
+	if !exists {
+		if _, belongsToDock2 := ResolveDock2Product(gatewayKey); belongsToDock2 {
+			return nil, errors.New("DJI_DOCK3_PRODUCT_UNSUPPORTED")
+		}
+		return []ProductNode{unknownProductNode(gatewaySN, topology.ThingVersion, "", "", gatewayKey)}, nil
+	}
+	if dock.TypeKey != "dji.dock3" {
 		return nil, errors.New("DJI_DOCK3_PRODUCT_UNSUPPORTED")
 	}
 	nodes := []ProductNode{productNode(gatewaySN, dock, topology.ThingVersion, "", "")}
@@ -60,8 +67,16 @@ func ExpandDock3Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 		if child.SN == "" {
 			return nil, errors.New("DJI_TOPOLOGY_DEVICE_SN_REQUIRED")
 		}
-		product, supported := ResolveDock3Product(ProductKey{Domain: int(child.Domain), Type: int(child.Type), Subtype: int(child.Subtype)})
-		if !supported || product.Category != "aircraft" {
+		childKey := ProductKey{Domain: int(child.Domain), Type: int(child.Type), Subtype: int(child.Subtype)}
+		product, supported := ResolveDock3Product(childKey)
+		if !supported {
+			if _, belongsToDock2 := ResolveDock2Product(childKey); belongsToDock2 {
+				return nil, errors.New("DJI_DOCK3_AIRCRAFT_UNSUPPORTED")
+			}
+			nodes = append(nodes, unknownProductNode(child.SN, child.ThingVersion, gatewaySN, "gateway-for", childKey))
+			continue
+		}
+		if product.Category != "aircraft" {
 			return nil, errors.New("DJI_DOCK3_AIRCRAFT_UNSUPPORTED")
 		}
 		nodes = append(nodes, productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"))

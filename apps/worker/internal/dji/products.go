@@ -112,13 +112,16 @@ type productTopology struct {
 }
 
 type ProductNode struct {
-	ExternalID       string
-	TypeKey          string
-	Name             string
-	Category         string
-	Firmware         string
-	ParentExternalID string
-	Relation         string
+	ExternalID          string
+	TypeKey             string
+	Name                string
+	Category            string
+	ProtocolVersion     string
+	ParentExternalID    string
+	Relation            string
+	ProductKey          ProductKey
+	ReadOnly            bool
+	CompatibilityReason string
 }
 
 func descriptorByTypeKey(products []ProductDescriptor, typeKey string) ProductDescriptor {
@@ -131,7 +134,15 @@ func descriptorByTypeKey(products []ProductDescriptor, typeKey string) ProductDe
 }
 
 func productNode(externalID string, product ProductDescriptor, firmware, parent, relation string) ProductNode {
-	return ProductNode{ExternalID: externalID, TypeKey: product.TypeKey, Name: product.Name, Category: product.Category, Firmware: firmware, ParentExternalID: parent, Relation: relation}
+	return ProductNode{ExternalID: externalID, TypeKey: product.TypeKey, Name: product.Name, Category: product.Category, ProtocolVersion: firmware, ParentExternalID: parent, Relation: relation, ProductKey: product.Key}
+}
+
+func unknownProductNode(externalID, protocolVersion, parent, relation string, key ProductKey) ProductNode {
+	return ProductNode{
+		ExternalID: externalID, TypeKey: UnknownDeviceTypeKey, Name: "Unknown DJI device", Category: "unknown",
+		ProtocolVersion: protocolVersion, ParentExternalID: parent, Relation: relation, ProductKey: key,
+		ReadOnly: true, CompatibilityReason: "DJI_PRODUCT_ENUM_UNKNOWN",
+	}
 }
 
 func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNode, error) {
@@ -146,8 +157,15 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 	if gatewayDomain == 0 {
 		gatewayDomain = 3 // Dock 2 messages before domain was added imply the dock namespace.
 	}
-	dock, exists := ResolveDock2Product(ProductKey{Domain: gatewayDomain, Type: int(topology.Type), Subtype: int(topology.Subtype)})
-	if !exists || dock.TypeKey != "dji.dock2" {
+	gatewayKey := ProductKey{Domain: gatewayDomain, Type: int(topology.Type), Subtype: int(topology.Subtype)}
+	dock, exists := ResolveDock2Product(gatewayKey)
+	if !exists {
+		if _, belongsToDock3 := ResolveDock3Product(gatewayKey); belongsToDock3 {
+			return nil, errors.New("DJI_DOCK2_PRODUCT_UNSUPPORTED")
+		}
+		return []ProductNode{unknownProductNode(gatewaySN, topology.ThingVersion, "", "", gatewayKey)}, nil
+	}
+	if dock.TypeKey != "dji.dock2" {
 		return nil, errors.New("DJI_DOCK2_PRODUCT_UNSUPPORTED")
 	}
 	nodes := []ProductNode{productNode(gatewaySN, dock, topology.ThingVersion, "", "")}
@@ -160,8 +178,16 @@ func ExpandDock2Topology(gatewaySN string, payload json.RawMessage) ([]ProductNo
 			return nil, errors.New("DJI_TOPOLOGY_DEVICE_SN_REQUIRED")
 		}
 		domain := int(child.Domain)
-		product, supported := ResolveDock2Product(ProductKey{Domain: domain, Type: int(child.Type), Subtype: int(child.Subtype)})
-		if !supported || product.Category != "aircraft" {
+		childKey := ProductKey{Domain: domain, Type: int(child.Type), Subtype: int(child.Subtype)}
+		product, supported := ResolveDock2Product(childKey)
+		if !supported {
+			if _, belongsToDock3 := ResolveDock3Product(childKey); belongsToDock3 {
+				return nil, errors.New("DJI_DOCK2_AIRCRAFT_UNSUPPORTED")
+			}
+			nodes = append(nodes, unknownProductNode(child.SN, child.ThingVersion, gatewaySN, "gateway-for", childKey))
+			continue
+		}
+		if product.Category != "aircraft" {
 			return nil, errors.New("DJI_DOCK2_AIRCRAFT_UNSUPPORTED")
 		}
 		nodes = append(nodes, productNode(child.SN, product, child.ThingVersion, gatewaySN, "docked-aircraft"))

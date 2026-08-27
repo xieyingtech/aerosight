@@ -1,0 +1,22 @@
+{
+  "tid": "fixture-dock2-unknown-aircraft",
+  "bid": "fixture-business-id",
+  "method": "update_topo",
+  "timestamp": 1787821202000,
+  "data": {
+    "domain": "3",
+    "type": 2,
+    "sub_type": 0,
+    "thing_version": "1.0.0",
+    "sub_devices": [
+      {
+        "sn": "UNKNOWN-AIRCRAFT-001",
+        "domain": "0",
+        "type": 999,
+        "sub_type": 7,
+        "index": "A",
+        "thing_version": "99.0.0"
+      }
+    ]
+  }
+}
