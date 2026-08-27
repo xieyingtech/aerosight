@@ -1166,6 +1166,21 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
+ALTER TABLE "device_adapters"
+	ADD COLUMN "lease_owner" text,
+	ADD COLUMN "lease_expires_at" timestamp with time zone,
+	ADD COLUMN "connection_epoch" bigint DEFAULT 0 NOT NULL,
+	ADD COLUMN "last_connected_at" timestamp with time zone;
+--> statement-breakpoint
+ALTER TABLE "device_adapters" ADD CONSTRAINT "device_adapters_lease_complete" CHECK (
+	("lease_owner" is null and "lease_expires_at" is null)
+	or ("lease_owner" is not null and "lease_expires_at" is not null)
+);
+--> statement-breakpoint
+CREATE INDEX "device_adapters_lease_claim_idx"
+ON "device_adapters" ("adapter_type", "status", "lease_expires_at")
+WHERE "status" in ('connecting', 'connected', 'degraded');
+--> statement-breakpoint
 CREATE TRIGGER algorithm_definition_versions_published_immutable
 BEFORE UPDATE OR DELETE ON algorithm_definition_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_algorithm_definition_version();

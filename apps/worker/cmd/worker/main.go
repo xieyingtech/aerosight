@@ -15,6 +15,8 @@ import (
 	"aerosight/worker/internal/algorithm"
 	"aerosight/worker/internal/automation"
 	"aerosight/worker/internal/config"
+	"aerosight/worker/internal/dji"
+	"aerosight/worker/internal/driver"
 	"aerosight/worker/internal/heartbeat"
 	"aerosight/worker/internal/media"
 	"aerosight/worker/internal/mission"
@@ -76,6 +78,24 @@ func main() {
 	}
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
+	driverRegistry := driver.NewRegistry()
+	if err := dji.RegisterDriver(driverRegistry, func(context.Context, driver.AdapterConfig) error { return nil }); err != nil {
+		logger.Error("DJI driver registration failed", "error", err.Error())
+		os.Exit(1)
+	}
+	djiManager := dji.NewAdapterManager(
+		dji.NewSQLLeaseRepository(database), dji.EnvironmentSecretResolver{},
+		func(ctx context.Context, config dji.MQTTConfig, handler dji.MQTTMessageHandler) (dji.ManagedSession, error) {
+			return dji.StartMQTTSession(ctx, config, handler)
+		},
+		func(lease dji.AdapterLease) dji.MQTTMessageHandler {
+			return func(_ context.Context, message dji.MQTTMessage) error {
+				logger.Debug("DJI MQTT message received", "adapter_id", lease.AdapterID, "topic", message.Topic)
+				return nil
+			}
+		},
+		workerConfig.WorkerName+":"+runID, logger,
+	)
 	missionProcessor := mission.NewProcessor(nil)
 	consumer.Register("task_run.transitioned", missionProcessor.Handler)
 	consumer.Register("mission.control", missionProcessor.Handler)
@@ -137,9 +157,10 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
 		IdleTimeout: 60 * time.Second,
 	}
-	runErrors := make(chan error, 3)
+	runErrors := make(chan error, 4)
 	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
 	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
+	go func() { runErrors <- djiManager.Run(runContext) }()
 	go func() {
 		logger.Info("algorithm callback endpoint started", "address", workerConfig.CallbackListenAddress)
 		err := callbackServer.ListenAndServe()
