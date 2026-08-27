@@ -48,6 +48,8 @@ var commandMappings = []CommandMapping{
 	{CapabilityCode: "mission.cancel", CommandKey: "cancel", Method: "flighttask_undo", Validate: requireStringArray("flight_ids")},
 	{CapabilityCode: "flight.return_home", CommandKey: "return_home", Method: "return_home", Validate: requireObject},
 	{CapabilityCode: "flight.return_home", CommandKey: "flight.return_home", Method: "return_home", Validate: requireObject},
+	{CapabilityCode: "stream.video.control", CommandKey: "start", Method: "live_start_push", Validate: validateLiveStart},
+	{CapabilityCode: "stream.video.control", CommandKey: "stop", Method: "live_stop_push", Validate: validateLiveStop},
 	{CapabilityCode: "dock.debug.control", CommandKey: "debug.open", Method: "debug_mode_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
 	{CapabilityCode: "dock.debug.control", CommandKey: "debug.close", Method: "debug_mode_close", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
 	{CapabilityCode: "dock.debug.control", CommandKey: "cover.open", Method: "cover_open", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
@@ -59,6 +61,32 @@ var commandMappings = []CommandMapping{
 	{CapabilityCode: "dock.debug.control", CommandKey: "alarm.enable", Method: "alarm_state_switch", Validate: requireIntValue("action", 1), ProductFamilies: dockFamilies()},
 	{CapabilityCode: "dock.debug.control", CommandKey: "alarm.disable", Method: "alarm_state_switch", Validate: requireIntValue("action", 0), ProductFamilies: dockFamilies()},
 	{CapabilityCode: "dock.debug.control", CommandKey: "reboot", Method: "device_reboot", Validate: requireEmptyObject, ProductFamilies: dockFamilies()},
+}
+
+func validateLiveStart(raw json.RawMessage) error {
+	var parameters struct {
+		URLType      *int   `json:"url_type"`
+		URL          string `json:"url"`
+		VideoID      string `json:"video_id"`
+		VideoQuality *int   `json:"video_quality"`
+	}
+	if json.Unmarshal(raw, &parameters) != nil || parameters.URLType == nil || *parameters.URLType != 1 ||
+		parameters.VideoQuality == nil || *parameters.VideoQuality < 0 || *parameters.VideoQuality > 4 ||
+		strings.TrimSpace(parameters.VideoID) == "" {
+		return errors.New("DJI_LIVE_START_PARAMETERS_INVALID")
+	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(parameters.URL)), "rtmp://") {
+		return errors.New("DJI_LIVE_RTMP_URL_REQUIRED")
+	}
+	return nil
+}
+
+func validateLiveStop(raw json.RawMessage) error {
+	var parameters map[string]json.RawMessage
+	if json.Unmarshal(raw, &parameters) != nil || len(parameters) != 1 {
+		return errors.New("DJI_LIVE_STOP_PARAMETERS_INVALID")
+	}
+	return requireString("video_id")(raw)
 }
 
 func dockFamilies() map[string]bool { return map[string]bool{"dock2": true, "dock3": true} }

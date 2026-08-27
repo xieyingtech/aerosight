@@ -18,6 +18,8 @@ func TestVersionedCommandMappingsBuildOfficialServiceMessages(t *testing.T) {
 		{"mission.execute", "execute", `{"flight_id":"flight-1"}`, "flighttask_execute"},
 		{"mission.cancel", "cancel", `{"flight_ids":["flight-1"]}`, "flighttask_undo"},
 		{"flight.return_home", "return_home", `{}`, "return_home"},
+		{"stream.video.control", "start", `{"url_type":1,"url":"rtmp://media.example/demo/session","video_id":"aircraft/80-0-0/normal-0","video_quality":3}`, "live_start_push"},
+		{"stream.video.control", "stop", `{"video_id":"aircraft/80-0-0/normal-0"}`, "live_stop_push"},
 	}
 	for _, fixture := range tests {
 		command, err := BuildServiceCommand("DOCK2-DEMO-001", "tid-1", "bid-1", "dock2", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now)
@@ -44,6 +46,9 @@ func TestCommandMappingRejectsUnknownOrMalformedCommands(t *testing.T) {
 		{"dock.debug.control", "open_cover", `{}`},
 		{"mission.execute", "execute", `{}`},
 		{"mission.cancel", "cancel", `{"flight_ids":[]}`},
+		{"stream.video.control", "start", `{"url_type":4,"url":"https://media.example/whip","video_id":"camera","video_quality":3}`},
+		{"stream.video.control", "start", `{"url_type":1,"url":"rtmp://media.example/demo","video_id":"camera","video_quality":9}`},
+		{"stream.video.control", "stop", `{"video_id":"camera","unexpected":true}`},
 	} {
 		if _, err := BuildServiceCommand("dock", "tid", "bid", "dock2", fixture.capability, fixture.commandKey, json.RawMessage(fixture.parameters), now); err == nil {
 			t.Fatalf("unsafe mapping unexpectedly accepted: %+v", fixture)
