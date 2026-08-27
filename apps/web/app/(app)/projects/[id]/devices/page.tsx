@@ -1,9 +1,9 @@
-import { listProjectItems } from "@/lib/data";
-import { DataTable } from "@/components/data-table";
+import { DeviceTree } from "@/components/device-tree";
+import { readProjectDeviceTree } from "@/lib/device-tree";
 import { Page } from "@/components/page";
 
 export default async function DevicesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const items = await listProjectItems(Number(id), "devices");
-  return <Page title="设备监控"><DataTable columns={[{ key: "name", label: "名称" }, { key: "type", label: "类型" }, { key: "status", label: "状态" }]} items={items} /></Page>;
+  const nodes = await readProjectDeviceTree(Number(id));
+  return <Page description="统一查看 DeviceType、Driver、拓扑、实时通道和有效能力" title="设备监控"><DeviceTree nodes={nodes} /></Page>;
 }
