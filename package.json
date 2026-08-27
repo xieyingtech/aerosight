@@ -20,6 +20,7 @@
     "test:migrations": "pnpm --dir apps/web test:migrations",
     "test:web": "pnpm --dir apps/web test:unit",
     "test:worker": "cd apps/worker && go test ./...",
+    "test:security": "node scripts/test-security-acceptance.mjs",
     "typecheck": "pnpm --dir apps/web typecheck",
     "check": "pnpm typecheck && pnpm test"
   },
