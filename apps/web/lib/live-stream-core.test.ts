@@ -3,10 +3,14 @@ import test from "node:test";
 
 import {
   assertStreamCanStart,
+  assertLiveStreamConcurrency,
   assertLiveStreamProjectScope,
+  createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
   playbackAvailability,
+  planLiveStreamStop,
   SimulatorPlaybackLocator,
+  recoverExpiredLiveStream,
   transitionLiveStream,
   type LiveStreamSession
 } from "./live-stream-core.ts";
@@ -17,6 +21,7 @@ const session: LiveStreamSession = {
 };
 
 test("live stream state machine rejects invalid terminal transitions", () => {
+  assert.equal(transitionLiveStream("requested", "starting"), "starting");
   assert.equal(transitionLiveStream("starting", "live"), "live");
   assert.equal(transitionLiveStream("live", "degraded"), "degraded");
   assert.equal(transitionLiveStream("stopping", "stopped"), "stopped");
@@ -43,6 +48,34 @@ test("stream start requires online capable device and implemented adapter", () =
   assert.throws(() => assertStreamCanStart({
     deviceStatus: "online", capabilities: ["camera.live"], adapterType: "ros2"
   }), /ADAPTER_UNAVAILABLE/);
+});
+
+test("stream concurrency rejects conflicts at the driver declared limit", () => {
+  assert.equal(assertLiveStreamConcurrency({ activeCount: 0, maxConcurrentSessions: 1 }), true);
+  assert.throws(() => assertLiveStreamConcurrency({ activeCount: 1, maxConcurrentSessions: 1 }), /CONCURRENCY_CONFLICT/);
+  assert.throws(() => assertLiveStreamConcurrency({ activeCount: 0, maxConcurrentSessions: 0 }), /CONCURRENCY_INVALID/);
+});
+
+test("each session receives a random opaque ingest reference", () => {
+  const first = createLiveStreamIngestRef();
+  const second = createLiveStreamIngestRef();
+  assert.match(first, /^aerosight\/[A-Za-z0-9_-]{32}$/);
+  assert.notEqual(first, second);
+});
+
+test("DJI stop enters stopping and repeated stop is idempotent", () => {
+  assert.deepEqual(planLiveStreamStop("live", "dji"), { status: "stopping", replayed: false });
+  assert.deepEqual(planLiveStreamStop("stopping", "dji"), { status: "stopping", replayed: true });
+  assert.deepEqual(planLiveStreamStop("live", "simulator"), { status: "stopped", replayed: false });
+  assert.deepEqual(planLiveStreamStop("stopped", "simulator"), { status: "stopped", replayed: true });
+});
+
+test("expired session leases recover every non-terminal state deterministically", () => {
+  assert.deepEqual(recoverExpiredLiveStream("requested"), { status: "failed", reason: "session-start-lease-expired" });
+  assert.deepEqual(recoverExpiredLiveStream("starting"), { status: "failed", reason: "session-start-lease-expired" });
+  assert.deepEqual(recoverExpiredLiveStream("stopping"), { status: "stopped", reason: "session-stop-lease-expired" });
+  assert.deepEqual(recoverExpiredLiveStream("live"), { status: "failed", reason: "session-owner-lease-expired" });
+  assert.deepEqual(recoverExpiredLiveStream("stopped"), { status: "stopped", reason: null });
 });
 
 test("simulator locator is short lived and tamper evident", () => {

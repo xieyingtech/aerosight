@@ -1,6 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-export type LiveStreamStatus = "starting" | "live" | "degraded" | "failed" | "stopping" | "stopped";
+export type LiveStreamStatus = "requested" | "starting" | "live" | "degraded" | "failed" | "stopping" | "stopped";
 
 export type LiveStreamSession = {
   id: number;
@@ -15,6 +15,7 @@ export type LiveStreamSession = {
 };
 
 const transitions: Record<LiveStreamStatus, ReadonlySet<LiveStreamStatus>> = {
+  requested: new Set(["starting", "failed", "stopping"]),
   starting: new Set(["live", "degraded", "failed", "stopping"]),
   live: new Set(["degraded", "failed", "stopping"]),
   degraded: new Set(["live", "failed", "stopping"]),
@@ -45,9 +46,47 @@ export function assertStreamCanStart(input: {
   adapterType: string | null;
 }) {
   if (input.deviceStatus !== "online") throw new Error("LIVE_STREAM_DEVICE_OFFLINE");
-  if (!input.capabilities.includes("camera.live")) throw new Error("LIVE_STREAM_NOT_SUPPORTED");
+  if (!input.capabilities.includes("stream.video.control") && !input.capabilities.includes("camera.live")) {
+    throw new Error("LIVE_STREAM_NOT_SUPPORTED");
+  }
   if (input.adapterType !== "simulator" && input.adapterType !== "dji") {
     throw new Error("LIVE_STREAM_ADAPTER_UNAVAILABLE");
+  }
+}
+
+export function assertLiveStreamConcurrency(input: { activeCount: number; maxConcurrentSessions: number }) {
+  if (!Number.isInteger(input.maxConcurrentSessions) || input.maxConcurrentSessions < 1) {
+    throw new Error("LIVE_STREAM_CONCURRENCY_INVALID");
+  }
+  if (input.activeCount >= input.maxConcurrentSessions) throw new Error("LIVE_STREAM_CONCURRENCY_CONFLICT");
+  return true;
+}
+
+export function createLiveStreamIngestRef() {
+  return `aerosight/${randomBytes(24).toString("base64url")}`;
+}
+
+export function planLiveStreamStop(status: LiveStreamStatus, sourceType: string) {
+  if (status === "stopped" || status === "stopping") return { status, replayed: true };
+  if (sourceType === "dji" && ["requested", "starting", "live", "degraded"].includes(status)) {
+    return { status: "stopping" as const, replayed: false };
+  }
+  return { status: "stopped" as const, replayed: false };
+}
+
+export function recoverExpiredLiveStream(status: LiveStreamStatus) {
+  switch (status) {
+    case "requested":
+    case "starting":
+      return { status: "failed" as const, reason: "session-start-lease-expired" };
+    case "stopping":
+      return { status: "stopped" as const, reason: "session-stop-lease-expired" };
+    case "live":
+    case "degraded":
+      return { status: "failed" as const, reason: "session-owner-lease-expired" };
+    case "failed":
+    case "stopped":
+      return { status, reason: null };
   }
 }
 

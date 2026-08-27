@@ -832,13 +832,14 @@ async function assertLiveStreamSchema(connectionString) {
       `insert into live_streams (
          project_id, team_id, device_id, adapter_id, stream_key, source_type, status, playback_ref
        ) values ($1, $2, $3, $4, 'camera.main', 'simulator', 'live', 'simulator://camera.main')
-       returning id`,
+       returning id, session_token`,
       [north.id, north.team_id, north.device_id, north.adapter_id]
     );
+    assert(stream.rows[0].session_token, "live stream session token was not generated");
     await client.query(
       `insert into live_streams (
          project_id, team_id, device_id, adapter_id, stream_key, source_type, status
-       ) values ($1, $2, $3, $4, 'camera.main', 'simulator', 'starting')`,
+       ) values ($1, $2, $3, $4, 'camera.main', 'dji', 'requested')`,
       [north.id, north.team_id, north.device_id, north.adapter_id]
     ).then(
       () => assert(false, "a device stream key should have one active session"),
@@ -850,6 +851,31 @@ async function assertLiveStreamSchema(connectionString) {
     ).then(
       () => assert(false, "cross-project live stream device should fail"),
       (error) => assert(error.code === "23503", "cross-project live stream failed unexpectedly")
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id, team_id, device_id, adapter_id, stream_key, source_type, status,
+         ingest_ref, lease_owner, lease_expires_at
+       ) values ($1,$2,$3,$4,'camera.secondary','dji','requested',$5,'worker:test',now()+interval '30 seconds')`,
+      [north.id, north.team_id, north.device_id, north.adapter_id, "aerosight/opaque-session-fixture"]
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id, team_id, device_id, adapter_id, stream_key, source_type, status, ingest_ref
+       ) values ($1,$2,$3,$4,'camera.third','dji','failed',$5)`,
+      [north.id, north.team_id, north.device_id, north.adapter_id, "aerosight/opaque-session-fixture"]
+    ).then(
+      () => assert(false, "ingest references must be globally unguessable and unique"),
+      (error) => assert(error.code === "23505", "duplicate ingest ref failed unexpectedly")
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id, team_id, device_id, adapter_id, stream_key, source_type, status, lease_expires_at
+       ) values ($1,$2,$3,$4,'camera.invalid-lease','dji','requested',now()+interval '30 seconds')`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    ).then(
+      () => assert(false, "partial live stream lease should fail"),
+      (error) => assert(error.code === "23514", "partial live stream lease failed unexpectedly")
     );
   } finally {
     await client.end();
@@ -1318,7 +1344,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 40, "empty database should apply all migrations");
+    assert(first.applied.length === 41, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1366,7 +1392,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 40, "existing database should record all migrations");
+    assert(first.applied.length === 41, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
