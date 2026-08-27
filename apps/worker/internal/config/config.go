@@ -14,6 +14,7 @@ type Config struct {
 	ObjectStorageLocalRoot string
 	CallbackListenAddress  string
 	CallbackPublicBaseURL  string
+	AssetURLSigningSecret  string
 }
 
 func Load() (Config, error) {
@@ -24,6 +25,7 @@ func Load() (Config, error) {
 		ObjectStorageLocalRoot: strings.TrimSpace(os.Getenv("OBJECT_STORAGE_LOCAL_ROOT")),
 		CallbackListenAddress:  valueOrDefault("CALLBACK_LISTEN_ADDRESS", "127.0.0.1:8081"),
 		CallbackPublicBaseURL:  strings.TrimRight(strings.TrimSpace(os.Getenv("CALLBACK_PUBLIC_BASE_URL")), "/"),
+		AssetURLSigningSecret:  strings.TrimSpace(os.Getenv("AUTH_SECRET")),
 	}
 
 	var problems []error

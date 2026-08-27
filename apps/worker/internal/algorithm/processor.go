@@ -33,14 +33,12 @@ type Processor struct {
 	breaker         *CircuitBreaker
 	store           RawResultStore
 	callbackBaseURL string
+	assetIssuer     AssetAccessIssuer
 }
 
-func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL ...string) *Processor {
-	baseURL := ""
-	if len(callbackBaseURL) > 0 {
-		baseURL = strings.TrimRight(callbackBaseURL[0], "/")
-	}
-	return &Processor{client: client, breaker: breaker, store: store, callbackBaseURL: baseURL}
+func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL string, assetIssuer AssetAccessIssuer) *Processor {
+	return &Processor{client: client, breaker: breaker, store: store,
+		callbackBaseURL: strings.TrimRight(callbackBaseURL, "/"), assetIssuer: assetIssuer}
 }
 
 type transactionRecorder struct {
@@ -84,10 +82,11 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		inputJSON      []byte
 		mappingJSON    []byte
 		status         string
+		runAssetID     int
 	)
 	err := tx.QueryRowContext(ctx, `
 		select provider.base_url, provider.provider_type, provider.status, provider.timeout_seconds,
-		       run.input_snapshot_json, version.output_mapping_json, run.status
+		       run.input_snapshot_json, version.output_mapping_json, run.status, run.input_asset_id
 		from algorithm_runs run
 		join algorithm_definition_versions version
 		  on version.id = run.algorithm_definition_version_id and version.project_id = run.project_id
@@ -97,7 +96,7 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		  on provider.id = definition.provider_id and provider.project_id = run.project_id
 		where run.id = $1 and run.project_id = $2 and run.team_id = $3
 		for update of run`, payload.RunID, event.ProjectID, event.TeamID).Scan(
-		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &inputJSON, &mappingJSON, &status,
+		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &inputJSON, &mappingJSON, &status, &runAssetID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.New("algorithm run scope does not match outbox event")
@@ -118,6 +117,19 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
 		return processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", err.Error())
 	}
+	if input.RunID != payload.RunID || input.ProjectID != event.ProjectID || input.InputAsset.AssetID != runAssetID {
+		return processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", "algorithm input snapshot scope or asset mismatch")
+	}
+	if processor.assetIssuer == nil {
+		return processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", "algorithm asset URL issuer is unavailable")
+	}
+	assetURLExpiresAt := time.Now().Add(5 * time.Minute).UTC()
+	assetURL, err := processor.assetIssuer.IssueAssetURL(input.ProjectID, input.InputAsset.AssetID, input.InputAsset.Version, assetURLExpiresAt)
+	if err != nil {
+		return processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", err.Error())
+	}
+	input.InputAsset.AccessURL = assetURL
+	input.InputAsset.AccessExpiresAt = assetURLExpiresAt
 	if input.Definition.ExecutionMode == "callback" {
 		var tokenHash string
 		input, tokenHash, err = issueCallbackCredentials(input, processor.callbackBaseURL)

@@ -37,6 +37,14 @@ func (store algorithmRawStore) PutRawResult(
 	return algorithm.RawResultObject{Key: object.Key, ChecksumSHA256: object.ChecksumSHA256}, nil
 }
 
+func (store algorithmRawStore) ReadAlgorithmAsset(ctx context.Context, key string) (algorithm.AlgorithmAsset, error) {
+	object, err := store.storage.GetObject(ctx, key)
+	if err != nil {
+		return algorithm.AlgorithmAsset{}, err
+	}
+	return algorithm.AlgorithmAsset{Body: object.Body, ContentType: object.ContentType}, nil
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -71,10 +79,12 @@ func main() {
 	consumer.Register("mission.control", missionProcessor.Handler)
 	consumer.Register("command.ack", missionProcessor.Handler)
 	var rawStore algorithm.RawResultStore
+	var assetStore algorithm.AlgorithmAssetStore
+	var assetHandler outbox.Handler
 	if workerConfig.ObjectStorageLocalRoot == "" {
-		consumer.Register("asset.available", func(context.Context, *sql.Tx, outbox.Event) error {
+		assetHandler = func(context.Context, *sql.Tx, outbox.Event) error {
 			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")
-		})
+		}
 		logger.Warn("media derivative processing unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	} else {
 		storage, err := media.NewLocalObjectStorage(workerConfig.ObjectStorageLocalRoot)
@@ -83,19 +93,31 @@ func main() {
 			os.Exit(1)
 		}
 		processor := media.NewProcessor(storage, media.NewSQLRepository())
-		consumer.Register("asset.available", processor.Handler)
+		assetHandler = processor.Handler
 		rawStore = algorithmRawStore{storage: storage}
+		assetStore = algorithmRawStore{storage: storage}
 	}
+	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
+	algorithmTrigger := algorithm.NewTrigger(assetSigner)
+	consumer.Register("asset.available", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+		if err := assetHandler(ctx, tx, event); err != nil {
+			return err
+		}
+		return algorithmTrigger.Handler(ctx, tx, event)
+	})
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
-		workerConfig.CallbackPublicBaseURL,
+		workerConfig.CallbackPublicBaseURL, assetSigner,
 	)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
+	callbackMux := http.NewServeMux()
+	callbackMux.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore))
+	callbackMux.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner))
 	callbackServer := &http.Server{
-		Addr: workerConfig.CallbackListenAddress, Handler: algorithm.NewCallbackHandler(database, rawStore),
+		Addr: workerConfig.CallbackListenAddress, Handler: callbackMux,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
 		IdleTimeout: 60 * time.Second,
 	}
