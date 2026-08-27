@@ -119,6 +119,17 @@ func main() {
 	defer cancelRun()
 	callbackMux := http.NewServeMux()
 	callbackMux.Handle("/metrics", observability.DefaultMetrics)
+	healthHandler := observability.NewHealthHandler([]observability.DependencyCheck{
+		{Name: "database", Critical: true, Check: database.PingContext},
+		{Name: "object_storage", Critical: false, Check: func(context.Context) error {
+			if workerConfig.ObjectStorageLocalRoot == "" {
+				return errors.New("object storage is not configured")
+			}
+			return nil
+		}},
+	}, 2*time.Second)
+	callbackMux.Handle("/healthz", healthHandler)
+	callbackMux.Handle("/readyz", healthHandler)
 	callbackMux.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore, detectionSink))
 	callbackMux.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner))
 	callbackServer := &http.Server{

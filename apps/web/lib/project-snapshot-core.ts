@@ -1,10 +1,11 @@
 import type { PoolClient } from "pg";
+import { dependencyHealthFromRecord, evaluateProjectHealth, type ProjectHealth } from "./dependency-health-core.ts";
 
 type SnapshotClient = Pick<PoolClient, "query" | "release">;
 export type ConnectSnapshotClient = () => Promise<SnapshotClient>;
 
 export type ProjectSituationSnapshot = {
-  project: { id: number; name: string; teamId: number };
+  project: { id: number; name: string; teamId: number; dependencyHealth?: Record<string, unknown> };
   generatedAt: string;
   consistency: "repeatable-read";
   devices: Array<Record<string, unknown>>;
@@ -16,7 +17,8 @@ export type ProjectSituationSnapshot = {
   openAlerts: Array<Record<string, unknown>>;
   regions: Array<Record<string, unknown>>;
   freshness: { latestCapturedAt: string | null; isRealtime: boolean };
-  availability: Record<string, "available" | "not-configured">;
+  availability: Record<string, "available" | "not-configured" | "degraded">;
+  health?: ProjectHealth;
 };
 
 function latestTimestamp(collections: Array<Array<Record<string, unknown>>>) {
@@ -41,11 +43,15 @@ export async function readProjectSituationSnapshot(
   const client = await connect();
   try {
     await client.query("begin isolation level repeatable read read only");
-    const projectResult = await client.query<{ id: number; name: string; teamId: number }>(
+    const projectResult = await client.query<{
+      id: number; name: string; teamId: number; dependencyHealth: Record<string, unknown>;
+    }>(
       `/* snapshot:project-scope */
-       select project.id, project.name, project.team_id as "teamId"
+       select project.id, project.name, project.team_id as "teamId",
+              coalesce(flags.dependency_health_json, '{}'::jsonb) as "dependencyHealth"
        from projects project
        join team_members membership on membership.team_id = project.team_id
+       left join project_feature_flags flags on flags.project_id = project.id
        where project.id = $1 and membership.user_id = $2`,
       [projectId, userId]
     );
@@ -139,6 +145,7 @@ export async function readProjectSituationSnapshot(
 
     const generatedAt = new Date();
     const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, mediaPoints, openAlerts]);
+    const health = evaluateProjectHealth(dependencyHealthFromRecord(project.dependencyHealth));
     const snapshot: ProjectSituationSnapshot = {
       project,
       generatedAt: generatedAt.toISOString(),
@@ -157,8 +164,11 @@ export async function readProjectSituationSnapshot(
       },
       availability: {
         devices: "available", tasks: "available", media: "available", alerts: "available",
-        liveStreams: "available", suspectedConstruction: "available", regions: "not-configured"
-      }
+        liveStreams: health.capabilityAvailability.realtime_device_control === "degraded" ? "degraded" : "available",
+        suspectedConstruction: health.capabilityAvailability.algorithm_execution === "degraded" ? "degraded" : "available",
+        regions: "not-configured"
+      },
+      health
     };
     await client.query("commit");
     return snapshot;
