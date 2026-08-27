@@ -35,10 +35,16 @@ CREATE TABLE "agent_drafts" (
 	"status" text DEFAULT 'draft' NOT NULL,
 	"title" text NOT NULL,
 	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"model_id" text,
+	"prompt_template_version" text,
+	"generation_tool_calls_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"evidence_version_hash" text,
+	"generated_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "agent_drafts_type_valid" CHECK (draft_type in('inspection_task','report','issue')),
 	CONSTRAINT "agent_drafts_status_valid" CHECK (status in('draft','discarded','published')),
+	CONSTRAINT "agent_drafts_generation_metadata_complete" CHECK ((model_id is null and prompt_template_version is null and evidence_version_hash is null and generated_at is null) or (model_id is not null and prompt_template_version is not null and evidence_version_hash is not null and generated_at is not null)),
 	CONSTRAINT "agent_drafts_id_project_unique" UNIQUE("id","project_id")
 );
 --> statement-breakpoint

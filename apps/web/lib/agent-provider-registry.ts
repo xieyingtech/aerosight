@@ -12,7 +12,7 @@ export function createAgentProviderRegistryFromProviders<PROVIDERS extends Regis
 export function createAgentProviderRegistry(config:WebRuntimeConfig){
   if(config.aiProvider==="disabled")throw new Error("AI_PROVIDER_DISABLED");
   if(config.aiProvider==="openai"&&config.aiModel&&config.openaiApiKey){
-    return {registry:createAgentProviderRegistryFromProviders({openai:createOpenAI({apiKey:config.openaiApiKey})}),modelId:`openai:${config.aiModel}`};
+    return {registry:createAgentProviderRegistryFromProviders({openai:createOpenAI({apiKey:config.openaiApiKey})}),modelId:`openai:${config.aiModel}` as `openai:${string}`};
   }
   throw new Error("AI_PROVIDER_CONFIGURATION_INVALID");
 }
