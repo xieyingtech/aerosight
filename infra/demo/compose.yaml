@@ -1,6 +1,23 @@
 name: aerosight-demo
 
 services:
+  database:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aerosight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aerosight-demo-database}
+      POSTGRES_DB: ${POSTGRES_DB:-aerosight}
+    ports:
+      - "${POSTGRES_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aerosight} -d ${POSTGRES_DB:-aerosight}"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - database-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   auth-init:
     image: eclipse-mosquitto:2.1.2-alpine
     entrypoint: ["/bin/sh", "/templates/init-auth.sh"]
@@ -81,5 +98,6 @@ services:
     entrypoint: ["/bin/sh", "-c"]
 
 volumes:
+  database-data:
   generated-auth:
   mqtt-data:
