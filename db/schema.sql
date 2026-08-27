@@ -38,18 +38,114 @@ CREATE TABLE "agents" (
 CREATE TABLE "assets" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
 	"device_id" integer,
 	"task_run_id" integer,
 	"issue_id" integer,
 	"kind" text NOT NULL,
 	"mime_type" text,
 	"storage_key" text NOT NULL,
+	"logical_key" text NOT NULL,
+	"version" integer DEFAULT 1 NOT NULL,
+	"status" text DEFAULT 'available' NOT NULL,
+	"object_version" text,
 	"size_bytes" bigint,
 	"checksum" text,
+	"checksum_sha256" text,
 	"captured_at" timestamp,
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"available_at" timestamp with time zone,
+	"failed_at" timestamp with time zone,
+	"failure_code" text,
+	"retention_hold_until" timestamp with time zone,
+	"legal_hold" boolean DEFAULT false NOT NULL,
+	"retention_reason" text,
+	"deleted_at" timestamp with time zone,
+	"supersedes_asset_id" integer,
+	CONSTRAINT "assets_status_valid" CHECK (status in ('pending', 'available', 'failed', 'deleted')),
+	CONSTRAINT "assets_version_positive" CHECK (version > 0),
+	CONSTRAINT "assets_checksum_sha256_valid" CHECK (checksum_sha256 is null or checksum_sha256 ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "assets_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "assets_project_logical_version_unique" UNIQUE("project_id", "logical_key", "version")
 );
+--> statement-breakpoint
+CREATE TABLE "asset_upload_intents" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"actor_user_id" integer,
+	"logical_key" text NOT NULL,
+	"object_key" text NOT NULL,
+	"file_name" text NOT NULL,
+	"kind" text NOT NULL,
+	"mime_type" text NOT NULL,
+	"expected_size_bytes" bigint NOT NULL,
+	"expected_checksum_sha256" text NOT NULL,
+	"device_id" integer,
+	"task_run_id" integer,
+	"issue_id" integer,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"asset_id" integer,
+	"failure_code" text,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"completed_at" timestamp with time zone,
+	CONSTRAINT "asset_upload_intents_status_valid" CHECK (status in ('pending', 'completed', 'failed', 'expired')),
+	CONSTRAINT "asset_upload_intents_size_valid" CHECK (expected_size_bytes >= 0),
+	CONSTRAINT "asset_upload_intents_checksum_valid" CHECK (expected_checksum_sha256 ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "asset_upload_intents_project_object_unique" UNIQUE("project_id", "object_key")
+);
+--> statement-breakpoint
+CREATE TABLE "asset_derivatives" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"source_asset_id" integer NOT NULL,
+	"derived_asset_id" integer NOT NULL,
+	"derivative_type" text NOT NULL,
+	"generator" text NOT NULL,
+	"generator_version" text,
+	"parameters_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "asset_derivatives_not_self" CHECK (source_asset_id <> derived_asset_id),
+	CONSTRAINT "asset_derivatives_unique" UNIQUE("source_asset_id", "derived_asset_id", "derivative_type")
+);
+--> statement-breakpoint
+CREATE TABLE "evidence_links" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"target_type" text NOT NULL,
+	"target_id" text NOT NULL,
+	"asset_id" integer NOT NULL,
+	"asset_version" integer NOT NULL,
+	"asset_checksum_sha256" text NOT NULL,
+	"start_offset_ms" bigint,
+	"end_offset_ms" bigint,
+	"is_published" boolean DEFAULT false NOT NULL,
+	"created_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "evidence_links_target_type_valid" CHECK (target_type in ('detection', 'track', 'event', 'report', 'issue', 'task_run')),
+	CONSTRAINT "evidence_links_offsets_valid" CHECK ((start_offset_ms is null and end_offset_ms is null) or (start_offset_ms is not null and start_offset_ms >= 0 and end_offset_ms is not null and end_offset_ms > start_offset_ms)),
+	CONSTRAINT "evidence_links_version_positive" CHECK (asset_version > 0),
+	CONSTRAINT "evidence_links_checksum_valid" CHECK (asset_checksum_sha256 ~ '^[a-f0-9]{64}$'),
+	CONSTRAINT "evidence_links_unique" UNIQUE("project_id", "target_type", "target_id", "asset_id", "start_offset_ms", "end_offset_ms")
+);
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_evidence_link()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF OLD.is_published THEN
+		RAISE EXCEPTION 'published evidence links are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER evidence_links_published_immutable
+BEFORE UPDATE OR DELETE ON evidence_links
+FOR EACH ROW EXECUTE FUNCTION protect_published_evidence_link();
 --> statement-breakpoint
 CREATE TABLE "audit_events" (
 	"id" bigserial PRIMARY KEY NOT NULL,
@@ -342,7 +438,8 @@ CREATE TABLE "issues" (
 	"assignee_user_id" integer,
 	"closed_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "issues_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "outbox_events" (
@@ -433,7 +530,8 @@ CREATE TABLE "task_runs" (
 	"started_at" timestamp,
 	"finished_at" timestamp,
 	"created_by_user_id" integer,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "task_runs_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "tasks" (
@@ -493,6 +591,23 @@ ALTER TABLE "assets" ADD CONSTRAINT "assets_project_id_projects_id_fk" FOREIGN K
 ALTER TABLE "assets" ADD CONSTRAINT "assets_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "assets" ADD CONSTRAINT "assets_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "assets" ADD CONSTRAINT "assets_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "assets" ADD CONSTRAINT "assets_supersedes_project_fk" FOREIGN KEY ("supersedes_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE SET NULL ("supersedes_asset_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "assets" ADD CONSTRAINT "assets_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("device_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "assets" ADD CONSTRAINT "assets_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "assets" ADD CONSTRAINT "assets_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE SET NULL ("issue_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_actor_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("device_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE SET NULL ("issue_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_upload_intents" ADD CONSTRAINT "asset_upload_intents_asset_project_fk" FOREIGN KEY ("asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE SET NULL ("asset_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_derivatives" ADD CONSTRAINT "asset_derivatives_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_derivatives" ADD CONSTRAINT "asset_derivatives_source_project_fk" FOREIGN KEY ("source_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_derivatives" ADD CONSTRAINT "asset_derivatives_derived_project_fk" FOREIGN KEY ("derived_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_asset_project_fk" FOREIGN KEY ("asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence_links" ADD CONSTRAINT "evidence_links_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -563,6 +678,11 @@ CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id",
 CREATE INDEX "assets_task_run_idx" ON "assets" USING btree ("task_run_id");--> statement-breakpoint
 CREATE INDEX "assets_issue_idx" ON "assets" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "assets_device_idx" ON "assets" USING btree ("device_id");--> statement-breakpoint
+CREATE INDEX "assets_project_status_created_idx" ON "assets" USING btree ("project_id","status","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "assets_retention_idx" ON "assets" USING btree ("project_id","retention_hold_until") WHERE "assets"."status" = 'available';--> statement-breakpoint
+CREATE INDEX "asset_upload_intents_expiry_idx" ON "asset_upload_intents" USING btree ("status","expires_at");--> statement-breakpoint
+CREATE INDEX "asset_derivatives_source_idx" ON "asset_derivatives" USING btree ("project_id","source_asset_id");--> statement-breakpoint
+CREATE INDEX "evidence_links_target_idx" ON "evidence_links" USING btree ("project_id","target_type","target_id");--> statement-breakpoint
 CREATE INDEX "audit_events_project_created_idx" ON "audit_events" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "audit_events_request_idx" ON "audit_events" USING btree ("request_id");--> statement-breakpoint
 CREATE INDEX "audit_events_resource_idx" ON "audit_events" USING btree ("project_id","resource_type","resource_id");--> statement-breakpoint

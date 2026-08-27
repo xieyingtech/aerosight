@@ -619,6 +619,63 @@ async function assertSpatiotemporalSchema(connectionString) {
   }
 }
 
+async function assertMediaEvidenceSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const projects = await client.query(
+      `select project.id, project.team_id, project.name, device.id as device_id
+         from projects project
+         join devices device on device.project_id = project.id
+        where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = projects.rows.find((project) => project.name === "北区巡检");
+    const south = projects.rows.find((project) => project.name === "南区巡检");
+    await client.query(
+      `insert into asset_upload_intents (
+         id, project_id, team_id, logical_key, object_key, file_name, kind, mime_type,
+         expected_size_bytes, expected_checksum_sha256, device_id, expires_at
+       ) values (
+         '00000000-0000-4000-8000-000000000001', $1, $2, 'mission/frame',
+         'projects/cross/uploads/forged/frame.jpg', 'frame.jpg', 'image', 'image/jpeg',
+         4, repeat('a', 64), $3, now() + interval '15 minutes'
+       )`,
+      [north.id, north.team_id, south.device_id]
+    ).then(
+      () => assert(false, "cross-project upload source should fail"),
+      (error) => assert(error.code === "23503", "cross-project upload source failed unexpectedly")
+    );
+
+    const asset = await client.query(
+      `insert into assets (
+         project_id, team_id, device_id, kind, mime_type, storage_key, logical_key,
+         version, status, size_bytes, checksum_sha256, available_at
+       ) values (
+         $1, $2, $3, 'image', 'image/jpeg', 'projects/north/uploads/one/frame.jpg',
+         'mission/frame', 1, 'available', 4, repeat('a', 64), now()
+       ) returning id`,
+      [north.id, north.team_id, north.device_id]
+    );
+    const evidence = await client.query(
+      `insert into evidence_links (
+         project_id, team_id, target_type, target_id, asset_id,
+         asset_version, asset_checksum_sha256, is_published
+       ) values ($1, $2, 'report', 'report-1', $3, 1, repeat('a', 64), true)
+       returning id`,
+      [north.id, north.team_id, asset.rows[0].id]
+    );
+    await client.query(
+      "update evidence_links set asset_version = 2 where id = $1",
+      [evidence.rows[0].id]
+    ).then(
+      () => assert(false, "published evidence should be immutable"),
+      (error) => assert(error.code === "55000", "published evidence mutation failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -635,7 +692,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 12, "empty database should apply all migrations");
+    assert(first.applied.length === 13, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -648,6 +705,7 @@ try {
     await assertTelemetryIngestionSemantics(connectionString);
     await assertHeartbeatProjectionSchema(connectionString);
     await assertSpatiotemporalSchema(connectionString);
+    await assertMediaEvidenceSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -661,7 +719,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 12, "existing database should record all migrations");
+    assert(first.applied.length === 13, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
@@ -678,9 +736,15 @@ try {
       const result = await client.query(
         `select to_regclass('public.users') as users,
                 to_regclass('public.device_adapters') as adapters,
-                to_regclass('public.device_telemetry') as telemetry`
+                to_regclass('public.device_telemetry') as telemetry,
+                to_regclass('public.asset_upload_intents') as upload_intents,
+                to_regclass('public.evidence_links') as evidence_links`
       );
-      assert(result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry, "schema snapshot is incomplete");
+      assert(
+        result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
+        result.rows[0].upload_intents && result.rows[0].evidence_links,
+        "schema snapshot is incomplete"
+      );
     } finally {
       await client.end();
     }
