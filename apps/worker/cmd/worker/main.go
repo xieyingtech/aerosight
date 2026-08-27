@@ -84,6 +84,10 @@ func main() {
 		os.Exit(1)
 	}
 	djiIngestor := dji.NewMessageIngestor(dji.NewSQLIngressStore(database))
+	djiProjector := dji.NewProjector()
+	consumer.Register("device.topology", djiProjector.Handler)
+	consumer.Register("device.state", djiProjector.Handler)
+	consumer.Register("device.telemetry", djiProjector.Handler)
 	djiManager := dji.NewAdapterManager(
 		dji.NewSQLLeaseRepository(database), dji.EnvironmentSecretResolver{},
 		func(ctx context.Context, config dji.MQTTConfig, handler dji.MQTTMessageHandler) (dji.ManagedSession, error) {
