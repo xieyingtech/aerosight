@@ -28,17 +28,22 @@ type RawResultStore interface {
 	PutRawResult(context.Context, string, io.Reader, string) (RawResultObject, error)
 }
 
+type DetectionSink interface {
+	SaveDetections(context.Context, *sql.Tx, int, string, []Detection) error
+}
+
 type Processor struct {
 	client          HTTPDoer
 	breaker         *CircuitBreaker
 	store           RawResultStore
 	callbackBaseURL string
 	assetIssuer     AssetAccessIssuer
+	detectionSink   DetectionSink
 }
 
-func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL string, assetIssuer AssetAccessIssuer) *Processor {
+func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL string, assetIssuer AssetAccessIssuer, detectionSink DetectionSink) *Processor {
 	return &Processor{client: client, breaker: breaker, store: store,
-		callbackBaseURL: strings.TrimRight(callbackBaseURL, "/"), assetIssuer: assetIssuer}
+		callbackBaseURL: strings.TrimRight(callbackBaseURL, "/"), assetIssuer: assetIssuer, detectionSink: detectionSink}
 }
 
 type transactionRecorder struct {
@@ -218,7 +223,13 @@ func (processor *Processor) finishSucceeded(
 		set status = 'succeeded', raw_result_object_key = $2, raw_result_checksum_sha256 = $3,
 		    canonical_result_json = $4, finished_at = now()
 		where id = $1 and status in ('running', 'polling', 'waiting_callback')`, runID, object.Key, object.ChecksumSHA256, canonical)
-	return err
+	if err != nil {
+		return err
+	}
+	if processor.detectionSink != nil {
+		return processor.detectionSink.SaveDetections(ctx, tx, projectID, runID, outcome.Detections)
+	}
+	return nil
 }
 
 func (processor *Processor) finishFailed(

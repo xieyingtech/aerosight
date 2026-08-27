@@ -19,6 +19,7 @@ import (
 	"aerosight/worker/internal/mission"
 	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/outbox"
+	"aerosight/worker/internal/perception"
 	"aerosight/worker/internal/wakeup"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -98,6 +99,7 @@ func main() {
 		assetStore = algorithmRawStore{storage: storage}
 	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
+	detectionSink := perception.NewSQLDetectionSink()
 	algorithmTrigger := algorithm.NewTrigger(assetSigner)
 	consumer.Register("asset.available", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
 		if err := assetHandler(ctx, tx, event); err != nil {
@@ -107,14 +109,14 @@ func main() {
 	})
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
-		workerConfig.CallbackPublicBaseURL, assetSigner,
+		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink,
 	)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
 	callbackMux := http.NewServeMux()
-	callbackMux.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore))
+	callbackMux.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore, detectionSink))
 	callbackMux.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner))
 	callbackServer := &http.Server{
 		Addr: workerConfig.CallbackListenAddress, Handler: callbackMux,

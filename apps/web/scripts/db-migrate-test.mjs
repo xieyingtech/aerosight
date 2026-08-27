@@ -1046,6 +1046,46 @@ async function assertAlgorithmRuntimeSchema(connectionString) {
   }
 }
 
+async function assertDetectionSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = (await client.query(
+      `select run.project_id, run.team_id, run.input_asset_id, run.task_run_id
+         from algorithm_runs run where run.id='20000000-0000-4000-8000-000000000001'`
+    )).rows[0];
+    const detection = await client.query(
+      `insert into detections (
+         project_id,team_id,algorithm_run_id,input_asset_id,task_run_id,detection_key,label,confidence,
+         pixel_geometry_json,geographic_geometry,location_quality,projection_method,horizontal_error_meters,
+         transform_version,captured_at
+       ) values ($1,$2,'20000000-0000-4000-8000-000000000001',$3,$4,'d-1','suspected-construction',0.9,
+         '{"type":"bbox","x":1,"y":2,"width":3,"height":4}',
+         st_geomfromtext('POLYGON((120 30,120.001 30,120.001 30.001,120 30.001,120 30))',4326),
+         'estimated','nadir-ray-ground-plane',2.5,'aerosight-geo-projection/v1',now()) returning id`,
+      [scope.project_id, scope.team_id, scope.input_asset_id, scope.task_run_id]
+    );
+    const group = await client.query(
+      `insert into detection_groups (project_id,team_id,label,location_quality,first_detected_at,last_detected_at)
+       values ($1,$2,'suspected-construction','estimated',now(),now()) returning id`,
+      [scope.project_id, scope.team_id]
+    );
+    await client.query(
+      `insert into detection_group_members (project_id,team_id,detection_group_id,detection_id) values ($1,$2,$3,$4)`,
+      [scope.project_id, scope.team_id, group.rows[0].id, detection.rows[0].id]
+    );
+    await client.query(
+      `insert into detection_group_members (project_id,team_id,detection_group_id,detection_id) values ($1,$2,$3,$4)`,
+      [scope.project_id, scope.team_id, group.rows[0].id, detection.rows[0].id]
+    ).then(
+      () => assert(false, "detection should belong to only one group"),
+      (error) => assert(error.code === "23505", "detection group uniqueness failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -1062,7 +1102,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 20, "empty database should apply all migrations");
+    assert(first.applied.length === 21, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1082,6 +1122,7 @@ try {
     await assertApprovalSchema(connectionString);
     await assertTaskRunCommandSchema(connectionString);
     await assertAlgorithmRuntimeSchema(connectionString);
+    await assertDetectionSchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -1107,7 +1148,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 20, "existing database should record all migrations");
+    assert(first.applied.length === 21, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1153,7 +1194,10 @@ try {
                 to_regclass('public.algorithm_definitions') as algorithm_definitions,
                 to_regclass('public.algorithm_definition_versions') as algorithm_definition_versions,
                 to_regclass('public.algorithm_runs') as algorithm_runs,
-                to_regclass('public.algorithm_run_attempts') as algorithm_run_attempts`
+                to_regclass('public.algorithm_run_attempts') as algorithm_run_attempts,
+                to_regclass('public.detections') as detections,
+                to_regclass('public.detection_groups') as detection_groups,
+                to_regclass('public.detection_group_members') as detection_group_members`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
@@ -1162,7 +1206,8 @@ try {
         result.rows[0].approvals && result.rows[0].task_run_steps && result.rows[0].device_commands &&
         result.rows[0].command_attempts && result.rows[0].algorithm_providers &&
         result.rows[0].algorithm_definitions && result.rows[0].algorithm_definition_versions &&
-        result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts,
+        result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts &&
+        result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members,
         "schema snapshot is incomplete"
       );
     } finally {

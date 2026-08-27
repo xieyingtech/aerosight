@@ -117,11 +117,16 @@ func NextCallbackRunStatus(current, callbackStatus string) (string, bool, error)
 type CallbackHandler struct {
 	db            *sql.DB
 	store         RawResultStore
+	detectionSink DetectionSink
 	authenticator CallbackAuthenticator
 }
 
-func NewCallbackHandler(db *sql.DB, store RawResultStore) *CallbackHandler {
-	return &CallbackHandler{db: db, store: store, authenticator: CallbackAuthenticator{MaxSkew: 5 * time.Minute}}
+func NewCallbackHandler(db *sql.DB, store RawResultStore, detectionSink ...DetectionSink) *CallbackHandler {
+	var sink DetectionSink
+	if len(detectionSink) > 0 {
+		sink = detectionSink[0]
+	}
+	return &CallbackHandler{db: db, store: store, detectionSink: sink, authenticator: CallbackAuthenticator{MaxSkew: 5 * time.Minute}}
 }
 
 func (handler *CallbackHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -246,7 +251,7 @@ func (handler *CallbackHandler) process(
 		if err != nil {
 			return 422, "callback result mapping failed", err
 		}
-		processor := Processor{store: handler.store}
+		processor := Processor{store: handler.store, detectionSink: handler.detectionSink}
 		if err := processor.finishSucceeded(ctx, tx, projectID, runID, outcome); err != nil {
 			return 500, "callback result storage failed", err
 		}

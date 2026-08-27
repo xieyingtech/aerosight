@@ -168,6 +168,62 @@ CREATE TABLE "algorithm_callback_receipts" (
 	CONSTRAINT "algorithm_callback_receipts_provider_callback_unique" UNIQUE("provider_id", "callback_id")
 );
 --> statement-breakpoint
+CREATE TABLE "detections" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"algorithm_run_id" uuid NOT NULL,
+	"input_asset_id" integer NOT NULL,
+	"task_run_id" integer,
+	"detection_key" text NOT NULL,
+	"label" text NOT NULL,
+	"confidence" double precision NOT NULL,
+	"pixel_geometry_json" jsonb NOT NULL,
+	"geographic_geometry" geometry(Polygon,4326),
+	"location_quality" text DEFAULT 'unavailable' NOT NULL,
+	"projection_method" text DEFAULT 'image-only' NOT NULL,
+	"horizontal_error_meters" double precision,
+	"transform_version" text NOT NULL,
+	"attributes_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"captured_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "detections_confidence_valid" CHECK (confidence between 0 and 1),
+	CONSTRAINT "detections_location_quality_valid" CHECK (location_quality in ('surveyed','estimated','low','unavailable')),
+	CONSTRAINT "detections_error_valid" CHECK (horizontal_error_meters is null or horizontal_error_meters >= 0),
+	CONSTRAINT "detections_run_key_unique" UNIQUE("algorithm_run_id", "detection_key"),
+	CONSTRAINT "detections_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "detection_groups" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"label" text NOT NULL,
+	"status" text DEFAULT 'active' NOT NULL,
+	"geographic_geometry" geometry(Polygon,4326),
+	"location_quality" text NOT NULL,
+	"first_detected_at" timestamp with time zone NOT NULL,
+	"last_detected_at" timestamp with time zone NOT NULL,
+	"member_count" integer DEFAULT 1 NOT NULL,
+	"aggregation_version" text DEFAULT 'aerosight-detection-aggregation/v1' NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "detection_groups_status_valid" CHECK (status in ('active','superseded')),
+	CONSTRAINT "detection_groups_location_quality_valid" CHECK (location_quality in ('surveyed','estimated','low','unavailable')),
+	CONSTRAINT "detection_groups_time_valid" CHECK (last_detected_at >= first_detected_at and member_count > 0),
+	CONSTRAINT "detection_groups_id_project_unique" UNIQUE("id", "project_id")
+);
+--> statement-breakpoint
+CREATE TABLE "detection_group_members" (
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"detection_group_id" bigint NOT NULL,
+	"detection_id" bigint NOT NULL,
+	"added_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "detection_group_members_detection_unique" UNIQUE("detection_id"),
+	CONSTRAINT "detection_group_members_pk" PRIMARY KEY("detection_group_id", "detection_id")
+);
+--> statement-breakpoint
 CREATE TABLE "approval_requests" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"project_id" integer NOT NULL,
@@ -1035,6 +1091,14 @@ ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_run_
 ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_callback_receipts" ADD CONSTRAINT "algorithm_callback_receipts_provider_project_fk" FOREIGN KEY ("provider_id","project_id") REFERENCES "public"."algorithm_providers"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detections" ADD CONSTRAINT "detections_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detections" ADD CONSTRAINT "detections_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detections" ADD CONSTRAINT "detections_asset_project_fk" FOREIGN KEY ("input_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detections" ADD CONSTRAINT "detections_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detection_groups" ADD CONSTRAINT "detection_groups_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_group_project_fk" FOREIGN KEY ("detection_group_id","project_id") REFERENCES "public"."detection_groups"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "detection_group_members" ADD CONSTRAINT "detection_group_members_detection_project_fk" FOREIGN KEY ("detection_id","project_id") REFERENCES "public"."detections"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_requester_member_fk" FOREIGN KEY ("team_id","requested_by_user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approvals" ADD CONSTRAINT "approvals_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1168,6 +1232,10 @@ CREATE INDEX "algorithm_runs_claim_idx" ON "algorithm_runs" USING btree ("status
 CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "algorithm_run_attempts_run_idx" ON "algorithm_run_attempts" USING btree ("algorithm_run_id","attempt");--> statement-breakpoint
 CREATE INDEX "algorithm_callback_receipts_run_idx" ON "algorithm_callback_receipts" USING btree ("algorithm_run_id","received_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "detections_project_captured_idx" ON "detections" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "detections_geometry_gist" ON "detections" USING gist ("geographic_geometry");--> statement-breakpoint
+CREATE INDEX "detection_groups_project_time_idx" ON "detection_groups" USING btree ("project_id","last_detected_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "detection_groups_geometry_gist" ON "detection_groups" USING gist ("geographic_geometry");--> statement-breakpoint
 CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
 CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id","created_at");--> statement-breakpoint
