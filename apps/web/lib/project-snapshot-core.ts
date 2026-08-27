@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { dependencyHealthFromRecord, evaluateProjectHealth, type ProjectHealth } from "./dependency-health-core.ts";
+import type { OperationDiagnostic } from "./operation-diagnostics-core.ts";
 
 type SnapshotClient = Pick<PoolClient, "query" | "release">;
 export type ConnectSnapshotClient = () => Promise<SnapshotClient>;
@@ -13,6 +14,7 @@ export type ProjectSituationSnapshot = {
   activeTasks: Array<Record<string, unknown>>;
   liveStreams: Array<Record<string, unknown>>;
   realtimeChannels?: Array<Record<string, unknown>>;
+  diagnostics?: OperationDiagnostic[];
   mediaPoints: Array<Record<string, unknown>>;
   suspectedConstruction: Array<Record<string, unknown>>;
   openAlerts: Array<Record<string, unknown>>;
@@ -136,6 +138,28 @@ export async function readProjectSituationSnapshot(
            on telemetry.project_id=channel.project_id and telemetry.device_id=channel.device_id
         where channel.project_id=$1 order by channel.device_id,channel.channel_key`, [projectId]
     )).rows;
+    const diagnostics = (await client.query<OperationDiagnostic>(
+      `/* snapshot:diagnostics */
+       select 'command:'||command.id::text as id,'command'::text as kind,
+              case when command.status in ('unknown','timed_out','nacked') then 'error' else 'warning' end as severity,
+              device.name||' · '||command.capability_code as title,
+              coalesce(command.result_json->>'reason',command.result_json->>'errorCode',command.status) as reason,
+              command.status,coalesce(command.completed_at,command.created_at) as "occurredAt"
+         from device_commands command join devices device on device.id=command.device_id and device.project_id=command.project_id
+        where command.project_id=$1 and command.status in ('nacked','timed_out','unknown')
+       union all
+       select 'connection:'||adapter.id::text,'connection',case when adapter.status='failed' then 'error' else 'warning' end,
+              adapter.name,coalesce(adapter.last_health_json->>'code',adapter.status),adapter.status,
+              coalesce(adapter.last_checked_at,adapter.updated_at)
+         from device_adapters adapter where adapter.project_id=$1 and adapter.status in ('failed','degraded')
+       union all
+       select 'stream:'||stream.id::text,'stream',case when stream.status='failed' then 'error' else 'warning' end,
+              device.name||' · '||stream.stream_key,coalesce(stream.status_reason,stream.status),stream.status,
+              coalesce(stream.ended_at,stream.updated_at)
+         from live_streams stream join devices device on device.id=stream.device_id and device.project_id=stream.project_id
+        where stream.project_id=$1 and stream.status in ('failed','degraded','starting')
+       order by "occurredAt" desc limit 50`, [projectId]
+    )).rows;
     const mediaPoints = (await client.query<Record<string, unknown>>(
       `/* snapshot:media */
        select asset.id, asset.kind, asset.mime_type as "mimeType", asset.device_id as "deviceId",
@@ -175,6 +199,7 @@ export async function readProjectSituationSnapshot(
       activeTasks,
       liveStreams,
       realtimeChannels,
+      diagnostics,
       mediaPoints,
       suspectedConstruction,
       openAlerts,

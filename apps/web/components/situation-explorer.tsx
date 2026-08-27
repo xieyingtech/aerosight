@@ -9,6 +9,7 @@ import { initialSituationState, situationReducer } from "@/lib/situation-state";
 import { applyReplayToSnapshot } from "@/lib/replay-model";
 import type { ProjectReplay } from "@/lib/project-replay-core";
 import { LiveStreamPanel } from "@/components/live-stream-panel";
+import { OperationDiagnostics } from "@/components/operation-diagnostics";
 
 function selectedRecord(snapshot: ProjectSituationSnapshot, lane: string, entityId: string) {
   const sources = lane.includes("device") || lane === "track" ? snapshot.devices
@@ -58,6 +59,7 @@ export function SituationExplorer({ snapshot, mapClassName }: { snapshot: Projec
       <div className="rounded-xl border bg-card">
         <LiveStreamPanel cursor={state.cursor} mode={state.mode} selection={state.selection} snapshot={viewSnapshot} />
       </div>
+      <OperationDiagnostics items={viewSnapshot.diagnostics ?? []} />
       <ProjectTimeline cursor={state.cursor} onCursorChange={(cursor) => dispatch({ type: "set-cursor", cursor })} onRangeChange={(from, to) => dispatch({ type: "set-range", from, to })} onReturnLive={() => dispatch({ type: "return-live" })} onSelect={(selection) => dispatch({ type: "select", selection })} range={state.range} snapshot={viewSnapshot} />
     </div>
   );
