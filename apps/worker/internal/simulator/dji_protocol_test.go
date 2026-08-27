@@ -22,6 +22,26 @@ func (fixture *protocolTransportFixture) Publish(_ context.Context, topic string
 	return nil
 }
 
+type mediaControllerFixture struct {
+	started map[string]string
+	stopped []string
+}
+
+func (fixture *mediaControllerFixture) Start(_ context.Context, videoID, destination string) error {
+	if fixture.started == nil {
+		fixture.started = map[string]string{}
+	}
+	fixture.started[videoID] = destination
+	return nil
+}
+
+func (fixture *mediaControllerFixture) Stop(videoID string) error {
+	fixture.stopped = append(fixture.stopped, videoID)
+	return nil
+}
+
+func (fixture *mediaControllerFixture) Close() error { return nil }
+
 func TestDJIProtocolPublishesTopologyAndCorrelatedReplyThroughTransport(t *testing.T) {
 	topology, err := os.ReadFile("../../testdata/dji/dock2-m3td-topology.json")
 	if err != nil {
@@ -214,5 +234,51 @@ func TestDJIProtocolPackageHasNoDatabaseOrInternalSuccessBypass(t *testing.T) {
 				t.Fatalf("%s contains forbidden simulator bypass %q", file, forbidden)
 			}
 		}
+	}
+}
+
+func TestDJILiveCommandsControlTwoIndependentMediaSources(t *testing.T) {
+	topology, err := os.ReadFile("../../testdata/dji/dock2-m3td-topology.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := &protocolTransportFixture{}
+	media := &mediaControllerFixture{}
+	protocol, err := NewDJIProtocol(DJIProtocolConfig{
+		GatewaySN: "DOCK2-DEMO-001", Topology: topology, Media: media,
+		Now: func() time.Time { return time.UnixMilli(1_787_821_300_200).UTC() },
+	}, transport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, source := range []struct{ videoID, destination string }{
+		{"DOCK2-DEMO-001/165-0-7/normal-0", "rtmp://media:1935/demo/dock-camera"},
+		{"M3TD-DEMO-001/81-0-0/normal-0", "rtmp://media:1935/demo/aircraft-camera"},
+	} {
+		payload, _ := json.Marshal(map[string]any{
+			"tid": "live-start-" + source.videoID, "bid": "live-demo", "timestamp": 1_787_821_300_100 + index,
+			"method": "live_start_push", "data": map[string]any{"url_type": 1, "url": source.destination, "video_id": source.videoID, "video_quality": 3},
+		})
+		if err := protocol.HandleMessage(context.Background(), protocol.ServiceTopic(), payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(media.started) != 2 || media.started["DOCK2-DEMO-001/165-0-7/normal-0"] == media.started["M3TD-DEMO-001/81-0-0/normal-0"] {
+		t.Fatalf("two camera sources were merged: %+v", media.started)
+	}
+	stop := []byte(`{"tid":"live-stop-1","bid":"live-demo","timestamp":1787821300300,"method":"live_stop_push","data":{"video_id":"DOCK2-DEMO-001/165-0-7/normal-0"}}`)
+	if err := protocol.HandleMessage(context.Background(), protocol.ServiceTopic(), stop); err != nil {
+		t.Fatal(err)
+	}
+	if len(media.stopped) != 1 || media.stopped[0] != "DOCK2-DEMO-001/165-0-7/normal-0" {
+		t.Fatalf("stop affected the wrong media source: %+v", media.stopped)
+	}
+	for _, publication := range transport.publications {
+		if !strings.Contains(string(publication.payload), `"result":0`) {
+			t.Fatalf("successful media action was not acknowledged: %s", publication.payload)
+		}
+	}
+	if mediaPattern("DOCK2-DEMO-001/165-0-7/normal-0") == mediaPattern("M3TD-DEMO-001/81-0-0/normal-0") {
+		t.Fatal("fixture video ids must render visibly distinct loop patterns")
 	}
 }

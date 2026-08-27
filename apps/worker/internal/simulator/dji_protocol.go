@@ -22,6 +22,7 @@ type DJIProtocolConfig struct {
 	Topology          json.RawMessage
 	TelemetryInterval time.Duration
 	Faults            DJIFaults
+	Media             DJIMediaController
 	Now               func() time.Time
 }
 
@@ -233,6 +234,21 @@ func (simulator *DJIProtocolSimulator) HandleMessage(ctx context.Context, topic 
 	if configured, exists := simulator.config.Faults.NackMethods[request.Method]; exists {
 		result = configured
 		if result == 0 {
+			result = 1
+		}
+	}
+	if result == 0 && (request.Method == "live_start_push" || request.Method == "live_stop_push") {
+		var mediaRequest struct {
+			URL     string `json:"url"`
+			VideoID string `json:"video_id"`
+		}
+		if json.Unmarshal(request.Data, &mediaRequest) != nil || mediaRequest.VideoID == "" || simulator.config.Media == nil {
+			result = 1
+		} else if request.Method == "live_start_push" {
+			if err := simulator.config.Media.Start(ctx, mediaRequest.VideoID, mediaRequest.URL); err != nil {
+				result = 1
+			}
+		} else if err := simulator.config.Media.Stop(mediaRequest.VideoID); err != nil {
 			result = 1
 		}
 	}

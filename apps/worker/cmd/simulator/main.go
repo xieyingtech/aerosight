@@ -31,10 +31,12 @@ func main() {
 	disconnectAfter := flag.Duration("disconnect-after", 0, "exit after this duration to simulate a device disconnect")
 	unknownFirmware := flag.String("unknown-firmware", "", "replace product firmware with an unvalidated version")
 	unknownCapability := flag.String("unknown-capability", "", "inject an unknown runtime capability in aircraft telemetry")
+	ffmpegExecutable := flag.String("ffmpeg-executable", "", "FFmpeg executable or wrapper used for DJI live push")
+	mediaHostOverride := flag.String("media-host-override", "", "replace the RTMP hostname passed to the media process")
 	flag.Parse()
 	if *mode == "dji-mqtt" {
 		runDJIMQTT(*topologyPath, *product, *gatewaySN, *aircraftSN, *mqttURL, *mqttUsername, *mqttPasswordEnv,
-			*nackMethod, *timeoutMethod, *disconnectAfter, *unknownFirmware, *unknownCapability)
+			*nackMethod, *timeoutMethod, *disconnectAfter, *unknownFirmware, *unknownCapability, *ffmpegExecutable, *mediaHostOverride)
 		return
 	}
 	if *mode != "stdout" {
@@ -69,6 +71,7 @@ func main() {
 
 func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, username, passwordEnv, nackMethod, timeoutMethod string,
 	disconnectAfter time.Duration, unknownFirmware, unknownCapability string,
+	ffmpegExecutable, mediaHostOverride string,
 ) {
 	if (topologyPath == "" && product == "") || gatewaySN == "" || username == "" || passwordEnv == "" {
 		fmt.Fprintln(os.Stderr, "-gateway-sn, -mqtt-username, -mqtt-password-env, and either -topology or -product are required in dji-mqtt mode")
@@ -112,6 +115,15 @@ func runDJIMQTT(topologyPath, product, gatewaySN, aircraftSN, brokerURL, usernam
 	}
 	delete(protocolConfig.Faults.NackMethods, "")
 	delete(protocolConfig.Faults.TimeoutMethods, "")
+	if ffmpegExecutable != "" {
+		media, err := simulator.NewFFmpegMediaController(ffmpegExecutable, mediaHostOverride)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		defer media.Close()
+		protocolConfig.Media = media
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	incoming := make(chan dji.MQTTMessage, 32)
