@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   assertNoInlineSecrets,
   assertSupportedDeviceAdapterType,
+  buildDjiConfigurationSummary,
   canManageDeviceAdapters,
   djiAdapterSetupInputSchema,
   publicDeviceAdapter
@@ -47,8 +48,22 @@ test("DJI setup accepts secret references without inline credentials", () => {
     tlsRequired: true,
     mqttAnonymous: false,
     secretRef: "vault://aerosight/dji",
+    ntpServerHost: "time.example.com",
+    ntpServerPort: 123,
     gatewaySerials: ["DOCK-001"]
   });
   assert.equal(setup.secretRef, "vault://aerosight/dji");
   assert(!("password" in setup));
+});
+
+test("DJI setup summary uses official fields and never renders credentials", () => {
+  const summary = buildDjiConfigurationSummary({
+    gatewaySerials: ["DOCK-001"], mqttEndpoint: "mqtts://mqtt.example.com:8883",
+    ntpServerHost: "time.example.com", ntpServerPort: 123
+  }, "aerosight-project-adapter");
+  assert.equal(summary.gateway_sn[0], "DOCK-001");
+  assert.equal(summary.mqtt_broker.enable_tls, true);
+  assert.equal(summary.mqtt_broker.password, "[SECRET_REF]");
+  assert.equal(summary.config.app_license, "[SECRET_REF]");
+  assert.equal(summary.config.ntp_server_port, 123);
 });

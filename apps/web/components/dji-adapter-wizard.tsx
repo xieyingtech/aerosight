@@ -18,6 +18,7 @@ type AdapterSummary = {
 };
 
 type SetupIssue = { field: string; code: string };
+type ConfigurationSummary = Record<string, unknown>;
 
 export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: number; initialAdapters: AdapterSummary[] }) {
   const [step, setStep] = useState<1 | 2>(1);
@@ -27,6 +28,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
   const [error, setError] = useState<string | null>(null);
   const [issues, setIssues] = useState<SetupIssue[]>([]);
   const [testResult, setTestResult] = useState<Record<string, unknown> | null>(null);
+  const [configurationSummary, setConfigurationSummary] = useState<ConfigurationSummary | null>(null);
 
   const submit = async (form: HTMLFormElement) => {
     setBusy(true); setError(null); setIssues([]); setTestResult(null);
@@ -44,10 +46,12 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
         tlsRequired: mode === "public" || values.get("tlsRequired") === "on",
         mqttAnonymous: false,
         secretRef: values.get("secretRef"),
+        ntpServerHost: values.get("ntpServerHost"),
+        ntpServerPort: Number(values.get("ntpServerPort")),
         gatewaySerials: String(values.get("gatewaySerials") ?? "").split(/[\s,]+/).filter(Boolean)
       })
     });
-    const result = await response.json() as AdapterSummary & { error?: string; issues?: SetupIssue[] };
+    const result = await response.json() as AdapterSummary & { error?: string; issues?: SetupIssue[]; configurationSummary?: ConfigurationSummary };
     setBusy(false);
     if (!response.ok) {
       setError(result.error === "NETWORK_PROFILE_INVALID" ? "网络配置未通过安全策略" : (result.error ?? "创建失败"));
@@ -55,6 +59,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
       return;
     }
     setAdapters((current) => [...current, result]);
+    setConfigurationSummary(result.configurationSummary ?? null);
     form.reset(); setStep(1);
   };
 
@@ -87,6 +92,8 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
         <label className="space-y-1 text-sm">WebSocket<Input name="websocketPublicUrl" placeholder={mode === "public" ? "wss://api.example.com" : "ws://192.168.1.10:3100"} required /></label>
         <label className="space-y-1 text-sm">媒体摄取<Input name="mediaIngestBaseUrl" placeholder={mode === "public" ? "rtmps://media.example.com:443" : "rtmp://192.168.1.10:1935"} required /></label>
         <label className="space-y-1 text-sm">媒体播放<Input name="mediaPlaybackBaseUrl" placeholder={mode === "public" ? "https://media.example.com" : "http://192.168.1.10:8888"} required /></label>
+        <label className="space-y-1 text-sm">NTP Host<Input name="ntpServerHost" placeholder="time.example.com" required /></label>
+        <label className="space-y-1 text-sm">NTP Port<Input defaultValue="123" max="65535" min="1" name="ntpServerPort" required type="number" /></label>
         <label className="flex items-center gap-2 self-end text-sm"><input defaultChecked={mode === "public"} disabled={mode === "public"} name="tlsRequired" type="checkbox" />强制 TLS</label>
       </div>
       <div className="flex gap-2">
@@ -98,6 +105,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     </form>
 
     {error && <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}{issues.length > 0 && <ul className="mt-2 list-inside list-disc">{issues.map((issue) => <li key={`${issue.field}:${issue.code}`}>{issue.field}: {issue.code}</li>)}</ul>}</div>}
+    {configurationSummary && <div className="rounded-lg border p-3 text-sm"><p className="font-medium">DJI 配置摘要（秘密已脱敏）</p><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(configurationSummary, null, 2)}</pre></div>}
 
     <div className="space-y-2">
       {adapters.map((adapter) => <article className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/30 p-3" key={adapter.id}>

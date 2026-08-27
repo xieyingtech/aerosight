@@ -8,6 +8,7 @@ import { query } from "@/lib/db";
 import {
   assertNoInlineSecrets,
   assertSupportedDeviceAdapterType,
+  buildDjiConfigurationSummary,
   canManageDeviceAdapters,
   djiAdapterSetupInputSchema,
   deviceAdapterInputSchema,
@@ -127,6 +128,7 @@ export async function createDjiAdapterSetup(
     `thing/product/${serial}/requests`,
     `thing/product/${serial}/services_reply`
   ]);
+  const clientId = `aerosight-${randomUUID()}`;
   return withAuditedProjectWrite(
     {
       projectId,
@@ -165,13 +167,17 @@ export async function createDjiAdapterSetup(
                    last_checked_at as "lastCheckedAt", updated_at as "updatedAt"`,
         [
           projectId, access.teamId, input.name, input.secretRef,
-          { clientId: `aerosight-${randomUUID()}`, gatewaySerials: input.gatewaySerials, topics },
+          {
+            clientId, gatewaySerials: input.gatewaySerials, topics,
+            djiConfiguration: { ntpServerHost: input.ntpServerHost, ntpServerPort: input.ntpServerPort }
+          },
           profile.rows[0].id
         ]
       );
       return {
         ...publicDeviceAdapter(adapter.rows[0]),
-        network: { mode: input.mode, status: "unverified", hasSecret: true }
+        network: { mode: input.mode, status: "unverified", hasSecret: true },
+        configurationSummary: buildDjiConfigurationSummary(input, clientId)
       };
     }
   );

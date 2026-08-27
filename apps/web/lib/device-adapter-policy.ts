@@ -22,6 +22,8 @@ export const djiAdapterSetupInputSchema = z.object({
   tlsRequired: z.boolean(),
   mqttAnonymous: z.boolean().default(false),
   secretRef: z.string().trim().regex(/^[a-z][a-z0-9+.-]*:\/\/.+/i),
+  ntpServerHost: z.string().trim().min(1).max(253),
+  ntpServerPort: z.coerce.number().int().min(1).max(65535).default(123),
   gatewaySerials: z.array(z.string().trim().min(1).max(100)).min(1).max(100)
 });
 
@@ -55,4 +57,25 @@ export function assertNoInlineSecrets(value: unknown, path = "config") {
 export function publicDeviceAdapter<T extends { secretRef: string | null }>(adapter: T) {
   const { secretRef, ...safe } = adapter;
   return { ...safe, hasSecret: secretRef !== null };
+}
+
+export function buildDjiConfigurationSummary(input: Pick<DjiAdapterSetupInput,
+  "gatewaySerials" | "mqttEndpoint" | "ntpServerHost" | "ntpServerPort">, clientId: string) {
+  return {
+    gateway_sn: input.gatewaySerials,
+    mqtt_broker: {
+      address: input.mqttEndpoint,
+      client_id: clientId,
+      username: "[SECRET_REF]",
+      password: "[SECRET_REF]",
+      enable_tls: input.mqttEndpoint.startsWith("mqtts://")
+    },
+    config: {
+      app_id: "[SECRET_REF]",
+      app_key: "[SECRET_REF]",
+      app_license: "[SECRET_REF]",
+      ntp_server_host: input.ntpServerHost,
+      ntp_server_port: input.ntpServerPort
+    }
+  };
 }

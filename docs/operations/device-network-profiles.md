@@ -1,5 +1,7 @@
 # 设备网络 Profile 部署指南
 
+实机接入前还必须完成 [DJI Dock 2/3 实机接入与现场验收清单](./dji-field-acceptance.md)。
+
 设备网络 Profile 是项目 Adapter 引用的显式连接配置。它分别描述机场或协议模拟器可达的 MQTT、API、WebSocket、媒体摄取地址，以及用户浏览器可达的媒体播放地址。不得从浏览器当前 Host 自动推导这些地址。
 
 ## 配置文件与校验
