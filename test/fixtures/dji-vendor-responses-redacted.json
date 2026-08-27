@@ -1,0 +1,22 @@
+{
+  "telemetry": {
+    "event_id": "SANDBOX-EVENT-101",
+    "sn": "SANDBOX-UAV-001",
+    "timestamp_ms": 1787817600000,
+    "sequence": 42,
+    "data": {
+      "longitude": 120.1542,
+      "latitude": 30.2741,
+      "height": 86.5,
+      "horizontal_speed": 4.2,
+      "vertical_speed": -0.3,
+      "battery_percent": 67,
+      "link_quality": 82,
+      "mode_code": 17
+    }
+  },
+  "command_results": [
+    {"tid":"SANDBOX-CMD-ACK","sn":"SANDBOX-UAV-001","timestamp_ms":1787817601000,"result":0,"error_code":0,"expected_outcome":"ack"},
+    {"tid":"SANDBOX-CMD-NACK","sn":"SANDBOX-UAV-001","timestamp_ms":1787817602000,"result":-1,"error_code":314001,"expected_outcome":"nack"}
+  ]
+}

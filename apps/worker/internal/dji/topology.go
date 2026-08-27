@@ -53,12 +53,15 @@ func MapTopology(projectID int, adapterID int64, payload []byte) ([]adapter.Disc
 func mapCapabilities(domain, model string) (string, []string, error) {
 	switch domain {
 	case "dock":
-		return "dock", []string{"dock.charge", "dock.environment", "live.video", "flight.dispatch"}, nil
+		return "dock", []string{"dock.charge", "dock.environment", "camera.live", "live.video", "flight.dispatch"}, nil
 	case "device":
 		if model == "" {
 			return "", nil, errors.New("DJI aircraft model is missing")
 		}
-		return "drone", []string{"flight.route", "flight.takeoff", "flight.land", "flight.return_home", "camera.photo", "camera.video", "gimbal.control", "live.video"}, nil
+		return "drone", []string{
+			"flight.navigate", "flight.route", "flight.takeoff", "flight.land", "flight.return_home", "command.rth",
+			"camera.capture", "camera.live", "camera.photo", "camera.video", "gimbal.control", "live.video",
+		}, nil
 	default:
 		return "", nil, fmt.Errorf("unsupported DJI topology domain %q", domain)
 	}
