@@ -2029,3 +2029,32 @@ ALTER TABLE "devices"
 --> statement-breakpoint
 ALTER TABLE "devices" ADD CONSTRAINT "devices_data_freshness_valid"
 CHECK ("data_freshness" in ('fresh', 'stale', 'expired', 'unknown'));
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_algorithm_definition_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF TG_OP = 'DELETE' AND OLD.status IN ('published','retired') THEN
+		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	IF TG_OP = 'UPDATE' AND OLD.status = 'published' THEN
+		IF NEW.status = 'retired'
+		   AND NEW.execution_mode = OLD.execution_mode
+		   AND NEW.model_or_process = OLD.model_or_process
+		   AND NEW.input_requirements_json = OLD.input_requirements_json
+		   AND NEW.parameters_schema_json = OLD.parameters_schema_json
+		   AND NEW.protocol_config_json = OLD.protocol_config_json
+		   AND NEW.output_mapping_json = OLD.output_mapping_json
+		   AND NEW.label_mapping_json = OLD.label_mapping_json
+		   AND NEW.output_schema_json = OLD.output_schema_json
+		   AND NEW.display_metadata_json = OLD.display_metadata_json
+		   AND NEW.publish_threshold = OLD.publish_threshold THEN
+			RETURN NEW;
+		END IF;
+		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	IF TG_OP = 'UPDATE' AND OLD.status = 'retired' THEN
+		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;

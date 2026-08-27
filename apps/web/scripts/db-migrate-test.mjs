@@ -1144,6 +1144,10 @@ async function assertAlgorithmRuntimeSchema(connectionString) {
         where id = $1`, [version.rows[0].id, north.user_id]
     );
     await client.query(
+      `update algorithm_definitions set current_published_version_id=$2 where id=$1`,
+      [definition.rows[0].id, version.rows[0].id]
+    );
+    await client.query(
       "update algorithm_definition_versions set model_or_process = 'changed' where id = $1",
       [version.rows[0].id]
     ).then(
@@ -1155,6 +1159,50 @@ async function assertAlgorithmRuntimeSchema(connectionString) {
          id, project_id, team_id, algorithm_definition_version_id, input_asset_id, idempotency_key
        ) values ('20000000-0000-4000-8000-000000000001', $1, $2, $3, $4, 'asset:fixture:v1')`,
       [north.id, north.team_id, version.rows[0].id, asset.rows[0].id]
+    );
+    const versionTwo = await client.query(
+      `insert into algorithm_definition_versions (
+         project_id, team_id, algorithm_definition_id, version, status, execution_mode,
+         model_or_process, input_requirements_json, parameters_schema_json, output_schema_json,
+         output_mapping_json, created_by_user_id
+       ) values ($1,$2,$3,2,'draft','synchronous','model-v2',
+                 '{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,'{"type":"object"}'::jsonb,
+                 '{"kind":"detection"}'::jsonb,$4) returning id`,
+      [north.id, north.team_id, definition.rows[0].id, north.user_id]
+    );
+    await client.query(
+      `update algorithm_definition_versions set status='retired'
+        where project_id=$1 and id=$2`, [north.id, version.rows[0].id]
+    );
+    await client.query(
+      `update algorithm_definition_versions set status='published',published_by_user_id=$3,published_at=now()
+        where project_id=$1 and id=$2`, [north.id, versionTwo.rows[0].id, north.user_id]
+    );
+    await client.query(
+      `update algorithm_definitions set current_published_version_id=$3 where project_id=$1 and id=$2`,
+      [north.id, definition.rows[0].id, versionTwo.rows[0].id]
+    );
+    const stableHistory = await client.query(
+      `select run.algorithm_definition_version_id as run_version_id,
+              definition.current_published_version_id as current_version_id,
+              historical.model_or_process as historical_model,
+              current.model_or_process as current_model
+         from algorithm_runs run
+         join algorithm_definition_versions historical on historical.id=run.algorithm_definition_version_id
+         join algorithm_definitions definition on definition.id=historical.algorithm_definition_id
+         join algorithm_definition_versions current on current.id=definition.current_published_version_id
+        where run.id='20000000-0000-4000-8000-000000000001'`
+    );
+    assert(stableHistory.rows[0].run_version_id === version.rows[0].id &&
+      stableHistory.rows[0].current_version_id === versionTwo.rows[0].id &&
+      stableHistory.rows[0].historical_model === "model-v1" && stableHistory.rows[0].current_model === "model-v2",
+    "publishing an algorithm upgrade drifted historical runs");
+    await client.query(
+      "update algorithm_definition_versions set output_mapping_json='{}'::jsonb where id=$1",
+      [version.rows[0].id]
+    ).then(
+      () => assert(false, "retired algorithm definition version should remain immutable"),
+      (error) => assert(error.code === "55000", "retired algorithm mutation failed unexpectedly")
     );
     await client.query(
       `insert into algorithm_runs (
@@ -1270,7 +1318,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 33, "empty database should apply all migrations");
+    assert(first.applied.length === 34, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1318,7 +1366,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 33, "existing database should record all migrations");
+    assert(first.applied.length === 34, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
