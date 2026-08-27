@@ -103,7 +103,7 @@ func (repository *SQLLeaseRepository) UpdateStatus(
 	_, err := repository.db.ExecContext(ctx, `
 		update device_adapters
 		set status = $5,
-		    last_health_json = jsonb_build_object('ok', $5 = 'connected', 'code', $6, 'connectionEpoch', $3),
+		    last_health_json = jsonb_build_object('ok', $5 = 'connected', 'code', $6::text, 'connectionEpoch', $3),
 		    last_checked_at = now(),
 		    last_connected_at = case when $5 = 'connected' then now() else last_connected_at end,
 		    updated_at = now()

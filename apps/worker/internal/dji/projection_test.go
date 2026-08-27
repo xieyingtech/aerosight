@@ -165,6 +165,16 @@ func TestProjectorClaimsDJITopologyIntoUnifiedDeviceQuery(t *testing.T) {
 	if telemetryType != "dji.environment" || sensorStatus != "online" || !json.Valid(sensorPayload) {
 		t.Fatalf("sensor telemetry was not written to unified realtime tables: type=%s status=%s payload=%s", telemetryType, sensorStatus, sensorPayload)
 	}
+	var inheritedOnline int
+	if err := database.QueryRowContext(ctx, `select count(*) from devices child
+		join device_relationships relation on relation.to_device_id=child.id and relation.project_id=child.project_id and relation.valid_until is null
+		join device_external_identities parent on parent.device_id=relation.from_device_id and parent.adapter_id=$1
+		where parent.external_device_id='DOCK2-DEMO-001' and child.type='camera' and child.status='online'`, adapterID).Scan(&inheritedOnline); err != nil {
+		t.Fatal(err)
+	}
+	if inheritedOnline != 1 {
+		t.Fatalf("camera did not inherit its parent device heartbeat: %d", inheritedOnline)
+	}
 	testCommandDispatchAndReplies(t, ctx, database, teamID, projectID, adapterID)
 }
 

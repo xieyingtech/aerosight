@@ -250,6 +250,17 @@ func (projector *Projector) projectRealtime(ctx context.Context, tx *sql.Tx, tea
 		deviceID, envelope.ProjectID, envelope.CapturedAt, envelope.EventID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `
+		update devices child set status='online',status_reason=null,last_seen_at=$3,
+		  status_observed_at=$3,status_projected_at=now(),data_freshness='fresh',
+		  raw_status_ref=$4,updated_at=now()
+		from device_relationships relation
+		where relation.project_id=$2 and relation.from_device_id=$1 and relation.to_device_id=child.id
+		  and relation.valid_until is null
+		  and (child.status_observed_at is null or child.status_observed_at <= $3)`,
+		deviceID, envelope.ProjectID, envelope.CapturedAt, envelope.EventID+":parent"); err != nil {
+		return err
+	}
 	telemetryType := "dji.state"
 	if envelope.EventType == "device.telemetry" {
 		telemetryType = "dji.osd"

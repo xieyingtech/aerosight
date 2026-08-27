@@ -2,6 +2,8 @@ package simulator
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ type DJIProtocolTransport interface {
 type DJIProtocolConfig struct {
 	GatewaySN         string
 	AircraftSN        string
+	SessionID         string
 	Topology          json.RawMessage
 	TelemetryInterval time.Duration
 	Faults            DJIFaults
@@ -144,6 +147,13 @@ func NewDJIProtocol(config DJIProtocolConfig, transport DJIProtocolTransport) (*
 	if config.Now == nil {
 		config.Now = time.Now
 	}
+	if config.SessionID == "" {
+		identity := make([]byte, 6)
+		if _, err := rand.Read(identity); err != nil {
+			return nil, errors.New("DJI_SIMULATOR_SESSION_ID_FAILED")
+		}
+		config.SessionID = hex.EncodeToString(identity)
+	}
 	return &DJIProtocolSimulator{config: config, transport: transport}, nil
 }
 
@@ -183,7 +193,7 @@ func (simulator *DJIProtocolSimulator) PublishTelemetry(ctx context.Context) err
 		{"thing/product/" + simulator.config.AircraftSN + "/osd", aircraftData},
 	} {
 		payload, err := json.Marshal(map[string]any{
-			"tid": fmt.Sprintf("sim-osd-%s-%d", simulator.config.GatewaySN, simulator.sequence),
+			"tid": fmt.Sprintf("sim-osd-%s-%s-%d", simulator.config.GatewaySN, simulator.config.SessionID, simulator.sequence),
 			"bid": "sim-telemetry-" + simulator.config.GatewaySN, "timestamp": now.UnixMilli(),
 			"gateway": simulator.config.GatewaySN, "data": publication.data,
 		})
