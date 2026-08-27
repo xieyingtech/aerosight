@@ -97,6 +97,7 @@ type Runtime struct {
 type Registry struct {
 	mu       sync.RWMutex
 	runtimes map[string]Runtime
+	enabled  map[string]bool
 }
 
 var (
@@ -106,7 +107,7 @@ var (
 )
 
 func NewRegistry() *Registry {
-	return &Registry{runtimes: make(map[string]Runtime)}
+	return &Registry{runtimes: make(map[string]Runtime), enabled: make(map[string]bool)}
 }
 
 func runtimeKey(driverKey, version string) string {
@@ -238,6 +239,7 @@ func (registry *Registry) Register(runtime Runtime) error {
 		return fmt.Errorf("driver runtime %s is already registered", key)
 	}
 	registry.runtimes[key] = runtime
+	registry.enabled[key] = true
 	return nil
 }
 
@@ -248,7 +250,51 @@ func (registry *Registry) Resolve(driverKey, version string) (Runtime, error) {
 	if !exists {
 		return Runtime{}, fmt.Errorf("driver runtime %s is not registered", runtimeKey(driverKey, version))
 	}
+	if !registry.enabled[runtimeKey(driverKey, version)] {
+		return Runtime{}, fmt.Errorf("driver runtime %s is disabled", runtimeKey(driverKey, version))
+	}
 	return runtime, nil
+}
+
+func (registry *Registry) SetEnabled(driverKey, version string, enabled bool) error {
+	key := runtimeKey(driverKey, version)
+	registry.mu.Lock()
+	defer registry.mu.Unlock()
+	if _, exists := registry.runtimes[key]; !exists {
+		return fmt.Errorf("driver runtime %s is not registered", key)
+	}
+	registry.enabled[key] = enabled
+	return nil
+}
+
+func (registry *Registry) ResolveCompatible(driverKey, constraint string) (Runtime, error) {
+	rangeRule, err := ParseVersionConstraint(constraint)
+	if err != nil {
+		return Runtime{}, err
+	}
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	var selected Runtime
+	var selectedVersion Version
+	found := false
+	for key, runtime := range registry.runtimes {
+		if runtime.Manifest.DriverKey != driverKey || !registry.enabled[key] {
+			continue
+		}
+		version, parseErr := ParseVersion(runtime.Manifest.Version)
+		if parseErr != nil || !rangeRule.Matches(version) {
+			continue
+		}
+		if !found || version.Compare(selectedVersion) > 0 {
+			selected = runtime
+			selectedVersion = version
+			found = true
+		}
+	}
+	if !found {
+		return Runtime{}, fmt.Errorf("no enabled driver runtime %s matches %q", driverKey, constraint)
+	}
+	return selected, nil
 }
 
 func (registry *Registry) ResolveCapability(driverKey, version, capabilityCode string) (CapabilityDefinition, error) {
