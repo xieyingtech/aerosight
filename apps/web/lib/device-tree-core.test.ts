@@ -4,10 +4,10 @@ import test from "node:test";
 import { buildDeviceTree, type DeviceTreeItem } from "./device-tree-core.ts";
 
 const device = (id: number, category: string): DeviceTreeItem => ({
-  id, name: `${category}-${id}`, category, status: "online", dataFreshness: "fresh", statusReason: null,
+  id, deviceTypeId: String(id), name: `${category}-${id}`, category, status: "online", dataFreshness: "fresh", statusReason: null,
   typeName: category, typeKey: `fixture.${category}`, driverKey: "fixture.driver", driverVersion: "1.0.0",
   vendor: category === "unknown" ? null : "Fixture", model: null,
-  capabilities: [{ code: "state.read", availability: "available", reason: null, risk: "low" }], channels: []
+  capabilities: [{ code: "state.read", availability: "available", reason: null, risk: "low", authorized: true, actions: [] }], channels: []
 });
 
 test("all device categories render through the same topology model", () => {

@@ -1,5 +1,6 @@
 export type DeviceTreeItem = {
   id: number;
+  deviceTypeId: string;
   name: string;
   category: string;
   status: string;
@@ -11,7 +12,7 @@ export type DeviceTreeItem = {
   driverVersion: string;
   vendor: string | null;
   model: string | null;
-  capabilities: { code: string; availability: string; reason: string | null; risk: string }[];
+  capabilities: { code: string; availability: string; reason: string | null; risk: "low" | "medium" | "high" | "critical"; authorized: boolean; actions: import("./device-capability-actions").DeviceCapabilityAction[] }[];
   channels: { stableChannelId: string; name: string; dataType: string; availability: string }[];
 };
 

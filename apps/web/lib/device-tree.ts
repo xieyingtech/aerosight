@@ -1,14 +1,16 @@
 import "server-only";
 
-import { getProject } from "@/lib/data";
+import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
 import { buildDeviceTree, type DeviceTreeItem, type DeviceTreeRelation } from "@/lib/device-tree-core";
+import { actionPatternMatches, authorizeCapabilityAction } from "@/lib/device-command-core";
+import { actionsForCapability } from "@/lib/device-capability-actions";
 
 export async function readProjectDeviceTree(projectId: number) {
-  await getProject(projectId);
-  const [devices, relations] = await Promise.all([
+  const { user, access } = await requireCurrentProjectPermission(projectId, "project:view");
+  const [devices, relations, grants] = await Promise.all([
     query<DeviceTreeItem>(
-      `select device.id,device.name,device_type.category,device.status,device.data_freshness as "dataFreshness",
+      `select device.id,device.device_type_id::text as "deviceTypeId",device.name,device_type.category,device.status,device.data_freshness as "dataFreshness",
               device.status_reason as "statusReason",device_type.display_name as "typeName",
               device_type.type_key as "typeKey",driver.driver_key as "driverKey",driver.version as "driverVersion",
               device_type.vendor,device_type.model,
@@ -30,7 +32,26 @@ export async function readProjectDeviceTree(projectId: number) {
     query<DeviceTreeRelation>(
       `select from_device_id as "fromDeviceId",to_device_id as "toDeviceId",relation_type as "relationType"
          from device_relationships where project_id=$1 and valid_until is null order by valid_from`, [projectId]
+    ),
+    query<{ scopeType: "project" | "device_type" | "device"; deviceTypeId: string | null; deviceId: number | null; actionPattern: string; effect: "allow" | "deny" }>(
+      `select scope_type as "scopeType",device_type_id::text as "deviceTypeId",device_id as "deviceId",
+              action_pattern as "actionPattern",effect
+         from device_capability_grants
+        where project_id=$1 and team_id=$2 and user_id=$3 and (expires_at is null or expires_at>now())`,
+      [projectId, access.teamId, user.id]
     )
   ]);
-  return buildDeviceTree(devices.rows, relations.rows);
+  const authorizedDevices = devices.rows.map((device) => ({ ...device, capabilities: device.capabilities.map((capability) => {
+    const matching = grants.rows.filter((grant) => actionPatternMatches(grant.actionPattern, capability.code)
+      && (grant.scopeType === "project" || (grant.scopeType === "device_type" && grant.deviceTypeId === device.deviceTypeId)
+        || (grant.scopeType === "device" && grant.deviceId === device.id)));
+    let authorized = false;
+    try {
+      authorized = authorizeCapabilityAction({ role: access.role, action: capability.code, grants: matching });
+    } catch {}
+    const actions = capability.availability === "available" && authorized
+      ? actionsForCapability(capability.code, capability.risk) : [];
+    return { ...capability, authorized, actions };
+  }) }));
+  return buildDeviceTree(authorizedDevices, relations.rows);
 }
