@@ -158,7 +158,7 @@ const projectItemQueries = {
   agents: `select id, name, description, status, updated_at as "updatedAt" from agents where project_id = $1 order by updated_at desc`,
   tasks: `select id, name, description, trigger_type as "triggerType", status, updated_at as "updatedAt" from tasks where project_id = $1 order by updated_at desc`,
   issues: `select id, number, title, status, priority, updated_at as "updatedAt" from issues where project_id = $1 order by updated_at desc`,
-  assets: `select id, kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt" from assets where project_id = $1 order by created_at desc`
+  assets: `select id, kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt" from assets where project_id = $1 and status = 'available' order by created_at desc`
 } as const;
 
 export async function listProjectItems(projectId: number, kind: keyof typeof projectItemQueries) {
@@ -172,7 +172,7 @@ const projectItemByIdQueries = {
   agents: `select id, project_id as "projectId", name, description, status, updated_at as "updatedAt" from agents where project_id = $1 and id = $2`,
   tasks: `select id, project_id as "projectId", name, description, trigger_type as "triggerType", status, updated_at as "updatedAt" from tasks where project_id = $1 and id = $2`,
   issues: `select id, project_id as "projectId", number, title, status, priority, updated_at as "updatedAt" from issues where project_id = $1 and id = $2`,
-  assets: `select id, project_id as "projectId", kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt" from assets where project_id = $1 and id = $2`
+  assets: `select id, project_id as "projectId", kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt" from assets where project_id = $1 and id = $2 and status = 'available'`
 } as const;
 
 export async function getProjectItem(

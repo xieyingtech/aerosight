@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { HistoryIcon, RadioTowerIcon, RefreshCwIcon, VideoOffIcon } from "lucide-react";
+import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, VideoOffIcon } from "lucide-react";
 
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
@@ -10,6 +10,43 @@ import type { SituationSelection } from "@/lib/situation-state";
 type PlaybackState =
   | { status: "idle" | "loading" | "error"; locator?: never }
   | { status: "ready"; locator: { url: string; expiresAt: string } };
+
+function HistoricalMedia({ projectId, media }: { projectId: number; media: Record<string, unknown> }) {
+  const [accessUrl, setAccessUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const mimeType = String(media.mimeType ?? "application/octet-stream");
+  const action = mimeType.startsWith("video/") ? "play" : "preview";
+  useEffect(() => {
+    const controller = new AbortController();
+    setFailed(false);
+    fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=${action}`, {
+      signal: controller.signal, cache: "no-store"
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("media access failed");
+      const result = await response.json() as { url: string };
+      setAccessUrl(result.url);
+    }).catch((error) => { if (error?.name !== "AbortError") setFailed(true); });
+    return () => controller.abort();
+  }, [action, media.id, projectId]);
+  const download = async () => {
+    const response = await fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=download`, { cache: "no-store" });
+    if (!response.ok) { setFailed(true); return; }
+    const result = await response.json() as { url: string };
+    window.location.assign(result.url);
+  };
+  return <div className="space-y-2">
+    <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted/40 text-center text-xs text-muted-foreground">
+      {failed ? <div><VideoOffIcon className="mx-auto mb-2 size-7" />媒体不可用或无访问权限</div>
+        : !accessUrl ? <RefreshCwIcon className="size-5 animate-spin" />
+          : mimeType.startsWith("image/") ? <img alt="历史巡检媒体" className="h-full w-full object-contain" src={accessUrl} />
+            : mimeType.startsWith("video/") ? <video className="h-full w-full object-contain" controls src={accessUrl} />
+              : <div>媒体 #{String(media.id)} · {mimeType}</div>}
+    </div>
+    <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs" onClick={download} type="button">
+      <DownloadIcon className="size-3.5" />下载
+    </button>
+  </div>;
+}
 
 export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
   snapshot: ProjectSituationSnapshot;
@@ -39,10 +76,10 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
   if (model.mode === "history") {
     return <div className="space-y-3 p-4">
       <div className="flex items-center gap-2 text-sm font-medium"><HistoryIcon className="size-4" />历史媒体</div>
-      <div className="flex aspect-video items-center justify-center rounded-lg border bg-muted/40 text-center text-xs text-muted-foreground">
-        {model.media ? <div>媒体 #{String(model.media.id)}<br />{String(model.media.mimeType ?? model.media.kind ?? "历史采集")}</div>
-          : <div><VideoOffIcon className="mx-auto mb-2 size-7" />当前时间点没有可用媒体</div>}
-      </div>
+      {model.media ? <HistoricalMedia media={model.media} projectId={snapshot.project.id} />
+        : <div className="flex aspect-video items-center justify-center rounded-lg border bg-muted/40 text-center text-xs text-muted-foreground">
+          <div><VideoOffIcon className="mx-auto mb-2 size-7" />当前时间点没有可用媒体</div>
+        </div>}
     </div>;
   }
 
