@@ -1,14 +1,35 @@
 import { NextResponse } from "next/server";
-import { requireCurrentProjectPermission } from "@/lib/data";
-import { assertLiveControlRequest, ReplayControlForbiddenError } from "@/lib/replay-policy";
+
+import { submitDeviceCommand } from "@/lib/device-commands";
+import { assertLiveControlRequest } from "@/lib/replay-policy";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; deviceId: string }> }) {
-  const { id } = await params;
-  await requireCurrentProjectPermission(Number(id), "mission:operate");
-  try { assertLiveControlRequest(request); }
-  catch (error) {
-    if (error instanceof ReplayControlForbiddenError) return NextResponse.json({ error: error.code }, { status: 409 });
-    throw error;
+  const { id, deviceId } = await params;
+  const projectId = Number(id);
+  const parsedDeviceId = Number(deviceId);
+  const body = await request.json() as Record<string, unknown>;
+  if (!Number.isInteger(projectId) || projectId <= 0 || !Number.isInteger(parsedDeviceId) || parsedDeviceId <= 0
+      || typeof body.capabilityCode !== "string" || !body.capabilityCode.trim()
+      || typeof body.commandKey !== "string" || !body.commandKey.trim()
+      || !body.parameters || typeof body.parameters !== "object" || Array.isArray(body.parameters)
+      || typeof body.idempotencyKey !== "string" || body.idempotencyKey.length < 8 || body.idempotencyKey.length > 128
+      || typeof body.reason !== "string" || !body.reason.trim()
+      || (body.deadlineSeconds !== undefined && (typeof body.deadlineSeconds !== "number" || !Number.isFinite(body.deadlineSeconds)))) {
+    return NextResponse.json({ error: "DEVICE_COMMAND_INPUT_INVALID" }, { status: 400 });
   }
-  return NextResponse.json({ error: "DEVICE_COMMANDS_NOT_ENABLED" }, { status: 503 });
+  try {
+    assertLiveControlRequest(request);
+    const result = await submitDeviceCommand({
+      projectId, deviceId: parsedDeviceId, capabilityCode: body.capabilityCode,
+      commandKey: body.commandKey, parameters: body.parameters as Record<string, unknown>,
+      idempotencyKey: body.idempotencyKey, confirmation: typeof body.confirmation === "string" ? body.confirmation : null,
+      reason: body.reason, deadlineSeconds: typeof body.deadlineSeconds === "number" ? body.deadlineSeconds : undefined,
+      requestId: request.headers.get("x-request-id")
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "DEVICE_COMMAND_FAILED";
+    const forbidden = code.includes("DENIED") || code.includes("NOT_GRANTED");
+    return NextResponse.json({ error: code }, { status: forbidden ? 403 : 409 });
+  }
 }
