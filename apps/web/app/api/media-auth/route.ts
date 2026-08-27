@@ -16,17 +16,18 @@ export async function POST(request: Request) {
     user?: string; password?: string; token?: string; action?: string; path?: string;
     protocol?: string; query?: string;
   };
-  if (!body?.action || !body.path) return NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
+  if (!body?.action) return NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
+  if (body.action === "api") {
+    const allowed = equalSecret(body.user ?? "", process.env.MEDIA_ADMIN_USER)
+      && equalSecret(body.password ?? "", process.env.MEDIA_ADMIN_PASSWORD);
+    return allowed ? new NextResponse(null, { status: 204 })
+      : NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
+  }
+  if (!body.path) return NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
   if (body.action === "publish") {
     const allowed = body.path.startsWith("demo/aerosight/")
       && equalSecret(body.user ?? "", process.env.MEDIA_PUBLISH_USER)
       && equalSecret(body.password ?? "", process.env.MEDIA_PUBLISH_PASSWORD);
-    return allowed ? new NextResponse(null, { status: 204 })
-      : NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
-  }
-  if (body.action === "api") {
-    const allowed = equalSecret(body.user ?? "", process.env.MEDIA_ADMIN_USER)
-      && equalSecret(body.password ?? "", process.env.MEDIA_ADMIN_PASSWORD);
     return allowed ? new NextResponse(null, { status: 204 })
       : NextResponse.json({ error: "MEDIA_AUTH_DENIED" }, { status: 401 });
   }
