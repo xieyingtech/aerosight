@@ -22,6 +22,7 @@
     "test:worker": "cd apps/worker && go test ./...",
     "test:security": "node scripts/test-security-acceptance.mjs",
     "benchmark:load": "pnpm --dir apps/web benchmark:load",
+    "drill:fresh-environment": "node scripts/fresh-environment-drill.mjs",
     "typecheck": "pnpm --dir apps/web typecheck",
     "check": "pnpm typecheck && pnpm test"
   },
