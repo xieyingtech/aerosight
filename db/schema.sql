@@ -503,6 +503,7 @@ CREATE TABLE "projects" (
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"current_safety_policy_version_id" bigint,
 	CONSTRAINT "projects_id_team_unique" UNIQUE("id", "team_id")
 );
 --> statement-breakpoint
@@ -539,6 +540,31 @@ CREATE TABLE "project_events" (
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "project_events_event_unique" UNIQUE("event_id")
+);
+--> statement-breakpoint
+CREATE TABLE "safety_policy_versions" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"version" integer NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"project_boundary" geometry(Polygon,4326),
+	"restricted_areas" geometry(MultiPolygon,4326),
+	"max_altitude_meters" double precision NOT NULL,
+	"max_speed_meters_per_second" double precision NOT NULL,
+	"minimum_battery_percent" double precision NOT NULL,
+	"allowed_windows_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"required_compliance_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"optional_compliance_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"exemptions_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"created_by_user_id" integer,
+	"published_by_user_id" integer,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"published_at" timestamp with time zone,
+	CONSTRAINT "safety_policy_versions_status_valid" CHECK (status in ('draft', 'published')),
+	CONSTRAINT "safety_policy_versions_limits_valid" CHECK (max_altitude_meters > 0 and max_speed_meters_per_second > 0 and minimum_battery_percent between 0 and 100),
+	CONSTRAINT "safety_policy_versions_project_version_unique" UNIQUE("project_id", "version"),
+	CONSTRAINT "safety_policy_versions_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "task_runs" (
@@ -673,6 +699,20 @@ CREATE TRIGGER task_steps_published_immutable
 BEFORE UPDATE OR DELETE ON task_steps
 FOR EACH ROW EXECUTE FUNCTION protect_published_task_step();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION protect_published_safety_policy_version()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	IF OLD.status = 'published' THEN
+		RAISE EXCEPTION 'published safety policy versions are immutable' USING ERRCODE = '55000';
+	END IF;
+	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER safety_policy_versions_published_immutable
+BEFORE UPDATE OR DELETE ON safety_policy_versions
+FOR EACH ROW EXECUTE FUNCTION protect_published_safety_policy_version();
+--> statement-breakpoint
 ALTER TABLE "agent_messages" ADD CONSTRAINT "agent_messages_session_id_agent_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."agent_sessions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -753,12 +793,16 @@ ALTER TABLE "outbox_events" ADD CONSTRAINT "outbox_events_project_team_fk" FOREI
 ALTER TABLE "outbox_consumptions" ADD CONSTRAINT "outbox_consumptions_event_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."outbox_events"("event_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_current_safety_policy_project_fk" FOREIGN KEY ("current_safety_policy_version_id","id") REFERENCES "public"."safety_policy_versions"("id","project_id") ON DELETE SET NULL ("current_safety_policy_version_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_updated_by_user_id_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_team_member_fk" FOREIGN KEY ("team_id","user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_granted_by_user_id_users_id_fk" FOREIGN KEY ("granted_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_events" ADD CONSTRAINT "project_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "safety_policy_versions" ADD CONSTRAINT "safety_policy_versions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "safety_policy_versions" ADD CONSTRAINT "safety_policy_versions_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "safety_policy_versions" ADD CONSTRAINT "safety_policy_versions_published_by_fk" FOREIGN KEY ("published_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_task_id_tasks_id_fk" FOREIGN KEY ("task_id") REFERENCES "public"."tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "task_runs" ADD CONSTRAINT "task_runs_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -840,6 +884,9 @@ CREATE INDEX "project_permissions_user_project_idx" ON "project_permissions" USI
 CREATE INDEX "project_permissions_project_permission_idx" ON "project_permissions" USING btree ("project_id","permission");--> statement-breakpoint
 CREATE INDEX "project_events_project_cursor_idx" ON "project_events" USING btree ("project_id","cursor");--> statement-breakpoint
 CREATE INDEX "project_events_project_occurred_idx" ON "project_events" USING btree ("project_id","occurred_at","cursor");--> statement-breakpoint
+CREATE UNIQUE INDEX "safety_policy_versions_one_draft_idx" ON "safety_policy_versions" USING btree ("project_id") WHERE "safety_policy_versions"."status" = 'draft';--> statement-breakpoint
+CREATE INDEX "safety_policy_versions_boundary_gist" ON "safety_policy_versions" USING gist ("project_boundary");--> statement-breakpoint
+CREATE INDEX "safety_policy_versions_restricted_gist" ON "safety_policy_versions" USING gist ("restricted_areas");--> statement-breakpoint
 CREATE INDEX "task_runs_project_created_idx" ON "task_runs" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_task_created_idx" ON "task_runs" USING btree ("task_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> statement-breakpoint

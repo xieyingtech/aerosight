@@ -771,6 +771,52 @@ async function assertTaskVersionSchema(connectionString) {
   }
 }
 
+async function assertSafetyPolicySchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = await client.query(
+      `select project.id, project.team_id, actor.id as user_id
+         from projects project join users actor on actor.email = 'legacy@example.test'
+        where project.name = 'legacy-project'`
+    );
+    const row = scope.rows[0];
+    const policy = await client.query(
+      `insert into safety_policy_versions (
+         project_id, team_id, version, status, project_boundary, restricted_areas,
+         max_altitude_meters, max_speed_meters_per_second, minimum_battery_percent,
+         required_compliance_json, published_by_user_id, published_at
+       ) values (
+         $1, $2, 1, 'published',
+         ST_GeomFromText('POLYGON((120 30,122 30,122 32,120 32,120 30))', 4326),
+         ST_GeomFromText('MULTIPOLYGON(((120.8 30.8,121.2 30.8,121.2 31.2,120.8 31.2,120.8 30.8)))', 4326),
+         120, 15, 30, '["flightApproval"]'::jsonb, $3, now()
+       ) returning id`,
+      [row.id, row.team_id, row.user_id]
+    );
+    await client.query(
+      "update projects set current_safety_policy_version_id = $2 where id = $1",
+      [row.id, policy.rows[0].id]
+    );
+    const spatial = await client.query(
+      `select ST_Covers(project_boundary, ST_SetSRID(ST_MakePoint(121, 31), 4326)) as in_boundary,
+              ST_Intersects(restricted_areas, ST_SetSRID(ST_MakePoint(121, 31), 4326)) as restricted
+         from safety_policy_versions where id = $1`,
+      [policy.rows[0].id]
+    );
+    assert(spatial.rows[0].in_boundary && spatial.rows[0].restricted, "safety policy geometry is not queryable");
+    await client.query(
+      "update safety_policy_versions set max_altitude_meters = 200 where id = $1",
+      [policy.rows[0].id]
+    ).then(
+      () => assert(false, "published safety policy should be immutable"),
+      (error) => assert(error.code === "55000", "published safety policy mutation failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
@@ -787,7 +833,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 15, "empty database should apply all migrations");
+    assert(first.applied.length === 16, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -803,6 +849,7 @@ try {
     await assertMediaEvidenceSchema(connectionString);
     await assertLiveStreamSchema(connectionString);
     await assertTaskVersionSchema(connectionString);
+    await assertSafetyPolicySchema(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -828,7 +875,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 15, "existing database should record all migrations");
+    assert(first.applied.length === 16, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -864,12 +911,13 @@ try {
                 to_regclass('public.evidence_links') as evidence_links,
                 to_regclass('public.live_streams') as live_streams,
                 to_regclass('public.task_versions') as task_versions,
-                to_regclass('public.task_steps') as task_steps`
+                to_regclass('public.task_steps') as task_steps,
+                to_regclass('public.safety_policy_versions') as safety_policy_versions`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].telemetry &&
         result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
-        result.rows[0].task_versions && result.rows[0].task_steps,
+        result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions,
         "schema snapshot is incomplete"
       );
     } finally {
