@@ -12,7 +12,7 @@ export type DeviceTreeItem = {
   driverVersion: string;
   vendor: string | null;
   model: string | null;
-  capabilities: { code: string; availability: string; reason: string | null; risk: "low" | "medium" | "high" | "critical"; authorized: boolean; actions: import("./device-capability-actions").DeviceCapabilityAction[] }[];
+  capabilities: { code: string; availability: string; reason: string | null; risk: "low" | "medium" | "high" | "critical"; authorized: boolean; actions: Array<import("./device-capability-actions").DeviceCapabilityAction & { enabled: boolean; unavailableReason: string | null }> }[];
   channels: { stableChannelId: string; name: string; dataType: string; availability: string }[];
 };
 

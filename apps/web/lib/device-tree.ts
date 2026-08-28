@@ -3,8 +3,7 @@ import "server-only";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
 import { buildDeviceTree, type DeviceTreeItem, type DeviceTreeRelation } from "@/lib/device-tree-core";
-import { actionPatternMatches, authorizeCapabilityAction } from "@/lib/device-command-core";
-import { actionsForCapability } from "@/lib/device-capability-actions";
+import { projectDeviceCapabilities, type DeviceCapabilityGrant } from "@/lib/device-action-projection";
 
 export async function readProjectDeviceTree(projectId: number) {
   const { user, access } = await requireCurrentProjectPermission(projectId, "project:view");
@@ -33,7 +32,7 @@ export async function readProjectDeviceTree(projectId: number) {
       `select from_device_id as "fromDeviceId",to_device_id as "toDeviceId",relation_type as "relationType"
          from device_relationships where project_id=$1 and valid_until is null order by valid_from`, [projectId]
     ),
-    query<{ scopeType: "project" | "device_type" | "device"; deviceTypeId: string | null; deviceId: number | null; actionPattern: string; effect: "allow" | "deny" }>(
+    query<DeviceCapabilityGrant>(
       `select scope_type as "scopeType",device_type_id::text as "deviceTypeId",device_id as "deviceId",
               action_pattern as "actionPattern",effect
          from device_capability_grants
@@ -41,17 +40,9 @@ export async function readProjectDeviceTree(projectId: number) {
       [projectId, access.teamId, user.id]
     )
   ]);
-  const authorizedDevices = devices.rows.map((device) => ({ ...device, capabilities: device.capabilities.map((capability) => {
-    const matching = grants.rows.filter((grant) => actionPatternMatches(grant.actionPattern, capability.code)
-      && (grant.scopeType === "project" || (grant.scopeType === "device_type" && grant.deviceTypeId === device.deviceTypeId)
-        || (grant.scopeType === "device" && grant.deviceId === device.id)));
-    let authorized = false;
-    try {
-      authorized = authorizeCapabilityAction({ role: access.role, action: capability.code, grants: matching });
-    } catch {}
-    const actions = capability.availability === "available" && authorized
-      ? actionsForCapability(capability.code, capability.risk) : [];
-    return { ...capability, authorized, actions };
+  const authorizedDevices = devices.rows.map((device) => ({ ...device, capabilities: projectDeviceCapabilities({
+    deviceId: device.id, deviceTypeId: device.deviceTypeId, deviceStatus: device.status,
+    role: access.role, capabilities: device.capabilities, grants: grants.rows
   }) }));
   return buildDeviceTree(authorizedDevices, relations.rows);
 }

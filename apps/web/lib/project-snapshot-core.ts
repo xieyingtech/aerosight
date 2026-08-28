@@ -1,15 +1,66 @@
 import type { PoolClient } from "pg";
 import { dependencyHealthFromRecord, evaluateProjectHealth, type ProjectHealth } from "./dependency-health-core.ts";
 import type { OperationDiagnostic } from "./operation-diagnostics-core.ts";
+import { projectDeviceCapabilities, type DeviceCapabilityGrant, type ProjectedDeviceCapability } from "./device-action-projection.ts";
 
 type SnapshotClient = Pick<PoolClient, "query" | "release">;
 export type ConnectSnapshotClient = () => Promise<SnapshotClient>;
+
+export type ProjectSnapshotChannel = {
+  stableChannelId: string;
+  channelKey: string;
+  displayName: string;
+  dataType: string;
+  availability: string;
+  availabilityReason: string | null;
+  protocol: string | null;
+};
+
+export type ProjectSnapshotDevice = Record<string, unknown> & {
+  id?: number;
+  deviceTypeId?: string;
+  name?: string;
+  type?: string;
+  status?: string;
+  typeKey?: string;
+  typeVersion?: string;
+  typeName?: string;
+  category?: string;
+  driverKey?: string;
+  driverVersion?: string;
+  driverStatus?: string;
+  statusReason?: string | null;
+  lastSeenAt?: string | Date | null;
+  pose?: Record<string, unknown> | null;
+  capabilities?: ProjectedDeviceCapability[];
+  channels?: ProjectSnapshotChannel[];
+};
+
+type SnapshotDeviceRow = {
+  id: number;
+  deviceTypeId: string;
+  name: string;
+  type: string;
+  status: string;
+  typeKey: string;
+  typeVersion: string;
+  typeName: string;
+  category: string;
+  driverKey: string;
+  driverVersion: string;
+  driverStatus: string;
+  statusReason: string | null;
+  lastSeenAt: string | Date | null;
+  pose: Record<string, unknown> | null;
+  rawCapabilities: Array<Omit<ProjectedDeviceCapability, "authorized" | "actions">>;
+  rawChannels: ProjectSnapshotChannel[];
+};
 
 export type ProjectSituationSnapshot = {
   project: { id: number; name: string; teamId: number; dependencyHealth?: Record<string, unknown> };
   generatedAt: string;
   consistency: "repeatable-read";
-  devices: Array<Record<string, unknown>>;
+  devices: ProjectSnapshotDevice[];
   tracks: Array<Record<string, unknown>>;
   activeTasks: Array<Record<string, unknown>>;
   liveStreams: Array<Record<string, unknown>>;
@@ -47,10 +98,10 @@ export async function readProjectSituationSnapshot(
   try {
     await client.query("begin isolation level repeatable read read only");
     const projectResult = await client.query<{
-      id: number; name: string; teamId: number; dependencyHealth: Record<string, unknown>;
+      id: number; name: string; teamId: number; role: "owner" | "admin" | "member"; dependencyHealth: Record<string, unknown>;
     }>(
       `/* snapshot:project-scope */
-       select project.id, project.name, project.team_id as "teamId",
+       select project.id, project.name, project.team_id as "teamId", membership.role,
               coalesce(flags.dependency_health_json, '{}'::jsonb) as "dependencyHealth"
        from projects project
        join team_members membership on membership.team_id = project.team_id
@@ -64,14 +115,27 @@ export async function readProjectSituationSnapshot(
       return null;
     }
 
-    const devices = (await client.query<Record<string, unknown>>(
+    const rawDevices = (await client.query<SnapshotDeviceRow>(
       `/* snapshot:devices */
        select device.id, device.name, device.type, device.status,
+              device.device_type_id::text as "deviceTypeId",
               device_type.type_key as "typeKey", device_type.version as "typeVersion",
               device_type.display_name as "typeName", device_type.category,
               driver.driver_key as "driverKey", driver.version as "driverVersion",
               driver.status as "driverStatus",
               device.status_reason as "statusReason", device.last_seen_at as "lastSeenAt",
+              coalesce((select jsonb_agg(jsonb_build_object(
+                'code',capability.capability_code,'availability',capability.availability,
+                'reason',capability.availability_reason,'risk',capability.risk_level
+              ) order by capability.capability_code) from device_capabilities capability
+                where capability.project_id=device.project_id and capability.device_id=device.id),'[]') as "rawCapabilities",
+              coalesce((select jsonb_agg(jsonb_build_object(
+                'stableChannelId',channel.stable_channel_id,'channelKey',channel.channel_key,
+                'displayName',channel.display_name,'dataType',channel.data_type,
+                'availability',channel.availability,'availabilityReason',channel.availability_reason,
+                'protocol',channel.protocol
+              ) order by channel.channel_key) from device_stream_channels channel
+                where channel.project_id=device.project_id and channel.device_id=device.id),'[]') as "rawChannels",
               case when pose.observation_id is null then null else json_build_object(
                 'longitude', ST_X(pose.standard_position),
                 'latitude', ST_Y(pose.standard_position),
@@ -91,6 +155,22 @@ export async function readProjectSituationSnapshot(
        where device.project_id = $1 order by device.id`,
       [projectId]
     )).rows;
+    const grants = (await client.query<DeviceCapabilityGrant>(
+      `/* snapshot:device-grants */
+       select scope_type as "scopeType",device_type_id::text as "deviceTypeId",device_id as "deviceId",
+              action_pattern as "actionPattern",effect
+         from device_capability_grants
+        where project_id=$1 and team_id=$2 and user_id=$3 and (expires_at is null or expires_at>now())`,
+      [projectId, project.teamId, userId]
+    )).rows;
+    const devices: ProjectSnapshotDevice[] = rawDevices.map(({ rawCapabilities, rawChannels, ...device }) => ({
+      ...device,
+      capabilities: projectDeviceCapabilities({
+        deviceId: device.id, deviceTypeId: device.deviceTypeId, deviceStatus: device.status,
+        role: project.role, capabilities: Array.isArray(rawCapabilities) ? rawCapabilities : [], grants
+      }),
+      channels: Array.isArray(rawChannels) ? rawChannels : []
+    }));
     const activeTasks = (await client.query<Record<string, unknown>>(
       `/* snapshot:active-tasks */
        select run.id, run.status, run.started_at as "startedAt", run.created_at as "createdAt",
@@ -121,7 +201,7 @@ export async function readProjectSituationSnapshot(
               stream.last_active_at as "lastActiveAt", stream.ended_at as "endedAt"
        from live_streams stream
        where stream.project_id = $1
-         and stream.status in ('starting', 'live', 'degraded')
+         and stream.status in ('requested', 'starting', 'live', 'degraded', 'stopping')
        order by stream.started_at desc`,
       [projectId]
     )).rows;
@@ -190,8 +270,9 @@ export async function readProjectSituationSnapshot(
     const generatedAt = new Date();
     const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, realtimeChannels, mediaPoints, openAlerts]);
     const health = evaluateProjectHealth(dependencyHealthFromRecord(project.dependencyHealth));
+    const { role: _role, ...publicProject } = project;
     const snapshot: ProjectSituationSnapshot = {
-      project,
+      project: publicProject,
       generatedAt: generatedAt.toISOString(),
       consistency: "repeatable-read",
       devices,
