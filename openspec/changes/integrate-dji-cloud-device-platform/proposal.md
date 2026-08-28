@@ -10,7 +10,7 @@ AeroSight 现有 DJI 代码尚未连接真实 Cloud API，设备与直播也没�
 - 交付最小安全控制集：任务投递/取消、返航及经过权限和安全确认的机场远程调试命令；所有命令进入统一命令账本，不允许 UI 直接发布厂商 Topic。
 - 建立通用实时流能力：支持设备通过 `stream.video`、`stream.telemetry`、`stream.sensor` 等能力暴露实时通道；视频经媒体网关摄取并转换为浏览器可播放的 HLS/WebRTC，遥测和传感数据使用统一实时订阅，页面不写死无人机、机器人、摄像头或传感器展示类型。
 - 同时支持局域网和公网部署拓扑，分别提供可配置的 MQTT、HTTPS、WebSocket、RTMP 与播放地址、TLS/鉴权要求和连通性检查，不把开发机地址暴露为生产默认值。
-- 将算法服务重构为通用 Provider、Definition、Version、Run 和结果映射模型；UI 从服务端能力目录渲染，不写死“违建”算法，违建识别仅作为可选示例定义/模板。
+- 将算法服务重构为通用 Provider、Definition、内部 Configuration Snapshot、Run 和结果映射模型；算法模型版本由 Provider 管理，平台仅记录 Provider 返回的 model revision/digest 与每次运行采用的不可变接入配置快照。UI 允许直接保存并立即使用算法配置，不提供模型版本发布流程；能力目录仍从服务端动态渲染且不写死“违建”算法，违建识别仅作为可选示例定义/模板。
 - 增加可在无实机时运行的 DJI 协议级演示器，模拟 Dock 2/3 拓扑、遥测、命令回复和双路视频源；实机验收仍要求合法 DJI 开发者配置、兼容固件与可达网络。
 - 保持现有项目、设备、任务、资产、事件和算法数据兼容；仅使用增量迁移，并为历史设备/算法记录提供默认类型或回填策略。
 - 非目标：本变更不实现任意摇杆/DRC 连续飞控、全量 DJI Cloud API、视频编解码器自研、自动绕过现场安全检查、其他厂商生产 Connector 或算法训练平台；通用 Connector 契约和非 DJI fixture 属于范围，但其他 IoT 平台的生产协议实现留给后续变更。
@@ -24,7 +24,7 @@ AeroSight 现有 DJI 代码尚未连接真实 Cloud API，设备与直播也没�
 - `unified-device-platform`: 项目级统一设备、ConnectorDefinition/ConnectorInstance、自动发现与纳管、DeviceType → Driver 绑定、设备拓扑、外部身份与绑定、有效能力、能力级 RBAC、状态投影及厂商无关的命令入口。
 - `dji-cloud-control`: Dock 2/3 与配套飞行器的 Cloud API 连接、遥测摄取、命令映射、回复关联、安全控制和协议级模拟验收。
 - `live-stream-gateway`: 厂商无关的实时通道发现与授权订阅，包括视频直播、DJI 推流控制、RTMP 摄取、HLS/WebRTC 播放以及遥测/传感数据实时查看。
-- `algorithm-service-platform`: 通用算法 Provider、算法定义与版本、输入输出契约、运行调度、结果映射和动态 UI 能力目录。
+- `algorithm-service-platform`: 通用算法 Provider、可直接保存的算法定义、内部配置快照、Provider 模型 revision 追溯、输入输出契约、运行调度、结果映射和动态 UI 能力目录。
 
 ### Modified Capabilities
 
@@ -32,7 +32,7 @@ AeroSight 现有 DJI 代码尚未连接真实 Cloud API，设备与直播也没�
 
 ## Impact
 
-- 数据库：增量建立 ConnectorDefinition、ConnectorInstance、发现同步状态、外部身份、显式设备绑定、Driver 定义、版本化 DeviceType、设备拓扑、有效能力和能力级授权，补齐 DJI 会话和实时通道/直播会话信息，并确保算法 Provider、Definition、Version、Run 不依赖业务类别；项目资源继续携带并校验 `project_id`。
+- 数据库：增量建立 ConnectorDefinition、ConnectorInstance、发现同步状态、外部身份、显式设备绑定、Driver 定义、版本化 DeviceType、设备拓扑、有效能力和能力级授权，补齐 DJI 会话和实时通道/直播会话信息，并确保算法 Provider、Definition、内部 Configuration Snapshot、Run 不依赖业务类别；项目资源继续携带并校验 `project_id`。
 - Worker：新增通用 Connector 租约、发现/增量同步和身份归一化边界，以及 DJI MQTT 长连接、Topic 路由、HTTPS/WebSocket 辅助接口、命令回复处理、连接恢复、直播控制和协议模拟器；沿用 outbox、幂等和命令账本边界。
 - Web/API：新增独立连接器管理、健康/同步日志、发现设备处理入口，以及通用设备拓扑、Driver/DeviceType、能力驱动操作、视频/遥测/传感实时面板和通用算法管理/运行界面；设备页面从连接器自动发现结果形成统一目录，所有查看、订阅和控制操作按项目、设备范围与 capability/action 重新鉴权。
 - 基础设施：开发/演示部署增加 MQTT Broker 和 MediaMTX 等媒体网关；公网部署要求域名、TLS、受限端口、秘密引用和设备可达性检查，局域网部署允许显式配置可路由的内网地址。

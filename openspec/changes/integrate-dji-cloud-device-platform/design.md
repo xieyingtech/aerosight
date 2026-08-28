@@ -112,15 +112,17 @@ ConnectorInstance 引用一个不可变/版本化连接 profile：
 
 选择理由：现有 stdout simulator 只能测试事件生成，不能证明 Broker 认证、Topic 路由、命令关联或直播链路。协议级模拟器覆盖的风险更接近实机。
 
-### 10. 算法服务使用通用 Provider/Definition/Run 三层模型
+### 10. 算法服务使用通用 Provider/Definition/Run 三层模型，模型版本归 Provider
 
 - `algorithm_providers` 只保存传输与运行策略：adapter type、base URL、secret ref、health、timeout、并发、allowlist。
-- `algorithm_definitions` 与不可变 version 保存名称、能力类别、输入 JSON Schema、参数 JSON Schema、输出映射 DSL、标签/展示元数据；“疑似违建”作为 seed/template 数据而非前端常量。
-- `algorithm_runs` 引用定义版本与不可变输入资产版本。Adapter 将 HTTP JSON 等协议转换为 canonical result union：classification、detection、segmentation、keypoints、tracking、OCR、scalar/table、asset/custom。
-- UI 用服务端 schema/catalog 渲染列表、参数表单和结果组件；无法标准化的输出保留原始资产引用并明确为 `partial`/`mapping_required`。
+- `algorithm_definitions` 保存管理员可随时修改并立即生效的当前配置，包括名称、能力类别、Provider 模型/进程标识、输入 JSON Schema、参数 JSON Schema、输出映射 DSL、标签/展示元数据；“疑似违建”作为 seed/template 数据而非前端常量。
+- 模型 revision/digest 由 Provider 管理和报告；`/v1` 等 URL 片段只表示 API 协议版本。平台不托管模型制品、不生成模型版本号，也不在 UI 提供算法版本发布流程。
+- 现有 `algorithm_definition_versions` 物理表保留为向后兼容的内部 Configuration Snapshot 存储。每次管理员保存配置时原子生成不可变快照并设为当前快照；快照序号、`published` 等兼容状态不向管理员暴露。
+- `algorithm_runs` 引用定义配置快照与不可变输入资产版本，并保存 Provider 响应中的模型 revision/digest（如有）。Adapter 将 HTTP JSON 等协议转换为 canonical result union：classification、detection、segmentation、keypoints、tracking、OCR、scalar/table、asset/custom。Provider 不报告 revision 时必须明确显示“未提供”，不能把 API 路径当作模型版本。
+- UI 用服务端 schema/catalog 渲染列表、配置保存、参数表单和结果组件；无法标准化的输出保留原始资产引用并明确为 `partial`/`mapping_required`。
 - Provider callback 只完成算法运行。任何事件或设备后续动作都必须经规则、任务草案、用户确认和统一命令账本。
 
-备选方案是为每个算法类型写独立页面和字段；短期直观但每接一个算法都要发布前后端，也容易把模型输出误当业务结论，故不采用。
+备选方案一是由 AeroSight 管理模型制品和模型版本；这会与 Provider 的部署职责重复，且无法从 `/v1` 推断真实模型 revision，故不采用。备选方案二是为每个算法类型写独立页面和字段；短期直观但每接一个算法都要发布前后端，也容易把模型输出误当业务结论，故不采用。
 
 ### 11. 数据迁移保持向后兼容和项目隔离
 
