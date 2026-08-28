@@ -1406,8 +1406,8 @@ async function assertTaskStepIssueSchema(connectionString) {
       (error) => assert(error.code === "23503", "cross-project issue link failed unexpectedly")
     );
 
-    await client.query(`insert into issue_events(project_id,issue_id,event_type,body,actor_user_id,client_key)
-      values($1,$2,'comment.created','fixture comment',$3,'00000000-0000-4000-8000-000000000047')`,
+    const commentEvent = await client.query(`insert into issue_events(project_id,issue_id,event_type,body,actor_user_id,client_key)
+      values($1,$2,'comment.created','fixture comment',$3,'00000000-0000-4000-8000-000000000047') returning id`,
     [scope.id, issue.rows[0].id, scope.user_id]);
     await client.query(`insert into issue_events(project_id,issue_id,event_type,body,actor_user_id,client_key)
       values($1,$2,'comment.created','duplicate comment',$3,'00000000-0000-4000-8000-000000000047')`,
@@ -1435,6 +1435,24 @@ async function assertTaskStepIssueSchema(connectionString) {
       () => assert(false, "cross-project issue agent should fail"),
       (error) => assert(error.code === "23503", "cross-project issue agent failed unexpectedly")
     );
+    const agentSession = await client.query(`insert into agent_sessions(project_id,issue_id,started_by_user_id,summary)
+      values($1,$2,$3,'fixture issue copilot') returning id`, [scope.id, issue.rows[0].id, scope.user_id]);
+    await client.query(`insert into agent_tool_jobs(project_id,team_id,session_id,requested_by_user_id,issue_id,
+      trigger_issue_event_id,trigger_type,idempotency_key,tool_name,required_permission,context_expires_at)
+      values($1,$2,$3,$4,$5,$6,'issue_mention','fixture-issue-mention','issue_copilot','agent:use',now()+interval '1 hour')`,
+    [scope.id, scope.team_id, agentSession.rows[0].id, scope.user_id, issue.rows[0].id, commentEvent.rows[0].id]);
+    await client.query(`insert into agent_tool_jobs(project_id,team_id,session_id,requested_by_user_id,issue_id,
+      trigger_issue_event_id,trigger_type,idempotency_key,tool_name,required_permission,context_expires_at)
+      values($1,$2,$3,$4,$5,$6,'issue_mention','fixture-issue-mention','issue_copilot','agent:use',now()+interval '1 hour')`,
+    [scope.id, scope.team_id, agentSession.rows[0].id, scope.user_id, issue.rows[0].id, commentEvent.rows[0].id]).then(
+      () => assert(false, "duplicate issue mention job should fail"),
+      (error) => assert(error.code === "23505", "duplicate issue mention job failed unexpectedly")
+    );
+    const mentionCounts = (await client.query(`select
+      (select count(*)::int from issue_events where project_id=$1 and issue_id=$2 and client_key='00000000-0000-4000-8000-000000000047') as comments,
+      (select count(*)::int from agent_tool_jobs where project_id=$1 and issue_id=$2 and idempotency_key='fixture-issue-mention') as jobs`,
+    [scope.id, issue.rows[0].id])).rows[0];
+    assert(mentionCounts.comments === 1 && mentionCounts.jobs === 1, "comment mention did not preserve one comment and one job");
   } finally {
     await client.end();
   }

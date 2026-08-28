@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { withAuditedProjectWrite } from "@/lib/audit";
+import { shouldQueueCopilotMention } from "@/lib/copilot-mention-core";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { planIssueMutation, type IssueMutation } from "@/lib/issue-collaboration-core";
 import { correlationId } from "@/lib/observability";
@@ -62,9 +63,26 @@ export async function mutateIssue(projectId: number, issueId: number, input: {
       where project_id=$1 and id=$2 and state_version=$6 returning state_version as "stateVersion"`,
     [projectId, issueId, "status" in plan ? plan.status : null, "labels" in plan ? plan.labels : null, plan.nextVersion, issue.stateVersion])).rows[0];
     if (!updated) throw new Error("ISSUE_VERSION_CONFLICT");
-    await client.query(`insert into issue_events(project_id,issue_id,event_type,body,metadata_json,actor_user_id,client_key)
-      values($1,$2,$3,$4,$5,$6,$7)`, [projectId, issueId, plan.eventType, plan.body, plan.metadata, user.id, input.clientKey]);
+    const activity = (await client.query<{ id: number }>(`insert into issue_events(project_id,issue_id,event_type,body,metadata_json,actor_user_id,client_key)
+      values($1,$2,$3,$4,$5,$6,$7) returning id`, [projectId, issueId, plan.eventType, plan.body, plan.metadata, user.id, input.clientKey])).rows[0];
+    let copilotJobId: string | null = null;
+    if (input.mutation.action === "comment" && shouldQueueCopilotMention(plan.body ?? "", access.permissions)) {
+      const session = (await client.query<{ id: number }>(`insert into agent_sessions(project_id,issue_id,started_by_user_id,summary)
+        values($1,$2,$3,$4) returning id`, [projectId, issueId, user.id, `Copilot · 案件 #${issueId}`])).rows[0];
+      const idempotencyKey = `issue-comment:${activity.id}:copilot`;
+      const job = (await client.query<{ id: string }>(`insert into agent_tool_jobs(
+        project_id,team_id,session_id,requested_by_user_id,issue_id,trigger_issue_event_id,trigger_type,idempotency_key,
+        tool_name,required_permission,args_json,context_expires_at)
+        values($1,$2,$3,$4,$5,$6,'issue_mention',$7,'issue_copilot','agent:use',
+          jsonb_build_object('issueId',$5::int,'commentEventId',$6::int),now()+interval '24 hours')
+        on conflict(project_id,idempotency_key) where idempotency_key is not null do update set idempotency_key=excluded.idempotency_key
+        returning id`, [projectId, access.teamId, session.id, user.id, issueId, activity.id, idempotencyKey])).rows[0];
+      copilotJobId = job.id;
+      await client.query(`insert into issue_events(project_id,issue_id,event_type,metadata_json,actor_user_id)
+        values($1,$2,'copilot.requested',jsonb_build_object('jobId',$3::text,'sessionId',$4::int,'triggerEventId',$5::int),$6)`,
+      [projectId, issueId, job.id, session.id, activity.id, user.id]);
+    }
     await publishProjectEvent(client, { projectId, teamId: access.teamId, eventId: randomUUID(), eventType: "issue.updated", payload: { issueId, stateVersion: updated.stateVersion, action: input.mutation.action }, enqueue: false });
-    return { issueId, stateVersion: updated.stateVersion, replayed: false };
+    return { issueId, stateVersion: updated.stateVersion, replayed: false, copilotJobId };
   });
 }

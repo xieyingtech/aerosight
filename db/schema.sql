@@ -68,6 +68,10 @@ CREATE TABLE "agent_tool_jobs" (
 	"team_id" integer NOT NULL,
 	"session_id" integer NOT NULL,
 	"requested_by_user_id" integer NOT NULL,
+	"issue_id" integer,
+	"trigger_issue_event_id" integer,
+	"trigger_type" text,
+	"idempotency_key" text,
 	"tool_name" text NOT NULL,
 	"required_permission" text NOT NULL,
 	"args_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
@@ -80,7 +84,8 @@ CREATE TABLE "agent_tool_jobs" (
 	"result_json" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "agent_tool_jobs_status_valid" CHECK (status in('queued','running','succeeded','failed')),
-	CONSTRAINT "agent_tool_jobs_expiry_valid" CHECK (context_expires_at > created_at)
+	CONSTRAINT "agent_tool_jobs_expiry_valid" CHECK (context_expires_at > created_at),
+	CONSTRAINT "agent_tool_jobs_trigger_type_valid" CHECK (trigger_type is null or trigger_type in ('issue_mention','issue_assignment','task_step','chat'))
 );
 --> statement-breakpoint
 CREATE TABLE "agents" (
@@ -781,7 +786,8 @@ CREATE TABLE "issue_events" (
 	"actor_user_id" integer,
 	"actor_agent_id" integer,
 	"client_key" text,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "issue_events_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "idempotency_records" (
@@ -1608,6 +1614,8 @@ ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_project_id_projects_
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_id_agents_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE SET NULL ("issue_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_agent_project_fk" FOREIGN KEY ("agent_id","project_id") REFERENCES "public"."agents"("id","project_id") ON DELETE SET NULL ("agent_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_sessions" ADD CONSTRAINT "agent_sessions_started_by_user_id_users_id_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_session_project_fk" FOREIGN KEY ("session_id","project_id") REFERENCES "public"."agent_sessions"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1615,6 +1623,8 @@ ALTER TABLE "agent_drafts" ADD CONSTRAINT "agent_drafts_actor_team_fk" FOREIGN K
 ALTER TABLE "agent_draft_evidence" ADD CONSTRAINT "agent_draft_evidence_draft_fk" FOREIGN KEY ("agent_draft_id","project_id") REFERENCES "public"."agent_drafts"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_tool_jobs" ADD CONSTRAINT "agent_tool_jobs_session_project_fk" FOREIGN KEY ("session_id","project_id") REFERENCES "public"."agent_sessions"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_tool_jobs" ADD CONSTRAINT "agent_tool_jobs_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_tool_jobs" ADD CONSTRAINT "agent_tool_jobs_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agent_tool_jobs" ADD CONSTRAINT "agent_tool_jobs_trigger_event_project_fk" FOREIGN KEY ("trigger_issue_event_id","project_id") REFERENCES "public"."issue_events"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agents" ADD CONSTRAINT "agents_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_providers" ADD CONSTRAINT "algorithm_providers_creator_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1799,6 +1809,8 @@ CREATE INDEX "agent_drafts_session_created_idx" ON "agent_drafts" USING btree ("
 CREATE INDEX "agent_draft_evidence_project_ref_idx" ON "agent_draft_evidence" USING btree ("project_id","reference_type","reference_id");--> statement-breakpoint
 CREATE INDEX "agent_tool_jobs_claim_idx" ON "agent_tool_jobs" USING btree ("status","created_at") WHERE "agent_tool_jobs"."status"='queued';--> statement-breakpoint
 CREATE INDEX "agent_tool_jobs_session_idx" ON "agent_tool_jobs" USING btree ("session_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "agent_tool_jobs_project_idempotency_unique" ON "agent_tool_jobs" USING btree ("project_id","idempotency_key") WHERE "agent_tool_jobs"."idempotency_key" is not null;--> statement-breakpoint
+CREATE INDEX "agent_tool_jobs_issue_created_idx" ON "agent_tool_jobs" USING btree ("issue_id","created_at" DESC NULLS LAST) WHERE "agent_tool_jobs"."issue_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "alert_automation_policy_versions_one_draft_idx" ON "alert_automation_policy_versions" USING btree ("alert_automation_policy_id") WHERE "alert_automation_policy_versions"."status"='draft';--> statement-breakpoint
 CREATE INDEX "alert_automation_policy_versions_project_status_idx" ON "alert_automation_policy_versions" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "alert_automation_runs_claim_idx" ON "alert_automation_runs" USING btree ("status","queued_at") WHERE "alert_automation_runs"."status"='queued';--> statement-breakpoint
