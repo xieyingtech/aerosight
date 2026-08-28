@@ -22,11 +22,11 @@ export type DeviceNetworkProfileInput = {
   mediaPlaybackBaseUrl: string;
   tlsRequired: boolean;
   mqttAnonymous: boolean;
-  secretRef?: string | null;
+  credentialProvided: boolean;
 };
 
 export type DeviceNetworkProfileIssue = {
-  field: DeviceNetworkProfileEndpointField | "tlsRequired" | "mqttAnonymous" | "secretRef";
+  field: DeviceNetworkProfileEndpointField | "tlsRequired" | "mqttAnonymous" | "credential";
   code: string;
 };
 
@@ -98,7 +98,7 @@ export async function validateDeviceNetworkProfile(
   if (input.mode === "public") {
     if (!input.tlsRequired) addIssue(issues, "tlsRequired", "PUBLIC_TLS_REQUIRED");
     if (input.mqttAnonymous) addIssue(issues, "mqttAnonymous", "PUBLIC_MQTT_ANONYMOUS_FORBIDDEN");
-    if (!input.secretRef?.trim()) addIssue(issues, "secretRef", "PUBLIC_CREDENTIAL_REQUIRED");
+    if (!input.credentialProvided) addIssue(issues, "credential", "PUBLIC_CREDENTIAL_REQUIRED");
   }
 
   await Promise.all(deviceNetworkProfileEndpointFields.map(async (field) => {

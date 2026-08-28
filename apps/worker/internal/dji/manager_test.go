@@ -60,7 +60,7 @@ func (fixture *managedSessionFixture) Done() <-chan struct{}       { return fixt
 
 func TestAdapterLeaseAllowsOnlyOneActiveWorker(t *testing.T) {
 	repository := &leaseRepositoryFixture{lease: AdapterLease{
-		AdapterID: 1, ProjectID: 2, BrokerURL: "mqtt://broker.example.test:1883", SecretRef: "secret://adapter/1",
+		AdapterID: 1, ProjectID: 2, BrokerURL: "mqtt://broker.example.test:1883",
 		ConfigJSON: json.RawMessage(`{"topics":["dji/project-2/GW001/#"],"gatewaySerials":["GW001"]}`),
 	}}
 	var mu sync.Mutex

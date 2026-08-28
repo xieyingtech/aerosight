@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
 	"aerosight/worker/internal/adapter"
+	"aerosight/worker/internal/credentials"
 	"aerosight/worker/internal/outbox"
 )
 
@@ -18,18 +20,23 @@ type CommandPublisher interface {
 }
 
 type CommandDispatcher struct {
-	publisher CommandPublisher
-	now       func() time.Time
+	publisher  CommandPublisher
+	now        func() time.Time
+	authSecret string
 }
 
-func NewCommandDispatcher(publisher CommandPublisher, now func() time.Time) (*CommandDispatcher, error) {
+func NewCommandDispatcher(publisher CommandPublisher, now func() time.Time, authSecret ...string) (*CommandDispatcher, error) {
 	if publisher == nil {
 		return nil, errors.New("DJI_COMMAND_PUBLISHER_REQUIRED")
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return &CommandDispatcher{publisher: publisher, now: now}, nil
+	secret := ""
+	if len(authSecret) > 0 {
+		secret = authSecret[0]
+	}
+	return &CommandDispatcher{publisher: publisher, now: now, authSecret: secret}, nil
 }
 
 func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
@@ -40,24 +47,32 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		return errors.New("DJI_COMMAND_EVENT_INVALID")
 	}
 	var command struct {
-		ID             string
-		CapabilityCode string
-		CommandKey     string
-		Parameters     json.RawMessage
-		Deadline       time.Time
-		Priority       int
-		AdapterID      int64
-		GatewaySN      string
-		ProductFamily  string
+		ID                 string
+		CapabilityCode     string
+		CommandKey         string
+		Parameters         json.RawMessage
+		Deadline           time.Time
+		Priority           int
+		AdapterID          int64
+		GatewaySN          string
+		ProductFamily      string
+		LiveStreamID       sql.NullInt64
+		CredentialEnvelope []byte
+		MediaIngestBaseURL sql.NullString
+		IngestRef          sql.NullString
 	}
 	err := tx.QueryRowContext(ctx, `
 		select command.id::text,command.capability_code,command.command_key,command.parameters_json,
 		       command.deadline_at,command.priority,device.adapter_id,
 		       coalesce(device_type.capability_profile_json->'dock.debug.control'->>'productFamily',
 		         case gateway.type_key when 'dji.dock2' then 'dock2' when 'dji.dock3' then 'dock3' else '' end),
-		       coalesce(gateway.external_device_id,target_identity.external_device_id)
+		       coalesce(gateway.external_device_id,target_identity.external_device_id),
+		       command.live_stream_id,adapter.credential_envelope_json,profile.media_ingest_base_url,stream.ingest_ref
 		from device_commands command
 		join devices device on device.id=command.device_id and device.project_id=command.project_id
+		join device_adapters adapter on adapter.id=device.adapter_id and adapter.project_id=device.project_id
+		left join device_network_profiles profile on profile.id=adapter.network_profile_id and profile.project_id=adapter.project_id
+		left join live_streams stream on stream.id=command.live_stream_id and stream.project_id=command.project_id
 		join device_types device_type on device_type.id=device.device_type_id
 		join driver_definitions driver on driver.id=device_type.driver_definition_id and driver.driver_key='dji.cloud'
 		join device_external_identities target_identity
@@ -85,6 +100,7 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		for update of command`, event.ProjectID, request.CommandID).Scan(
 		&command.ID, &command.CapabilityCode, &command.CommandKey, &command.Parameters,
 		&command.Deadline, &command.Priority, &command.AdapterID, &command.ProductFamily, &command.GatewaySN,
+		&command.LiveStreamID, &command.CredentialEnvelope, &command.MediaIngestBaseURL, &command.IngestRef,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -101,6 +117,13 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 			where project_id=$1 and id=$2::uuid and status='dispatchable'`, event.ProjectID, command.ID, now)
 		return err
 	}
+	if command.CommandKey == "start" && command.LiveStreamID.Valid && dispatcher.authSecret != "" {
+		command.Parameters, err = injectLivePublishCredentials(command.Parameters, command.CredentialEnvelope,
+			dispatcher.authSecret, command.AdapterID, event.ProjectID, command.MediaIngestBaseURL.String, command.IngestRef.String)
+		if err != nil {
+			return err
+		}
+	}
 	service, err := BuildServiceCommand(command.GatewaySN, command.ID, command.ID, command.ProductFamily,
 		command.CapabilityCode, command.CommandKey, command.Parameters, now)
 	if err != nil {
@@ -115,7 +138,7 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		on conflict (command_id) do update set command_id=excluded.command_id
 		returning status`, event.ProjectID, event.TeamID, command.ID, command.AdapterID,
 		service.MappingVersion, service.TransactionID, service.BusinessID, service.Method,
-		service.Topic, service.Payload).Scan(&correlationStatus)
+		service.Topic, redactLiveServicePayload(service.Payload)).Scan(&correlationStatus)
 	if err != nil {
 		return err
 	}
@@ -142,6 +165,54 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		where project_id=$1 and id=$2::uuid and status='dispatchable'`, event.ProjectID, command.ID,
 		jsonObject(map[string]any{"djiMappingVersion": service.MappingVersion, "djiMethod": service.Method, "attempt": attempt}))
 	return err
+}
+
+type livePublishCredential struct {
+	Username string `json:"mediaPublishUser"`
+	Password string `json:"mediaPublishPassword"`
+}
+
+func injectLivePublishCredentials(parameters, rawEnvelope []byte, authSecret string, adapterID int64, projectID int, baseURL, ingestRef string) (json.RawMessage, error) {
+	envelope, err := credentials.ParseEnvelope(rawEnvelope)
+	if err != nil {
+		return nil, errors.New("DJI_LIVE_CREDENTIAL_UNAVAILABLE")
+	}
+	var credential livePublishCredential
+	if err := credentials.DecryptJSON(envelope, authSecret, credentials.AAD("device-adapter", adapterID, projectID), &credential); err != nil || credential.Username == "" || credential.Password == "" {
+		return nil, errors.New("DJI_LIVE_CREDENTIAL_UNAVAILABLE")
+	}
+	target, err := url.Parse(baseURL)
+	if err != nil || (target.Scheme != "rtmp" && target.Scheme != "rtmps") || target.Hostname() == "" || target.User != nil || ingestRef == "" {
+		return nil, errors.New("DJI_LIVE_INGEST_PROFILE_INVALID")
+	}
+	target.Path = strings.TrimRight(target.Path, "/") + "/" + strings.TrimLeft(ingestRef, "/")
+	query := target.Query()
+	query.Set("user", credential.Username)
+	query.Set("pass", credential.Password)
+	target.RawQuery = query.Encode()
+	var value map[string]any
+	if json.Unmarshal(parameters, &value) != nil {
+		return nil, errors.New("DJI_LIVE_START_PARAMETERS_INVALID")
+	}
+	value["url"] = target.String()
+	return json.Marshal(value)
+}
+
+func redactLiveServicePayload(payload json.RawMessage) json.RawMessage {
+	var value map[string]any
+	if json.Unmarshal(payload, &value) != nil {
+		return json.RawMessage(`{"redacted":true}`)
+	}
+	if data, ok := value["data"].(map[string]any); ok {
+		if _, exists := data["url"]; exists {
+			data["url"] = "[REDACTED]"
+		}
+	}
+	redacted, err := json.Marshal(value)
+	if err != nil {
+		return json.RawMessage(`{"redacted":true}`)
+	}
+	return redacted
 }
 
 func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {

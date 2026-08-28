@@ -4,15 +4,17 @@ import { randomUUID } from "node:crypto";
 
 import { correlationId } from "@/lib/observability";
 import { withAuditedProjectWrite } from "@/lib/audit";
+import { credentialAAD, decryptCredentialObject, encryptCredentialObject, type CredentialEnvelope } from "@/lib/credential-encryption";
 import { query } from "@/lib/db";
 import {
   assertNoInlineSecrets,
   assertSupportedDeviceAdapterType,
   buildDjiConfigurationSummary,
   canManageDeviceAdapters,
+  djiCredentialUpdateSchema,
   djiAdapterSetupInputSchema,
   deviceAdapterInputSchema,
-  publicDeviceAdapter,
+  nonEmptyDjiCredentialUpdates,
   type DeviceAdapterInput,
   type DjiAdapterSetupInput
 } from "@/lib/device-adapter-policy";
@@ -20,6 +22,7 @@ import { requireCurrentProjectPermission } from "@/lib/data";
 import { checkDeviceNetworkConnection } from "@/lib/device-connection-check-core";
 import { createDeviceEndpointProbe } from "@/lib/device-connection-probe";
 import { validateDeviceNetworkProfile } from "@/lib/device-network-profile";
+import { getWebRuntimeConfig } from "@/lib/runtime-config";
 
 type DeviceAdapterRow = {
   id: string;
@@ -29,12 +32,15 @@ type DeviceAdapterRow = {
   vendor: string | null;
   protocolVersion: string;
   status: string;
-  secretRef: string | null;
   config: Record<string, unknown>;
   lastHealth: Record<string, unknown>;
   lastCheckedAt: Date | null;
   updatedAt: Date;
 };
+
+const adapterProjection = `id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
+  protocol_version as "protocolVersion", status, config_json as config,
+  last_health_json as "lastHealth", last_checked_at as "lastCheckedAt", updated_at as "updatedAt"`;
 
 async function requireAdapterManager(projectId: number) {
   const scope = await requireCurrentProjectPermission(projectId, "device:configure");
@@ -47,14 +53,13 @@ export async function listDeviceAdapters(projectId: number) {
   const result = await query<DeviceAdapterRow>(
     `select adapter.id, adapter.project_id as "projectId", adapter.name,
             adapter.adapter_type as "adapterType", adapter.vendor,
-            adapter.protocol_version as "protocolVersion", adapter.status,
-            adapter.secret_ref as "secretRef", adapter.config_json as config,
+            adapter.protocol_version as "protocolVersion", adapter.status, adapter.config_json as config,
             adapter.last_health_json as "lastHealth",
             adapter.last_checked_at as "lastCheckedAt", adapter.updated_at as "updatedAt"
        from device_adapters adapter where adapter.project_id = $1 order by adapter.name`,
     [projectId]
   );
-  return result.rows.map(publicDeviceAdapter);
+  return result.rows;
 }
 
 export async function createDeviceAdapter(
@@ -74,24 +79,26 @@ export async function createDeviceAdapter(
       actorUserId: user.id,
       action: "device_adapter.create",
       resourceType: "device_adapter",
-      input: { ...input, secretRef: input.secretRef ? "[SECRET_REF]" : undefined },
+      input: { ...input, credentials: undefined },
       policyResult: { permission: "device:configure", role: access.role }
     },
     async (client) => {
       const result = await client.query<DeviceAdapterRow>(
         `insert into device_adapters (
-           project_id, team_id, name, adapter_type, vendor, protocol_version, secret_ref, config_json
-         ) values ($1, $2, $3, $4, $5, $6, $7, $8)
-         returning id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
-                   protocol_version as "protocolVersion", status, secret_ref as "secretRef",
-                   config_json as config, last_health_json as "lastHealth",
-                   last_checked_at as "lastCheckedAt", updated_at as "updatedAt"`,
+           project_id, team_id, name, adapter_type, vendor, protocol_version, config_json
+         ) values ($1, $2, $3, $4, $5, $6, $7)
+         returning ${adapterProjection}`,
         [
           projectId, access.teamId, input.name, input.adapterType, input.vendor ?? null,
-          input.protocolVersion, input.secretRef ?? null, input.config
+          input.protocolVersion, input.config
         ]
       );
-      return publicDeviceAdapter(result.rows[0]);
+      if (input.credentials && Object.keys(input.credentials).length > 0) {
+        const envelope = encryptCredentialObject(input.credentials, getWebRuntimeConfig().authSecret,
+          credentialAAD("device-adapter", result.rows[0].id, projectId));
+        await client.query(`update device_adapters set credential_envelope_json=$2::jsonb where id=$1`, [result.rows[0].id, envelope]);
+      }
+      return result.rows[0];
     }
   );
 }
@@ -112,7 +119,7 @@ export async function createDjiAdapterSetup(
     mediaPlaybackBaseUrl: input.mediaPlaybackBaseUrl,
     tlsRequired: input.tlsRequired,
     mqttAnonymous: input.mqttAnonymous,
-    secretRef: input.secretRef
+    credentialProvided: true
   };
   const validation = await validateDeviceNetworkProfile(profileInput);
   if (!validation.valid) {
@@ -137,7 +144,11 @@ export async function createDjiAdapterSetup(
       actorUserId: user.id,
       action: "device_adapter.dji_setup",
       resourceType: "device_adapter",
-      input: { ...input, secretRef: "[SECRET_REF]" },
+      input: {
+        ...input, mqttUsername: undefined, mqttPassword: undefined, appId: undefined,
+        appKey: undefined, appLicense: undefined, mediaPublishUser: undefined,
+        mediaPublishPassword: undefined
+      },
       policyResult: { permission: "device:configure", role: access.role, networkPolicy: "valid" }
     },
     async (client) => {
@@ -145,13 +156,13 @@ export async function createDjiAdapterSetup(
         `insert into device_network_profiles (
            project_id, team_id, name, mode, mqtt_endpoint, api_public_base_url,
            websocket_public_url, media_ingest_base_url, media_playback_base_url,
-           tls_required, secret_ref, status, config_json, last_validation_json
-         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'unverified',$12,$13)
+           tls_required, status, config_json, last_validation_json
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'unverified',$11,$12)
          returning id`,
         [
           projectId, access.teamId, `${input.name} Network`, input.mode, input.mqttEndpoint,
           input.apiPublicBaseUrl, input.websocketPublicUrl, input.mediaIngestBaseUrl,
-          input.mediaPlaybackBaseUrl, input.tlsRequired, input.secretRef,
+          input.mediaPlaybackBaseUrl, input.tlsRequired,
           { mqttAnonymous: input.mqttAnonymous },
           { status: "unverified", policyIssues: [] }
         ]
@@ -159,14 +170,11 @@ export async function createDjiAdapterSetup(
       const adapter = await client.query<DeviceAdapterRow>(
         `insert into device_adapters (
            project_id, team_id, name, adapter_type, vendor, protocol_version,
-           status, secret_ref, config_json, network_profile_id
-         ) values ($1,$2,$3,'dji','dji','cloud-api-mqtt5','connecting',$4,$5,$6)
-         returning id, project_id as "projectId", name, adapter_type as "adapterType", vendor,
-                   protocol_version as "protocolVersion", status, secret_ref as "secretRef",
-                   config_json as config, last_health_json as "lastHealth",
-                   last_checked_at as "lastCheckedAt", updated_at as "updatedAt"`,
+           status, config_json, network_profile_id
+         ) values ($1,$2,$3,'dji','dji','cloud-api-mqtt5','connecting',$4,$5)
+         returning ${adapterProjection}`,
         [
-          projectId, access.teamId, input.name, input.secretRef,
+          projectId, access.teamId, input.name,
           {
             clientId, gatewaySerials: input.gatewaySerials, topics,
             djiConfiguration: { ntpServerHost: input.ntpServerHost, ntpServerPort: input.ntpServerPort }
@@ -174,9 +182,15 @@ export async function createDjiAdapterSetup(
           profile.rows[0].id
         ]
       );
+      const envelope = encryptCredentialObject({
+        mqttUsername: input.mqttUsername, mqttPassword: input.mqttPassword,
+        appId: input.appId, appKey: input.appKey, appLicense: input.appLicense,
+        mediaPublishUser: input.mediaPublishUser, mediaPublishPassword: input.mediaPublishPassword
+      }, getWebRuntimeConfig().authSecret, credentialAAD("device-adapter", adapter.rows[0].id, projectId));
+      await client.query(`update device_adapters set credential_envelope_json=$2::jsonb where id=$1`, [adapter.rows[0].id, envelope]);
       return {
-        ...publicDeviceAdapter(adapter.rows[0]),
-        network: { mode: input.mode, status: "unverified", hasSecret: true },
+        ...adapter.rows[0],
+        network: { mode: input.mode, status: "unverified" },
         configurationSummary: buildDjiConfigurationSummary(input, clientId)
       };
     }
@@ -276,13 +290,13 @@ export async function testDeviceAdapterConnection(
     mediaIngestBaseUrl: string | null;
     mediaPlaybackBaseUrl: string | null;
     tlsRequired: boolean | null;
-    networkSecretRef: string | null;
+    hasCredential: boolean;
     networkConfig: Record<string, unknown> | null;
   }>(
     `select adapter.id, adapter.project_id as "projectId", adapter.name,
             adapter.adapter_type as "adapterType", adapter.vendor,
             adapter.protocol_version as "protocolVersion", adapter.status,
-            adapter.secret_ref as "secretRef", adapter.config_json as config,
+            adapter.config_json as config,
             adapter.last_health_json as "lastHealth", adapter.last_checked_at as "lastCheckedAt",
             adapter.updated_at as "updatedAt", profile.id as "networkProfileId",
             profile.mode as "networkMode", profile.mqtt_endpoint as "mqttEndpoint",
@@ -290,7 +304,7 @@ export async function testDeviceAdapterConnection(
             profile.websocket_public_url as "websocketPublicUrl",
             profile.media_ingest_base_url as "mediaIngestBaseUrl",
             profile.media_playback_base_url as "mediaPlaybackBaseUrl",
-            profile.tls_required as "tlsRequired", profile.secret_ref as "networkSecretRef",
+            profile.tls_required as "tlsRequired", adapter.credential_envelope_json is not null as "hasCredential",
             profile.config_json as "networkConfig"
        from device_adapters adapter
        left join device_network_profiles profile
@@ -315,7 +329,7 @@ export async function testDeviceAdapterConnection(
           mediaPlaybackBaseUrl: row.mediaPlaybackBaseUrl!,
           tlsRequired: Boolean(row.tlsRequired),
           mqttAnonymous: row.networkConfig?.mqttAnonymous === true,
-          secretRef: row.networkSecretRef ?? row.secretRef
+          credentialProvided: row.hasCredential
         }, { probe: createDeviceEndpointProbe() });
 
   return withAuditedProjectWrite(
@@ -368,4 +382,37 @@ export async function setDeviceAdapterEnabled(
       return result.rows[0];
     }
   );
+}
+
+export async function updateDjiAdapterCredentials(
+  projectId: number,
+  adapterId: number,
+  rawInput: unknown,
+  requestId?: string | null
+) {
+  const { user, access } = await requireAdapterManager(projectId);
+  const input = djiCredentialUpdateSchema.parse(rawInput);
+  const updates = nonEmptyDjiCredentialUpdates(input);
+  if (Object.keys(updates).length === 0) return { id: adapterId, updated: false };
+  return withAuditedProjectWrite({
+    projectId, teamId: access.teamId, requestId: correlationId(requestId), actorUserId: user.id,
+    action: "device_adapter.credentials.update", resourceType: "device_adapter", resourceId: String(adapterId),
+    input: { fieldsUpdated: Object.keys(updates).sort() }, policyResult: { permission: "device:configure" }
+  }, async (client) => {
+    const adapter = (await client.query<{ id: string; envelope: CredentialEnvelope | null }>(
+      `select id, credential_envelope_json as envelope from device_adapters
+        where project_id=$1 and id=$2 and adapter_type='dji' for update`, [projectId, adapterId]
+    )).rows[0];
+    if (!adapter) throw new Error("DEVICE_ADAPTER_NOT_FOUND");
+    const aad = credentialAAD("device-adapter", adapter.id, projectId);
+    const current = adapter.envelope
+      ? decryptCredentialObject<Record<string, string>>(adapter.envelope, getWebRuntimeConfig().authSecret, aad)
+      : {};
+    const envelope = encryptCredentialObject({ ...current, ...updates }, getWebRuntimeConfig().authSecret, aad);
+    await client.query(
+      `update device_adapters set credential_envelope_json=$3::jsonb, status='connecting', updated_at=now()
+        where project_id=$1 and id=$2`, [projectId, adapterId, envelope]
+    );
+    return { id: adapterId, updated: true };
+  });
 }

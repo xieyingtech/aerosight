@@ -6,18 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
+
+	"aerosight/worker/internal/credentials"
 )
 
 type AdapterLease struct {
-	AdapterID  int64
-	ProjectID  int
-	Epoch      int64
-	BrokerURL  string
-	SecretRef  string
-	ConfigJSON json.RawMessage
+	AdapterID          int64
+	ProjectID          int
+	Epoch              int64
+	BrokerURL          string
+	CredentialEnvelope json.RawMessage
+	ConfigJSON         json.RawMessage
 }
 
 type LeaseRepository interface {
@@ -37,7 +38,7 @@ func (repository *SQLLeaseRepository) Claim(
 	rows, err := repository.db.QueryContext(ctx, `
 		with candidates as (
 			select adapter.id, adapter.project_id, profile.mqtt_endpoint,
-			       coalesce(adapter.secret_ref, profile.secret_ref) as secret_ref,
+			       adapter.credential_envelope_json,
 			       adapter.config_json
 			from device_adapters adapter
 			join device_network_profiles profile
@@ -56,7 +57,7 @@ func (repository *SQLLeaseRepository) Claim(
 		from candidates
 		where adapter.id = candidates.id
 		returning adapter.id, adapter.project_id, adapter.connection_epoch,
-		          candidates.mqtt_endpoint, candidates.secret_ref, candidates.config_json`,
+			          candidates.mqtt_endpoint, candidates.credential_envelope_json, candidates.config_json`,
 		limit, owner, lease.Milliseconds())
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (repository *SQLLeaseRepository) Claim(
 	var leases []AdapterLease
 	for rows.Next() {
 		var lease AdapterLease
-		if err := rows.Scan(&lease.AdapterID, &lease.ProjectID, &lease.Epoch, &lease.BrokerURL, &lease.SecretRef, &lease.ConfigJSON); err != nil {
+		if err := rows.Scan(&lease.AdapterID, &lease.ProjectID, &lease.Epoch, &lease.BrokerURL, &lease.CredentialEnvelope, &lease.ConfigJSON); err != nil {
 			return nil, err
 		}
 		leases = append(leases, lease)
@@ -113,36 +114,33 @@ func (repository *SQLLeaseRepository) UpdateStatus(
 }
 
 type MQTTCredentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"mqttUsername"`
+	Password string `json:"mqttPassword"`
 }
 
 type SecretResolver interface {
-	ResolveMQTT(context.Context, string) (MQTTCredentials, error)
+	ResolveMQTT(context.Context, AdapterLease) (MQTTCredentials, error)
 }
 
-type EnvironmentSecretResolver struct{}
+type EncryptedCredentialResolver struct{ AuthSecret string }
 
-func (EnvironmentSecretResolver) ResolveMQTT(_ context.Context, reference string) (MQTTCredentials, error) {
-	if !strings.HasPrefix(reference, "env://") {
-		return MQTTCredentials{}, errors.New("DJI_SECRET_PROVIDER_UNSUPPORTED")
+func (resolver EncryptedCredentialResolver) ResolveMQTT(_ context.Context, lease AdapterLease) (MQTTCredentials, error) {
+	if len(lease.CredentialEnvelope) == 0 {
+		return MQTTCredentials{}, errors.New("DJI_CREDENTIAL_UNAVAILABLE")
 	}
-	name := strings.TrimPrefix(reference, "env://")
-	if name == "" || strings.ContainsAny(name, "/?#") {
-		return MQTTCredentials{}, errors.New("DJI_SECRET_REFERENCE_INVALID")
+	envelope, err := credentials.ParseEnvelope(lease.CredentialEnvelope)
+	if err != nil {
+		return MQTTCredentials{}, errors.New("DJI_CREDENTIAL_UNAVAILABLE")
 	}
-	raw, exists := os.LookupEnv(name)
-	if !exists {
-		return MQTTCredentials{}, errors.New("DJI_SECRET_NOT_FOUND")
+	var value MQTTCredentials
+	if err := credentials.DecryptJSON(envelope, resolver.AuthSecret,
+		credentials.AAD("device-adapter", lease.AdapterID, lease.ProjectID), &value); err != nil {
+		return MQTTCredentials{}, errors.New("DJI_CREDENTIAL_UNAVAILABLE")
 	}
-	var credentials MQTTCredentials
-	if err := json.Unmarshal([]byte(raw), &credentials); err != nil {
-		return MQTTCredentials{}, errors.New("DJI_SECRET_FORMAT_INVALID")
+	if strings.TrimSpace(value.Username) == "" || value.Password == "" {
+		return MQTTCredentials{}, errors.New("DJI_CREDENTIAL_UNAVAILABLE")
 	}
-	if strings.TrimSpace(credentials.Username) == "" || credentials.Password == "" {
-		return MQTTCredentials{}, errors.New("DJI_SECRET_FORMAT_INVALID")
-	}
-	return credentials, nil
+	return value, nil
 }
 
 type adapterSessionConfig struct {
@@ -192,7 +190,7 @@ func BuildMQTTConfig(ctx context.Context, lease AdapterLease, resolver SecretRes
 	if configured.ClientID == "" {
 		configured.ClientID = fmt.Sprintf("aerosight-%d-%d", lease.ProjectID, lease.AdapterID)
 	}
-	credentials, err := resolver.ResolveMQTT(ctx, lease.SecretRef)
+	credentials, err := resolver.ResolveMQTT(ctx, lease)
 	if err != nil {
 		return MQTTConfig{}, err
 	}

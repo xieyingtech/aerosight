@@ -7,7 +7,7 @@ export const deviceAdapterInputSchema = z.object({
   adapterType: z.enum(["simulator", "dji", "ros2", "mqtt", "mavlink", "rtsp", "gb28181"]),
   vendor: z.string().trim().max(100).optional(),
   protocolVersion: z.string().trim().min(1).max(50).default("1"),
-  secretRef: z.string().trim().regex(/^[a-z][a-z0-9+.-]*:\/\/.+/i).optional(),
+  credentials: z.record(z.string(), z.string().max(16_384)).optional(),
   config: z.record(z.string(), z.unknown()).default({})
 });
 
@@ -21,7 +21,13 @@ export const djiAdapterSetupInputSchema = z.object({
   mediaPlaybackBaseUrl: z.string().trim().min(1).max(500),
   tlsRequired: z.boolean(),
   mqttAnonymous: z.boolean().default(false),
-  secretRef: z.string().trim().regex(/^[a-z][a-z0-9+.-]*:\/\/.+/i),
+  mqttUsername: z.string().trim().min(1).max(255),
+  mqttPassword: z.string().min(1).max(16_384),
+  appId: z.string().trim().min(1).max(255),
+  appKey: z.string().min(1).max(16_384),
+  appLicense: z.string().min(1).max(16_384),
+  mediaPublishUser: z.string().trim().min(1).max(255),
+  mediaPublishPassword: z.string().min(1).max(16_384),
   ntpServerHost: z.string().trim().min(1).max(253),
   ntpServerPort: z.coerce.number().int().min(1).max(65535).default(123),
   gatewaySerials: z.array(z.string().trim().min(1).max(100)).min(1).max(100)
@@ -29,6 +35,19 @@ export const djiAdapterSetupInputSchema = z.object({
 
 export type DeviceAdapterInput = z.infer<typeof deviceAdapterInputSchema>;
 export type DjiAdapterSetupInput = z.infer<typeof djiAdapterSetupInputSchema>;
+
+export const djiCredentialUpdateSchema = z.object({
+  mqttUsername: z.string().max(255).optional(), mqttPassword: z.string().max(16_384).optional(),
+  appId: z.string().max(255).optional(), appKey: z.string().max(16_384).optional(),
+  appLicense: z.string().max(16_384).optional(), mediaPublishUser: z.string().max(255).optional(),
+  mediaPublishPassword: z.string().max(16_384).optional()
+}).strict();
+
+export type DjiCredentialUpdate = z.infer<typeof djiCredentialUpdateSchema>;
+
+export function nonEmptyDjiCredentialUpdates(input: DjiCredentialUpdate) {
+  return Object.fromEntries(Object.entries(input).filter(([, value]) => value?.trim())) as Record<string, string>;
+}
 
 export function canManageDeviceAdapters(role: "owner" | "admin" | "member" | null) {
   return role === "owner" || role === "admin";
@@ -54,11 +73,6 @@ export function assertNoInlineSecrets(value: unknown, path = "config") {
   }
 }
 
-export function publicDeviceAdapter<T extends { secretRef: string | null }>(adapter: T) {
-  const { secretRef, ...safe } = adapter;
-  return { ...safe, hasSecret: secretRef !== null };
-}
-
 export function buildDjiConfigurationSummary(input: Pick<DjiAdapterSetupInput,
   "gatewaySerials" | "mqttEndpoint" | "ntpServerHost" | "ntpServerPort">, clientId: string) {
   return {
@@ -66,14 +80,14 @@ export function buildDjiConfigurationSummary(input: Pick<DjiAdapterSetupInput,
     mqtt_broker: {
       address: input.mqttEndpoint,
       client_id: clientId,
-      username: "[SECRET_REF]",
-      password: "[SECRET_REF]",
+      username: "[ENCRYPTED]",
+      password: "[ENCRYPTED]",
       enable_tls: input.mqttEndpoint.startsWith("mqtts://")
     },
     config: {
-      app_id: "[SECRET_REF]",
-      app_key: "[SECRET_REF]",
-      app_license: "[SECRET_REF]",
+      app_id: "[ENCRYPTED]",
+      app_key: "[ENCRYPTED]",
+      app_license: "[ENCRYPTED]",
       ntp_server_host: input.ntpServerHost,
       ntp_server_port: input.ntpServerPort
     }

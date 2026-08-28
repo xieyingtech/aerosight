@@ -12,7 +12,7 @@ export default async function ConnectorsPage({ params }: { params: Promise<{ id:
 
   return (
     <Page
-      description="管理外部 IoT 平台连接、网络端点、凭据引用和设备发现范围"
+      description="管理外部 IoT 平台连接、网络端点、加密凭据和设备发现范围"
       title="连接器"
     >
       <DjiAdapterWizard initialAdapters={connectors} projectId={projectId} />

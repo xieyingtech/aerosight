@@ -7,7 +7,7 @@ import {
   buildDjiConfigurationSummary,
   canManageDeviceAdapters,
   djiAdapterSetupInputSchema,
-  publicDeviceAdapter
+  nonEmptyDjiCredentialUpdates,
 } from "./device-adapter-policy.ts";
 
 test("only project owner and admin can manage device adapters", () => {
@@ -30,13 +30,7 @@ test("adapter config rejects nested inline secrets", () => {
   );
 });
 
-test("public adapter view never returns the secret reference", () => {
-  const view = publicDeviceAdapter({ id: 1, name: "DJI", secretRef: "vault://aerosight/dji" });
-  assert.deepEqual(view, { id: 1, name: "DJI", hasSecret: true });
-  assert(!("secretRef" in view));
-});
-
-test("DJI setup accepts secret references without inline credentials", () => {
+test("DJI setup accepts write-only credentials", () => {
   const setup = djiAdapterSetupInputSchema.parse({
     name: "Dock fleet",
     mode: "public",
@@ -47,13 +41,15 @@ test("DJI setup accepts secret references without inline credentials", () => {
     mediaPlaybackBaseUrl: "https://media.example.com",
     tlsRequired: true,
     mqttAnonymous: false,
-    secretRef: "vault://aerosight/dji",
+    mqttUsername: "dock", mqttPassword: "mqtt-secret",
+    appId: "app-id", appKey: "app-key", appLicense: "app-license",
+    mediaPublishUser: "publisher", mediaPublishPassword: "publish-secret",
     ntpServerHost: "time.example.com",
     ntpServerPort: 123,
     gatewaySerials: ["DOCK-001"]
   });
-  assert.equal(setup.secretRef, "vault://aerosight/dji");
-  assert(!("password" in setup));
+  assert.equal(setup.mqttUsername, "dock");
+  assert.equal(setup.mqttPassword, "mqtt-secret");
 });
 
 test("DJI setup summary uses official fields and never renders credentials", () => {
@@ -63,7 +59,13 @@ test("DJI setup summary uses official fields and never renders credentials", () 
   }, "aerosight-project-adapter");
   assert.equal(summary.gateway_sn[0], "DOCK-001");
   assert.equal(summary.mqtt_broker.enable_tls, true);
-  assert.equal(summary.mqtt_broker.password, "[SECRET_REF]");
-  assert.equal(summary.config.app_license, "[SECRET_REF]");
+  assert.equal(summary.mqtt_broker.password, "[ENCRYPTED]");
+  assert.equal(summary.config.app_license, "[ENCRYPTED]");
   assert.equal(summary.config.ntp_server_port, 123);
+});
+
+test("DJI credential update keeps blank fields and overwrites only non-empty values", () => {
+  assert.deepEqual(nonEmptyDjiCredentialUpdates({ mqttUsername: "", mqttPassword: "new-secret" }), {
+    mqttPassword: "new-secret"
+  });
 });

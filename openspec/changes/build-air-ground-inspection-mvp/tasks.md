@@ -20,7 +20,7 @@
 
 - [x] 3.1 创建 `device_adapters`、`device_external_identities`、`device_connections`、`device_telemetry` 及复合项目外键，扩展设备类型和 capability，并通过跨项目绑定失败测试验证。
 - [x] 3.2 定义版本化 adapter 上行 envelope、下行 command envelope、`Pose` / `Track` 契约和兼容策略，并通过无人机与模拟 ROS 设备契约测试验证相同轨迹 API、不同能力声明。
-- [ ] 3.3 将管理员 adapter 配置从 `secret_ref` 占位改为 AES 加密凭据存库，编辑时敏感 input 为空、留空保持、非空覆盖，并通过角色授权、读取不回显、Web/worker 解密和旧引用迁移测试验证。
+- [x] 3.3 将管理员 adapter 配置从 `secret_ref` 占位改为 AES 加密凭据存库，编辑时敏感 input 为空、留空保持、非空覆盖，并通过角色授权、读取不回显、Web/worker 解密和旧引用迁移测试验证。
 - [x] 3.4 实现设备发现、人工绑定、外部身份去重、能力更新和未实现 adapter 类型的显式拒绝，并通过冲突绑定与 `ros2` 未启用场景测试验证。
 - [x] 3.5 创建 `coordinate_references`、`sensor_calibrations`、`observations`、`poses` 和轨迹索引，并通过时间、几何、质量字段及项目复合约束测试验证。
 - [x] 3.6 实现遥测到观测/位姿的归一化摄取，保存采集/接收双时间、原始 CRS、WGS84、精度和来源链，并通过重复、乱序、时钟偏差和未知 CRS 测试验证。

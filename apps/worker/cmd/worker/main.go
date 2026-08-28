@@ -89,7 +89,7 @@ func main() {
 	consumer.Register("device.state", djiProjector.Handler)
 	consumer.Register("device.telemetry", djiProjector.Handler)
 	djiManager := dji.NewAdapterManager(
-		dji.NewSQLLeaseRepository(database), dji.EnvironmentSecretResolver{},
+		dji.NewSQLLeaseRepository(database), dji.EncryptedCredentialResolver{AuthSecret: workerConfig.AuthSecret},
 		func(ctx context.Context, config dji.MQTTConfig, handler dji.MQTTMessageHandler) (dji.ManagedSession, error) {
 			return dji.StartMQTTSession(ctx, config, handler)
 		},
@@ -102,7 +102,7 @@ func main() {
 		},
 		workerConfig.WorkerName+":"+runID, logger,
 	)
-	djiCommandDispatcher, err := dji.NewCommandDispatcher(djiManager, nil)
+	djiCommandDispatcher, err := dji.NewCommandDispatcher(djiManager, nil, workerConfig.AuthSecret)
 	if err != nil {
 		logger.Error("DJI command dispatcher initialization failed", "error", err.Error())
 		os.Exit(1)

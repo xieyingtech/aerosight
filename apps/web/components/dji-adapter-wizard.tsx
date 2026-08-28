@@ -12,7 +12,6 @@ type AdapterSummary = {
   adapterType: string;
   protocolVersion: string;
   status: string;
-  hasSecret: boolean;
   lastHealth: Record<string, unknown>;
   lastCheckedAt: string | Date | null;
 };
@@ -45,7 +44,9 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
         mediaPlaybackBaseUrl: values.get("mediaPlaybackBaseUrl"),
         tlsRequired: mode === "public" || values.get("tlsRequired") === "on",
         mqttAnonymous: false,
-        secretRef: values.get("secretRef"),
+        mqttUsername: values.get("mqttUsername"), mqttPassword: values.get("mqttPassword"),
+        appId: values.get("appId"), appKey: values.get("appKey"), appLicense: values.get("appLicense"),
+        mediaPublishUser: values.get("mediaPublishUser"), mediaPublishPassword: values.get("mediaPublishPassword"),
         ntpServerHost: values.get("ntpServerHost"),
         ntpServerPort: Number(values.get("ntpServerPort")),
         gatewaySerials: String(values.get("gatewaySerials") ?? "").split(/[\s,]+/).filter(Boolean)
@@ -72,10 +73,25 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     setTestResult(result);
   };
 
+  const updateCredentials = async (adapter: AdapterSummary, form: HTMLFormElement) => {
+    setBusy(true); setError(null);
+    const values = new FormData(form);
+    const credentials = Object.fromEntries([
+      "mqttUsername", "mqttPassword", "appId", "appKey", "appLicense", "mediaPublishUser", "mediaPublishPassword"
+    ].map((name) => [name, String(values.get(name) ?? "")]));
+    const response = await fetch(`/api/projects/${projectId}/device-adapters/${adapter.id}`, {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ credentials })
+    });
+    const result = await response.json() as { error?: string };
+    setBusy(false);
+    if (!response.ok) { setError(result.error ?? "凭据更新失败"); return; }
+    form.reset();
+  };
+
   return <section className="space-y-5 rounded-xl border p-4">
     <div>
       <h2 className="flex items-center gap-2 font-medium"><NetworkIcon className="size-4" />DJI Cloud API 接入</h2>
-      <p className="mt-1 text-sm text-muted-foreground">配置 Dock 2/3 共用的 MQTT、应用 API 与媒体网关。秘密只保存引用，页面不会回显凭据。</p>
+      <p className="mt-1 text-sm text-muted-foreground">配置 Dock 2/3 共用的 MQTT、应用 API 与媒体网关。凭据加密保存，页面不会回显。</p>
     </div>
 
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
@@ -84,7 +100,13 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
         <label className="space-y-1 text-sm">名称<Input name="name" placeholder="例如：华东机场集群" required /></label>
         <label className="space-y-1 text-sm">网络模式<select className="flex h-9 w-full rounded-md border bg-transparent px-3 text-sm" onChange={(event) => setMode(event.target.value as "lan" | "public")} value={mode}><option value="lan">局域网 LAN</option><option value="public">公网 Public</option></select></label>
         <label className="space-y-1 text-sm md:col-span-2">机场序列号<Input name="gatewaySerials" placeholder="多个序列号用逗号或空格分隔" required /></label>
-        <label className="space-y-1 text-sm md:col-span-2">凭据引用<Input name="secretRef" placeholder="env://DJI_MQTT_CREDENTIALS 或 vault://…" required /></label>
+        <label className="space-y-1 text-sm">MQTT 用户名<Input autoComplete="off" name="mqttUsername" required /></label>
+        <label className="space-y-1 text-sm">MQTT 密码<Input autoComplete="new-password" name="mqttPassword" required type="password" /></label>
+        <label className="space-y-1 text-sm">App ID<Input autoComplete="off" name="appId" required /></label>
+        <label className="space-y-1 text-sm">App Key<Input autoComplete="new-password" name="appKey" required type="password" /></label>
+        <label className="space-y-1 text-sm md:col-span-2">App License<Input autoComplete="new-password" name="appLicense" required type="password" /></label>
+        <label className="space-y-1 text-sm">媒体推流用户名<Input autoComplete="off" name="mediaPublishUser" required /></label>
+        <label className="space-y-1 text-sm">媒体推流密码<Input autoComplete="new-password" name="mediaPublishPassword" required type="password" /></label>
       </div>
       <div className={step === 2 ? "grid gap-3 md:grid-cols-2" : "hidden"}>
         <label className="space-y-1 text-sm">MQTT<Input name="mqttEndpoint" placeholder={mode === "public" ? "mqtts://mqtt.example.com:8883" : "mqtt://192.168.1.10:1883"} required /></label>
@@ -108,9 +130,16 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     {configurationSummary && <div className="rounded-lg border p-3 text-sm"><p className="font-medium">DJI 配置摘要（秘密已脱敏）</p><pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(configurationSummary, null, 2)}</pre></div>}
 
     <div className="space-y-2">
-      {adapters.map((adapter) => <article className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/30 p-3" key={adapter.id}>
-        <div><p className="text-sm font-medium">{adapter.name}</p><p className="text-xs text-muted-foreground">DJI · {adapter.protocolVersion} · {adapter.status} · 凭据{adapter.hasSecret ? "已配置（不显示）" : "未配置"}</p></div>
-        <Button disabled={busy} onClick={() => void testConnection(adapter)} size="sm" type="button" variant="outline">连接自检</Button>
+      {adapters.map((adapter) => <article className="space-y-3 rounded-lg bg-muted/30 p-3" key={adapter.id}>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium">{adapter.name}</p><p className="text-xs text-muted-foreground">DJI · {adapter.protocolVersion} · {adapter.status}</p></div>
+        <Button disabled={busy} onClick={() => void testConnection(adapter)} size="sm" type="button" variant="outline">连接自检</Button></div>
+        <details><summary className="cursor-pointer text-sm">更新连接凭据</summary>
+          <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void updateCredentials(adapter, event.currentTarget); }}>
+            {["mqttUsername","mqttPassword","appId","appKey","appLicense","mediaPublishUser","mediaPublishPassword"].map((name) =>
+              <Input autoComplete="new-password" key={name} name={name} placeholder={`${name}（留空保持）`} type="password" />)}
+            <Button className="md:col-span-2" disabled={busy} size="sm" type="submit">更新非空字段</Button>
+          </form>
+        </details>
       </article>)}
       {adapters.length === 0 && <p className="text-sm text-muted-foreground">尚未配置 DJI 连接器。</p>}
     </div>

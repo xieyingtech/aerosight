@@ -81,6 +81,14 @@ export function buildRTMPIngestURL(input: {
   return url.toString();
 }
 
+export function buildRTMPIngestEndpoint(baseURL: string, ingestRef: string) {
+  const url = new URL(baseURL);
+  if (url.protocol !== "rtmp:" && url.protocol !== "rtmps:") throw new Error("LIVE_STREAM_RTMP_URL_REQUIRED");
+  if (url.username || url.password) throw new Error("LIVE_STREAM_PUBLISH_CREDENTIALS_INVALID");
+  url.pathname = `${url.pathname.replace(/\/$/, "")}/${ingestRef}`;
+  return url.toString();
+}
+
 export function buildDJIVideoID(input: {
   sourceExternalId: string;
   cameraType: number;

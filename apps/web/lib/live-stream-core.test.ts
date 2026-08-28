@@ -7,6 +7,7 @@ import {
   assertLiveStreamProjectScope,
   buildDJIVideoID,
   buildRTMPIngestURL,
+  buildRTMPIngestEndpoint,
   buildPlaybackCandidates,
   createLiveStreamIngestRef,
   normalizeAdapterLiveStatus,
@@ -74,6 +75,8 @@ test("DJI RTMP destination and video id are derived from server-owned topology",
     username: "publisher", password: "secret"
   });
   assert.equal(destination, "rtmp://media.lan:1935/demo/aerosight/opaque?user=publisher&pass=secret");
+  assert.equal(buildRTMPIngestEndpoint("rtmp://media.lan:1935", "demo/aerosight/opaque"),
+    "rtmp://media.lan:1935/demo/aerosight/opaque");
   assert.equal(buildDJIVideoID({ sourceExternalId: "AIRCRAFT-SN", cameraType: 98, cameraSubtype: 0 }),
     "AIRCRAFT-SN/98-0-0/normal-0");
   assert.throws(() => buildRTMPIngestURL({ baseURL: "https://media.lan", ingestRef: "x", username: "u", password: "p" }), /RTMP_URL_REQUIRED/);

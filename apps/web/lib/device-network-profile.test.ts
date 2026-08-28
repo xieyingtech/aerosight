@@ -17,7 +17,7 @@ const lanProfile: DeviceNetworkProfileInput = {
   mediaPlaybackBaseUrl: "http://192.168.20.10:8888",
   tlsRequired: false,
   mqttAnonymous: false,
-  secretRef: "vault://aerosight/demo-mqtt"
+  credentialProvided: true
 };
 
 const publicProfile: DeviceNetworkProfileInput = {
@@ -29,7 +29,7 @@ const publicProfile: DeviceNetworkProfileInput = {
   mediaPlaybackBaseUrl: "https://media.example.test",
   tlsRequired: true,
   mqttAnonymous: false,
-  secretRef: "vault://aerosight/production-mqtt"
+  credentialProvided: true
 };
 
 const privateResolver: HostResolver = async () => [{ address: "192.168.20.10", family: 4 }];
@@ -77,17 +77,17 @@ test("public profiles require encrypted schemes and the TLS policy flag", async 
   }
 });
 
-test("public MQTT cannot be anonymous and must use a secret reference", async () => {
+test("public MQTT cannot be anonymous and must have encrypted credentials", async () => {
   const result = await validateDeviceNetworkProfile({
     ...publicProfile,
     mqttAnonymous: true,
-    secretRef: null
+    credentialProvided: false
   }, { resolver: publicResolver });
   assert.deepEqual(
-    result.issues.filter((issue) => issue.field === "mqttAnonymous" || issue.field === "secretRef"),
+    result.issues.filter((issue) => issue.field === "mqttAnonymous" || issue.field === "credential"),
     [
       { field: "mqttAnonymous", code: "PUBLIC_MQTT_ANONYMOUS_FORBIDDEN" },
-      { field: "secretRef", code: "PUBLIC_CREDENTIAL_REQUIRED" }
+      { field: "credential", code: "PUBLIC_CREDENTIAL_REQUIRED" }
     ]
   );
 });

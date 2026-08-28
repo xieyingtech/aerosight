@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { correlationId } from "@/lib/observability";
 import { withAuditedProjectWrite } from "@/lib/audit";
+import { credentialAAD, decryptCredentialObject, type CredentialEnvelope } from "@/lib/credential-encryption";
 import { db, query } from "@/lib/db";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import {
@@ -11,6 +12,7 @@ import {
   assertLiveStreamConcurrency,
   assertLiveStreamProjectScope,
   buildDJIVideoID,
+  buildRTMPIngestEndpoint,
   buildPlaybackCandidates,
   buildRTMPIngestURL,
   MediaPlaybackTokenIssuer,
@@ -42,19 +44,13 @@ type LiveStreamRow = {
   statusReason: string | null;
 };
 
-function mediaPublishCredentials(secretRef: string | null) {
-  let referenced: Record<string, unknown> = {};
-  if (secretRef && process.env[secretRef]) {
-    try {
-      referenced = JSON.parse(process.env[secretRef]!) as Record<string, unknown>;
-    } catch {
-      throw new Error("LIVE_STREAM_NETWORK_SECRET_INVALID");
-    }
-  }
-  const username = typeof referenced.mediaPublishUser === "string"
-    ? referenced.mediaPublishUser : process.env.MEDIA_PUBLISH_USER;
-  const password = typeof referenced.mediaPublishPassword === "string"
-    ? referenced.mediaPublishPassword : process.env.MEDIA_PUBLISH_PASSWORD;
+function mediaPublishCredentials(adapterId: string, projectId: number, envelope: CredentialEnvelope | null) {
+  if (!envelope) throw new Error("LIVE_STREAM_PUBLISH_CREDENTIALS_REQUIRED");
+  const referenced = decryptCredentialObject<{ mediaPublishUser: string; mediaPublishPassword: string }>(
+    envelope, getWebRuntimeConfig().authSecret, credentialAAD("device-adapter", adapterId, projectId)
+  );
+  const username = referenced.mediaPublishUser;
+  const password = referenced.mediaPublishPassword;
   if (!username || !password) throw new Error("LIVE_STREAM_PUBLISH_CREDENTIALS_REQUIRED");
   return { username, password };
 }
@@ -102,7 +98,7 @@ export async function startLiveStream(
       const deviceResult = await client.query<{
         status: string; adapterId: string | null; adapterType: string | null; capabilities: string[];
         deviceTypeId: string; maxConcurrentSessions: number; mediaIngestBaseUrl: string | null;
-        networkSecretRef: string | null;
+        credentialEnvelope: CredentialEnvelope | null;
       }>(
         `select device.status, device.adapter_id as "adapterId", adapter.adapter_type as "adapterType",
                 device.device_type_id::text as "deviceTypeId",
@@ -120,7 +116,7 @@ export async function startLiveStream(
                            order by capability.capability_code='stream.video.control' desc limit 1), 1)::int
                   as "maxConcurrentSessions",
                 profile.media_ingest_base_url as "mediaIngestBaseUrl",
-                profile.secret_ref as "networkSecretRef"
+                adapter.credential_envelope_json as "credentialEnvelope"
            from devices device
            left join device_adapters adapter
              on adapter.id = device.adapter_id and adapter.project_id = device.project_id
@@ -199,8 +195,9 @@ export async function startLiveStream(
         if (!source) throw new Error("DJI_LIVE_TOPOLOGY_NOT_FOUND");
         vendorStreamRef = buildDJIVideoID(source);
         if (!device.mediaIngestBaseUrl) throw new Error("LIVE_STREAM_MEDIA_INGEST_PROFILE_REQUIRED");
-        vendorIngestURL = buildRTMPIngestURL({ baseURL: device.mediaIngestBaseUrl, ingestRef,
-          ...mediaPublishCredentials(device.networkSecretRef) });
+        if (!device.adapterId) throw new Error("LIVE_STREAM_ADAPTER_REQUIRED");
+        mediaPublishCredentials(device.adapterId, projectId, device.credentialEnvelope);
+        vendorIngestURL = buildRTMPIngestEndpoint(device.mediaIngestBaseUrl, ingestRef);
       }
       const started = await client.query<LiveStreamRow>(
         `insert into live_streams (

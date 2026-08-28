@@ -14,7 +14,7 @@ const profile: DeviceNetworkProfileInput = {
   mediaPlaybackBaseUrl: "https://media.example.test/private-playback",
   tlsRequired: true,
   mqttAnonymous: false,
-  secretRef: "vault://projects/1/mqtt-password"
+  credentialProvided: true
 };
 
 const publicResolver: HostResolver = async () => [{ address: "203.0.113.20", family: 4 }];
