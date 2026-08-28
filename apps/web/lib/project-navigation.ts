@@ -1,7 +1,7 @@
 import type { ProjectPermission } from "@/lib/project-permission-policy";
 
 export type ProjectNavigationItem = {
-  key: "overview" | "realtime" | "tasks" | "devices" | "connectors" | "events" | "algorithms" | "agents" | "assets" | "settings";
+  key: "overview" | "realtime" | "tasks" | "devices" | "connectors" | "issues" | "algorithms" | "agents" | "assets" | "settings";
   title: string;
   segment: string;
   exact?: boolean;
@@ -15,7 +15,7 @@ const projectNavigation: ProjectNavigationItem[] = [
   { key: "tasks", title: "任务", segment: "tasks" },
   { key: "devices", title: "设备", segment: "devices" },
   { key: "connectors", title: "连接器", segment: "connectors", managementOnly: true },
-  { key: "events", title: "告警事件", segment: "events" },
+  { key: "issues", title: "案件", segment: "issues" },
   { key: "algorithms", title: "算法服务", segment: "algorithms", permission: "algorithm:manage" },
   { key: "agents", title: "智能体", segment: "agents", permission: "agent:use" },
   { key: "assets", title: "数据资产", segment: "assets" },
@@ -38,4 +38,8 @@ export function visibleProjectNavigation(
 export function projectNavigationHref(projectId: number, segment: string) {
   const base = `/projects/${projectId}`;
   return segment ? `${base}/${segment}` : base;
+}
+
+export function legacyProjectEventListHref(projectId: number) {
+  return projectNavigationHref(projectId, "issues");
 }
