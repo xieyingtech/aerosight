@@ -6,3 +6,7 @@ export type AlertAutomationMode = (typeof ALERT_AUTOMATION_MODES)[number];
 export const alertAutomationPolicyInputSchema = z.object({
   mode: z.enum(ALERT_AUTOMATION_MODES).default("manual")
 }).strict();
+
+export function isAutomaticAlertMode(mode: AlertAutomationMode) {
+  return mode === "agent-auto-draft" || mode === "follow-up-draft";
+}

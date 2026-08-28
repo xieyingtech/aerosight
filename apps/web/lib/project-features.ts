@@ -7,7 +7,6 @@ export type ProjectFeatureFlags = {
   operationsOverview: boolean;
   objectStorage: boolean;
   externalAlgorithms: boolean;
-  automaticAi: boolean;
   dependencyHealth: Record<string, unknown>;
 };
 
@@ -16,7 +15,6 @@ export const DEFAULT_PROJECT_FEATURE_FLAGS: ProjectFeatureFlags = Object.freeze(
   operationsOverview: false,
   objectStorage: false,
   externalAlgorithms: false,
-  automaticAi: false,
   dependencyHealth: {}
 });
 
@@ -26,7 +24,6 @@ export async function getProjectFeatureFlags(projectId: number): Promise<Project
             coalesce(flags.operations_overview_enabled, false) as "operationsOverview",
             coalesce(flags.object_storage_enabled, false) as "objectStorage",
             coalesce(flags.external_algorithms_enabled, false) as "externalAlgorithms",
-            coalesce(flags.automatic_ai_enabled, false) as "automaticAi",
             coalesce(flags.dependency_health_json, '{}'::jsonb) as "dependencyHealth"
        from projects project
        left join project_feature_flags flags on flags.project_id = project.id

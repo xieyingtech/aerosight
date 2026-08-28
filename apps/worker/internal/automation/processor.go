@@ -53,15 +53,17 @@ func (processor Processor) Handler(ctx context.Context, tx *sql.Tx, event outbox
 		return errors.New("alert automation event is missing identifiers")
 	}
 	var mode string
-	var enabled bool
-	if err := tx.QueryRowContext(ctx, `select version.mode,flags.automatic_ai_enabled from alert_automation_runs run
+	if err := tx.QueryRowContext(ctx, `select version.mode from alert_automation_runs run
 		join alert_automation_policy_versions version on version.id=run.policy_version_id and version.project_id=run.project_id
-		join project_feature_flags flags on flags.project_id=run.project_id
-		where run.id=$1 and run.project_id=$2`, payload.AutomationRunID, event.ProjectID).Scan(&mode, &enabled); err != nil {
+		where run.id=$1 and run.project_id=$2`, payload.AutomationRunID, event.ProjectID).Scan(&mode); err != nil {
 		return err
 	}
-	if !ShouldContinueAutomation(enabled) {
-		_, err := tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATIC_AI_DISABLED',finished_at=now() where id=$1 and project_id=$2`, payload.AutomationRunID, event.ProjectID)
+	currentMode, err := currentProjectAutomationMode(ctx, tx, event.ProjectID)
+	if err != nil {
+		return err
+	}
+	if !ShouldRunAutomaticDrafts(currentMode) {
+		_, err := tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATION_MODE_DISABLED',finished_at=now() where id=$1 and project_id=$2`, payload.AutomationRunID, event.ProjectID)
 		return err
 	}
 	recorder := sqlRunRecorder{tx: tx, projectID: event.ProjectID}
@@ -75,12 +77,12 @@ type sqlRunRecorder struct {
 }
 
 func (recorder sqlRunRecorder) Succeeded(ctx context.Context, runID string, result Result, now time.Time) error {
-	var enabled bool
-	if err := recorder.tx.QueryRowContext(ctx, `select coalesce(flags.automatic_ai_enabled,false) from alert_automation_runs run left join project_feature_flags flags on flags.project_id=run.project_id where run.id=$1 and run.project_id=$2`, runID, recorder.projectID).Scan(&enabled); err != nil {
+	currentMode, err := currentProjectAutomationMode(ctx, recorder.tx, recorder.projectID)
+	if err != nil {
 		return err
 	}
-	if !ShouldContinueAutomation(enabled) {
-		_, err := recorder.tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATIC_AI_DISABLED',finished_at=$3 where id=$1 and project_id=$2`, runID, recorder.projectID, now)
+	if !ShouldRunAutomaticDrafts(currentMode) {
+		_, err := recorder.tx.ExecContext(ctx, `update alert_automation_runs set status='canceled',failure_code='AUTOMATION_MODE_DISABLED',finished_at=$3 where id=$1 and project_id=$2`, runID, recorder.projectID, now)
 		return err
 	}
 	for _, draft := range result.Drafts {
@@ -110,6 +112,21 @@ func (recorder sqlRunRecorder) Succeeded(ctx context.Context, runID string, resu
 	_, err = recorder.tx.ExecContext(ctx, `update alert_automation_runs set status='succeeded',output_refs_json=$3,finished_at=$4
 		where id=$1 and project_id=$2`, runID, recorder.projectID, output, now)
 	return err
+}
+
+func currentProjectAutomationMode(ctx context.Context, tx *sql.Tx, projectID int) (string, error) {
+	var mode string
+	err := tx.QueryRowContext(ctx, `select snapshot.mode
+		from alert_automation_policy_versions snapshot
+		join alert_automation_policies policy
+			on policy.id=snapshot.alert_automation_policy_id and policy.project_id=snapshot.project_id
+		where snapshot.project_id=$1 and snapshot.status='published' and snapshot.event_rule_version_id is null
+		order by snapshot.id desc
+		limit 1`, projectID).Scan(&mode)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "manual", nil
+	}
+	return mode, err
 }
 
 func (recorder sqlRunRecorder) Failed(ctx context.Context, runID string, cause error, now time.Time) error {
