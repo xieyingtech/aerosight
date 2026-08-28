@@ -112,7 +112,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
         <div><p className="text-sm font-medium">{adapter.name}</p><p className="text-xs text-muted-foreground">DJI · {adapter.protocolVersion} · {adapter.status} · 凭据{adapter.hasSecret ? "已配置（不显示）" : "未配置"}</p></div>
         <Button disabled={busy} onClick={() => void testConnection(adapter)} size="sm" type="button" variant="outline">连接自检</Button>
       </article>)}
-      {adapters.length === 0 && <p className="text-sm text-muted-foreground">尚未配置 DJI Adapter。</p>}
+      {adapters.length === 0 && <p className="text-sm text-muted-foreground">尚未配置 DJI 连接器。</p>}
     </div>
     {testResult && <div className="rounded-lg border p-3 text-sm"><p className="flex items-center gap-2 font-medium"><ShieldCheckIcon className="size-4" />服务端自检结果</p><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{JSON.stringify(testResult, null, 2)}</pre><p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><CheckCircle2Icon className="size-3.5" />设备侧可达性仍需在 DJI Pilot/Dock 现场确认。</p></div>}
   </section>;

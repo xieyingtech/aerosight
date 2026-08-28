@@ -1,7 +1,7 @@
 import type { ProjectPermission } from "@/lib/project-permission-policy";
 
 export type ProjectNavigationItem = {
-  key: "overview" | "realtime" | "tasks" | "devices" | "events" | "algorithms" | "agents" | "assets" | "settings";
+  key: "overview" | "realtime" | "tasks" | "devices" | "connectors" | "events" | "algorithms" | "agents" | "assets" | "settings";
   title: string;
   segment: string;
   exact?: boolean;
@@ -14,6 +14,7 @@ const projectNavigation: ProjectNavigationItem[] = [
   { key: "realtime", title: "实时作业", segment: "realtime" },
   { key: "tasks", title: "任务", segment: "tasks" },
   { key: "devices", title: "设备", segment: "devices" },
+  { key: "connectors", title: "连接器", segment: "connectors", managementOnly: true },
   { key: "events", title: "告警事件", segment: "events" },
   { key: "algorithms", title: "算法服务", segment: "algorithms", permission: "algorithm:manage" },
   { key: "agents", title: "智能体", segment: "agents", permission: "agent:use" },

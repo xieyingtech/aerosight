@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BellRingIcon, BotIcon, BoxesIcon, Building2Icon, ChevronLeftIcon, ChevronsUpDownIcon,
   CpuIcon, FolderKanbanIcon, GaugeIcon, LayoutDashboardIcon, MapIcon, PlaneTakeoffIcon,
-  RadioTowerIcon, SettingsIcon, UsersIcon, WaypointsIcon
+  PlugIcon, RadioTowerIcon, SettingsIcon, UsersIcon, WaypointsIcon
 } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -54,7 +54,7 @@ export function AppSidebar({
   ];
   const projectIcons = {
     overview: <MapIcon />, realtime: <RadioTowerIcon />, tasks: <WaypointsIcon />,
-    devices: <CpuIcon />, events: <BellRingIcon />, algorithms: <BoxesIcon />,
+    devices: <CpuIcon />, connectors: <PlugIcon />, events: <BellRingIcon />, algorithms: <BoxesIcon />,
     agents: <BotIcon />, assets: <FolderKanbanIcon />, settings: <SettingsIcon />
   };
   const projectItems = currentProject
