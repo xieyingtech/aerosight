@@ -86,7 +86,7 @@
 
 ## 11. 通用连接器与自动设备发现
 
-- [ ] 11.1 将现有 Adapter 运行实例兼容迁移为 ConnectorInstance，新增版本化 ConnectorDefinition、同步游标/运行记录和显式 Device–Connector–ExternalIdentity 绑定，并用迁移测试验证现有 DJI 实例、设备 ID、历史引用和项目隔离不变
+- [x] 11.1 将现有 Adapter 运行实例兼容迁移为 ConnectorInstance，新增版本化 ConnectorDefinition、同步游标/运行记录和显式 Device–Connector–ExternalIdentity 绑定，并用迁移测试验证现有 DJI 实例、设备 ID、历史引用和项目隔离不变
 - [ ] 11.2 实现通用 Connector registry 与 manifest 校验，覆盖配置/凭据 JSON Schema、`push`/`poll`/`subscribe`/`manual-import` 发现模式、健康检查、兼容 Driver 范围和运行租约，并用一个非 DJI 内存 IoT fixture 验证新增连接器无需修改设备领域表
 - [ ] 11.3 实现范围受限的自动发现和增量同步状态机，持久化游标、首次/最后发现时间及 `discovered`/`managed`/`ignored`/`conflicted`/`missing` 状态，并用重复消息、游标重放、范围越界和临时来源消失测试验证幂等且不误删设备
 - [ ] 11.4 实现 `automatic`、`review`、`observe-only` 纳管策略、DeviceType 匹配置信度与冲突隔离，并用唯一匹配、未知型号、多候选类型、重复外部身份和忽略后重现测试验证只有安全确定的对象可自动创建 Device

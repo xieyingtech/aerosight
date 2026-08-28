@@ -562,6 +562,98 @@ async function assertUnifiedDeviceDriverSchema(connectionString) {
   }
 }
 
+async function assertConnectorCompatibilitySchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const projects = await client.query(
+      `select project.id, project.team_id, project.name
+         from projects project where project.name in ('北区巡检', '南区巡检')`
+    );
+    const north = projects.rows.find((project) => project.name === "北区巡检");
+    const south = projects.rows.find((project) => project.name === "南区巡检");
+    const coverage = await client.query(
+      `select (select count(*)::int from device_adapters) as adapters,
+              (select count(*)::int from connector_instances) as connectors,
+              (select count(*)::int from device_adapters where connector_definition_id is null) as unmapped`
+    );
+    assert(coverage.rows[0].adapters === coverage.rows[0].connectors, "legacy Adapter was not exposed as a ConnectorInstance");
+    assert(coverage.rows[0].unmapped === 0, "legacy Adapter did not receive a ConnectorDefinition");
+
+    const inserted = await client.query(
+      `insert into device_adapters (project_id, team_id, name, adapter_type)
+       values ($1, $2, 'connector-trigger-fixture', 'simulator')
+       returning id, connector_definition_id`,
+      [north.id, north.team_id]
+    );
+    const connector = await client.query(
+      `select id, connector_key, onboarding_policy
+         from connector_instances where id = $1 and project_id = $2`,
+      [inserted.rows[0].id, north.id]
+    );
+    assert(connector.rows[0].id === inserted.rows[0].id, "Connector compatibility view changed the runtime instance ID");
+    assert(connector.rows[0].connector_key === "simulator.memory", "legacy Adapter type mapped to the wrong ConnectorDefinition");
+    assert(connector.rows[0].onboarding_policy === "review", "Connector did not default to review onboarding");
+
+    const device = await client.query("select id from devices where project_id=$1 order by id limit 1", [north.id]);
+    const identity = await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, device_id, external_device_id, discovery_status
+       ) values ($1, $2, $3, $4, 'connector-binding-fixture', 'managed')
+       returning id`,
+      [north.id, north.team_id, inserted.rows[0].id, device.rows[0].id]
+    );
+    const binding = await client.query(
+      `insert into device_connector_bindings (
+         project_id, team_id, device_id, connector_instance_id, external_identity_id
+       ) values ($1, $2, $3, $4, $5) returning device_id`,
+      [north.id, north.team_id, device.rows[0].id, inserted.rows[0].id, identity.rows[0].id]
+    );
+    assert(binding.rows[0].device_id === device.rows[0].id, "Connector binding changed the Device ID");
+
+    const southAdapter = await client.query(
+      "select id from device_adapters where project_id=$1 order by id limit 1",
+      [south.id]
+    );
+    const crossIdentity = await client.query(
+      `insert into device_external_identities (
+         project_id, team_id, adapter_id, external_device_id, discovery_status
+       ) values ($1, $2, $3, 'connector-cross-project-fixture', 'discovered')
+       returning id`,
+      [north.id, north.team_id, inserted.rows[0].id]
+    );
+    await client.query(
+      `insert into device_connector_bindings (
+         project_id, team_id, device_id, connector_instance_id, external_identity_id
+       ) values ($1, $2, $3, $4, $5)`,
+      [north.id, north.team_id, device.rows[0].id, southAdapter.rows[0].id, crossIdentity.rows[0].id]
+    ).then(
+      () => assert(false, "cross-project Connector binding should fail"),
+      (error) => assert(error.code === "23503", "cross-project Connector binding failed unexpectedly")
+    );
+
+    const syncRun = await client.query(
+      `insert into connector_sync_runs (
+         project_id, team_id, connector_instance_id, discovery_mode, status, started_at, finished_at
+       ) values ($1, $2, $3, 'push', 'succeeded', now(), now()) returning id`,
+      [north.id, north.team_id, inserted.rows[0].id]
+    );
+    await client.query(
+      "update device_external_identities set last_sync_run_id=$1 where id=$2 and project_id=$3",
+      [syncRun.rows[0].id, identity.rows[0].id, north.id]
+    );
+    await client.query(
+      "update device_adapters set onboarding_policy='unsafe' where id=$1",
+      [inserted.rows[0].id]
+    ).then(
+      () => assert(false, "invalid Connector onboarding policy should fail"),
+      (error) => assert(error.code === "23514", "invalid onboarding policy failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 async function assertTelemetryIngestionSemantics(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
@@ -1344,7 +1436,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 42, "empty database should apply all migrations");
+    assert(first.applied.length === 43, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1355,6 +1447,7 @@ try {
     await assertProjectEventCursorAndDurability(connectionString);
     await assertDeviceConnectivityConstraints(connectionString);
     await assertUnifiedDeviceDriverSchema(connectionString);
+    await assertConnectorCompatibilitySchema(connectionString);
     await assertTelemetryIngestionSemantics(connectionString);
     await assertHeartbeatProjectionSchema(connectionString);
     await assertSpatiotemporalSchema(connectionString);
@@ -1392,7 +1485,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 42, "existing database should record all migrations");
+    assert(first.applied.length === 43, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
@@ -1423,6 +1516,10 @@ try {
       const result = await client.query(
         `select to_regclass('public.users') as users,
                 to_regclass('public.device_adapters') as adapters,
+                to_regclass('public.connector_definitions') as connector_definitions,
+                to_regclass('public.connector_instances') as connector_instances,
+                to_regclass('public.connector_sync_runs') as connector_sync_runs,
+                to_regclass('public.device_connector_bindings') as device_connector_bindings,
                 to_regclass('public.driver_definitions') as driver_definitions,
                 to_regclass('public.device_types') as device_types,
                 to_regclass('public.device_relationships') as device_relationships,
@@ -1464,7 +1561,9 @@ try {
                 to_regclass('public.generated_report_evidence') as generated_report_evidence`
       );
       assert(
-        result.rows[0].users && result.rows[0].adapters && result.rows[0].driver_definitions &&
+        result.rows[0].users && result.rows[0].adapters && result.rows[0].connector_definitions &&
+        result.rows[0].connector_instances && result.rows[0].connector_sync_runs &&
+        result.rows[0].device_connector_bindings && result.rows[0].driver_definitions &&
         result.rows[0].device_types && result.rows[0].device_relationships &&
         result.rows[0].device_stream_channels && result.rows[0].device_capability_grants &&
         result.rows[0].device_network_profiles && result.rows[0].telemetry &&
