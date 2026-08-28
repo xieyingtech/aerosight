@@ -5,14 +5,15 @@ import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default async function ProjectsPage({
   searchParams
 }: {
-  searchParams: Promise<{ scope?: string; search?: string }>;
+  searchParams: Promise<{ search?: string }>;
 }) {
   const params = await searchParams;
-  const projects = await listProjects(params.scope, params.search);
+  const projects = await listProjects("", params.search);
 
   return (
     <Page
@@ -24,17 +25,15 @@ export default async function ProjectsPage({
       description={`共 ${projects.length} 个项目`}
       title="项目"
     >
-      <nav className="flex gap-2">
-        <Button asChild size="sm" variant={!params.scope ? "default" : "outline"}>
-          <Link href="/projects">全部</Link>
-        </Button>
-        <Button asChild size="sm" variant={params.scope === "joined" ? "default" : "outline"}>
-          <Link href="/projects?scope=joined">我参与的</Link>
-        </Button>
-        <Button asChild size="sm" variant={params.scope === "managed" ? "default" : "outline"}>
-          <Link href="/projects?scope=managed">我管理的</Link>
-        </Button>
-      </nav>
+      <form action="/projects" className="flex gap-2">
+        <Input
+          className="min-w-0 flex-1"
+          defaultValue={params.search ?? ""}
+          name="search"
+          placeholder="按项目、团队名称搜索"
+        />
+        <Button type="submit" variant="outline">搜索</Button>
+      </form>
       <DataTable
         columns={[
           {
