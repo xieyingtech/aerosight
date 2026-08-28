@@ -1,8 +1,8 @@
 "use client";
 
-import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, SearchIcon, WrenchIcon } from "lucide-react";
+import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, WrenchIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ActiveStreamSwitcher } from "@/components/active-stream-switcher";
 import { DeviceActionPanel } from "@/components/device-action-panel";
@@ -12,7 +12,7 @@ import { OperationDiagnostics } from "@/components/operation-diagnostics";
 import { ProjectMap } from "@/components/project-map";
 import { ProjectTimeline } from "@/components/project-timeline";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { InputSelect } from "@/components/ui/input-select";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import {
   findProjectDevice, liveStreamPollDecision, resolveWorkbenchSelection,
@@ -47,7 +47,6 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const [selection, setSelection] = useState<RealtimeWorkbenchSelection>(() => resolveWorkbenchSelection(initialSnapshot, {
     deviceId: initialDeviceId, streamId: initialStreamId
   }));
-  const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [transitionTimeout, setTransitionTimeout] = useState(false);
   const pollCount = useRef(0);
@@ -109,11 +108,12 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     lane: `device-${String(selectedDevice.category ?? selectedDevice.type ?? "ground")}`,
     entityId: String(selectedDevice.id), label: String(selectedDevice.name ?? `设备 #${selectedDevice.id}`)
   } : null;
-  const filteredDevices = useMemo(() => snapshot.devices.filter((device) => {
-    const needle = query.trim().toLowerCase();
-    return !needle || [device.name, device.typeName, device.typeKey, device.category, device.driverKey]
-      .some((value) => String(value ?? "").toLowerCase().includes(needle));
-  }), [query, snapshot.devices]);
+  const deviceOptions = snapshot.devices.map((device) => ({
+    value: String(device.id),
+    label: String(device.name ?? `设备 #${device.id}`),
+    description: `${String(device.typeName ?? device.category ?? "未分类")} · ${String(device.status ?? "unknown")}`,
+    keywords: [String(device.typeKey ?? ""), String(device.driverKey ?? ""), String(device.category ?? "")]
+  }));
   const timelineSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
   const actions = (selectedDevice?.capabilities ?? []).flatMap((capability) => capability.actions).filter((action) => action.kind !== "live");
   const diagnostics = selectedDevice && selection.deviceId
@@ -144,13 +144,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
         <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索所有设备，包括没有地图坐标的设备。</p></div>
         <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs disabled:opacity-50" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />刷新状态</button>
       </div>
-      <div className="relative mt-3"><SearchIcon className="absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="按设备名称、类型或驱动搜索" value={query} /></div>
-      <div className="mt-2 flex max-h-40 flex-wrap gap-2 overflow-y-auto">
-        {filteredDevices.map((device) => <button className={`rounded-md border px-3 py-2 text-left text-sm ${Number(device.id) === selection.deviceId ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`} key={String(device.id)} onClick={() => selectDevice(Number(device.id))} type="button">
-          <span className="font-medium">{String(device.name ?? `设备 #${device.id}`)}</span><span className="ml-2 text-xs text-muted-foreground">{String(device.typeName ?? device.category ?? "未分类")}</span>
-        </button>)}
-        {!filteredDevices.length && <p className="py-3 text-sm text-muted-foreground">没有匹配的设备</p>}
-      </div>
+      <div className="mt-3"><InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按设备名称、类型或驱动搜索并选择" value={selection.deviceId ? String(selection.deviceId) : null} /></div>
     </section>
 
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)]">
