@@ -1,6 +1,8 @@
 export const PROJECT_PERMISSIONS = [
   "project:view",
   "event:handle",
+  "issue:handle",
+  "issue:assign",
   "mission:operate",
   "mission:approve",
   "device:configure",
@@ -30,6 +32,7 @@ export function effectiveProjectPermissions(
   const permissions = new Set<ProjectPermission>(["project:view"]);
   for (const permission of explicitPermissions) {
     if (isProjectPermission(permission)) permissions.add(permission);
+    if (permission === "event:handle") permissions.add("issue:handle");
   }
   return permissions;
 }

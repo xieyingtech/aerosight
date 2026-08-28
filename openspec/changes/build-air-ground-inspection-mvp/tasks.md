@@ -9,7 +9,7 @@
 
 ## 2. 租户权限、审计与异步基础
 
-- [ ] 2.1 扩展 `project_permissions` 和集中式权限解析服务，覆盖 `issue:handle`、`issue:assign`、`mission:operate`、`mission:approve`、`algorithm:manage`、`agent:use`，并通过旧 `event:handle` 迁移及 owner/admin/member 权限矩阵测试验证。
+- [x] 2.1 扩展 `project_permissions` 和集中式权限解析服务，覆盖 `issue:handle`、`issue:assign`、`mission:operate`、`mission:approve`、`algorithm:manage`、`agent:use`，并通过旧 `event:handle` 迁移及 owner/admin/member 权限矩阵测试验证。
 - [x] 2.2 将项目资源查询和写入统一封装为从当前用户解析项目访问的服务端入口，并通过跨项目资源 ID 枚举负向测试验证无信息泄露。
 - [x] 2.3 创建 `audit_events` 和审计写入 API，对受保护写操作实行审计失败即失败关闭，并通过故障注入测试验证无审计不产生副作用。
 - [x] 2.4 创建 `idempotency_records` 及项目/主体/操作范围的幂等包装器，并通过并发重复请求测试验证只产生一次副作用。
@@ -83,7 +83,7 @@
 - [x] 8.5 停止独立 `event_rules` / `perception_events` 主动编排并保留历史只读兼容，将业务判断迁移为版本化 Task 条件步骤，通过历史记录可读、算法 callback 不直接创建案件和旧规则迁移测试验证。
 - [x] 8.6 实现任务 `issue.create-or-update` 步骤，按项目、任务版本、条件范围和业务对象幂等创建/更新案件并关联任务、算法、检测、条件与媒体证据，通过重复投递、条件为假和跨项目测试验证。
 - [x] 8.7 实现案件列表、地图图层和详情页，统一使用项目编号、开放/关闭状态、优先级、标签、描述、证据及活动时间线，通过无地理位置、完整证据和旧事件链接迁移测试验证。
-- [ ] 8.8 扩展 `issue_events` 和统一 `issue_assignees`，支持评论、状态、标签、用户/Copilot 指派及乐观并发，通过权限、重复评论、并发更新和跨项目主体测试验证。
+- [x] 8.8 扩展 `issue_events` 和统一 `issue_assignees`，支持评论、状态、标签、用户/Copilot 指派及乐观并发，通过权限、重复评论、并发更新和跨项目主体测试验证。
 - [ ] 8.9 将确认、误报、类别修正和处置结果写入案件活动并关联原检测、模型、条件和任务版本，通过原算法结果不可变及质量统计测试验证。
 
 ## 9. 时空大模型与安全调度

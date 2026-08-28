@@ -14,6 +14,7 @@ export async function listIssues(projectId: number) {
   await requireCurrentProjectPermission(projectId, "project:view");
   return (await query<IssueListItem>(`select issue.id,issue.number,issue.title,issue.status,issue.priority,
     issue.occurrence_count as "occurrenceCount",issue.labels_json as labels,
+    issue.state_version as "stateVersion",
     issue.first_seen_at as "firstSeenAt",issue.last_seen_at as "lastSeenAt",issue.updated_at as "updatedAt",
     exists(select 1 from issue_links link join detections detection
       on detection.project_id=link.project_id and detection.id=case when link.target_id~'^[0-9]+$' then link.target_id::bigint end
@@ -23,7 +24,7 @@ export async function listIssues(projectId: number) {
 }
 
 export async function readIssue(projectId: number, issueId: number) {
-  await requireCurrentProjectPermission(projectId, "project:view");
+  const { access } = await requireCurrentProjectPermission(projectId, "project:view");
   const issue = (await query<Record<string, unknown>>(`select issue.id,issue.number,issue.title,issue.description,
     issue.status,issue.priority,issue.source_type as "sourceType",issue.source_id as "sourceId",
     issue.task_run_id as "taskRunId",issue.task_version_id as "taskVersionId",
@@ -36,7 +37,7 @@ export async function readIssue(projectId: number, issueId: number) {
     left join task_versions version on version.id=issue.task_version_id and version.project_id=issue.project_id
     where issue.project_id=$1 and issue.id=$2`, [projectId, issueId])).rows[0];
   if (!issue) notFound();
-  const [events, links, detections, assets] = await Promise.all([
+  const [events, links, detections, assets, assignees, members, agents] = await Promise.all([
     query<Record<string, unknown>>(`select event.id,event.event_type as "eventType",event.body,event.metadata_json as metadata,
       event.created_at as "createdAt",coalesce(actor.name,agent.name,'系统') as "actorName"
       from issue_events event left join users actor on actor.id=event.actor_user_id
@@ -67,7 +68,18 @@ export async function readIssue(projectId: number, issueId: number) {
         or exists(select 1 from issue_links link join detections detection
           on detection.project_id=link.project_id and detection.id=case when link.target_id~'^[0-9]+$' then link.target_id::bigint end
           where link.project_id=asset.project_id and link.issue_id=$2 and link.link_type='detection' and detection.input_asset_id=asset.id)
-      ) order by asset.captured_at,asset.id`, [projectId, issueId])
+      ) order by asset.captured_at,asset.id`, [projectId, issueId]),
+    query<Record<string, unknown>>(`select assignee.id,assignee.assignee_type as "assigneeType",
+      coalesce(member.id,agent.id) as "assigneeId",coalesce(member.name,agent.name) as name,assignee.created_at as "createdAt"
+      from issue_assignees assignee left join users member on member.id=assignee.user_id
+      left join agents agent on agent.id=assignee.agent_id and agent.project_id=assignee.project_id
+      where assignee.project_id=$1 and assignee.issue_id=$2 and assignee.active order by assignee.created_at`, [projectId, issueId]),
+    query<Record<string, unknown>>(`select member_user.id,member_user.name,member.role
+      from projects project join team_members member on member.team_id=project.team_id
+      join users member_user on member_user.id=member.user_id where project.id=$1 order by member_user.name`, [projectId]),
+    query<Record<string, unknown>>(`select id,name,status from agents where project_id=$1 order by name`, [projectId])
   ]);
-  return { issue, events: events.rows, links: links.rows, detections: detections.rows, assets: assets.rows };
+  return { issue, events: events.rows, links: links.rows, detections: detections.rows, assets: assets.rows,
+    assignees: assignees.rows, members: members.rows, agents: agents.rows,
+    canHandle: access.permissions.has("issue:handle"), canAssign: access.permissions.has("issue:assign") };
 }

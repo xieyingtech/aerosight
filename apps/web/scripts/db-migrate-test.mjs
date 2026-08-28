@@ -1328,8 +1328,9 @@ async function assertTaskStepIssueSchema(connectionString) {
   await client.connect();
   try {
     const scope = (await client.query(
-      `select project.id, project.team_id, version.id as version_id, run.id as run_id, run_step.id as run_step_id
+      `select project.id, project.team_id, member.user_id, version.id as version_id, run.id as run_id, run_step.id as run_step_id
          from projects project
+         join team_members member on member.team_id=project.team_id and member.role='owner'
          join tasks task on task.project_id=project.id and task.name='versioned-task'
          join task_versions version on version.task_id=task.id and version.project_id=project.id
          join task_runs run on run.task_version_id=version.id and run.project_id=project.id
@@ -1403,6 +1404,36 @@ async function assertTaskStepIssueSchema(connectionString) {
     ).then(
       () => assert(false, "cross-project issue link should fail"),
       (error) => assert(error.code === "23503", "cross-project issue link failed unexpectedly")
+    );
+
+    await client.query(`insert into issue_events(project_id,issue_id,event_type,body,actor_user_id,client_key)
+      values($1,$2,'comment.created','fixture comment',$3,'00000000-0000-4000-8000-000000000047')`,
+    [scope.id, issue.rows[0].id, scope.user_id]);
+    await client.query(`insert into issue_events(project_id,issue_id,event_type,body,actor_user_id,client_key)
+      values($1,$2,'comment.created','duplicate comment',$3,'00000000-0000-4000-8000-000000000047')`,
+    [scope.id, issue.rows[0].id, scope.user_id]).then(
+      () => assert(false, "duplicate issue comment client key should fail"),
+      (error) => assert(error.code === "23505", "duplicate issue comment failed unexpectedly")
+    );
+    const advancedIssue = await client.query(`update issues set state_version=state_version+1
+      where project_id=$1 and id=$2 and state_version=0 returning state_version`, [scope.id, issue.rows[0].id]);
+    const staleIssue = await client.query(`update issues set state_version=state_version+1
+      where project_id=$1 and id=$2 and state_version=0 returning state_version`, [scope.id, issue.rows[0].id]);
+    assert(advancedIssue.rows[0].state_version === 1 && staleIssue.rowCount === 0, "issue optimistic concurrency failed");
+
+    const agent = await client.query(`insert into agents(project_id,name,status) values($1,'fixture-copilot','active') returning id`, [scope.id]);
+    await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
+      values($1,$2,$3,'agent',$4,$5)`, [scope.id, scope.team_id, issue.rows[0].id, agent.rows[0].id, scope.user_id]);
+    await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
+      values($1,$2,$3,'agent',$4,$5)`, [scope.id, scope.team_id, issue.rows[0].id, agent.rows[0].id, scope.user_id]).then(
+      () => assert(false, "duplicate active issue assignee should fail"),
+      (error) => assert(error.code === "23505", "duplicate issue assignee failed unexpectedly")
+    );
+    const foreignAgent = await client.query(`insert into agents(project_id,name,status) values($1,'foreign-copilot','active') returning id`, [otherProject.id]);
+    await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
+      values($1,$2,$3,'agent',$4,$5)`, [scope.id, scope.team_id, issue.rows[0].id, foreignAgent.rows[0].id, scope.user_id]).then(
+      () => assert(false, "cross-project issue agent should fail"),
+      (error) => assert(error.code === "23503", "cross-project issue agent failed unexpectedly")
     );
   } finally {
     await client.end();

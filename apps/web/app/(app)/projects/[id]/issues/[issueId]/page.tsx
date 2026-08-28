@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EvidenceImage } from "@/components/evidence-image";
+import { IssueCollaborationPanel } from "@/components/issue-collaboration-panel";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +49,11 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ id
 
       <Card><CardHeader><CardTitle>活动时间线</CardTitle><CardDescription>任务自动建案、合并以及后续评论和处置都记录在这里。</CardDescription></CardHeader><CardContent>
         {model.events.length ? <ol className="space-y-3">{model.events.map((event) => <li className="border-l-2 pl-4 text-sm" key={String(event.id)}><div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{String(event.eventType)}</span><time className="text-muted-foreground">{displayDate(event.createdAt)}</time></div><p className="text-muted-foreground">{String(event.actorName)}{event.body ? ` · ${String(event.body)}` : ""}</p></li>)}</ol> : <p className="text-sm text-muted-foreground">暂无活动记录。</p>}
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>协作处置</CardTitle><CardDescription>评论、标签、状态以及成员/智能体指派受项目权限和乐观并发保护。</CardDescription></CardHeader><CardContent>
+        <IssueCollaborationPanel agents={model.agents} assignees={model.assignees} canAssign={model.canAssign} canHandle={model.canHandle}
+          issueId={Number(issue.id)} labels={labels.map(String)} members={model.members} projectId={projectId}
+          stateVersion={Number(issue.stateVersion)} status={String(issue.status)} />
       </CardContent></Card>
     </div>
   </Page>;

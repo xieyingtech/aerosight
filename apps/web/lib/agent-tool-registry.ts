@@ -80,7 +80,7 @@ export const agentToolRegistry = Object.freeze({
     description: "创建当前项目的问题草案",
     inputSchema: issueDraftInputSchema,
     risk: "draft",
-    permission: "event:handle",
+    permission: "issue:handle",
     confirmation: "never"
   },
   request_mission_start: {

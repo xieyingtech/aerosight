@@ -14,7 +14,7 @@ export function assertMediaActionAllowed(input: {
   sensitive: boolean;
 }) {
   if (input.action !== "download" || !input.sensitive) return;
-  if (input.role === "owner" || input.role === "admin" || input.permissions.has("event:handle")) return;
+  if (input.role === "owner" || input.role === "admin" || input.permissions.has("issue:handle") || input.permissions.has("event:handle")) return;
   throw new Error("SENSITIVE_MEDIA_DOWNLOAD_DENIED");
 }
 

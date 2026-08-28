@@ -91,7 +91,8 @@ CREATE TABLE "agents" (
 	"status" text DEFAULT 'disabled' NOT NULL,
 	"config_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "agents_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
 CREATE TABLE "algorithm_providers" (
@@ -779,6 +780,7 @@ CREATE TABLE "issue_events" (
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"actor_user_id" integer,
 	"actor_agent_id" integer,
+	"client_key" text,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -828,6 +830,7 @@ CREATE TABLE "issues" (
 	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"labels_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"state_version" integer DEFAULT 0 NOT NULL,
 	"opened_by_user_id" integer,
 	"assignee_user_id" integer,
 	"closed_at" timestamp,
@@ -835,7 +838,25 @@ CREATE TABLE "issues" (
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "issues_id_project_unique" UNIQUE("id", "project_id"),
 	CONSTRAINT "issues_occurrence_positive" CHECK (occurrence_count > 0),
-	CONSTRAINT "issues_labels_array" CHECK (jsonb_typeof(labels_json) = 'array')
+	CONSTRAINT "issues_labels_array" CHECK (jsonb_typeof(labels_json) = 'array'),
+	CONSTRAINT "issues_state_version_nonnegative" CHECK (state_version >= 0)
+);
+--> statement-breakpoint
+CREATE TABLE "issue_assignees" (
+	"id" bigserial PRIMARY KEY NOT NULL,
+	"project_id" integer NOT NULL,
+	"team_id" integer NOT NULL,
+	"issue_id" integer NOT NULL,
+	"assignee_type" text NOT NULL,
+	"user_id" integer,
+	"agent_id" integer,
+	"assigned_by_user_id" integer NOT NULL,
+	"active" boolean DEFAULT true NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"removed_at" timestamp with time zone,
+	CONSTRAINT "issue_assignees_type_valid" CHECK (assignee_type in ('user','agent')),
+	CONSTRAINT "issue_assignees_subject_valid" CHECK ((assignee_type='user' and user_id is not null and agent_id is null) or (assignee_type='agent' and agent_id is not null and user_id is null)),
+	CONSTRAINT "issue_assignees_active_time_valid" CHECK (active=(removed_at is null))
 );
 --> statement-breakpoint
 CREATE TABLE "outbox_events" (
@@ -1719,6 +1740,11 @@ ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_project_id_projects_id_fk"
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_assignees" ADD CONSTRAINT "issue_assignees_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_assignees" ADD CONSTRAINT "issue_assignees_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_assignees" ADD CONSTRAINT "issue_assignees_user_team_fk" FOREIGN KEY ("team_id","user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_assignees" ADD CONSTRAINT "issue_assignees_agent_project_fk" FOREIGN KEY ("agent_id","project_id") REFERENCES "public"."agents"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_assignees" ADD CONSTRAINT "issue_assignees_actor_fk" FOREIGN KEY ("assigned_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
@@ -1851,11 +1877,15 @@ CREATE INDEX "poses_device_time_idx" ON "poses" USING btree ("device_id","captur
 CREATE INDEX "poses_standard_position_gist" ON "poses" USING gist ("standard_position");--> statement-breakpoint
 CREATE INDEX "issue_events_issue_created_idx" ON "issue_events" USING btree ("issue_id","created_at");--> statement-breakpoint
 CREATE INDEX "issue_events_project_created_idx" ON "issue_events" USING btree ("project_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "issue_events_client_key_unique" ON "issue_events" USING btree ("project_id","issue_id","client_key") WHERE "issue_events"."client_key" is not null;--> statement-breakpoint
 CREATE INDEX "idempotency_records_expiry_idx" ON "idempotency_records" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "idempotency_records_project_created_idx" ON "idempotency_records" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "issue_links_issue_target_unique" ON "issue_links" USING btree ("issue_id","link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_target_idx" ON "issue_links" USING btree ("link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_project_issue_idx" ON "issue_links" USING btree ("project_id","issue_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "issue_assignees_active_user_unique" ON "issue_assignees" USING btree ("issue_id","user_id") WHERE "issue_assignees"."active" and "issue_assignees"."user_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "issue_assignees_active_agent_unique" ON "issue_assignees" USING btree ("issue_id","agent_id") WHERE "issue_assignees"."active" and "issue_assignees"."agent_id" is not null;--> statement-breakpoint
+CREATE INDEX "issue_assignees_project_issue_idx" ON "issue_assignees" USING btree ("project_id","issue_id") WHERE "issue_assignees"."active";--> statement-breakpoint
 CREATE UNIQUE INDEX "issues_project_number_unique" ON "issues" USING btree ("project_id","number");--> statement-breakpoint
 CREATE INDEX "issues_project_status_idx" ON "issues" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "issues_project_priority_idx" ON "issues" USING btree ("project_id","priority");--> statement-breakpoint
