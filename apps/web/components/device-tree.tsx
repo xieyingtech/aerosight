@@ -1,5 +1,8 @@
+import Link from "next/link";
+import { ArrowRightIcon } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
-import { DeviceActionPanel } from "@/components/device-action-panel";
+import { Button } from "@/components/ui/button";
 import type { DeviceTreeNode } from "@/lib/device-tree-core";
 
 function DeviceNode({ node, projectId, depth = 0 }: { node: DeviceTreeNode; projectId: number; depth?: number }) {
@@ -28,7 +31,7 @@ function DeviceNode({ node, projectId, depth = 0 }: { node: DeviceTreeNode; proj
       {!!node.channels.length && <div className="mt-3 grid gap-1 text-xs text-muted-foreground md:grid-cols-2">
         {node.channels.map((channel) => <div className="rounded-md border px-2 py-1.5" key={channel.stableChannelId}>{channel.name} · {channel.dataType} · {channel.availability}</div>)}
       </div>}
-      <DeviceActionPanel actions={available.flatMap((capability) => capability.actions)} deviceId={node.id} projectId={projectId} />
+      <div className="mt-3 flex justify-end"><Button asChild size="sm" variant="outline"><Link href={`/projects/${projectId}/realtime?deviceId=${node.id}`}>进入实时作业<ArrowRightIcon /></Link></Button></div>
     </article>
     {!!node.children.length && <ul className="space-y-2">{node.children.map((child) => <DeviceNode depth={depth + 1} key={child.id} node={child} projectId={projectId} />)}</ul>}
   </li>;

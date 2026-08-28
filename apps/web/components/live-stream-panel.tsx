@@ -6,6 +6,7 @@ import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, V
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
+import { isLiveStreamPlayable } from "@/lib/realtime-workbench-core";
 
 type PlaybackState =
   | { status: "idle" | "loading" | "error"; candidates?: never; index?: never }
@@ -48,13 +49,18 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
   </div>;
 }
 
-export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
+export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStreamId, onStreamChanged }: {
   snapshot: ProjectSituationSnapshot;
   selection: SituationSelection | null;
   mode: "live" | "history";
   cursor: string | null;
+  selectedStreamId?: number | null;
+  onStreamChanged?: () => void | Promise<void>;
 }) {
-  const model = useMemo(() => createLiveStreamPanelModel({ snapshot, selection, mode, cursor }), [snapshot, selection, mode, cursor]);
+  const baseModel = useMemo(() => createLiveStreamPanelModel({ snapshot, selection, mode, cursor }), [snapshot, selection, mode, cursor]);
+  const model = mode === "live" && selectedStreamId
+    ? { ...baseModel, stream: snapshot.liveStreams.find((stream) => Number(stream.id) === selectedStreamId) ?? null }
+    : baseModel;
   const [playback, setPlayback] = useState<PlaybackState>({ status: "idle" });
   const [stopState, setStopState] = useState<"idle" | "stopping" | "error">("idle");
   const streamId = model.mode === "live" ? Number(model.stream?.id) || null : null;
@@ -85,7 +91,8 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
   }, [activeChannel?.stableChannelId, snapshot.project.id]);
 
   useEffect(() => {
-    if (!streamId) { setPlayback({ status: "idle" }); return; }
+    const streamStatus = String(model.stream?.status ?? "");
+    if (!streamId || !isLiveStreamPlayable(streamStatus)) { setPlayback({ status: "idle" }); return; }
     const controller = new AbortController();
     setPlayback({ status: "loading" });
     fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
@@ -103,7 +110,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
       setPlayback({ status: "ready", candidates, index: 0 });
     }).catch((error) => { if (error?.name !== "AbortError") setPlayback({ status: "error" }); });
     return () => controller.abort();
-  }, [snapshot.project.id, streamId]);
+  }, [model.stream?.status, snapshot.project.id, streamId]);
 
   if (model.mode === "history") {
     return <div className="space-y-3 p-4">
@@ -144,7 +151,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
     });
     if (!response.ok) { setStopState("error"); return; }
     setPlayback({ status: "idle" });
-    window.location.reload();
+    await onStreamChanged?.();
   };
   const lastActive = model.stream.lastActiveAt ? Date.parse(String(model.stream.lastActiveAt)) : NaN;
   const latencySeconds = Number.isFinite(lastActive) ? Math.max(0, Math.round((Date.now() - lastActive) / 1000)) : null;
@@ -154,7 +161,8 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor }: {
       <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
     </div>
     <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-slate-950 text-slate-200">
-      {playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
+      {!isLiveStreamPlayable(status) ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? "正在停止直播…" : "正在等待设备推流…"}</div>
+        : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
         : playback.status === "error" ? <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />直播连接失败或 locator 已过期</div>
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "webrtc"
             ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />

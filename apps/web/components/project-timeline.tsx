@@ -21,7 +21,7 @@ export function ProjectTimeline({ snapshot, cursor, range, onSelect, onCursorCha
   onRangeChange?: (from: string, to: string) => void;
   onReturnLive?: () => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const model = useMemo(() => buildTimelineModel(snapshot), [snapshot]);
   return (
     <section className="overflow-hidden rounded-xl border bg-card">

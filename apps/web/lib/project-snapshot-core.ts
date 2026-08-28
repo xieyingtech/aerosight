@@ -8,6 +8,7 @@ export type ConnectSnapshotClient = () => Promise<SnapshotClient>;
 
 export type ProjectSnapshotChannel = {
   stableChannelId: string;
+  capabilityCode?: string;
   channelKey: string;
   displayName: string;
   dataType: string;
@@ -130,7 +131,7 @@ export async function readProjectSituationSnapshot(
               ) order by capability.capability_code) from device_capabilities capability
                 where capability.project_id=device.project_id and capability.device_id=device.id),'[]') as "rawCapabilities",
               coalesce((select jsonb_agg(jsonb_build_object(
-                'stableChannelId',channel.stable_channel_id,'channelKey',channel.channel_key,
+                'stableChannelId',channel.stable_channel_id,'capabilityCode',channel.capability_code,'channelKey',channel.channel_key,
                 'displayName',channel.display_name,'dataType',channel.data_type,
                 'availability',channel.availability,'availabilityReason',channel.availability_reason,
                 'protocol',channel.protocol
@@ -220,7 +221,7 @@ export async function readProjectSituationSnapshot(
     )).rows;
     const diagnostics = (await client.query<OperationDiagnostic>(
       `/* snapshot:diagnostics */
-       select 'command:'||command.id::text as id,'command'::text as kind,
+       select 'command:'||command.id::text as id,command.device_id as "deviceId",'command'::text as kind,
               case when command.status in ('unknown','timed_out','nacked') then 'error' else 'warning' end as severity,
               device.name||' · '||command.capability_code as title,
               coalesce(command.result_json->>'reason',command.result_json->>'errorCode',command.status) as reason,
@@ -228,12 +229,12 @@ export async function readProjectSituationSnapshot(
          from device_commands command join devices device on device.id=command.device_id and device.project_id=command.project_id
         where command.project_id=$1 and command.status in ('nacked','timed_out','unknown')
        union all
-       select 'connection:'||adapter.id::text,'connection',case when adapter.status='failed' then 'error' else 'warning' end,
+       select 'connection:'||adapter.id::text,null::integer,'connection',case when adapter.status='failed' then 'error' else 'warning' end,
               adapter.name,coalesce(adapter.last_health_json->>'code',adapter.status),adapter.status,
               coalesce(adapter.last_checked_at,adapter.updated_at)
          from device_adapters adapter where adapter.project_id=$1 and adapter.status in ('failed','degraded')
        union all
-       select 'stream:'||stream.id::text,'stream',case when stream.status='failed' then 'error' else 'warning' end,
+       select 'stream:'||stream.id::text,stream.device_id,'stream',case when stream.status='failed' then 'error' else 'warning' end,
               device.name||' · '||stream.stream_key,coalesce(stream.status_reason,stream.status),stream.status,
               coalesce(stream.ended_at,stream.updated_at)
          from live_streams stream join devices device on device.id=stream.device_id and device.project_id=stream.project_id

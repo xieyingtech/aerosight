@@ -45,3 +45,12 @@ export function workbenchQuery(selection: RealtimeWorkbenchSelection) {
 export function hasTransitionalLiveStream(snapshot: ProjectSituationSnapshot) {
   return activeProjectStreams(snapshot).some((stream) => ["requested", "starting", "stopping"].includes(String(stream.status)));
 }
+
+export function isLiveStreamPlayable(status: unknown) {
+  return ["live", "degraded"].includes(String(status));
+}
+
+export function liveStreamPollDecision(snapshot: ProjectSituationSnapshot, completedAttempts: number, maximumAttempts = 15) {
+  if (!hasTransitionalLiveStream(snapshot)) return "stable" as const;
+  return completedAttempts >= maximumAttempts ? "timeout" as const : "poll" as const;
+}

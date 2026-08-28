@@ -7,7 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DeviceCapabilityAction } from "@/lib/device-capability-actions";
 
-export function DeviceActionPanel({ projectId, deviceId, actions }: { projectId: number; deviceId: number; actions: DeviceCapabilityAction[] }) {
+type ProjectedAction = DeviceCapabilityAction & { enabled?: boolean; unavailableReason?: string | null };
+
+export function DeviceActionPanel({ projectId, deviceId, actions, onChanged }: {
+  projectId: number;
+  deviceId: number;
+  actions: ProjectedAction[];
+  onChanged?: () => void | Promise<void>;
+}) {
   const [reason, setReason] = useState("本地演示操作");
   const [confirmation, setConfirmation] = useState("");
   const [parameters, setParameters] = useState<Record<string, string>>({});
@@ -40,6 +47,7 @@ export function DeviceActionPanel({ projectId, deviceId, actions }: { projectId:
     setStatus(response.ok
       ? action.kind === "live" ? `直播 #${result.session?.id}：${result.session?.status}` : `命令 ${result.id}：${result.status}`
       : result.error ?? "操作失败");
+    if (response.ok) await onChanged?.();
   };
 
   const requiresConfirmation = actions.some((action) => ["high", "critical"].includes(action.risk));
@@ -47,8 +55,11 @@ export function DeviceActionPanel({ projectId, deviceId, actions }: { projectId:
     <div className="flex flex-wrap gap-2">
       {actions.map((action) => action.kind === "workflow"
         ? <Button asChild key={`${action.capabilityCode}:${action.key}`} size="sm" variant="outline"><Link href={`/projects/${projectId}/tasks`}>{action.label}</Link></Button>
-        : <Button disabled={pending || !reason.trim() || (["high", "critical"].includes(action.risk) && confirmation !== `CONFIRM ${deviceId} ${action.capabilityCode}`)} key={`${action.capabilityCode}:${action.key}`} onClick={() => invoke(action)} size="sm" variant={action.risk === "critical" ? "destructive" : "outline"}>{action.label}</Button>)}
+        : <Button disabled={action.enabled === false || pending || !reason.trim() || (["high", "critical"].includes(action.risk) && confirmation !== `CONFIRM ${deviceId} ${action.capabilityCode}`)} key={`${action.capabilityCode}:${action.key}`} onClick={() => invoke(action)} size="sm" title={action.unavailableReason ?? undefined} variant={action.risk === "critical" ? "destructive" : "outline"}>{action.label}</Button>)}
     </div>
+    {actions.some((action) => action.enabled === false && action.unavailableReason) && <div className="space-y-1 text-xs text-amber-700">
+      {Array.from(new Set(actions.filter((action) => action.enabled === false).map((action) => action.unavailableReason).filter(Boolean))).map((message) => <p key={message}>{message}</p>)}
+    </div>}
     {actions.flatMap((action) => action.fields.map((field) => {
       const key = `${action.capabilityCode}:${action.key}:${field.key}`;
       return <label className="grid gap-1 text-xs" key={key}>{field.label}{field.unit ? ` (${field.unit})` : ""}<Input onChange={(event) => setParameters((current) => ({ ...current, [key]: event.target.value }))} required={field.required} type={field.type} value={parameters[key] ?? ""} /></label>;

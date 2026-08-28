@@ -1,5 +1,6 @@
 export type OperationDiagnostic = {
   id: string;
+  deviceId?: number | null;
   kind: "command" | "connection" | "stream";
   severity: "info" | "warning" | "error";
   title: string;
