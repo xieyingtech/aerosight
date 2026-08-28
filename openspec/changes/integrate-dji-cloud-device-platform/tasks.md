@@ -83,3 +83,14 @@
 - [x] 10.5 运行租户隔离、DeviceType/Device 范围 capability RBAC、Topic ACL、播放鉴权、秘密脱敏、重复命令和超时恢复测试，并保存无跨项目访问、越权能力或重复副作用的结果
 - [x] 10.6 运行 `pnpm check`、`pnpm build`、Go 全量测试和 OpenSpec strict validation，修复所有失败并记录最终验证结果
 - [x] 10.7 按功能边界提交 conventional commits，确认最终 `git status` 仅保留用户原有无关修改且提交历史可独立审查
+
+## 11. 通用连接器与自动设备发现
+
+- [ ] 11.1 将现有 Adapter 运行实例兼容迁移为 ConnectorInstance，新增版本化 ConnectorDefinition、同步游标/运行记录和显式 Device–Connector–ExternalIdentity 绑定，并用迁移测试验证现有 DJI 实例、设备 ID、历史引用和项目隔离不变
+- [ ] 11.2 实现通用 Connector registry 与 manifest 校验，覆盖配置/凭据 JSON Schema、`push`/`poll`/`subscribe`/`manual-import` 发现模式、健康检查、兼容 Driver 范围和运行租约，并用一个非 DJI 内存 IoT fixture 验证新增连接器无需修改设备领域表
+- [ ] 11.3 实现范围受限的自动发现和增量同步状态机，持久化游标、首次/最后发现时间及 `discovered`/`managed`/`ignored`/`conflicted`/`missing` 状态，并用重复消息、游标重放、范围越界和临时来源消失测试验证幂等且不误删设备
+- [ ] 11.4 实现 `automatic`、`review`、`observe-only` 纳管策略、DeviceType 匹配置信度与冲突隔离，并用唯一匹配、未知型号、多候选类型、重复外部身份和忽略后重现测试验证只有安全确定的对象可自动创建 Device
+- [ ] 11.5 实现 direct/gateway/inherited 显式路由、连接器迁移和主备优先级解析，并用网关继承、连接器切换、双主冲突和下行命令测试验证每次控制只选择一个有效主路由且 Device ID 不变
+- [ ] 11.6 新增项目级“连接器”导航与管理页面，提供通用连接器创建、LAN/Public 端点、秘密引用、扫描范围、纳管策略、连接测试、健康状态和同步日志；将 DJI 向导迁入该页面并用 RBAC/脱敏测试验证普通成员不可管理或查看秘密
+- [ ] 11.7 扩展设备管理器展示已纳管、待确认、冲突、忽略和来源缺失对象，提供立即扫描、确认纳管、忽略和重新匹配 DeviceType 操作，并用多连接器、祖先拓扑、权限和并发扫描组件/API 测试验证设备页不承载连接器凭据配置
+- [ ] 11.8 更新连接器开发契约、DJI 兼容说明和管理员操作文档，运行迁移、单元、集成、构建及 OpenSpec strict validation，并按功能边界提交 Conventional Commits
