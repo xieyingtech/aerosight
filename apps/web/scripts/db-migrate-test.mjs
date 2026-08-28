@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -15,6 +15,8 @@ const legacySchema = await readFile(
   "utf8"
 );
 const currentSchema = await readFile(resolve(repositoryRoot, "db/schema.sql"), "utf8");
+const migrationCount = (await readdir(resolve(repositoryRoot, "db/migrations")))
+  .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).length;
 const integrationFixture = JSON.parse(
   await readFile(resolve(repositoryRoot, "test/fixtures/air-ground-projects.json"), "utf8")
 );
@@ -1436,7 +1438,7 @@ try {
   await withTemporaryDatabase("empty", async (connectionString) => {
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === 43, "empty database should apply all migrations");
+    assert(first.applied.length === migrationCount, "empty database should apply all migrations");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1485,7 +1487,7 @@ try {
 
     const first = await migrateDatabase({ connectionString, logger: silentLogger });
     const before = await readMigrationState(connectionString);
-    assert(first.applied.length === 43, "existing database should record all migrations");
+    assert(first.applied.length === migrationCount, "existing database should record all migrations");
     assert(first.applied[0].adopted === true, "existing database should adopt the baseline");
     const upgraded = new Client({ connectionString });
     await upgraded.connect();
