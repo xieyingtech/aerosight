@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"aerosight/worker/internal/agent"
 	"aerosight/worker/internal/algorithm"
 	"aerosight/worker/internal/config"
 	"aerosight/worker/internal/dji"
@@ -192,6 +193,9 @@ func main() {
 	runErrors := make(chan error, 5)
 	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
 	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
+	go func() {
+		runErrors <- (agent.JobProcessor{Database: database, AuthSecret: workerConfig.AuthSecret}).Run(runContext, 2*time.Second)
+	}()
 	go func() { runErrors <- djiManager.Run(runContext) }()
 	go func() { runErrors <- djiCommandDispatcher.RunTimeoutReconciler(runContext, database, time.Second) }()
 	if liveStreamHealth != nil {

@@ -37,7 +37,7 @@ export async function readIssue(projectId: number, issueId: number) {
     left join task_versions version on version.id=issue.task_version_id and version.project_id=issue.project_id
     where issue.project_id=$1 and issue.id=$2`, [projectId, issueId])).rows[0];
   if (!issue) notFound();
-  const [events, links, detections, assets, assignees, members, agents] = await Promise.all([
+  const [events, links, detections, assets, assignees, members, agents, drafts] = await Promise.all([
     query<Record<string, unknown>>(`select event.id,event.event_type as "eventType",event.body,event.metadata_json as metadata,
       event.created_at as "createdAt",coalesce(actor.name,agent.name,'系统') as "actorName"
       from issue_events event left join users actor on actor.id=event.actor_user_id
@@ -78,10 +78,16 @@ export async function readIssue(projectId: number, issueId: number) {
       from projects project join team_members member on member.team_id=project.team_id
       join users member_user on member_user.id=member.user_id where project.id=$1 order by member_user.name`, [projectId]),
     query<Record<string, unknown>>(`select id,name,status,config_json->>'kind' as kind from agents
-      where project_id=$1 and status='active' order by case when config_json->>'kind'='copilot' then 0 else 1 end,name`, [projectId])
+      where project_id=$1 and status='active' order by case when config_json->>'kind'='copilot' then 0 else 1 end,name`, [projectId]),
+    query<Record<string, unknown>>(`select draft.id,draft.title,draft.status,draft.payload_json as payload,
+      draft.model_id as "modelId",draft.prompt_template_version as "promptTemplateVersion",
+      draft.evidence_version_hash as "evidenceVersionHash",draft.generated_at as "generatedAt"
+      from agent_drafts draft join agent_sessions session
+        on session.id=draft.session_id and session.project_id=draft.project_id
+      where draft.project_id=$1 and session.issue_id=$2 order by draft.created_at desc`, [projectId, issueId])
   ]);
   return { issue, events: events.rows, links: links.rows, detections: detections.rows, assets: assets.rows,
-    assignees: assignees.rows, members: members.rows, agents: agents.rows,
+    assignees: assignees.rows, members: members.rows, agents: agents.rows, drafts: drafts.rows,
     canHandle: access.permissions.has("issue:handle"), canAssign: access.permissions.has("issue:assign"),
     canUseAgent: access.permissions.has("agent:use") };
 }

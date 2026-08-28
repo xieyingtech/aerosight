@@ -12,6 +12,19 @@ function displayDate(value: unknown) {
   return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "medium" }).format(new Date(String(value)));
 }
 
+const activityLabels: Record<string, string> = {
+  "copilot.requested": "已请求 Copilot",
+  "copilot.accepted": "Copilot 已接收",
+  "copilot.progress": "Copilot 正在整理证据",
+  "copilot.completed": "Copilot 已生成草案",
+  "copilot.failed": "Copilot 处理失败",
+  "comment.created": "添加评论",
+  "assignee.added": "添加负责人",
+  "assignee.removed": "移除负责人",
+  "status.changed": "变更状态",
+  "labels.changed": "更新标签"
+};
+
 export default async function IssueDetailPage({ params }: { params: Promise<{ id: string; issueId: string }> }) {
   const { id, issueId } = await params;
   const projectId = Number(id);
@@ -48,8 +61,11 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ id
       </CardContent></Card>
 
       <Card><CardHeader><CardTitle>活动时间线</CardTitle><CardDescription>任务自动建案、合并以及后续评论和处置都记录在这里。</CardDescription></CardHeader><CardContent>
-        {model.events.length ? <ol className="space-y-3">{model.events.map((event) => <li className="border-l-2 pl-4 text-sm" key={String(event.id)}><div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{String(event.eventType)}</span><time className="text-muted-foreground">{displayDate(event.createdAt)}</time></div><p className="text-muted-foreground">{String(event.actorName)}{event.body ? ` · ${String(event.body)}` : ""}</p></li>)}</ol> : <p className="text-sm text-muted-foreground">暂无活动记录。</p>}
+        {model.events.length ? <ol className="space-y-3">{model.events.map((event) => <li className="border-l-2 pl-4 text-sm" key={String(event.id)}><div className="flex flex-wrap justify-between gap-2"><span className="font-medium">{activityLabels[String(event.eventType)] ?? String(event.eventType)}</span><time className="text-muted-foreground">{displayDate(event.createdAt)}</time></div><p className="text-muted-foreground">{String(event.actorName)}{event.body ? ` · ${String(event.body)}` : ""}</p></li>)}</ol> : <p className="text-sm text-muted-foreground">暂无活动记录。</p>}
       </CardContent></Card>
+      {model.drafts.length ? <Card><CardHeader><CardTitle>Copilot 草案</CardTitle><CardDescription>草案只提供建议，不会自动执行任务、算法或设备命令。</CardDescription></CardHeader><CardContent className="space-y-4">
+        {model.drafts.map((draft) => { const payload = (draft.payload ?? {}) as Record<string, unknown>; return <article className="space-y-2 rounded-lg border p-4" key={String(draft.id)}><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{String(draft.title)}</h3><Badge variant="outline">待人工确认</Badge></div><p className="whitespace-pre-wrap text-sm">{String(payload.analysis ?? "草案内容不可用")}</p><p className="text-xs text-muted-foreground">模型 {String(draft.modelId)} · 提示模板 {String(draft.promptTemplateVersion)} · 证据快照 {String(draft.evidenceVersionHash).slice(0, 12)}</p></article>; })}
+      </CardContent></Card> : null}
       <Card><CardHeader><CardTitle>协作处置</CardTitle><CardDescription>评论、标签、状态以及成员/智能体指派受项目权限和乐观并发保护。</CardDescription></CardHeader><CardContent>
         <IssueCollaborationPanel agents={model.agents} assignees={model.assignees} canAssign={model.canAssign} canHandle={model.canHandle} canUseAgent={model.canUseAgent}
           issueId={Number(issue.id)} labels={labels.map(String)} members={model.members} projectId={projectId}
