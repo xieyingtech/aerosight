@@ -16,7 +16,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         <p className="font-medium">项目配置中心</p>
         <p className="mt-1 text-sm text-muted-foreground">所有外部能力默认关闭，管理员配置并验证后才会启用。</p>
       </div>
-      <AlertAutomationSettings automaticAi={automation.automaticAi} policies={automation.policies} projectId={Number(id)}/>
+      <AlertAutomationSettings automaticAi={automation.automaticAi} currentMode={automation.currentMode} projectId={Number(id)}/>
     </Page>
   );
 }

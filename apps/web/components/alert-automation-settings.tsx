@@ -4,23 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-
-const modeLabels: Record<string, string> = {
-  manual: "仅人工处理",
-  "agent-on-demand": "按需生成 AI 草案",
-  "agent-auto-draft": "自动生成 AI 草案",
-  "follow-up-draft": "生成后续处置草案"
-};
 
 export function AlertAutomationSettings({
   projectId,
   automaticAi,
-  policies
+  currentMode
 }: {
   projectId: number;
   automaticAi: boolean;
-  policies: Record<string, unknown>[];
+  currentMode: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -63,30 +55,18 @@ export function AlertAutomationSettings({
       <form
         action={(form) => call({
           action: "save",
-          name: form.get("name"),
-          mode: form.get("mode"),
-          eventRuleVersionId: form.get("eventRuleVersionId") ? Number(form.get("eventRuleVersionId")) : null,
-          config: {}
+          mode: form.get("mode")
         })}
-        className="grid gap-2 md:grid-cols-3"
+        className="flex flex-wrap items-center gap-2"
       >
-        <Input name="name" placeholder="策略名称" required />
-        <select className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" name="mode">
+        <select className="h-8 min-w-56 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" defaultValue={currentMode} name="mode">
           <option value="manual">仅人工处理</option>
           <option value="agent-on-demand">按需生成 AI 草案</option>
           <option value="agent-auto-draft">自动生成 AI 草案</option>
           <option value="follow-up-draft">生成后续处置草案</option>
         </select>
-        <Input name="eventRuleVersionId" placeholder="规则版本 ID（可选）" type="number" />
-        <Button className="justify-self-start" size="sm" type="submit">保存策略</Button>
+        <Button type="submit">保存模式</Button>
       </form>
-      <div className="space-y-2">
-        {policies.map((policy) => (
-          <p className="rounded-lg bg-muted/40 p-2 text-sm" key={String(policy.id)}>
-            {String(policy.name)} · {modeLabels[String(policy.mode)] ?? "未配置"}
-          </p>
-        ))}
-      </div>
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </section>
   );
