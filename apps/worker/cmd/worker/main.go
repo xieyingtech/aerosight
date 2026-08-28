@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"aerosight/worker/internal/algorithm"
-	"aerosight/worker/internal/automation"
 	"aerosight/worker/internal/config"
 	"aerosight/worker/internal/dji"
 	"aerosight/worker/internal/driver"
@@ -164,7 +163,6 @@ func main() {
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
 	)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
-	consumer.Register("alert.automation.requested", automation.Processor{Generator: automation.DeterministicDraftGenerator{}}.Handler)
 	wake := wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger)
 	runContext, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
