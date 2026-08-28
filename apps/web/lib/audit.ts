@@ -68,3 +68,33 @@ export async function withAuditedProjectWrite<T>(
     client.release();
   }
 }
+
+export async function withAuditedPlatformWrite<T>(
+  context: Omit<AuditContext, "projectId" | "teamId" | "actorAgentId" | "idempotencyKey" | "policyResult">,
+  operation: (client: PoolClient) => Promise<T>
+) {
+  if (!context.actorUserId) throw new Error("An audited platform write requires an actor");
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    const audit = await client.query<{ id: string }>(
+      `insert into platform_audit_events (
+         actor_user_id, request_id, action, resource_type, resource_id, input_hash
+       ) values ($1,$2,$3,$4,$5,$6) returning id`,
+      [context.actorUserId, context.requestId, context.action, context.resourceType,
+        context.resourceId ?? null, auditHash(context.input)]
+    );
+    const result = await operation(client);
+    await client.query(
+      `update platform_audit_events set status='completed', result_hash=$2, completed_at=now() where id=$1`,
+      [audit.rows[0].id, auditHash(result)]
+    );
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+}

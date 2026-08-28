@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BellRingIcon, BotIcon, BoxesIcon, Building2Icon, ChevronLeftIcon, ChevronsUpDownIcon,
   CpuIcon, FolderKanbanIcon, GaugeIcon, LayoutDashboardIcon, MapIcon, PlaneTakeoffIcon,
-  PlugIcon, RadioTowerIcon, SettingsIcon, UsersIcon, WaypointsIcon
+  PlugIcon, RadioTowerIcon, SettingsIcon, SparklesIcon, UsersIcon, WaypointsIcon
 } from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
@@ -50,7 +50,8 @@ export function AppSidebar({
     { title: "管理总览", url: "/admin", icon: <LayoutDashboardIcon /> },
     { title: "用户管理", url: "/admin/users", icon: <UsersIcon /> },
     { title: "团队管理", url: "/admin/teams", icon: <Building2Icon /> },
-    { title: "项目管理", url: "/admin/projects", icon: <FolderKanbanIcon /> }
+    { title: "项目管理", url: "/admin/projects", icon: <FolderKanbanIcon /> },
+    { title: "AI Provider", url: "/admin/ai-providers", icon: <SparklesIcon /> }
   ];
   const projectIcons = {
     overview: <MapIcon />, realtime: <RadioTowerIcon />, tasks: <WaypointsIcon />,

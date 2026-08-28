@@ -17,14 +17,6 @@ test("runtime configuration accepts valid values and defaults log level", () => 
     AUTH_SECRET: "0123456789abcdef"
   });
   assert.equal(config.logLevel, "info");
-  assert.equal(config.aiProvider, "disabled");
-});
-
-test("AI deployment configuration fails closed and accepts a complete provider",()=>{
-  const base={DATABASE_URL:"postgresql://database.example/aerosight",AUTH_SECRET:"0123456789abcdef"};
-  assert.throws(()=>parseWebRuntimeConfig({...base,AI_PROVIDER:"openai"}),/AI_MODEL is required.*OPENAI_API_KEY is required/);
-  const config=parseWebRuntimeConfig({...base,AI_PROVIDER:"openai",AI_MODEL:"gpt-5-mini",OPENAI_API_KEY:"secret-ref-resolved-at-deploy"});
-  assert.equal(config.aiProvider,"openai");assert.equal(config.aiModel,"gpt-5-mini");
 });
 
 test("correlation IDs accept safe upstream values and replace unsafe values", () => {

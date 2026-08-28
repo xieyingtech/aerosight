@@ -2,11 +2,11 @@ import "server-only";
 
 import { createAgentExecutionContext } from "@/lib/agent-execution-context-core";
 import { executeAgentDraftTool } from "@/lib/agent-draft-tools";
-import { collectAgentTextStream, createAgentProviderRegistry } from "@/lib/agent-provider-registry";
+import { collectAgentTextStream } from "@/lib/agent-provider-registry";
+import { loadAgentProviderRegistry } from "@/lib/agent-provider-loader";
 import { appendAgentMessage, createAgentSession } from "@/lib/agent-sessions";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { readPerceptionEvent } from "@/lib/perception-events";
-import { parseWebRuntimeConfig } from "@/lib/runtime-config";
 
 const PROMPT_TEMPLATE_VERSION="perception-event-summary/v1";
 
@@ -23,7 +23,7 @@ export async function generateOnDemandAlertDraft(projectId:number,eventId:string
     ])
   ];
   const prompt=`${PROMPT_TEMPLATE_VERSION}\n你是巡检告警分析助手。只根据下列结构化事实生成中文摘要，区分事实、规则推断、模型推断和建议；明确不确定性，不改变人工结论。\n${JSON.stringify({event:evidence.event,detections:evidence.detections.map((item)=>({id:item.id,label:item.label,confidence:item.confidence,locationQuality:item.locationQuality,modelVersion:item.modelVersion,mappingVersion:item.mappingVersion,capturedAt:item.capturedAt,inputAssetId:item.inputAssetId})),feedback:evidence.feedback})}`;
-  const configured=createAgentProviderRegistry(parseWebRuntimeConfig(process.env));
+  const configured=await loadAgentProviderRegistry();
   const generatedAt=new Date();
   const summary=await collectAgentTextStream(configured.registry.languageModel(configured.modelId),prompt);
   const draft=await executeAgentDraftTool(context,"draft_report",{title:`告警 ${eventId} 分析草稿`,sections:[{heading:"智能体摘要",body:summary}],evidenceRefs:references},requestId,
