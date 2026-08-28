@@ -71,7 +71,7 @@ export function AlertAutomationSettings({
         className="grid gap-2 md:grid-cols-3"
       >
         <Input name="name" placeholder="策略名称" required />
-        <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="mode">
+        <select className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" name="mode">
           <option value="manual">仅人工处理</option>
           <option value="agent-on-demand">按需生成 AI 草案</option>
           <option value="agent-auto-draft">自动生成 AI 草案</option>
