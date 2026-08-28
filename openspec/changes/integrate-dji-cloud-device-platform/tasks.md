@@ -88,7 +88,7 @@
 
 - [x] 11.1 将现有 Adapter 运行实例兼容迁移为 ConnectorInstance，新增版本化 ConnectorDefinition、同步游标/运行记录和显式 Device–Connector–ExternalIdentity 绑定，并用迁移测试验证现有 DJI 实例、设备 ID、历史引用和项目隔离不变
 - [x] 11.2 实现通用 Connector registry 与 manifest 校验，覆盖配置/凭据 JSON Schema、`push`/`poll`/`subscribe`/`manual-import` 发现模式、健康检查、兼容 Driver 范围和运行租约，并用一个非 DJI 内存 IoT fixture 验证新增连接器无需修改设备领域表
-- [ ] 11.3 实现范围受限的自动发现和增量同步状态机，持久化游标、首次/最后发现时间及 `discovered`/`managed`/`ignored`/`conflicted`/`missing` 状态，并用重复消息、游标重放、范围越界和临时来源消失测试验证幂等且不误删设备
+- [x] 11.3 实现范围受限的自动发现和增量同步状态机，持久化游标、首次/最后发现时间及 `discovered`/`managed`/`ignored`/`conflicted`/`missing` 状态，并用重复消息、游标重放、范围越界和临时来源消失测试验证幂等且不误删设备
 - [ ] 11.4 实现 `automatic`、`review`、`observe-only` 纳管策略、DeviceType 匹配置信度与冲突隔离，并用唯一匹配、未知型号、多候选类型、重复外部身份和忽略后重现测试验证只有安全确定的对象可自动创建 Device
 - [ ] 11.5 实现 direct/gateway/inherited 显式路由、连接器迁移和主备优先级解析，并用网关继承、连接器切换、双主冲突和下行命令测试验证每次控制只选择一个有效主路由且 Device ID 不变
 - [ ] 11.6 新增项目级“连接器”导航与管理页面，提供通用连接器创建、LAN/Public 端点、秘密引用、扫描范围、纳管策略、连接测试、健康状态和同步日志；将 DJI 向导迁入该页面并用 RBAC/脱敏测试验证普通成员不可管理或查看秘密

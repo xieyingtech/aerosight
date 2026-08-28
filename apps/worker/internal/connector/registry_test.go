@@ -29,6 +29,7 @@ func memoryIoTRuntime() Runtime {
 		HealthCheck: func(context.Context, Instance) (Health, error) {
 			return Health{Status: "healthy", Details: map[string]any{"transport": "memory"}}, nil
 		},
+		ScopeFilter: func(Instance, ExternalDevice) bool { return true },
 	}
 }
 
@@ -70,6 +71,7 @@ func TestRegistryRejectsIncompleteOrInvalidConnectorManifest(t *testing.T) {
 		{name: "mode", edit: func(runtime *Runtime) { runtime.Manifest.DiscoveryModes = []DiscoveryMode{"scan"} }, want: "unsupported"},
 		{name: "handler", edit: func(runtime *Runtime) { delete(runtime.DiscoveryHandlers, DiscoveryPoll) }, want: "no handler"},
 		{name: "health", edit: func(runtime *Runtime) { runtime.HealthCheck = nil }, want: "health check"},
+		{name: "scope", edit: func(runtime *Runtime) { runtime.ScopeFilter = nil }, want: "scope filter"},
 		{name: "lease", edit: func(runtime *Runtime) { runtime.Manifest.Lease.RenewBefore = runtime.Manifest.Lease.Duration }, want: "lease renewal"},
 	}
 	for _, test := range tests {

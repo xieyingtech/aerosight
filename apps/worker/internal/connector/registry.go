@@ -64,8 +64,10 @@ type DiscoveryRequest struct {
 }
 
 type DiscoveryBatch struct {
-	Devices []ExternalDevice
-	Cursor  json.RawMessage
+	Devices          []ExternalDevice
+	Cursor           json.RawMessage
+	CompleteSnapshot bool
+	SourceVersion    string
 }
 
 type Health struct {
@@ -75,11 +77,13 @@ type Health struct {
 
 type DiscoveryHandler func(context.Context, DiscoveryRequest) (DiscoveryBatch, error)
 type HealthCheck func(context.Context, Instance) (Health, error)
+type ScopeFilter func(Instance, ExternalDevice) bool
 
 type Runtime struct {
 	Manifest          Manifest
 	DiscoveryHandlers map[DiscoveryMode]DiscoveryHandler
 	HealthCheck       HealthCheck
+	ScopeFilter       ScopeFilter
 }
 
 type Registry struct {
@@ -185,6 +189,9 @@ func validateRuntime(runtime Runtime) error {
 	}
 	if runtime.HealthCheck == nil {
 		return errors.New("connector health check is required")
+	}
+	if runtime.ScopeFilter == nil {
+		return errors.New("connector scope filter is required")
 	}
 	for _, mode := range runtime.Manifest.DiscoveryModes {
 		if runtime.DiscoveryHandlers[mode] == nil {
