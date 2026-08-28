@@ -23,7 +23,7 @@ test("simulator vertical acceptance covers inspection through alert handling and
       pose: { longitude: 120.15, latitude: 30.27, altitudeMeters: 80, capturedAt: startedAt } }],
     tracks: [{ projectId: 17, deviceId: 1, startedAt, endedAt: "2026-08-27T08:05:00.000Z", pointCount: 2,
       geometry: { type: "LineString", coordinates: [[120.15, 30.27, 80], [120.16, 30.28, 85]] } }],
-    activeTasks: [], liveStreams: [], mediaPoints: [], suspectedConstruction: [], openAlerts: [], regions: [],
+    activeTasks: [], liveStreams: [], mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
     freshness: { latestCapturedAt: "2026-08-27T08:05:00.000Z", isRealtime: true },
     availability: { devices: "available", tasks: "available", media: "available", alerts: "available", liveStreams: "available" }
   };
@@ -83,7 +83,7 @@ test("simulator vertical acceptance covers inspection through alert handling and
       metadata: { longitude: 120.16, latitude: 30.28 } }],
     suspectedConstruction: [{ id: "group-1", projectId: 17, label: "疑似违建", status: "active",
       capturedAt: "2026-08-27T08:06:00.000Z", geometry: { type: "Polygon", coordinates: [[[120.16, 30.28], [120.17, 30.28], [120.17, 30.29], [120.16, 30.28]]] } }],
-    openAlerts: [{ id: "event-1", projectId: 17, title: "疑似违建", status: handled.status,
+    openIssues: [], openAlerts: [{ id: "event-1", projectId: 17, title: "疑似违建", status: handled.status,
       updatedAt: "2026-08-27T08:07:00.000Z", longitude: 120.16, latitude: 30.28 }]
   };
   const timeline = buildTimelineModel(completedSnapshot, { from: startedAt, to: completedSnapshot.generatedAt });

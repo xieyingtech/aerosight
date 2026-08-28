@@ -8,7 +8,7 @@ const snapshot = {
   project: { id: 7, name: "North", teamId: 3 }, generatedAt: "2026-08-28T00:00:00Z", consistency: "repeatable-read",
   devices: [{ id: 11, name: "Dock" }, { id: 12, name: "Drone" }], tracks: [], activeTasks: [],
   liveStreams: [{ id: 21, deviceId: 12, status: "starting" }, { id: 22, deviceId: 11, status: "stopped" }],
-  mediaPoints: [], suspectedConstruction: [], openAlerts: [], regions: [],
+  mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
   freshness: { latestCapturedAt: null, isRealtime: true }, availability: {}
 } satisfies ProjectSituationSnapshot;
 

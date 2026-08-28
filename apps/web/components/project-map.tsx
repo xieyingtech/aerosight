@@ -7,7 +7,7 @@ import { createProjectMapModel, filterProjectMapModelByTime, firstMapCoordinate,
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 
-const interactiveLayers = ["media-points", "alert-points", "suspected-points", "device-drones", "device-docks", "device-ground"];
+const interactiveLayers = ["media-points", "issue-points", "suspected-points", "device-drones", "device-docks", "device-ground"];
 
 export function ProjectMap({ snapshot, className, selection, range, onSelect }: {
   snapshot: ProjectSituationSnapshot;
@@ -54,7 +54,7 @@ export function ProjectMap({ snapshot, className, selection, range, onSelect }: 
           {visible.has("mission-routes") && <Layer id="mission-routes-line" type="line" filter={["==", ["get", "layerKind"], "mission-route"]} paint={{ "line-color": "#8b5cf6", "line-dasharray": [2, 1.5], "line-width": 3 }} />}
           {visible.has("tracks") && <Layer id="tracks-line" type="line" filter={["==", ["get", "layerKind"], "track"]} paint={{ "line-color": "#2563eb", "line-opacity": 0.8, "line-width": 3 }} />}
           {visible.has("media") && <Layer id="media-points" type="circle" filter={["==", ["get", "layerKind"], "media"]} paint={{ "circle-color": "#a855f7", "circle-radius": 5, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
-          {visible.has("alerts") && <Layer id="alert-points" type="circle" filter={["==", ["get", "layerKind"], "alert"]} paint={{ "circle-color": "#ef4444", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
+          {visible.has("issues") && <Layer id="issue-points" type="circle" filter={["==", ["get", "layerKind"], "issue"]} paint={{ "circle-color": "#ef4444", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("suspected-construction") && <Layer id="suspected-points" type="circle" filter={["all", ["==", ["get", "layerKind"], "suspected-construction"], ["==", ["geometry-type"], "Point"]]} paint={{ "circle-color": "#f97316", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("drones") && <Layer id="device-drones" type="circle" filter={["==", ["get", "layerKind"], "device-drone"]} paint={{ "circle-color": "#0ea5e9", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
           {visible.has("docks") && <Layer id="device-docks" type="circle" filter={["==", ["get", "layerKind"], "device-dock"]} paint={{ "circle-color": "#334155", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}

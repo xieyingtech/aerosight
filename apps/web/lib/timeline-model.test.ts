@@ -14,7 +14,7 @@ const fixed = {
     { id: 1, deviceId: 1, kind: "image", capturedAt: "2026-08-24T10:01:00Z" },
     { id: 2, deviceId: 1, kind: "image", capturedAt: "2026-08-24T10:01:01Z" }
   ],
-  suspectedConstruction: [], openAlerts: [], regions: [],
+  suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
   freshness: { latestCapturedAt: null, isRealtime: false }, availability: {}
 } satisfies ProjectSituationSnapshot;
 

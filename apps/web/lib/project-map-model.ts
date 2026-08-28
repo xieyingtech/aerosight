@@ -14,7 +14,7 @@ export const projectMapLayers = [
   { id: "tracks", label: "运行轨迹", kind: "track" },
   { id: "suspected-construction", label: "疑似违建", kind: "suspected-construction" },
   { id: "media", label: "媒体点", kind: "media" },
-  { id: "alerts", label: "告警", kind: "alert" },
+  { id: "issues", label: "案件", kind: "issue" },
   { id: "drones", label: "无人机", kind: "device-drone" },
   { id: "docks", label: "机巢", kind: "device-dock" },
   { id: "ground-robots", label: "地面设备", kind: "device-ground" }
@@ -109,11 +109,11 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
       layerKind: "suspected-construction", entityId: String(item.id), label: String(item.label ?? "疑似违建"), status: String(item.status ?? "open")
     }));
   }
-  for (const item of snapshot.openAlerts) {
+  for (const item of snapshot.openIssues) {
     if (!scoped(item, projectId)) continue;
     const position = geometry(item.geometry) ?? point(item.longitude, item.latitude);
     if (position) features.push(feature(projectId, position, {
-      layerKind: "alert", entityId: String(item.id), label: String(item.title ?? "告警"), status: String(item.status ?? "open")
+      layerKind: "issue", entityId: String(item.id), label: `#${String(item.number ?? "—")} ${String(item.title ?? "案件")}`, status: String(item.status ?? "open")
     }));
   }
   return { type: "FeatureCollection", features };

@@ -69,6 +69,8 @@ export type ProjectSituationSnapshot = {
   diagnostics?: OperationDiagnostic[];
   mediaPoints: Array<Record<string, unknown>>;
   suspectedConstruction: Array<Record<string, unknown>>;
+  openIssues: Array<Record<string, unknown>>;
+  /** @deprecated legacy perception records kept for history/replay compatibility */
   openAlerts: Array<Record<string, unknown>>;
   regions: Array<Record<string, unknown>>;
   freshness: { latestCapturedAt: string | null; isRealtime: boolean };
@@ -267,9 +269,25 @@ export async function readProjectSituationSnapshot(
        order by event.last_detected_at desc limit 500`,
       [projectId]
     )).rows;
+    const openIssues = (await client.query<Record<string, unknown>>(
+      `/* snapshot:issues */
+       select issue.id,issue.project_id as "projectId",issue.number,issue.title,issue.status,issue.priority,
+              issue.last_seen_at as "updatedAt",ST_AsGeoJSON(located.geometry)::json as geometry
+       from issues issue left join lateral (
+         select detection.geographic_geometry as geometry
+         from issue_links link join detections detection
+           on detection.project_id=link.project_id
+          and detection.id=case when link.target_id~'^[0-9]+$' then link.target_id::bigint end
+         where link.project_id=issue.project_id and link.issue_id=issue.id and link.link_type='detection'
+           and detection.geographic_geometry is not null
+         order by detection.captured_at desc,detection.id desc limit 1
+       ) located on true
+       where issue.project_id=$1 and issue.status<>'closed'
+       order by issue.last_seen_at desc limit 500`, [projectId]
+    )).rows;
 
     const generatedAt = new Date();
-    const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, realtimeChannels, mediaPoints, openAlerts]);
+    const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, realtimeChannels, mediaPoints, openIssues]);
     const health = evaluateProjectHealth(dependencyHealthFromRecord(project.dependencyHealth));
     const { role: _role, ...publicProject } = project;
     const snapshot: ProjectSituationSnapshot = {
@@ -284,6 +302,7 @@ export async function readProjectSituationSnapshot(
       diagnostics,
       mediaPoints,
       suspectedConstruction,
+      openIssues,
       openAlerts,
       regions: [],
       freshness: {
@@ -291,7 +310,7 @@ export async function readProjectSituationSnapshot(
         isRealtime: Boolean(latest && generatedAt.getTime() - latest.getTime() <= 120_000)
       },
       availability: {
-        devices: "available", tasks: "available", media: "available", alerts: "available",
+        devices: "available", tasks: "available", media: "available", issues: "available", alerts: "available",
         liveStreams: health.capabilityAvailability.realtime_device_control === "degraded" ? "degraded" : "available",
         suspectedConstruction: health.capabilityAvailability.algorithm_execution === "degraded" ? "degraded" : "available",
         regions: "not-configured"

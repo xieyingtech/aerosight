@@ -26,7 +26,7 @@ export function applyReplayToSnapshot(snapshot: ProjectSituationSnapshot, replay
   }
   return {
     ...snapshot, generatedAt: replay.window.to, devices, tracks, mediaPoints: replay.media,
-    activeTasks: [], liveStreams: [], suspectedConstruction: [], openAlerts: [],
+    activeTasks: [], liveStreams: [], suspectedConstruction: [], openIssues: [], openAlerts: [],
     freshness: { latestCapturedAt: replay.window.to, isRealtime: false }
   };
 }

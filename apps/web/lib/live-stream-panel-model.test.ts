@@ -12,7 +12,7 @@ const snapshot = {
     { id: 20, deviceId: 1, capturedAt: "2026-08-27T00:05:00Z" },
     { id: 21, deviceId: 1, capturedAt: "2026-08-27T00:08:00Z" }
   ],
-  suspectedConstruction: [], openAlerts: [], regions: [],
+  suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
   freshness: { latestCapturedAt: null, isRealtime: true }, availability: {}
 } satisfies ProjectSituationSnapshot;
 

@@ -14,6 +14,7 @@ import { OperationDiagnostics } from "@/components/operation-diagnostics";
 function selectedRecord(snapshot: ProjectSituationSnapshot, lane: string, entityId: string) {
   const sources = lane.includes("device") || lane === "track" ? snapshot.devices
     : lane === "media" ? snapshot.mediaPoints
+    : lane === "issue" || lane === "issues" ? snapshot.openIssues
     : lane === "alert" || lane === "alerts" ? snapshot.openAlerts
     : lane === "tasks" || lane === "mission-route" ? snapshot.activeTasks
     : lane === "detections" || lane === "suspected-construction" ? snapshot.suspectedConstruction
