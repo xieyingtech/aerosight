@@ -17,10 +17,24 @@ type TaskVersionRow = {
   status: TaskVersionStatus;
   definition: Record<string, unknown>;
   script: string;
+  inputSchema: Record<string, unknown>;
+  trigger: Record<string, unknown>;
+  concurrencyLimit: number;
 };
 
 const projection = `id, project_id as "projectId", task_id as "taskId", version, status,
-  definition_json as definition, script`;
+  definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
+  concurrency_limit as "concurrencyLimit"`;
+
+const emptyInputSchema = { type: "object", properties: {}, additionalProperties: false };
+
+function legacyTrigger(definition: Record<string, unknown>) {
+  if (definition.triggerType === "schedule") {
+    return { type: "schedule", cron: String(definition.schedule || "0 0 * * *"), timezone: "UTC", enabled: true };
+  }
+  if (definition.triggerType === "event") return { type: "webhook", source: "legacy-event" };
+  return { type: "manual" };
+}
 
 export async function createTaskDraft(projectId: number, taskId: number, requestId?: string | null) {
   const { user, access } = await requireCurrentProjectPermission(projectId, "mission:operate");
@@ -39,7 +53,8 @@ export async function createTaskDraft(projectId: number, taskId: number, request
       const task = await client.query<{ teamId: number; currentVersionId: string | null; script: string; definition: Record<string, unknown> }>(
         `select task.team_id as "teamId", task.current_published_version_id as "currentVersionId",
                 task.script, jsonb_build_object('name', task.name, 'description', task.description,
-                  'triggerType', task.trigger_type, 'targetSelector', task.target_selector_json) as definition
+                  'triggerType', task.trigger_type, 'targetSelector', task.target_selector_json,
+                  'schedule', task.schedule, 'eventRule', task.event_rule_json) as definition
            from tasks task where task.project_id = $1 and task.id = $2 for update`,
         [projectId, taskId]
       );
@@ -48,25 +63,32 @@ export async function createTaskDraft(projectId: number, taskId: number, request
         "select coalesce(max(version), 0)::int + 1 as version from task_versions where task_id = $1", [taskId]
       );
       const source = task.rows[0].currentVersionId
-        ? await client.query<{ definition: Record<string, unknown>; script: string }>(
-          `select definition_json as definition, script from task_versions where project_id = $1 and id = $2`,
+        ? await client.query<{ definition: Record<string, unknown>; script: string; inputSchema: Record<string, unknown>; trigger: Record<string, unknown>; concurrencyLimit: number }>(
+          `select definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
+                  concurrency_limit as "concurrencyLimit" from task_versions where project_id = $1 and id = $2`,
           [projectId, task.rows[0].currentVersionId]
         ) : null;
       const inserted = await client.query<TaskVersionRow>(
         `insert into task_versions (
-           project_id, team_id, task_id, version, status, definition_json, script, created_by_user_id
-         ) values ($1, $2, $3, $4, 'draft', $5, $6, $7) returning ${projection}`,
+           project_id, team_id, task_id, version, status, definition_json, script, input_schema_json,
+           trigger_json, concurrency_limit, created_by_user_id
+         ) values ($1, $2, $3, $4, 'draft', $5, $6, $7, $8, $9, $10) returning ${projection}`,
         [projectId, task.rows[0].teamId, taskId, next.rows[0].version,
           source?.rows[0]?.definition ?? task.rows[0].definition,
-          source?.rows[0]?.script ?? task.rows[0].script, user.id]
+          source?.rows[0]?.script ?? task.rows[0].script,
+          source?.rows[0]?.inputSchema ?? emptyInputSchema,
+          source?.rows[0]?.trigger ?? legacyTrigger(task.rows[0].definition),
+          source?.rows[0]?.concurrencyLimit ?? 1, user.id]
       );
       if (task.rows[0].currentVersionId) {
         await client.query(
           `insert into task_steps (
              project_id, team_id, task_version_id, position, step_key, name, capability_code,
-             action, parameters_json, failure_policy_json, media_requirements_json
+             action, parameters_json, failure_policy_json, media_requirements_json, uses,
+             input_schema_json, output_schema_json, condition_json, depends_on_json, timeout_seconds, retry_policy_json
            ) select project_id, team_id, $3, position, step_key, name, capability_code,
-                    action, parameters_json, failure_policy_json, media_requirements_json
+                    action, parameters_json, failure_policy_json, media_requirements_json, uses,
+                    input_schema_json, output_schema_json, condition_json, depends_on_json, timeout_seconds, retry_policy_json
                from task_steps where project_id = $1 and task_version_id = $2`,
           [projectId, task.rows[0].currentVersionId, inserted.rows[0].id]
         );
