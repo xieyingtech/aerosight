@@ -5,7 +5,7 @@
 ## 1. 账号、应用与版本基线
 
 - [ ] 注册 DJI 开发者账号，在开发者中心创建类型为 **Cloud API** 的应用，取得 `app_id`、`app_key`、`app_license`。官方说明要求先完成 License 校验，之后才能使用 Cloud API/JSBridge：[DJI Cloud API 部署步骤](https://developer.dji.com/doc/cloud-api-tutorial/en/quick-start/source-code-deployment-steps.html)。
-- [ ] 将上述三项和 MQTT 用户名/密码写入秘密管理系统；AeroSight 只保存 `env://`、`vault://` 等 secret reference，不把值写入 Adapter config、浏览器或日志。
+- [ ] 在连接器向导填写上述三项、MQTT 账号和媒体推流账号。AeroSight 使用 `AUTH_SECRET` 派生的 AES key 加密存库；读取 API、浏览器回显、审计和日志都不得包含原文。
 - [ ] 在当天重新核对 [DJI Cloud API release notes](https://developer.dji.com/doc/cloud-api-tutorial/en/) 与 [产品支持矩阵](https://developer.dji.com/doc/cloud-api-tutorial/en/overview/product-support.html)，记录实际固件版本与 Cloud API 版本。
 - [ ] 当前功能基线参考 Cloud API v1.16.1（2025-12-17）：Dock 2 与 Matrice 3D/3TD 为 `14.03.07.01`，Dock 3 与 Matrice 4D/4TD 为 `14.03.00.03`。这只是该版本新增功能的最低版本，不应当作永久固定值。
 - [ ] 确认机场与配套飞行器型号匹配，飞机已与机场对频，序列号与拟认领的 `gateway_sn`/子设备 SN 完全一致。
@@ -21,9 +21,9 @@
   - `gateway_sn`
   - `mqtt_broker.address`
   - `mqtt_broker.client_id`
-  - `mqtt_broker.username` / `mqtt_broker.password`（摘要中只能显示 `[SECRET_REF]`）
+  - `mqtt_broker.username` / `mqtt_broker.password`（摘要中只能显示 `[ENCRYPTED]`）
   - `mqtt_broker.enable_tls`
-  - `config.app_id` / `config.app_key` / `config.app_license`（只能显示 `[SECRET_REF]`）
+  - `config.app_id` / `config.app_key` / `config.app_license`（只能显示 `[ENCRYPTED]`）
   - `config.ntp_server_host` / `config.ntp_server_port`
 
   DJI Dock 2 的 config 回复字段见 [Dock configuration update](https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dock-to-cloud/mqtt/dock/config.html)，Dock 3 还显式支持 `ntp_server_port`，见 [Dock 3 configuration update](https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dock-to-cloud/mqtt/dock/dock3/config.html)。

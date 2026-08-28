@@ -30,4 +30,4 @@ pnpm drill:upgrade-rollback
 - 仅回滚 Web/Worker 构建，不回滚数据库迁移。
 - 不删除未知表、列、事件、对象或证据。
 - 回滚目标必须包含“只 claim 已注册 outbox 类型”的兼容性契约；更老且不满足该契约的构建不得作为回滚目标。
-- 发生回滚时先关闭设备命令、外部算法和自动 AI，核对未 ACK 命令与 outbox，再恢复写流量。
+- 发生回滚时先关闭设备命令和外部算法、暂停相关 Tasks，必要时停用默认 AI Provider；核对未 ACK 命令、Copilot Job 与 outbox，再恢复写流量。

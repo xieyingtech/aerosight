@@ -1,6 +1,6 @@
 # AeroSight MVP 部署与现场运行手册
 
-本手册覆盖单区域试点部署。试点默认关闭设备命令、对象存储和外部算法，自动 AI 模式默认为“仅人工处理”；每个项目必须由管理员逐项配置。部署不等于允许飞行，现场负责人仍须完成法规、空域、设备和人员确认。
+本手册覆盖单区域试点部署。试点默认关闭设备命令、对象存储和外部算法；每个项目必须由管理员逐项配置。AI 只由智能体聊天、案件 `@copilot`/指派或 Task `copilot.run` 显式调用。部署不等于允许飞行，现场负责人仍须完成法规、空域、设备和人员确认。
 
 ## 1. 组件与前置条件
 
@@ -19,18 +19,15 @@
 | 变量 | 用途 | 要求 |
 | --- | --- | --- |
 | `DATABASE_URL` | Web/Worker 共用数据库 | 使用专用最小权限账号；生产启用 TLS |
-| `AUTH_SECRET` | 登录与媒体短时令牌签名 | 从秘密管理器注入，至少 32 随机字节；Web/Worker 保持一致 |
+| `AUTH_SECRET` | 登录、短时令牌签名及数据库凭据加密主材料 | 至少 32 随机字节；Web、Worker 与轮换命令保持一致 |
 | `LOG_LEVEL` | 日志级别 | `info`/`warn`/`error`，排障时短时使用 `debug` |
 | `WORKER_NAME` | worker 实例名 | 每实例唯一，便于日志和指标定位 |
 | `OBJECT_STORAGE_LOCAL_ROOT` | 媒体与算法原始结果目录 | 持久卷绝对路径；留空会明确降级且媒体内容不可读 |
 | `ALGORITHM_ALLOWED_HOSTS` | 算法出站 allowlist | 逗号分隔主机名；不放 URL、IP、通配符或凭据 |
 | `CALLBACK_LISTEN_ADDRESS` | worker callback/健康监听 | 内网 `host:port`，默认 `127.0.0.1:8081` |
 | `CALLBACK_PUBLIC_BASE_URL` | 外部算法 callback 根地址 | 必须 HTTPS；经入口转发到 worker |
-| `AI_PROVIDER` | 模型 provider | 默认 `disabled`；当前可选 `openai` |
-| `AI_MODEL` | 模型 ID | `AI_PROVIDER=openai` 时必填 |
-| `OPENAI_API_KEY` | 模型密钥 | 仅由秘密管理器注入，禁止写入数据库、日志或项目配置 |
 
-算法服务自身的认证信息只保存 `secret://...` 引用。部署平台把引用解析成调用时凭据，普通 API、审计摘要和智能体上下文都不能得到秘密原文。轮换时先写入新版本、更新引用并执行 provider 测试，通过后再吊销旧版本。
+DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AES-256-GCM envelope 加密后存入数据库。密钥通过 HKDF-SHA-256 从 `AUTH_SECRET` 派生；普通读取、审计摘要、日志和智能体上下文都不能得到原文或“是否已配置”标记。编辑表单的敏感 input 始终为空，留空保留旧值，填写非空值才覆盖。
 
 ## 3. 全新部署
 
@@ -51,11 +48,11 @@
 
 ### 算法 provider
 
-先配置 `ALGORITHM_ALLOWED_HOSTS`，再由项目管理员创建 provider：类型、HTTPS base URL、`secretRef`、认证方式、允许 header、timeout、并发与速率限制。运行连接测试，确认 DNS/重定向仍满足 allowlist 且 callback 签名有效，最后开启 `external_algorithms_enabled`。任何 SSRF 拒绝、mapping 漂移或 callback 重放告警都阻断启用。
+先配置 `ALGORITHM_ALLOWED_HOSTS`，再由项目管理员创建 provider：类型、HTTPS base URL、认证凭据、认证方式、允许 header、timeout、并发与速率限制。运行连接测试，确认 DNS/重定向仍满足 allowlist 且 callback 签名有效，最后开启 `external_algorithms_enabled`。任何 SSRF 拒绝、mapping 漂移或 callback 重放告警都阻断启用。
 
 ### AI provider
 
-先保持 `AI_PROVIDER=disabled` 完成非 AI 纵向验收。需要 AI 时，从秘密管理器注入 key，设置 provider/model，重启 Web 并验证模拟或低风险只读工具。随后才把项目自动 AI 模式从“仅人工处理”切换为所需模式。切回“仅人工处理”或“按需生成 AI 草案”会停止排队中及运行中的自动草案，但已有告警仍可人工处置。智能体永远不能绕过预检、审批和命令账本直连设备。
+先在非 AI 路径完成纵向验收。需要 AI 时，由平台管理员进入“系统管理 → AI Provider”，填写 Provider、可选基础地址、模型与 API Key，测试连接后启用并设为唯一默认项。无需设置 AI 环境变量或重启 Web。没有可用默认 Provider 时，智能体、案件 Copilot 与 Task `copilot.run` 明确不可用，其他功能继续运行。智能体永远不能绕过预检、审批和命令账本直连设备。
 
 ## 5. 功能开关与试点启用顺序
 
@@ -63,9 +60,8 @@
 
 1. `operations_overview_enabled`：只读总览和回放。
 2. `object_storage_enabled`：完成持久卷验证后开启。
-3. `external_algorithms_enabled`：完成 allowlist、秘密引用和 callback 验证后开启。
+3. `external_algorithms_enabled`：完成 allowlist、加密凭据和 callback 验证后开启。
 4. `device_commands_enabled`：完成法规、围栏、预检、审批、现场急停演练后最后开启。
-5. 自动 AI 模式：默认“仅人工处理”；只在需要后台自动草案时选择“自动生成 AI 草案”或“生成后续处置草案”，异常时切回“仅人工处理”。
 
 启用前保存审批人、配置版本、验收结果和时间。不要通过直接 SQL 长期开关；紧急情况下如必须操作数据库，应由双人复核并补录审计。
 
@@ -75,7 +71,7 @@
 - 数据库迁移只前进，不回滚 schema；新代码必须兼容升级窗口中的旧数据。先迁移，再滚动升级 Worker，最后升级 Web。
 - 应用回滚只切回上一个已验证构建，不回退数据库、不删除新表/列、不删除新证据。旧 Worker 必须忽略未知 outbox event，并保留事件等待新版 Worker 处理。
 - 回滚触发条件包括 readiness 连续失败、重复物理命令、审计断链、租户隔离失败、证据不可读或延迟持续越过验收线。
-- 回滚后关闭 `device_commands_enabled` 和 `external_algorithms_enabled`，并将自动 AI 切换为“仅人工处理”，保留只读总览；核对命令账本、未 ACK 命令、callback 和 outbox，再决定恢复。
+- 回滚后关闭 `device_commands_enabled` 和 `external_algorithms_enabled`，必要时停用默认 AI Provider，保留只读总览；核对命令账本、未 ACK 命令、callback、Task/Copilot Job 和 outbox，再决定恢复。
 
 现有数据升级与应用回滚的具体演练证据由 `pnpm drill:upgrade-rollback` 生成，并记录在独立演练报告中。
 
@@ -90,7 +86,7 @@
 1. 立即使用独立高优先级紧急停止；系统应撤销未执行普通命令并记录请求、策略、尝试与 ACK。
 2. 若设备 ACK，现场确认停机/返航状态，冻结相关任务和证据。
 3. 若重试耗尽仍失联，将设备与任务视为“安全状态未知”，持续告警；现场按预案建立隔离区、联系操控责任人并采用厂商物理接管，不得在 UI 中推定已停止。
-4. 关闭项目设备命令并将自动 AI 切换为“仅人工处理”，保留对象、遥测、审计和告警；创建异常报告并施加 retention hold。
+4. 关闭项目设备命令，暂停相关 Tasks；需要时停用默认 AI Provider，保留对象、遥测、审计和案件；创建异常报告并施加 retention hold。
 5. 在解除现场风险、完成根因和双人批准前不得重新启用飞行。
 
 ### 数据或依赖故障
@@ -102,16 +98,9 @@
 - 备份可恢复，迁移 ledger 与应用版本已记录。
 - `pnpm drill:fresh-environment`、性能基准、安全验收、完整测试、构建和 strict OpenSpec 校验通过。
 - Web/Worker readiness 与指标正常，日志无秘密或高基数原文。
-- 功能开关按顺序启用，自动 AI 模式回退与设备急停演练通过。
+- 功能开关按顺序启用，Tasks/Copilot 降级与设备急停演练通过。
 - 现场操控责任人、批准引用、失联处置和回滚负责人已确认。
 
 ## 9. 全新环境演练记录
 
-2026-08-27 执行 `pnpm drill:fresh-environment`，结果通过：
-
-- 环境变量样例包含 10 个部署键，AI 默认关闭，未发现 API key 原文。
-- runtime config、对象存储、算法 provider、AI provider 和依赖降级共 19 项契约测试通过。
-- PostGIS 空库、当前快照、旧版快照和重复执行迁移验证通过，共应用 31 个迁移。
-- Next.js 生产构建与 Go Worker 构建通过。
-
-演练总耗时约 16 秒；详细耗时和构建路由由脚本在每次执行时输出为 JSON 与标准构建日志。
+历史演练记录不代表当前凭据与 Tasks/Copilot 变更已经验收。每个候选版本都必须重新执行 `pnpm drill:fresh-environment`、`pnpm test:migrations`、`pnpm check` 和生产构建，并保存实际输出；不得沿用旧迁移数量或旧 AI 环境变量检查结果。

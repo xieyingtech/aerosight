@@ -60,7 +60,7 @@ docker compose up -d mqtt media
 - MQTT/RTMPS 入口启用速率限制和连接数限制；能取得稳定出口网段时增加来源 allowlist。
 - API/WebSocket 只暴露需要的 callback 与协商路径，管理后台和 MediaMTX API 走独立内网。
 - HLS/WebRTC 播放需要短期授权；禁止公开目录枚举和永久播放 URL。
-- 证书续期后重新执行 Adapter 自检；秘密轮换时先创建新引用，再切换 Adapter，最后撤销旧凭据。
+- 证书续期后重新执行 Adapter 自检；单个连接器凭据通过空白敏感表单更新，平台 `AUTH_SECRET` 按统一原子轮换手册执行。
 
 ## MQTT Topic ACL
 
@@ -70,6 +70,6 @@ ACL 变更后分别用设备身份和 Worker 身份验证允许 Topic，再验�
 
 ## 媒体权限
 
-发布、播放和管理使用三种独立身份：发布者只能向随机、短期摄取 path 推流；播放者只能读取已授权 path；管理员只访问内网控制 API。模板中的 `MEDIA_PUBLISH_USER`、`MEDIA_READ_USER` 和 `MEDIA_ADMIN_USER` 已体现这个分离。公网部署还必须在播放入口校验 AeroSight 生成的短期凭据，并在直播停止或租约过期时撤销 path。
+发布、播放和管理使用三种独立身份：连接器中的发布凭据只能向随机、短期摄取 path 推流；播放者使用 AeroSight 签发的短时令牌；`MEDIA_ADMIN_USER`/`MEDIA_ADMIN_PASSWORD` 只访问内网控制 API。公网部署必须在播放入口校验短期凭据，并在直播停止或租约过期时撤销 path。
 
 验收时依次确认：错误发布密码失败、错误播放密码失败、发布者不能读取、播放者不能发布、随机 path 以外的推流失败、停止后 HLS/WebRTC 不再可读。任何一项未通过，Adapter 和直播能力都不得标记为可用。

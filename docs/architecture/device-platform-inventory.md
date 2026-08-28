@@ -7,7 +7,7 @@
 | 领域 | 既有事实来源 | 本次处理 |
 | --- | --- | --- |
 | 设备实例 | `devices` | 保留实例 ID、项目归属、状态和历史引用，新增 `device_type_id` |
-| 项目连接实例 | `device_adapters` | 继续保存项目网络配置、秘密引用、健康状态和 Worker 租约所需信息 |
+| 项目连接实例 | `device_adapters` | 继续保存项目网络配置、AES 凭据 envelope、健康状态和 Worker 租约所需信息 |
 | 外部身份 | `device_external_identities` | 继续作为 Adapter 外部 ID 到 Device 的唯一绑定，不新增身份表 |
 | 连接与遥测 | `device_connections`、`device_telemetry`、`device_latest_telemetry` | 继续作为连接历史、高频事实和最新投影，不建立 DJI 遥测专表 |
 | 有效能力 | `device_capabilities` | 扩展为 Driver、DeviceType 和运行状态计算后的有效能力投影，不新增平行能力表 |
