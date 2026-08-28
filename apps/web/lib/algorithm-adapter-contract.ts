@@ -24,7 +24,7 @@ export const algorithmAdapterInputSchema = z.object({
   runId: z.uuid(),
   projectId: z.number().int().positive(),
   definition: z.object({
-    definitionVersionId: z.number().int().positive(),
+    configurationSnapshotId: z.number().int().positive(),
     providerType: z.enum(["http-json", "kserve-v2", "ogc-processes", "ai-sdk"]),
     modelOrProcess: z.string().min(1),
     executionMode: z.enum(["synchronous", "asynchronous", "callback"]),
@@ -64,8 +64,9 @@ export const canonicalAlgorithmResultSchema = z.object({
     providerType: z.enum(["http-json", "kserve-v2", "ogc-processes", "ai-sdk"]),
     providerId: z.number().int().positive(),
     modelOrProcess: z.string().min(1),
-    modelVersion: z.string().min(1),
-    definitionVersionId: z.number().int().positive(),
+    modelRevision: z.string().min(1).nullable(),
+    modelDigest: z.string().min(1).nullable(),
+    configurationSnapshotId: z.number().int().positive(),
     mappingVersion: z.string().min(1)
   }),
   inputAsset: assetReferenceSchema.omit({ accessUrl: true, accessExpiresAt: true }),

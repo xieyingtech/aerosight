@@ -14,7 +14,7 @@ export const algorithmDefinitionInputSchema = z.object({
   description: z.string().trim().max(2000).nullable().optional()
 }).strict();
 
-export const algorithmDefinitionVersionInputSchema = z.object({
+export const algorithmDefinitionConfigurationInputSchema = z.object({
   executionMode: z.enum(["synchronous", "asynchronous", "callback"]),
   modelOrProcess: z.string().trim().min(1).max(240),
   inputSchema: jsonSchema,
@@ -28,4 +28,4 @@ export const algorithmDefinitionVersionInputSchema = z.object({
 }).strict();
 
 export type AlgorithmDefinitionInput = z.infer<typeof algorithmDefinitionInputSchema>;
-export type AlgorithmDefinitionVersionInput = z.infer<typeof algorithmDefinitionVersionInputSchema>;
+export type AlgorithmDefinitionConfigurationInput = z.infer<typeof algorithmDefinitionConfigurationInputSchema>;

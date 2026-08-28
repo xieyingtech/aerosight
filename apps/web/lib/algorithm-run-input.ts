@@ -1,10 +1,18 @@
 import { z } from "zod";
 
 export const startAlgorithmRunInputSchema = z.object({
-  definitionVersionId: z.coerce.number().int().positive(),
+  configurationSnapshotId: z.coerce.number().int().positive().optional(),
+  definitionVersionId: z.coerce.number().int().positive().optional(),
   assetId: z.coerce.number().int().positive(),
   parameters: z.record(z.string(), z.unknown()).default({})
-}).strict();
+}).strict().refine(
+  (input) => input.configurationSnapshotId !== undefined || input.definitionVersionId !== undefined,
+  { message: "algorithm configuration snapshot is required" }
+).transform((input) => ({
+  configurationSnapshotId: input.configurationSnapshotId ?? input.definitionVersionId!,
+  assetId: input.assetId,
+  parameters: input.parameters
+}));
 
 export function coerceSchemaParameters(schema: Record<string, unknown>, values: Record<string, FormDataEntryValue>) {
   const properties = schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)

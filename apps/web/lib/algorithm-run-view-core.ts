@@ -16,6 +16,7 @@ export function buildAlgorithmRunDiagnostics(row: AlgorithmRunViewRow, permissio
   const snapshot = row.inputSnapshot;
   const asset = objectValue(snapshot.inputAsset);
   const definition = objectValue(snapshot.definition);
+  const source = objectValue(row.canonicalResult.source);
   const diagnostics = Array.isArray(row.canonicalResult.mappingDiagnostics)
     ? row.canonicalResult.mappingDiagnostics.filter((value): value is string => typeof value === "string")
     : [];
@@ -27,9 +28,11 @@ export function buildAlgorithmRunDiagnostics(row: AlgorithmRunViewRow, permissio
       checksumSha256: stringValue(asset.checksumSha256), mimeType: stringValue(asset.mimeType),
       parameters: objectValue(snapshot.parameters), context: objectValue(snapshot.context)
     },
-    version: {
-      definitionVersionId: numberValue(definition.definitionVersionId),
+    provenance: {
+      configurationSnapshotId: numberValue(definition.configurationSnapshotId ?? definition.definitionVersionId),
       modelOrProcess: stringValue(definition.modelOrProcess),
+      modelRevision: stringValue(source.modelRevision),
+      modelDigest: stringValue(source.modelDigest),
       mappingVersion: stringValue(definition.mappingVersion), providerType: stringValue(definition.providerType)
     },
     durationMs,

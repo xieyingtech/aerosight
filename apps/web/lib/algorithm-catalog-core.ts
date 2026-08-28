@@ -1,7 +1,6 @@
 export type AlgorithmCatalogRow = {
   definitionId: string;
-  versionId: string;
-  version: number;
+  configurationSnapshotId: string;
   name: string;
   description: string | null;
   capabilityCode: string;
@@ -18,8 +17,7 @@ export type AlgorithmCatalogRow = {
 export function buildAlgorithmCatalogEntry(row: AlgorithmCatalogRow) {
   return {
     id: row.definitionId,
-    versionId: row.versionId,
-    version: row.version,
+    configurationSnapshotId: row.configurationSnapshotId,
     name: row.name,
     description: row.description,
     capabilityCode: row.capabilityCode,

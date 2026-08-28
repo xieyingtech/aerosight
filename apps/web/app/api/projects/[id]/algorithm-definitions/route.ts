@@ -16,8 +16,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    const body = await request.json() as { definition?: unknown; version?: unknown };
-    return NextResponse.json(await createAlgorithmDefinition(Number(id), body.definition, body.version), { status: 201 });
+    const body = await request.json() as { definition?: unknown; configuration?: unknown; version?: unknown };
+    return NextResponse.json(
+      await createAlgorithmDefinition(
+        Number(id),
+        body.definition,
+        body.configuration ?? body.version,
+        request.headers.get("x-request-id") ?? undefined
+      ),
+      { status: 201 }
+    );
   } catch (error) {
     const code = error instanceof Error ? error.message : "ALGORITHM_DEFINITION_FAILED";
     return NextResponse.json({ error: code }, { status: code === "PROJECT_ACCESS_DENIED" ? 403 : 400 });

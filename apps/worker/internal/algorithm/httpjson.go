@@ -33,11 +33,12 @@ type AssetReference struct {
 }
 
 type DefinitionReference struct {
-	DefinitionVersionID int64  `json:"definitionVersionId"`
-	ProviderType        string `json:"providerType"`
-	ModelOrProcess      string `json:"modelOrProcess"`
-	ExecutionMode       string `json:"executionMode"`
-	MappingVersion      string `json:"mappingVersion"`
+	ConfigurationSnapshotID int64  `json:"configurationSnapshotId,omitempty"`
+	DefinitionVersionID     int64  `json:"definitionVersionId,omitempty"`
+	ProviderType            string `json:"providerType"`
+	ModelOrProcess          string `json:"modelOrProcess"`
+	ExecutionMode           string `json:"executionMode"`
+	MappingVersion          string `json:"mappingVersion"`
 }
 
 type Input struct {
@@ -85,6 +86,8 @@ type Outcome struct {
 	Result             CanonicalResult `json:"result,omitempty"`
 	Raw                []byte          `json:"-"`
 	MappingDiagnostics []string        `json:"mappingDiagnostics,omitempty"`
+	ModelRevision      string          `json:"modelRevision,omitempty"`
+	ModelDigest        string          `json:"modelDigest,omitempty"`
 }
 
 type Attempt struct {
@@ -327,6 +330,9 @@ func validateRequest(request Request) error {
 	if request.Input.SchemaVersion != InputSchemaVersionV1 || request.Input.Definition.ProviderType != "http-json" {
 		return errors.New("http-json adapter received an unsupported input contract")
 	}
+	if request.Input.Definition.ConfigurationSnapshotID <= 0 && request.Input.Definition.DefinitionVersionID <= 0 {
+		return errors.New("algorithm request requires a configuration snapshot")
+	}
 	if !strings.HasPrefix(request.Input.InputAsset.AccessURL, "https://") {
 		return errors.New("algorithm input requires a presigned HTTPS asset URL")
 	}
@@ -356,12 +362,13 @@ func acceptedOutcome(raw []byte, headers http.Header, now time.Time) (Outcome, e
 }
 
 func mapCompleted(raw []byte, mapping Mapping) (Outcome, error) {
+	modelRevision, modelDigest := providerModelProvenance(raw)
 	if mapping.Kind != "" {
 		result, err := MapCanonicalResult(raw, CanonicalMapping{Kind: mapping.Kind, ResultPath: mapping.ResultPath})
 		if err != nil {
 			return Outcome{Raw: raw, MappingDiagnostics: []string{err.Error()}}, err
 		}
-		return Outcome{Kind: "completed", Result: result, Detections: result.Detections, Raw: raw}, nil
+		return Outcome{Kind: "completed", Result: result, Detections: result.Detections, Raw: raw, ModelRevision: modelRevision, ModelDigest: modelDigest}, nil
 	}
 	var payload any
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -392,7 +399,22 @@ func mapCompleted(raw []byte, mapping Mapping) (Outcome, error) {
 	if len(diagnostics) > 0 {
 		return Outcome{Raw: raw, MappingDiagnostics: diagnostics}, fmt.Errorf("%w: %s", ErrFormatDrift, strings.Join(diagnostics, "; "))
 	}
-	return Outcome{Kind: "completed", Detections: detections, Raw: raw}, nil
+	return Outcome{Kind: "completed", Detections: detections, Raw: raw, ModelRevision: modelRevision, ModelDigest: modelDigest}, nil
+}
+
+func providerModelProvenance(raw []byte) (string, string) {
+	var payload struct {
+		ModelRevision string `json:"modelRevision"`
+		ModelVersion  string `json:"modelVersion"`
+		ModelDigest   string `json:"modelDigest"`
+	}
+	if json.Unmarshal(raw, &payload) != nil {
+		return "", ""
+	}
+	if payload.ModelRevision == "" {
+		payload.ModelRevision = payload.ModelVersion
+	}
+	return strings.TrimSpace(payload.ModelRevision), strings.TrimSpace(payload.ModelDigest)
 }
 
 func pathValue(value any, path string) (any, bool) {

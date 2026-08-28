@@ -38,7 +38,7 @@ func validRequest(endpoint string) Request {
 			SchemaVersion: InputSchemaVersionV1,
 			RunID:         "0f98d89b-d901-44f7-a1d4-4f28fd365d63",
 			ProjectID:     3,
-			Definition:    DefinitionReference{DefinitionVersionID: 9, ProviderType: "http-json", ModelOrProcess: "detector", ExecutionMode: "synchronous", MappingVersion: "v1"},
+			Definition:    DefinitionReference{ConfigurationSnapshotID: 9, ProviderType: "http-json", ModelOrProcess: "detector", ExecutionMode: "synchronous", MappingVersion: "v1"},
 			InputAsset:    AssetReference{AssetID: 7, Version: 2, ChecksumSHA256: strings.Repeat("a", 64), MIMEType: "image/jpeg", AccessURL: "https://assets.example.test/signed/image.jpg?signature=secret", AccessExpiresAt: time.Now().Add(time.Hour)},
 			Context:       map[string]any{"capturedAt": time.Now().UTC().Format(time.RFC3339)}, Parameters: map[string]any{"threshold": 0.7},
 		},
@@ -54,7 +54,7 @@ func TestHTTPJSONAdapterSendsPresignedURLAndMapsSynchronousResponse(t *testing.T
 			t.Fatal(err)
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"results":[{"id":"d-1","class":"suspected-construction","score":0.91,"bbox":{"type":"bbox","x":1,"y":2,"width":3,"height":4}}]}`))
+		_, _ = writer.Write([]byte(`{"modelRevision":"detector-2026.08","modelDigest":"sha256:abc","results":[{"id":"d-1","class":"suspected-construction","score":0.91,"bbox":{"type":"bbox","x":1,"y":2,"width":3,"height":4}}]}`))
 	}))
 	defer server.Close()
 	recorder := &memoryRecorder{}
@@ -66,6 +66,9 @@ func TestHTTPJSONAdapterSendsPresignedURLAndMapsSynchronousResponse(t *testing.T
 	if outcome.Kind != "completed" || len(outcome.Detections) != 1 || outcome.Detections[0].Label != "suspected-construction" {
 		t.Fatalf("unexpected outcome: %+v", outcome)
 	}
+	if outcome.ModelRevision != "detector-2026.08" || outcome.ModelDigest != "sha256:abc" {
+		t.Fatalf("provider model provenance was not retained: %+v", outcome)
+	}
 	inputAsset := received["inputAsset"].(map[string]any)
 	if !strings.Contains(inputAsset["accessUrl"].(string), "signature=secret") {
 		t.Fatal("provider did not receive presigned asset URL")
@@ -76,6 +79,16 @@ func TestHTTPJSONAdapterSendsPresignedURLAndMapsSynchronousResponse(t *testing.T
 	}
 	if len(recorder.attempts) != 1 || recorder.attempts[0].Status != "succeeded" || recorder.attempts[0].RequestHash == "" {
 		t.Fatalf("attempt was not audited: %+v", recorder.attempts)
+	}
+}
+
+func TestHTTPJSONAdapterDoesNotTreatAPIVersionAsModelRevision(t *testing.T) {
+	outcome, err := mapCompleted([]byte(`{"results":[]}`), Mapping{DetectionsPath: "results"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.ModelRevision != "" || outcome.ModelDigest != "" {
+		t.Fatalf("API contract invented model provenance: %+v", outcome)
 	}
 }
 

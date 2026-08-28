@@ -29,7 +29,8 @@ const server = createServer((request, response) => {
             geometry: { type: "bbox", x: 32, y: 24, width: 320, height: 48 }
           }]
         },
-        model: "demo-ocr-v1",
+        modelRevision: "demo-ocr-2026.08",
+        modelDigest: "sha256:4d56999fb67dd1b2dc4f2135283b0487b650350be65b37a2e81ad0bc6ce9b451",
         inputRunId: input.runId
       }));
     } catch {

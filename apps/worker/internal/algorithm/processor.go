@@ -216,6 +216,7 @@ func (processor *Processor) finishSucceeded(
 	}
 	canonical, err := json.Marshal(map[string]any{
 		"kind": result.Kind, "result": result,
+		"source":             map[string]any{"modelRevision": nullableProviderValue(outcome.ModelRevision), "modelDigest": nullableProviderValue(outcome.ModelDigest)},
 		"mappingDiagnostics": outcome.MappingDiagnostics,
 		"rawResult":          map[string]any{"objectKey": object.Key, "checksumSha256": object.ChecksumSHA256, "contentType": "application/json"},
 	})
@@ -236,10 +237,23 @@ func (processor *Processor) finishSucceeded(
 	return nil
 }
 
+func nullableProviderValue(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
+}
+
 func (processor *Processor) finishFailed(
 	ctx context.Context, tx *sql.Tx, projectID int, runID, status, code, message string, outcome Outcome,
 ) error {
-	canonical, err := json.Marshal(map[string]any{"mappingDiagnostics": outcome.MappingDiagnostics})
+	canonical, err := json.Marshal(map[string]any{
+		"mappingDiagnostics": outcome.MappingDiagnostics,
+		"source": map[string]any{
+			"modelRevision": nullableProviderValue(outcome.ModelRevision),
+			"modelDigest":   nullableProviderValue(outcome.ModelDigest),
+		},
+	})
 	if err != nil {
 		return err
 	}

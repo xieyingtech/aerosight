@@ -11,7 +11,7 @@ const input = {
   schemaVersion: "aerosight.algorithm.input/v1" as const,
   runId: "20000000-0000-4000-8000-000000000001",
   projectId: 17,
-  definition: { definitionVersionId: 3, providerType: "http-json" as const, modelOrProcess: "construction-v2", executionMode: "synchronous" as const, mappingVersion: "mapping-v4" },
+  definition: { configurationSnapshotId: 3, providerType: "http-json" as const, modelOrProcess: "construction-v2", executionMode: "synchronous" as const, mappingVersion: "mapping-v4" },
   inputAsset: { assetId: 42, version: 2, checksumSha256: checksum, mimeType: "image/jpeg", accessUrl: "https://objects.example.test/signed", accessExpiresAt: "2026-08-28T10:05:00Z" },
   context: { capturedAt: "2026-08-28T10:00:00Z", deviceId: 8, taskRunId: 19, position: { longitude: 121.47, latitude: 31.23, altitudeMeters: 80 }, coordinateReference: "EPSG:4326", calibrationVersion: "camera-v3", quality: { horizontalAccuracyMeters: 1.2 } },
   parameters: { threshold: 0.7 }, callback: null
@@ -20,7 +20,7 @@ const input = {
 const result = {
   schemaVersion: "aerosight.algorithm.result/v1" as const,
   runId: input.runId,
-  source: { providerType: "http-json" as const, providerId: 6, modelOrProcess: "construction-v2", modelVersion: "2.3.1", definitionVersionId: 3, mappingVersion: "mapping-v4" },
+  source: { providerType: "http-json" as const, providerId: 6, modelOrProcess: "construction-v2", modelRevision: "2.3.1", modelDigest: "sha256:abc", configurationSnapshotId: 3, mappingVersion: "mapping-v4" },
   inputAsset: { assetId: 42, version: 2, checksumSha256: checksum, mimeType: "image/jpeg" },
   capturedAt: input.context.capturedAt,
   detections: [{ detectionKey: "building-1", label: "suspected-construction", confidence: 0.91,
@@ -40,12 +40,13 @@ test("callback credentials are required only for callback execution", () => {
   assert.equal(algorithmAdapterInputSchema.safeParse({ ...input, definition: { ...input.definition, executionMode: "callback" }, callback: { url: "https://aerosight.example.test/callback", token: "x".repeat(32) } }).success, true);
 });
 
-test("canonical result requires model, mapping, asset and raw-result lineage", () => {
+test("canonical result keeps provider model provenance without owning its version", () => {
   assert.equal(canonicalAlgorithmResultSchema.parse(result).detections[0].label, "suspected-construction");
   const missingSource = structuredClone(result) as Record<string, unknown>;
   delete missingSource.source;
   assert.equal(canonicalAlgorithmResultSchema.safeParse(missingSource).success, false);
   assert.equal(canonicalAlgorithmResultSchema.safeParse({ ...result, rawResult: { objectKey: "raw", checksumSha256: "bad", contentType: "application/json" } }).success, false);
+  assert.equal(canonicalAlgorithmResultSchema.parse({ ...result, source: { ...result.source, modelRevision: null, modelDigest: null } }).source.modelRevision, null);
 });
 
 test("contracts export JSON Schema 2020-12 with required fields", () => {

@@ -10,7 +10,7 @@ import { publishProjectEvent } from "@/lib/project-events";
 import { startAlgorithmRunInputSchema } from "@/lib/algorithm-run-input";
 
 type AlgorithmRunRow = AlgorithmRunViewRow & {
-  definitionName: string; definitionVersion: number; providerName: string; providerType: string;
+  definitionName: string; providerName: string; providerType: string;
   inputAssetId: number; taskRunId: number | null; deviceId: number | null; externalJobId: string | null;
 };
 
@@ -20,14 +20,14 @@ export async function startAlgorithmRun(projectId: number, rawInput: unknown, re
   const runId = randomUUID();
   return withAuditedProjectWrite({
     projectId, teamId: access.teamId, actorUserId: user.id, requestId: correlationId(requestId),
-    action: "algorithm_run.create", resourceType: "algorithm_definition_version", resourceId: String(input.definitionVersionId),
-    input, policyResult: { permission: "algorithm:manage", catalogVersionRequired: true }
+    action: "algorithm_run.create", resourceType: "algorithm_configuration_snapshot", resourceId: String(input.configurationSnapshotId),
+    input, policyResult: { permission: "algorithm:manage", configurationSnapshotRequired: true }
   }, async (client) => {
     const source = (await client.query<{
-      teamId: number; definitionVersionId: string; providerType: string; modelOrProcess: string;
+      teamId: number; configurationSnapshotId: string; providerType: string; modelOrProcess: string;
       executionMode: string; mappingVersion: string; assetId: number; assetVersion: number;
       checksumSha256: string; mimeType: string;
-    }>(`select definition.team_id as "teamId", version.id as "definitionVersionId",
+    }>(`select definition.team_id as "teamId", version.id as "configurationSnapshotId",
               provider.provider_type as "providerType", version.model_or_process as "modelOrProcess",
               version.execution_mode as "executionMode",
               coalesce(version.protocol_config_json->>'mappingVersion','v1') as "mappingVersion",
@@ -42,13 +42,13 @@ export async function startAlgorithmRun(projectId: number, rawInput: unknown, re
            on provider.id=definition.provider_id and provider.project_id=definition.project_id and provider.status='active'
          join assets asset on asset.project_id=version.project_id and asset.id=$3 and asset.status='available'
         where version.project_id=$1 and version.id=$2 and version.status='published'`,
-      [projectId, input.definitionVersionId, input.assetId])).rows[0];
+      [projectId, input.configurationSnapshotId, input.assetId])).rows[0];
     if (!source) throw new Error("ALGORITHM_RUN_SOURCE_NOT_AVAILABLE");
     if (!/^[a-f0-9]{64}$/.test(source.checksumSha256)) throw new Error("ALGORITHM_INPUT_ASSET_CHECKSUM_REQUIRED");
     const snapshot = {
       schemaVersion: "aerosight.algorithm.input/v1", runId, projectId,
       definition: {
-        definitionVersionId: Number(source.definitionVersionId), providerType: source.providerType,
+        configurationSnapshotId: Number(source.configurationSnapshotId), providerType: source.providerType,
         modelOrProcess: source.modelOrProcess, executionMode: source.executionMode, mappingVersion: source.mappingVersion
       },
       inputAsset: {
@@ -59,8 +59,8 @@ export async function startAlgorithmRun(projectId: number, rawInput: unknown, re
     };
     await client.query(`insert into algorithm_runs (
       id,project_id,team_id,algorithm_definition_version_id,input_asset_id,idempotency_key,parameters_json,input_snapshot_json
-    ) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [runId, projectId, source.teamId, source.definitionVersionId,
-      source.assetId, `catalog:${source.definitionVersionId}:asset:${source.assetId}:${runId}`, input.parameters, snapshot]);
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [runId, projectId, source.teamId, source.configurationSnapshotId,
+      source.assetId, `catalog:${source.configurationSnapshotId}:asset:${source.assetId}:${runId}`, input.parameters, snapshot]);
     await publishProjectEvent(client, { projectId, teamId: source.teamId, eventId: `algorithm-run-requested:${runId}`,
       eventType: "algorithm.run.requested", payload: { runId } });
     return { runId };
@@ -72,7 +72,7 @@ const runProjection = `run.id, run.status, run.input_asset_id as "inputAssetId",
   run.external_job_id as "externalJobId", run.raw_result_object_key as "rawResultObjectKey",
   run.raw_result_checksum_sha256 as "rawResultChecksumSha256", run.error_code as "errorCode",
   run.error_message as "errorMessage", run.created_at as "createdAt", run.started_at as "startedAt",
-  run.finished_at as "finishedAt", definition.name as "definitionName", version.version as "definitionVersion",
+  run.finished_at as "finishedAt", definition.name as "definitionName",
   provider.name as "providerName", provider.provider_type as "providerType"`;
 
 export async function listAlgorithmRuns(projectId: number) {

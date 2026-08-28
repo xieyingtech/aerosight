@@ -7,7 +7,7 @@ import { query } from "@/lib/db";
 export async function listAlgorithmCatalog(projectId: number) {
   await requireCurrentProjectPermission(projectId, "project:view");
   const result = await query<AlgorithmCatalogRow>(
-    `select definition.id as "definitionId", version.id as "versionId", version.version,
+    `select definition.id as "definitionId", version.id as "configurationSnapshotId",
             definition.name, definition.description, definition.capability_code as "capabilityCode",
             provider.provider_type as "providerType", provider.status as "providerStatus",
             version.execution_mode as "executionMode", version.model_or_process as "modelOrProcess",
