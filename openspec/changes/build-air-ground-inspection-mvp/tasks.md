@@ -3,7 +3,7 @@
 - [x] 1.1 建立可重复执行的增量数据库迁移目录和测试数据库初始化流程，保留 `db/schema.sql` 完整快照，并通过空库升级、现有快照升级与二次执行测试验证。
 - [x] 1.2 增加 PostGIS 扩展检测与启用迁移，在缺少扩展时输出明确错误，并通过创建和查询 `geometry(PointZ, 4326)` 验证。
 - [ ] 1.3 保留项目级设备下行、实时总览、对象存储和外部算法功能开关，移除自动 AI 开关/模式的运行时读取，并通过旧字段与历史 Automation Policy 数据仍可升级、旧页面仍可用的兼容测试验证。
-- [x] 1.4 为 Web 和 worker 增加统一配置校验、请求/事件关联标识、结构化日志与敏感字段清理，并通过缺失配置和日志脱敏单元测试验证。
+- [ ] 1.4 为 Web 和 worker 增加统一配置校验、请求/事件关联标识、结构化日志、敏感字段清理及凭据加密模块；使用 HKDF-SHA-256 从 `AUTH_SECRET` 派生 AES-256-GCM key，并通过跨语言固定向量、随机 nonce、AAD 替换失败、缺失配置和日志脱敏测试验证。
 - [x] 1.5 建立 Web 集成测试与 Go worker 测试夹具，包括用户、团队、两个隔离项目、模拟无人机和模拟地面移动设备，并通过夹具自检验证。
 
 ## 2. 租户权限、审计与异步基础
@@ -19,7 +19,7 @@
 
 - [x] 3.1 创建 `device_adapters`、`device_external_identities`、`device_connections`、`device_telemetry` 及复合项目外键，扩展设备类型和 capability，并通过跨项目绑定失败测试验证。
 - [x] 3.2 定义版本化 adapter 上行 envelope、下行 command envelope、`Pose` / `Track` 契约和兼容策略，并通过无人机与模拟 ROS 设备契约测试验证相同轨迹 API、不同能力声明。
-- [x] 3.3 实现管理员 adapter 配置、脱敏读取、连接测试与启停 API，通过角色授权和秘密不回显测试验证。
+- [ ] 3.3 将管理员 adapter 配置从 `secret_ref` 占位改为 AES 加密凭据存库，编辑时敏感 input 为空、留空保持、非空覆盖，并通过角色授权、读取不回显、Web/worker 解密和旧引用迁移测试验证。
 - [x] 3.4 实现设备发现、人工绑定、外部身份去重、能力更新和未实现 adapter 类型的显式拒绝，并通过冲突绑定与 `ros2` 未启用场景测试验证。
 - [x] 3.5 创建 `coordinate_references`、`sensor_calibrations`、`observations`、`poses` 和轨迹索引，并通过时间、几何、质量字段及项目复合约束测试验证。
 - [x] 3.6 实现遥测到观测/位姿的归一化摄取，保存采集/接收双时间、原始 CRS、WGS84、精度和来源链，并通过重复、乱序、时钟偏差和未知 CRS 测试验证。
@@ -65,7 +65,7 @@
 ## 7. 可配置算法服务框架
 
 - [x] 7.1 创建 `algorithm_providers`、`algorithm_definitions`、`algorithm_definition_versions`、`algorithm_runs` 和 `algorithm_run_attempts`，并通过项目复合外键、不可变版本和幂等 run 约束测试验证。
-- [x] 7.2 实现算法服务管理 API/UI，配置 `type`、`baseUrl`、`secretRef`、认证、允许 header、超时、并发和速率限制，通过 owner/admin/member 授权与 key 不回显测试验证。
+- [ ] 7.2 将算法服务管理 API/UI 改为配置 `type`、`baseUrl`、AES 加密凭据、认证、允许 header、超时、并发和速率限制；敏感 input 为空、留空保持、非空覆盖，并通过 owner/admin/member 授权、读取不回显和实际调用解密测试验证。
 - [x] 7.3 实现出站 URL 安全策略，校验 HTTPS、域名 allowlist、DNS 解析地址和每次重定向，拒绝 loopback、link-local、元数据地址与未授权私网，并通过 SSRF 套件验证。
 - [x] 7.4 定义算法 adapter 接口与 canonical result schema，覆盖输入资产/时空上下文、同步/轮询/callback、原始结果和版本化 mapping，并通过 JSON Schema 契约测试验证。
 - [x] 7.5 实现 MVP `http-json` adapter，使用预签名资产 URL、退避、熔断和 attempt 审计，并通过模拟同步、异步、超时、限流和格式漂移服务测试验证。
@@ -96,6 +96,8 @@
 - [x] 9.7 在排队 worker 真正执行 tool/调度前重新检查成员关系、项目 permission 和 context 有效期，并通过排队后撤权测试验证失败关闭。
 - [x] 9.8 实现智能体 UI、工具调用状态、证据引用和敏感结果最小留存，并通过临时 URL/秘密不进入消息历史及跨项目会话访问测试验证。
 - [ ] 9.9 将智能体页收敛为项目级 AI 聊天，并使 Copilot 的受保护调度只创建或启动 Tasks，通过不存在直连设备/算法 Adapter 工具及预检审批链测试验证。
+- [ ] 9.10 创建平台级 `ai_providers` 表和管理后台 API/UI，支持 Provider 类型、名称、基础地址、默认模型、AES 加密 API Key、启用/默认状态与连接测试；读取响应不返回凭据，编辑 input 始终为空，留空保持原值、非空覆盖，并通过平台管理员权限、读取不回显和更新语义测试验证。
+- [ ] 9.11 将 Agent Provider Registry 改为从数据库加载唯一的启用默认 Provider，移除 `AI_PROVIDER`、`AI_MODEL`、`OPENAI_API_KEY` 的运行时读取和示例配置，并通过切换默认 Provider、无可用 Provider、缓存失效及非 AI 功能不受影响测试验证。
 
 ## 10. 案件 Copilot 委派与报告
 
@@ -122,6 +124,6 @@
 - [ ] 12.2 更新 Copilot 纵向验收：智能体聊天或案件 `@copilot`/指派 → Task/报告草案 → 受保护启动请求 → 设备 ACK，并验证跨项目、撤权后排队、重复提及和提示注入全部失败关闭。
 - [x] 12.3 编写安全验收套件，覆盖 SSRF、秘密回显、callback 重放、跨项目枚举、重复命令、审批职责分离、回放控制、紧急停止失联和证据保全，并确保全部通过。
 - [ ] 12.4 更新基准负载脚本，验证目标负载下遥测到地图/时间线 P95 ≤ 2 秒、canonical detection 经任务条件到案件 P95 ≤ 5 秒且无重复步骤或案件，并保存参数和结果。
-- [ ] 12.5 更新部署、迁移、对象存储、秘密管理、算法 provider、AI provider、功能开关、Tasks/Copilot 回滚和现场安全处置文档，并通过全新环境演练验证。
+- [ ] 12.5 更新部署、迁移、对象存储、统一 AES 凭据存储、管理后台 AI Provider、`AUTH_SECRET` 轮换、功能开关、Tasks/Copilot 回滚和现场安全处置文档，明确轮换后需重新填写外部凭据，并通过全新环境演练验证。
 - [x] 12.6 对现有数据快照执行升级与应用回滚演练，验证旧页面/数据继续可用、新证据不被删除、旧 worker 安全忽略未知事件。
 - [ ] 12.7 运行 `pnpm check`、完整测试套件、`pnpm build` 和 `pnpm exec openspec validate build-air-ground-inspection-mvp --strict`，记录结果并修复全部阻断项后才允许试点开启。

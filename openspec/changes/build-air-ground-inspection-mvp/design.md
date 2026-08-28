@@ -49,7 +49,7 @@
 - DJI 适配器封装厂商 API、回调签名、设备拓扑、直播和任务命令映射，但只暴露统一 envelope。
 - `DeviceType` 和 capability 决定设备可执行的任务与 UI 符号；无人机和未来 ROS 机器人共享 `Pose` / `Track` 结构，但不会为了“统一”而抹平起降、导航、云台等能力差异。
 - MAVLink、ROS 2、MQTT、GB28181 等名称只作为未来 adapter 类型与能力声明预留。未实现的类型必须返回明确的“不支持”，不得表现为已接入。
-- 适配器凭据只保存秘密管理器引用；数据库不保存明文。
+- 适配器凭据由管理界面写入，经统一 Credential Encryption Service 加密后存入数据库；普通查询不返回明文或“已配置”标志。
 
 选择理由：模拟适配器让全链路测试不依赖真实硬件或厂商租户。备选方案是直接在业务服务中调用 DJI SDK；会将厂商语义扩散到任务和 UI，不采用。
 
@@ -72,6 +72,7 @@
 - 媒体：`live_streams`、扩展 `assets`、`asset_derivatives`、`evidence_links`、`retention_holds`。
 - 任务：扩展 `tasks`、`task_versions`、`task_steps`、`task_triggers`、`task_runs`、`task_run_steps`，并复用 `device_commands`、`command_attempts`、`approvals`。
 - 算法：`algorithm_providers`、`algorithm_definitions`、`algorithm_definition_versions`、`algorithm_runs`、`algorithm_run_attempts`、`detections`、`detection_groups`。
+- AI：平台级 `ai_providers`，保存 Provider 类型、名称、基础地址、默认模型、启用/默认状态及加密凭据 envelope；该表不归属于项目，只有平台管理员可以管理。
 - 案件与治理：扩展 `issues`、`issue_events`、`issue_links`、统一 `issue_assignees`、`project_permissions`、`safety_policy_versions`、`idempotency_records`、`audit_events`、`outbox_events`、`generated_reports`。既有 `event_rules`、`event_rule_versions`、`perception_events`、`event_feedback` 与 `alert_automation_*` 表停止产生新的主动编排记录，仅为升级兼容和历史审计保留。
 
 所有项目级表直接包含 `project_id`，即使可通过父表推导，以便数据库约束、索引和授权查询不依赖多跳关系。外键应验证父子资源同项目；若 PostgreSQL 普通外键无法直接表达，则使用包含 `(project_id, id)` 的唯一键和复合外键。
@@ -101,7 +102,7 @@
 
 ### 8. 算法服务采用“统一运行契约 + 多协议 adapter”
 
-平台不把某个厂商的推理 API 固化为业务接口。`algorithm_providers` 保存项目可用的服务连接，核心字段为 `type`、`base_url`、`secret_ref`、认证方式、允许的额外 header、超时、并发和速率限制；`algorithm_definitions` / version 保存能力名称、输入资产要求、协议参数和输出映射。API key 只能写入秘密管理器，普通 API 与 UI 仅返回掩码和 `secret_ref`。
+平台不把某个厂商的推理 API 固化为业务接口。`algorithm_providers` 保存项目可用的服务连接，核心字段为 `type`、`base_url`、加密凭据 envelope、认证方式、允许的额外 header、超时、并发和速率限制；`algorithm_definitions` / version 保存能力名称、输入资产要求、协议参数和输出映射。凭据由管理界面写入并加密存库，普通 API 与 UI 不返回凭据原文或存在状态。
 
 统一运行契约为：
 
@@ -139,7 +140,10 @@
 
 ### 11. AI SDK 智能体通过服务端 scope 和白名单工具访问领域服务
 
-- Web 使用 Vercel AI SDK `ai` 包与 provider packages，通过 `createProviderRegistry` 或等价注册表按部署配置选择大模型，不将单一模型 SDK 扩散到领域服务。
+- Web 使用 Vercel AI SDK `ai` 包与 provider packages，通过 `ToolLoopAgent` 和 `createProviderRegistry` 或等价注册表调用大模型，不将单一模型 SDK 扩散到领域服务。
+- AI Provider 是平台级静态资源，由平台管理员在管理后台配置 Provider 类型、名称、可选基础地址、默认模型、API Key、启用状态和默认状态。Agent Provider Registry 从数据库加载唯一的启用默认 Provider；新增、修改、测试、启停和切换默认 Provider 均记录管理员审计。
+- AI Provider 配置不从环境变量读取，现有 `AI_PROVIDER`、`AI_MODEL` 和 `OPENAI_API_KEY` 在迁移后不再参与运行时选择。没有可用默认 Provider 时，智能体聊天、案件 Copilot 和任务 `copilot.run` 明确显示不可用，其他平台能力继续运行。
+- AI API Key 使用统一 Credential Encryption Service 加密后保存在 `ai_providers` 表。读取接口永不返回 API Key，也不返回“已配置”提示；编辑表单的密码输入每次加载均为空。更新请求中缺少 API Key 或值为空字符串时保留数据库原值，只有非空值才覆盖。删除 Provider 时随记录删除密文。
 - 每次会话由服务端创建 `AgentExecutionContext { userId, teamId, projectId, sessionId }`。模型输入、tool args、提示词中的 `projectId` 或 `userId` 均不作为授权依据。
 - 工具分为只读查询、写入草案和受保护调度三类。只读工具覆盖设备、任务、案件、资产和当前地图上下文；草案工具覆盖任务/报告/案件评论草案；受保护调度工具只能创建、调用或请求启动 Tasks，并由 Tasks 进入领域 API 的执行入口。
 - tool call 执行前按 context 重新验证团队成员关系和项目 permission；排队后的 worker 在真正执行前再次鉴权并校验 scope 快照/有效期。用户已离组、权限撤销或项目不匹配时失败关闭。
@@ -148,7 +152,17 @@
 
 选择理由：时空大模型可以真正查询和调度平台能力，但授权和物理安全仍由确定性领域层掌控。备选方案是只允许生成草案，安全面更小但不能满足调度目标；通用 shell/MCP 直连设备则风险不可接受。
 
-### 12. 案件是协作对象，Copilot 只能由 Tasks 或案件交互显式调用
+### 12. 外部服务凭据使用应用层 AES 加密存库
+
+- 当前部署不依赖 KMS、Vault 或其他外部秘密管理设施。设备连接器、算法 Provider 和 AI Provider 的敏感字段统一序列化为凭据对象，并以 AES-256-GCM 加密 envelope 存入数据库；envelope 至少包含版本、随机 nonce、ciphertext 和 authentication tag。
+- 加密 key 不直接使用 `AUTH_SECRET` 字符串，而是通过 HKDF-SHA-256 和固定用途上下文 `aerosight/credential-encryption/v1` 派生 32 字节 key。Web 与 worker 使用相同算法和跨语言测试向量，确保需要外部调用的一方可以解密。
+- 每次写入使用新的随机 nonce；AAD 绑定凭据用途、资源类型和稳定资源 ID，避免密文被复制到另一资源后仍可解密。数据库、备份和普通查询只包含密文 envelope，不保存明文或旧 `secret_ref` 占位。
+- 所有管理表单的敏感 input 在读取时保持为空，读取 API 不返回凭据和“是否已配置”字段。更新时，缺少字段或空字符串表示保留原值，非空值才加密并覆盖；需要移除凭据时随资源删除，或使用明确的删除资源操作，不以空字符串清空。
+- 明文只在服务端完成外部请求前短时存在，不进入日志、错误、审计摘要、事件、任务快照、响应或智能体上下文。加解密失败时连接器/Provider 标记为不可用并返回稳定错误码，不得回退到明文、环境变量或空凭据。
+
+选择理由：这满足当前没有 KMS 的部署条件，同时避免数据库和备份直接暴露外部服务密钥。复用现有 `AUTH_SECRET` 不增加新的部署变量。代价是认证与凭据加密生命周期耦合：轮换 `AUTH_SECRET` 后旧密文无法解密，MVP 要求管理员重新填写所有外部凭据；未来可通过独立版本化主密钥或 KMS 消除该耦合。
+
+### 13. 案件是协作对象，Copilot 只能由 Tasks 或案件交互显式调用
 
 - 用户侧不展示“告警事件”工作台。算法与检测事实经过 Task 条件后创建或更新 `issue`，案件使用项目内递增编号、标题、描述、开放/关闭状态、优先级、标签、证据、关联任务和统一活动时间线。
 - `issue_events` 的 `comment` 类型保存用户或 Copilot 评论；状态、指派、标签和关联变化也作为活动记录展示。正文只保存稳定资源引用，不保存永久凭据或临时媒体 URL。
@@ -183,9 +197,10 @@
 - [SSE 在无状态多实例下的数据库连接与扇出成本] → 每实例共享项目订阅、限制每用户连接数；达到阈值后迁移到专用 realtime gateway。
 - [任务取消或紧急停止时设备失联] → 明确“安全状态未知”，高优先级重试与现场处置提示；平台不宣称未确认的物理安全结果。
 - [对象存储与数据库写入无法原子提交] → 采用上传意图、对象校验、完成记录和孤儿对象清理的 saga，不发布未完成资产。
-- [可配置 `base_url` 和 header 形成 SSRF/秘密泄露面] → HTTPS/域名 allowlist、DNS 解析后地址检查、重定向复验、秘密引用、日志脱敏和 callback 签名。
+- [可配置 `base_url` 和 header 形成 SSRF/凭据泄露面] → HTTPS/域名 allowlist、DNS 解析后地址检查、重定向复验、AES 加密存储、日志脱敏和 callback 签名。
 - [外部算法输出格式漂移或长时间不可用] → 版本化 mapping、契约测试、原始结果保全、熔断/退避和任务步骤失败可见；不得将解析失败当作“无违建”。
 - [智能体幻觉、越权或提示注入] → 事实回答引用工具结果，服务端固定 scope，tool 与 worker 双重鉴权，模型不直连设备 adapter，受保护调度走既有审批和命令账本。
+- [`AUTH_SECRET` 轮换后数据库凭据无法解密] → 部署文档将认证密钥轮换视为破坏性凭据轮换，先维护窗口、再轮换并由管理员重新填写连接器和 Provider 凭据；解密失败只标记不可用，不删除密文或降级为明文。
 - [Tasks 统一编排后单个任务定义过于复杂] → MVP 限制为类型化顺序步骤与受限条件表达式，提供版本化模板和逐步输出检查；多 Job/DAG 在运行证据表明需要后再开放。
 - [一次变更包含较多领域] → 按 tasks.md 的纵向里程碑实施，每个里程碑可独立启用；功能开关默认关闭未完成能力。
 
@@ -194,8 +209,8 @@
 1. 先部署只增不删的数据库迁移：启用 PostGIS，创建新表、索引、复合约束和 outbox；对现有表仅增加带默认值或可空列。
 2. 部署仍关闭新功能的 Web/worker，运行 schema 与授权回归；worker 能安全忽略未知事件类型。
 3. 启用 simulator 和项目总览功能开关，完成地图、时间线、轨迹、任务、直播占位、资产和回放的端到端验收。
-4. 对内部项目启用对象存储、`http-json` 算法 provider，并发布“巡检—采集—算法—条件—案件”任务模板；验证 SSRF、秘密、callback、条件幂等和案件去重测试。
-5. 启用 AI SDK 聊天、案件 `@copilot`/指派和任务 `copilot.run` 步骤，再单独启用受保护任务调度；验证跨项目、撤权后排队和提示注入测试。
+4. 启用统一凭据加密迁移，由管理员在管理界面重新填写现有连接器/算法 Provider 凭据；随后对内部项目启用对象存储、`http-json` 算法 provider，并发布“巡检—采集—算法—条件—案件”任务模板，验证 AES envelope、SSRF、凭据清理、callback、条件幂等和案件去重测试。
+5. 由平台管理员在管理后台创建并测试默认 AI Provider，再启用 AI SDK 聊天、案件 `@copilot`/指派和任务 `copilot.run` 步骤，随后单独启用受保护任务调度；验证空密钥更新不覆盖、读取不回显、跨项目、撤权后排队和提示注入测试。
 6. 接入 DJI 沙箱/测试组织，验证签名、设备身份映射、直播与命令能力，再对单个试点项目开启。
 7. 在达到指标和安全演练通过后扩大项目范围；保留每项目设备下行、外部算法开关。回滚 AI 时停用含 `copilot.run` 的任务版本并停止新的 Copilot Job，不影响任务事实和案件人工协作。
 
@@ -203,6 +218,6 @@
 
 ## Open Questions
 
-- 生产对象存储和秘密管理器的具体供应商可在部署阶段选择；接口、测试和数据模型不依赖供应商。
+- 生产对象存储的具体供应商可在部署阶段选择；当前 MVP 的外部凭据统一使用由 `AUTH_SECRET` 派生密钥的 AES 加密存库，不要求秘密管理器。独立主密钥或 KMS 属于后续生产加固选项。
 - DJI 首个试点使用哪种账号层级、机型和直播授权需要在接入任务开始前确认，但 simulator 与核心 MVP 不受阻塞。
 - 项目标准底图供应商和中国境内坐标展示策略由部署地区决定；数据库保留原始 CRS 和 WGS84 标准值以支持适配。

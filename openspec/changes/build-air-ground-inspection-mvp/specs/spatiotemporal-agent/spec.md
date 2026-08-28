@@ -4,6 +4,29 @@
 
 ## ADDED Requirements
 
+### Requirement: 管理后台配置 AI Provider
+系统 SHALL 允许平台管理员在管理后台配置平台级 AI Provider 的类型、名称、可选基础地址、默认模型、API Key、启用状态和默认状态；Agent Provider Registry MUST 从数据库加载唯一的启用默认 Provider，且 MUST NOT 从 AI Provider、模型或 API Key 环境变量加载运行配置。
+
+#### Scenario: 管理员创建默认 Provider
+- **GIVEN** 平台管理员填写有效 Provider、模型和 API Key
+- **WHEN** 管理员测试并保存为启用的默认 Provider
+- **THEN** 系统将配置和 AES 加密后的 API Key 保存到数据库，后续智能体聊天、案件 Copilot 和 `copilot.run` 使用该 Provider
+
+#### Scenario: 查看和更新已有 Provider
+- **GIVEN** 数据库中已有包含 API Key 的 Provider
+- **WHEN** 平台管理员打开编辑页
+- **THEN** 系统不在读取响应中返回 API Key，密钥 input 显示为空；保存时留空 SHALL 保持原 API Key，填写非空值 SHALL 覆盖原值
+
+#### Scenario: 非管理员管理 Provider
+- **GIVEN** 用户不是平台管理员，即使其是项目 owner 或 admin
+- **WHEN** 用户请求读取管理列表、测试、创建、修改、启停或删除 AI Provider
+- **THEN** 系统 SHALL 拒绝操作且不得返回 API Key 或可用于推断其内容的数据
+
+#### Scenario: 没有可用的默认 Provider
+- **GIVEN** 数据库中没有同时启用且被设为默认的 AI Provider
+- **WHEN** 用户使用智能体聊天、案件 Copilot 或任务 `copilot.run`
+- **THEN** 系统 SHALL 明确返回 AI Provider 未配置或不可用，且设备、Tasks、案件和其他非 AI 功能继续可用
+
 ### Requirement: 基于项目证据的智能体聊天
 智能体页面 SHALL 提供绑定当前项目和用户的 AI 聊天；智能体 SHALL 仅查询当前授权项目范围内的设备、任务、观测、案件、资产和证据，并在事实性回答中返回可导航的来源引用、查询时间窗和数据新鲜度。
 
