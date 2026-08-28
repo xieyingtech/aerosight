@@ -1802,6 +1802,18 @@ ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_id_teams_id_fk" FOR
 ALTER TABLE "team_members" ADD CONSTRAINT "team_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "agent_messages_session_created_idx" ON "agent_messages" USING btree ("session_id","created_at");--> statement-breakpoint
 CREATE INDEX "agent_sessions_project_created_idx" ON "agent_sessions" USING btree ("project_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "agents_project_copilot_unique" ON "agents" USING btree ("project_id",(config_json->>'kind')) WHERE config_json->>'kind'='copilot';--> statement-breakpoint
+CREATE OR REPLACE FUNCTION provision_project_copilot_agent() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO agents(project_id,name,description,status,config_json)
+  VALUES(NEW.id,'Copilot','项目级 AI 助手，可通过案件评论提及或负责人指派触发。','active',
+         '{"kind":"copilot","builtIn":true}'::jsonb);
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER projects_provision_copilot_agent
+  AFTER INSERT ON projects FOR EACH ROW EXECUTE FUNCTION provision_project_copilot_agent();
+--> statement-breakpoint
 CREATE INDEX "agent_sessions_issue_idx" ON "agent_sessions" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "agent_sessions_task_run_idx" ON "agent_sessions" USING btree ("task_run_id");--> statement-breakpoint
 CREATE INDEX "agent_drafts_project_created_idx" ON "agent_drafts" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint

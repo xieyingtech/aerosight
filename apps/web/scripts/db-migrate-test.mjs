@@ -1421,7 +1421,9 @@ async function assertTaskStepIssueSchema(connectionString) {
       where project_id=$1 and id=$2 and state_version=0 returning state_version`, [scope.id, issue.rows[0].id]);
     assert(advancedIssue.rows[0].state_version === 1 && staleIssue.rowCount === 0, "issue optimistic concurrency failed");
 
-    const agent = await client.query(`insert into agents(project_id,name,status) values($1,'fixture-copilot','active') returning id`, [scope.id]);
+    const copilot = await client.query(`select id from agents where project_id=$1 and config_json->>'kind'='copilot' and status='active'`, [scope.id]);
+    assert(copilot.rowCount === 1, "migration did not provision exactly one project Copilot agent");
+    const agent = await client.query(`insert into agents(project_id,name,status) values($1,'fixture-agent','active') returning id`, [scope.id]);
     await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
       values($1,$2,$3,'agent',$4,$5)`, [scope.id, scope.team_id, issue.rows[0].id, agent.rows[0].id, scope.user_id]);
     await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
@@ -1435,6 +1437,18 @@ async function assertTaskStepIssueSchema(connectionString) {
       () => assert(false, "cross-project issue agent should fail"),
       (error) => assert(error.code === "23503", "cross-project issue agent failed unexpectedly")
     );
+    await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,user_id,assigned_by_user_id)
+      values($1,$2,$3,'user',$4,$4)`, [scope.id, scope.team_id, issue.rows[0].id, scope.user_id]);
+    await client.query(`insert into issue_assignees(project_id,team_id,issue_id,assignee_type,agent_id,assigned_by_user_id)
+      values($1,$2,$3,'agent',$4,$5)`, [scope.id, scope.team_id, issue.rows[0].id, copilot.rows[0].id, scope.user_id]);
+    const mixedAssignees = Number((await client.query(`select count(*) as count from issue_assignees
+      where project_id=$1 and issue_id=$2 and active`, [scope.id, issue.rows[0].id])).rows[0].count);
+    assert(mixedAssignees === 3, "user and Copilot were not represented by the unified multi-subject assignment model");
+    await client.query(`update issue_assignees set active=false,removed_at=now()
+      where project_id=$1 and issue_id=$2 and agent_id=$3 and active`, [scope.id, issue.rows[0].id, copilot.rows[0].id]);
+    const activeCopilot = Number((await client.query(`select count(*) as count from issue_assignees
+      where project_id=$1 and issue_id=$2 and agent_id=$3 and active`, [scope.id, issue.rows[0].id, copilot.rows[0].id])).rows[0].count);
+    assert(activeCopilot === 0, "Copilot assignment could not be removed");
     const agentSession = await client.query(`insert into agent_sessions(project_id,issue_id,started_by_user_id,summary)
       values($1,$2,$3,'fixture issue copilot') returning id`, [scope.id, issue.rows[0].id, scope.user_id]);
     await client.query(`insert into agent_tool_jobs(project_id,team_id,session_id,requested_by_user_id,issue_id,
@@ -1453,6 +1467,23 @@ async function assertTaskStepIssueSchema(connectionString) {
       (select count(*)::int from agent_tool_jobs where project_id=$1 and issue_id=$2 and idempotency_key='fixture-issue-mention') as jobs`,
     [scope.id, issue.rows[0].id])).rows[0];
     assert(mentionCounts.comments === 1 && mentionCounts.jobs === 1, "comment mention did not preserve one comment and one job");
+
+    const assignmentEvent = await client.query(`insert into issue_events(project_id,issue_id,event_type,actor_user_id)
+      values($1,$2,'assignee.added',$3) returning id`, [scope.id, issue.rows[0].id, scope.user_id]);
+    const assignmentSession = await client.query(`insert into agent_sessions(project_id,agent_id,issue_id,started_by_user_id,summary)
+      values($1,$2,$3,$4,'fixture Copilot assignment') returning id`,
+    [scope.id, copilot.rows[0].id, issue.rows[0].id, scope.user_id]);
+    await client.query(`insert into agent_tool_jobs(project_id,team_id,session_id,requested_by_user_id,issue_id,
+      trigger_issue_event_id,trigger_type,idempotency_key,tool_name,required_permission,context_expires_at)
+      values($1,$2,$3,$4,$5,$6,'issue_assignment','fixture-issue-assignment','issue_copilot','agent:use',now()+interval '1 hour')`,
+    [scope.id, scope.team_id, assignmentSession.rows[0].id, scope.user_id, issue.rows[0].id, assignmentEvent.rows[0].id]);
+    await client.query(`insert into agent_tool_jobs(project_id,team_id,session_id,requested_by_user_id,issue_id,
+      trigger_issue_event_id,trigger_type,idempotency_key,tool_name,required_permission,context_expires_at)
+      values($1,$2,$3,$4,$5,$6,'issue_assignment','fixture-issue-assignment','issue_copilot','agent:use',now()+interval '1 hour')`,
+    [scope.id, scope.team_id, assignmentSession.rows[0].id, scope.user_id, issue.rows[0].id, assignmentEvent.rows[0].id]).then(
+      () => assert(false, "duplicate Copilot assignment job should fail"),
+      (error) => assert(error.code === "23505", "duplicate Copilot assignment job failed unexpectedly")
+    );
   } finally {
     await client.end();
   }

@@ -8,9 +8,9 @@ import { Input } from "@/components/ui/input";
 
 type Assignee = Record<string, unknown>;
 
-export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign }: {
+export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign, canUseAgent }: {
   projectId: number; issueId: number; stateVersion: number; status: string; labels: string[];
-  assignees: Assignee[]; members: Assignee[]; agents: Assignee[]; canHandle: boolean; canAssign: boolean;
+  assignees: Assignee[]; members: Assignee[]; agents: Assignee[]; canHandle: boolean; canAssign: boolean; canUseAgent: boolean;
 }) {
   const router = useRouter();
   const [comment, setComment] = useState("");
@@ -31,7 +31,10 @@ export function IssueCollaborationPanel({ projectId, issueId, stateVersion, stat
   }
   const options = [
     ...members.map((item) => ({ value: `user:${String(item.id)}`, label: `${String(item.name)}（成员）` })),
-    ...agents.map((item) => ({ value: `agent:${String(item.id)}`, label: `${String(item.name)}（智能体）` }))
+    ...agents.filter((item) => item.kind !== "copilot" || canUseAgent).map((item) => ({
+      value: `agent:${String(item.id)}`,
+      label: item.kind === "copilot" ? "Copilot（AI）" : `${String(item.name)}（智能体）`
+    }))
   ];
   return <div className="space-y-5">
     <section className="space-y-2"><h3 className="text-sm font-medium">当前指派</h3><div className="flex flex-wrap gap-2">

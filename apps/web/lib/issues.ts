@@ -29,7 +29,7 @@ export async function readIssue(projectId: number, issueId: number) {
     issue.status,issue.priority,issue.source_type as "sourceType",issue.source_id as "sourceId",
     issue.task_run_id as "taskRunId",issue.task_version_id as "taskVersionId",
     issue.condition_scope_key as "conditionScopeKey",issue.business_object_key as "businessObjectKey",
-    issue.occurrence_count as "occurrenceCount",issue.labels_json as labels,
+    issue.occurrence_count as "occurrenceCount",issue.labels_json as labels,issue.state_version as "stateVersion",
     issue.first_seen_at as "firstSeenAt",issue.last_seen_at as "lastSeenAt",issue.created_at as "createdAt",
     task.name as "taskName",version.version as "taskVersion"
     from issues issue left join task_runs run on run.id=issue.task_run_id and run.project_id=issue.project_id
@@ -77,9 +77,11 @@ export async function readIssue(projectId: number, issueId: number) {
     query<Record<string, unknown>>(`select member_user.id,member_user.name,member.role
       from projects project join team_members member on member.team_id=project.team_id
       join users member_user on member_user.id=member.user_id where project.id=$1 order by member_user.name`, [projectId]),
-    query<Record<string, unknown>>(`select id,name,status from agents where project_id=$1 order by name`, [projectId])
+    query<Record<string, unknown>>(`select id,name,status,config_json->>'kind' as kind from agents
+      where project_id=$1 and status='active' order by case when config_json->>'kind'='copilot' then 0 else 1 end,name`, [projectId])
   ]);
   return { issue, events: events.rows, links: links.rows, detections: detections.rows, assets: assets.rows,
     assignees: assignees.rows, members: members.rows, agents: agents.rows,
-    canHandle: access.permissions.has("issue:handle"), canAssign: access.permissions.has("issue:assign") };
+    canHandle: access.permissions.has("issue:handle"), canAssign: access.permissions.has("issue:assign"),
+    canUseAgent: access.permissions.has("agent:use") };
 }

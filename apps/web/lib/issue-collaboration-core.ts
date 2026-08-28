@@ -4,6 +4,14 @@ export type IssueMutation =
   | { action: "labels"; labels: string[] }
   | { action: "assign" | "unassign"; assigneeType: "user" | "agent"; assigneeId: number };
 
+export function isCopilotAgent(input: { name?: string | null; kind?: string | null }) {
+  return input.kind === "copilot" || input.name?.trim().toLowerCase() === "copilot";
+}
+
+export function assignmentChangeRequired(action: "assign" | "unassign", currentlyActive: boolean) {
+  return action === "assign" ? !currentlyActive : currentlyActive;
+}
+
 export function planIssueMutation(input: {
   mutation: IssueMutation;
   permissions: ReadonlySet<string>;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planIssueMutation } from "./issue-collaboration-core.ts";
+import { assignmentChangeRequired, isCopilotAgent, planIssueMutation } from "./issue-collaboration-core.ts";
 
 test("issue handling permission and optimistic version are required", () => {
   assert.throws(() => planIssueMutation({ mutation: { action: "comment", body: "复核" }, permissions: new Set(), actualVersion: 2, expectedVersion: 2 }), /PROJECT_ACCESS_DENIED/);
@@ -21,4 +21,17 @@ test("user and agent assignment use one typed plan", () => {
     assert.equal(result.eventType, "assignee.added");
     assert.deepEqual(result.metadata, { assigneeType, assigneeId: 7 });
   }
+});
+
+test("Copilot identity is derived from the unified agent record", () => {
+  assert.equal(isCopilotAgent({ name: "Copilot", kind: "copilot" }), true);
+  assert.equal(isCopilotAgent({ name: "COPILOT" }), true);
+  assert.equal(isCopilotAgent({ name: "巡检助手", kind: "inspection" }), false);
+});
+
+test("repeated assignment and missing unassignment are no-ops", () => {
+  assert.equal(assignmentChangeRequired("assign", false), true);
+  assert.equal(assignmentChangeRequired("assign", true), false);
+  assert.equal(assignmentChangeRequired("unassign", true), true);
+  assert.equal(assignmentChangeRequired("unassign", false), false);
 });
