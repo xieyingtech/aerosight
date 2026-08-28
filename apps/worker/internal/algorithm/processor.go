@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"aerosight/worker/internal/credentials"
 	"aerosight/worker/internal/outbox"
 )
 
@@ -39,11 +40,12 @@ type Processor struct {
 	callbackBaseURL string
 	assetIssuer     AssetAccessIssuer
 	detectionSink   DetectionSink
+	authSecret      string
 }
 
-func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL string, assetIssuer AssetAccessIssuer, detectionSink DetectionSink) *Processor {
+func NewProcessor(client HTTPDoer, breaker *CircuitBreaker, store RawResultStore, callbackBaseURL string, assetIssuer AssetAccessIssuer, detectionSink DetectionSink, authSecret string) *Processor {
 	return &Processor{client: client, breaker: breaker, store: store,
-		callbackBaseURL: strings.TrimRight(callbackBaseURL, "/"), assetIssuer: assetIssuer, detectionSink: detectionSink}
+		callbackBaseURL: strings.TrimRight(callbackBaseURL, "/"), assetIssuer: assetIssuer, detectionSink: detectionSink, authSecret: authSecret}
 }
 
 type transactionRecorder struct {
@@ -88,9 +90,13 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		mappingJSON    []byte
 		status         string
 		runAssetID     int
+		providerID     int64
+		authType       string
+		credentialRaw  []byte
 	)
 	err := tx.QueryRowContext(ctx, `
 		select provider.base_url, provider.provider_type, provider.status, provider.timeout_seconds,
+		       provider.id, provider.auth_type, provider.credential_envelope_json,
 		       run.input_snapshot_json, version.output_mapping_json, run.status, run.input_asset_id
 		from algorithm_runs run
 		join algorithm_definition_versions version
@@ -101,7 +107,8 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		  on provider.id = definition.provider_id and provider.project_id = run.project_id
 		where run.id = $1 and run.project_id = $2 and run.team_id = $3
 		for update of run`, payload.RunID, event.ProjectID, event.TeamID).Scan(
-		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &inputJSON, &mappingJSON, &status, &runAssetID,
+		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &providerID, &authType, &credentialRaw,
+		&inputJSON, &mappingJSON, &status, &runAssetID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errors.New("algorithm run scope does not match outbox event")
@@ -117,6 +124,10 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	}
 	if providerStatus != "active" {
 		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "algorithm provider is not active")
+	}
+	providerHeaders, err := decryptProviderHeaders(providerID, event.ProjectID, authType, credentialRaw, processor.authSecret)
+	if err != nil {
+		return processor.failRun(ctx, tx, payload.RunID, "provider_credential_unavailable", "algorithm provider credentials are unavailable")
 	}
 	var input Input
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
@@ -158,7 +169,7 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	recorder := transactionRecorder{tx: tx, projectID: event.ProjectID, teamID: event.TeamID}
 	adapter := NewHTTPJSONAdapter(processor.client, recorder, processor.breaker)
 	outcome, executeErr := adapter.Execute(ctx, Request{
-		Endpoint: endpoint, Input: input, Mapping: mapping, Timeout: time.Duration(timeoutSeconds) * time.Second,
+		Endpoint: endpoint, Headers: providerHeaders, Input: input, Mapping: mapping, Timeout: time.Duration(timeoutSeconds) * time.Second,
 	})
 	if executeErr != nil {
 		code := "provider_execution_failed"
@@ -183,6 +194,51 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		return err
 	}
 	return processor.finishSucceeded(ctx, tx, event.ProjectID, payload.RunID, outcome)
+}
+
+type providerCredential struct {
+	Token    string `json:"token"`
+	APIKey   string `json:"apiKey"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Secret   string `json:"secret"`
+}
+
+func decryptProviderHeaders(providerID int64, projectID int, authType string, raw []byte, authSecret string) (map[string]string, error) {
+	if authType == "none" {
+		return nil, nil
+	}
+	if len(raw) == 0 || authSecret == "" {
+		return nil, errors.New("algorithm provider credential is missing")
+	}
+	envelope, err := credentials.ParseEnvelope(raw)
+	if err != nil {
+		return nil, err
+	}
+	var credential providerCredential
+	if err := credentials.DecryptJSON(envelope, authSecret, credentials.AAD("algorithm-provider", providerID, projectID), &credential); err != nil {
+		return nil, err
+	}
+	switch authType {
+	case "bearer":
+		if credential.Token == "" {
+			return nil, errors.New("bearer token is missing")
+		}
+		return map[string]string{"Authorization": "Bearer " + credential.Token}, nil
+	case "api-key-header":
+		if credential.APIKey == "" {
+			return nil, errors.New("API key is missing")
+		}
+		return map[string]string{"X-API-Key": credential.APIKey}, nil
+	case "basic":
+		if credential.Username == "" || credential.Password == "" {
+			return nil, errors.New("basic credentials are missing")
+		}
+		encoded := base64.StdEncoding.EncodeToString([]byte(credential.Username + ":" + credential.Password))
+		return map[string]string{"Authorization": "Basic " + encoded}, nil
+	default:
+		return nil, errors.New("algorithm provider authentication adapter is not implemented")
+	}
 }
 
 func issueCallbackCredentials(input Input, callbackBaseURL string) (Input, string, error) {

@@ -12,7 +12,7 @@ export function AlgorithmProviderForm({ projectId }: { projectId: number }) {
     setError(null);
     const response = await fetch(`/api/projects/${projectId}/algorithm-providers`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       name: formData.get("name"), providerType: formData.get("providerType"), baseUrl: formData.get("baseUrl"),
-      secretRef: formData.get("secretRef") || null, authType: formData.get("authType"),
+      credential: formData.get("credential") || "", username: formData.get("username") || "", authType: formData.get("authType"),
       allowedHeaders: String(formData.get("allowedHeaders") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
       timeoutSeconds: Number(formData.get("timeoutSeconds")), concurrencyLimit: Number(formData.get("concurrencyLimit")),
       rateLimitPerMinute: Number(formData.get("rateLimitPerMinute"))
@@ -23,7 +23,8 @@ export function AlgorithmProviderForm({ projectId }: { projectId: number }) {
     <Input name="name" placeholder="服务名称" required /><Input name="baseUrl" placeholder="https://algorithm.example.test" required />
     <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="providerType"><option value="http-json">HTTP JSON（已启用）</option><option value="kserve-v2">KServe V2（未启用）</option><option value="ogc-processes">OGC Processes（未启用）</option><option value="ai-sdk">AI SDK（未启用）</option></select>
     <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name="authType"><option value="none">无认证</option><option value="bearer">Bearer</option><option value="api-key-header">API Key Header</option><option value="basic">Basic</option><option value="signed">签名</option></select>
-    <Input className="md:col-span-2" name="secretRef" placeholder="secret://projects/...（不填写密钥原文）" />
+    <Input name="username" placeholder="用户名（仅 Basic 认证）" autoComplete="off" />
+    <Input name="credential" placeholder="Token / API Key / 密码（留空则不更新）" type="password" autoComplete="new-password" />
     <Input className="md:col-span-2" name="allowedHeaders" placeholder="允许的 Header 名称，以逗号分隔" />
     <Input defaultValue="30" min="1" name="timeoutSeconds" placeholder="超时（秒）" type="number" />
     <Input defaultValue="1" min="1" name="concurrencyLimit" placeholder="并发限制" type="number" />

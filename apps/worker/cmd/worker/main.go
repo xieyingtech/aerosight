@@ -161,7 +161,7 @@ func main() {
 	})
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
-		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink,
+		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
 	)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 	consumer.Register("alert.automation.requested", automation.Processor{Generator: automation.DeterministicDraftGenerator{}}.Handler)

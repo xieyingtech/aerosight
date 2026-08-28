@@ -15,6 +15,7 @@ type Config struct {
 	CallbackListenAddress  string
 	CallbackPublicBaseURL  string
 	AssetURLSigningSecret  string
+	AuthSecret             string
 	MediaAPIBaseURL        string
 	MediaAPIUser           string
 	MediaAPIPassword       string
@@ -29,6 +30,7 @@ func Load() (Config, error) {
 		CallbackListenAddress:  valueOrDefault("CALLBACK_LISTEN_ADDRESS", "127.0.0.1:8081"),
 		CallbackPublicBaseURL:  strings.TrimRight(strings.TrimSpace(os.Getenv("CALLBACK_PUBLIC_BASE_URL")), "/"),
 		AssetURLSigningSecret:  strings.TrimSpace(os.Getenv("AUTH_SECRET")),
+		AuthSecret:             strings.TrimSpace(os.Getenv("AUTH_SECRET")),
 		MediaAPIBaseURL:        strings.TrimRight(strings.TrimSpace(os.Getenv("MEDIA_API_BASE_URL")), "/"),
 		MediaAPIUser:           strings.TrimSpace(os.Getenv("MEDIA_ADMIN_USER")),
 		MediaAPIPassword:       strings.TrimSpace(os.Getenv("MEDIA_ADMIN_PASSWORD")),

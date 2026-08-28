@@ -102,7 +102,7 @@ export function encryptCredentialObject(
   credentials: Record<string, unknown>,
   authSecret: string,
   aad: string,
-  nonce?: Buffer
+  nonce?: Buffer<ArrayBuffer>
 ) {
   return encryptCredentialBytes(Buffer.from(JSON.stringify(credentials), "utf8"), authSecret, aad, nonce);
 }
