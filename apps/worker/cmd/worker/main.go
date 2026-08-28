@@ -162,6 +162,7 @@ func main() {
 	algorithmTrigger := algorithm.NewTrigger(assetSigner)
 	consumer.Register("task.step.algorithm.requested", algorithmTrigger.TaskStepHandler)
 	consumer.Register("task.step.issue.requested", issueworker.NewTaskStepProcessor(nil).Handler)
+	consumer.Register("task.step.copilot.requested", agent.TaskStepHandler)
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,

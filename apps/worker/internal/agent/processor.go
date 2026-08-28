@@ -29,9 +29,10 @@ type JobProcessor struct {
 }
 
 type copilotJob struct {
-	ID                         string
-	ProjectID, TeamID, IssueID int
-	ToolName                   string
+	ID                                    string
+	ProjectID, TeamID, IssueID, TaskRunID int
+	TaskRunStepID                         int64
+	ToolName, TriggerType                 string
 }
 
 type evidenceRef struct {
@@ -85,9 +86,11 @@ func (processor JobProcessor) ProcessNext(ctx context.Context) (bool, error) {
 	}
 	defer tx.Rollback()
 	var job copilotJob
-	err = tx.QueryRowContext(ctx, `select id,project_id,team_id,coalesce(issue_id,0),tool_name
-		from agent_tool_jobs where status='queued' order by created_at,id for update skip locked limit 1`).Scan(
-		&job.ID, &job.ProjectID, &job.TeamID, &job.IssueID, &job.ToolName)
+	err = tx.QueryRowContext(ctx, `select job.id,job.project_id,job.team_id,coalesce(job.issue_id,0),job.tool_name,
+		coalesce(job.trigger_type,''),coalesce(session.task_run_id,0),coalesce((job.args_json->>'taskRunStepId')::bigint,0)
+		from agent_tool_jobs job join agent_sessions session on session.id=job.session_id and session.project_id=job.project_id
+		where job.status='queued' order by job.created_at,job.id for update of job skip locked limit 1`).Scan(
+		&job.ID, &job.ProjectID, &job.TeamID, &job.IssueID, &job.ToolName, &job.TriggerType, &job.TaskRunID, &job.TaskRunStepID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -269,6 +272,17 @@ func (processor JobProcessor) succeed(ctx context.Context, job copilotJob, draft
 		where id=$1 and status='running'`, job.ID, draftID); err != nil {
 		return err
 	}
+	if job.TriggerType == "task_step" && job.TaskRunStepID > 0 {
+		output, _ := json.Marshal(map[string]any{"draftId": draftID, "issueId": job.IssueID, "status": "draft"})
+		if _, err := tx.ExecContext(ctx, `update task_run_steps set status='succeeded',output_snapshot_json=$3,result_json=result_json||$3,
+			execution_key=$4,finished_at=now() where project_id=$1 and id=$2 and status='running'`,
+			job.ProjectID, job.TaskRunStepID, output, fmt.Sprintf("task-run:%d:step:%d", job.TaskRunID, job.TaskRunStepID)); err != nil {
+			return err
+		}
+		if err := enqueueTaskContinuation(ctx, tx, job, "succeeded"); err != nil {
+			return err
+		}
+	}
 	if err := appendIssueActivity(ctx, tx, job, "copilot.completed", map[string]any{"jobId": job.ID, "draftId": draftID, "modelId": modelID,
 		"promptTemplateVersion": issueCopilotPromptVersion, "evidenceVersionHash": evidenceHash, "toolCalls": []any{}}); err != nil {
 		return err
@@ -285,10 +299,28 @@ func (processor JobProcessor) fail(ctx context.Context, job copilotJob, code str
 	if _, err := tx.ExecContext(ctx, `update agent_tool_jobs set status='failed',failure_code=$2,finished_at=now() where id=$1 and status='running'`, job.ID, code); err != nil {
 		return err
 	}
+	if job.TriggerType == "task_step" && job.TaskRunStepID > 0 {
+		if _, err := tx.ExecContext(ctx, `update task_run_steps set status='failed',result_json=result_json||jsonb_build_object('failureCode',$3::text),finished_at=now()
+			where project_id=$1 and id=$2 and status='running'`, job.ProjectID, job.TaskRunStepID, code); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `update task_runs set status='failed',state_reason='copilot_step_failed',state_version=state_version+1,finished_at=now()
+			where project_id=$1 and id=$2 and status in('running','dispatching')`, job.ProjectID, job.TaskRunID); err != nil {
+			return err
+		}
+	}
 	if err := appendIssueActivity(ctx, tx, job, "copilot.failed", map[string]any{"jobId": job.ID, "code": code}); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func enqueueTaskContinuation(ctx context.Context, tx *sql.Tx, job copilotJob, outcome string) error {
+	payload, _ := json.Marshal(map[string]any{"taskRunId": job.TaskRunID, "to": "running", "completedStepId": job.TaskRunStepID})
+	_, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+		values($1,$2,$3,'task_run.transitioned',$4) on conflict(event_id) do nothing`, job.ProjectID, job.TeamID,
+		fmt.Sprintf("task-run:%d:copilot-step:%d:%s", job.TaskRunID, job.TaskRunStepID, outcome), payload)
+	return err
 }
 
 func appendIssueActivity(ctx context.Context, tx *sql.Tx, job copilotJob, eventType string, metadata map[string]any) error {
