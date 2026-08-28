@@ -151,13 +151,7 @@ func main() {
 	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
 	detectionSink := perception.NewSQLDetectionSink()
-	algorithmTrigger := algorithm.NewTrigger(assetSigner)
-	consumer.Register("asset.available", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
-		if err := assetHandler(ctx, tx, event); err != nil {
-			return err
-		}
-		return algorithmTrigger.Handler(ctx, tx, event)
-	})
+	consumer.Register("asset.available", assetHandler)
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
