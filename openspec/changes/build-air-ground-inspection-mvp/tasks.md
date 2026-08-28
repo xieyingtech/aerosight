@@ -98,7 +98,7 @@
 - [x] 9.8 实现智能体 UI、工具调用状态、证据引用和敏感结果最小留存，并通过临时 URL/秘密不进入消息历史及跨项目会话访问测试验证。
 - [ ] 9.9 将智能体页收敛为项目级 AI 聊天，并使 Copilot 的受保护调度只创建或启动 Tasks，通过不存在直连设备/算法 Adapter 工具及预检审批链测试验证。
 - [ ] 9.10 创建平台级 `ai_providers` 表和管理后台 API/UI，支持 Provider 类型、名称、基础地址、默认模型、AES 加密 API Key、启用/默认状态与连接测试；读取响应不返回凭据，编辑 input 始终为空，留空保持原值、非空覆盖，并通过平台管理员权限、读取不回显和更新语义测试验证。
-- [ ] 9.11 将 Agent Provider Registry 改为从数据库加载唯一的启用默认 Provider，移除 `AI_PROVIDER`、`AI_MODEL`、`OPENAI_API_KEY` 的运行时读取和示例配置，并通过切换默认 Provider、无可用 Provider、缓存失效及非 AI 功能不受影响测试验证。
+- [x] 9.11 将 Agent Provider Registry 改为从数据库加载唯一的启用默认 Provider，移除 `AI_PROVIDER`、`AI_MODEL`、`OPENAI_API_KEY` 的运行时读取和示例配置，并通过切换默认 Provider、无可用 Provider、缓存失效及非 AI 功能不受影响测试验证。
 
 ## 10. 案件 Copilot 委派与报告
 
