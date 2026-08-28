@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import pg from "pg";
 
 import { assertPostgisAvailable, migrateDatabase } from "./db-migrate.mjs";
+import { credentialAAD, decryptCredentialObject, encryptCredentialObject } from "../lib/credential-encryption.ts";
 
 const { Client } = pg;
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -295,6 +296,111 @@ async function assertConcurrentIdempotency(connectionString) {
   } finally {
     await first.end();
     await second.end();
+  }
+}
+
+function rotateCredentials(connectionString, oldSecret, newSecret, dryRun = false) {
+  const args = ["-C", "apps/worker", "run", "./cmd/rotate-credentials"];
+  if (dryRun) args.push("--dry-run");
+  else args.push("--new-secret-stdin");
+  return spawnSync("go", args, {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: connectionString, AUTH_SECRET: oldSecret },
+    input: dryRun ? undefined : `${newSecret}\n`
+  });
+}
+
+async function assertCredentialRotation(connectionString) {
+  const oldSecret = "migration-old-auth-secret-0123456789";
+  const newSecret = "migration-new-auth-secret-9876543210";
+  const nextSecret = "migration-next-auth-secret-abcdefghij";
+  const credentialPlaintext = "rotation-provider-credential";
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = (await client.query(
+      `select project.id as project_id, project.team_id, users.id as user_id
+         from projects project join users on users.email='legacy@example.test'
+        where project.name='legacy-project'`
+    )).rows[0];
+    const adapter = (await client.query(
+      `insert into device_adapters(project_id,team_id,name,adapter_type)
+       values($1,$2,'rotation-adapter','dji') returning id`, [scope.project_id, scope.team_id]
+    )).rows[0];
+    const algorithm = (await client.query(
+      `insert into algorithm_providers(
+         project_id,team_id,name,provider_type,base_url,auth_type,credential_envelope_json,created_by_user_id
+       ) values($1,$2,'rotation-algorithm','http-json','https://algorithm.example.test','bearer','{}'::jsonb,$3)
+       returning id`, [scope.project_id, scope.team_id, scope.user_id]
+    )).rows[0];
+    const ai = (await client.query(
+      `insert into ai_providers(name,provider_type,model_id,credential_envelope_json,created_by_user_id,updated_by_user_id)
+       values('rotation-ai','openai','test-model','{}'::jsonb,$1,$1) returning id`, [scope.user_id]
+    )).rows[0];
+    const fixtures = [
+      ["device_adapters", adapter.id, encryptCredentialObject({ mqttPassword: credentialPlaintext }, oldSecret,
+        credentialAAD("device-adapter", adapter.id, scope.project_id))],
+      ["algorithm_providers", algorithm.id, encryptCredentialObject({ token: credentialPlaintext }, oldSecret,
+        credentialAAD("algorithm-provider", algorithm.id, scope.project_id))],
+      ["ai_providers", ai.id, encryptCredentialObject({ apiKey: credentialPlaintext }, oldSecret,
+        credentialAAD("ai-provider", ai.id))]
+    ];
+    for (const [table, id, envelope] of fixtures) {
+      await client.query(`update ${table} set credential_envelope_json=$2::jsonb where id=$1`, [id, envelope]);
+    }
+
+    const dryRun = rotateCredentials(connectionString, oldSecret, "", true);
+    assert(dryRun.status === 0, `credential dry-run failed: ${dryRun.stderr}`);
+    const rotated = rotateCredentials(connectionString, oldSecret, newSecret);
+    assert(rotated.status === 0, `credential rotation failed: ${rotated.stderr}`);
+    const combinedOutput = `${rotated.stdout}\n${rotated.stderr}`;
+    for (const secret of [oldSecret, newSecret, credentialPlaintext]) {
+      assert(!combinedOutput.includes(secret), "credential rotation output leaked a secret");
+    }
+    for (const [table, id] of fixtures) {
+      const envelope = (await client.query(`select credential_envelope_json as envelope from ${table} where id=$1`, [id])).rows[0].envelope;
+      const resourceType = table === "device_adapters" ? "device-adapter" : table === "algorithm_providers" ? "algorithm-provider" : "ai-provider";
+      const decoded = decryptCredentialObject(envelope, newSecret,
+        credentialAAD(resourceType, id, table === "ai_providers" ? undefined : scope.project_id));
+      assert(Object.values(decoded).includes(credentialPlaintext), `rotated ${table} credential changed`);
+    }
+
+    const currentAdapterEnvelope = (await client.query(
+      `select credential_envelope_json as envelope from device_adapters where id=$1`, [adapter.id]
+    )).rows[0].envelope;
+    const copied = (await client.query(
+      `insert into device_adapters(project_id,team_id,name,adapter_type,credential_envelope_json)
+       values($1,$2,'rotation-aad-copy','dji',$3) returning id`, [scope.project_id, scope.team_id, currentAdapterEnvelope]
+    )).rows[0];
+    const aadMismatch = rotateCredentials(connectionString, newSecret, "", true);
+    assert(aadMismatch.status !== 0, "credential rotation accepted an envelope copied to another resource");
+    await client.query(`delete from device_adapters where id=$1`, [copied.id]);
+
+    await client.query("select pg_advisory_lock(hashtext('aerosight.credential-rotation'))");
+    const locked = rotateCredentials(connectionString, newSecret, "", true);
+    await client.query("select pg_advisory_unlock(hashtext('aerosight.credential-rotation'))");
+    assert(locked.status !== 0, "concurrent credential rotation ignored the advisory lock");
+
+    const before = (await client.query(
+      `select (select credential_envelope_json from device_adapters where id=$1) as adapter,
+              (select credential_envelope_json from algorithm_providers where id=$2) as algorithm`,
+      [adapter.id, algorithm.id]
+    )).rows[0];
+    await client.query(
+      `update ai_providers set credential_envelope_json=jsonb_set(credential_envelope_json,'{ciphertext}','"damaged"') where id=$1`,
+      [ai.id]
+    );
+    const damaged = rotateCredentials(connectionString, newSecret, nextSecret);
+    assert(damaged.status !== 0, "credential rotation accepted damaged ciphertext");
+    const after = (await client.query(
+      `select (select credential_envelope_json from device_adapters where id=$1) as adapter,
+              (select credential_envelope_json from algorithm_providers where id=$2) as algorithm`,
+      [adapter.id, algorithm.id]
+    )).rows[0];
+    assert(JSON.stringify(before) === JSON.stringify(after), "failed credential rotation partially committed updates");
+  } finally {
+    await client.end();
   }
 }
 
@@ -1462,6 +1568,7 @@ try {
     await assertAlgorithmRuntimeSchema(connectionString);
     await assertDetectionSchema(connectionString);
     await assertPerceptionEventSchema(connectionString);
+    await assertCredentialRotation(connectionString);
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
