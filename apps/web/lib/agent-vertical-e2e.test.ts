@@ -29,7 +29,7 @@ test("agent vertical acceptance keeps reads and drafts scoped before protected A
   assert.equal(call.projectId, 17);
   const read = formatAgentReadToolResult(context, "query_events", [{ id: "event-1", status: "open", observedAt: evidence.observedAt }], new Date("2026-08-27T08:00:05Z"));
   assert.equal(read.projectId, 17);
-  assert.equal((read.items[0].reference as { href: string }).href, "/projects/17/events/event-1");
+  assert.equal((read.items[0].reference as { href: string }).href, "/projects/17/issues/event-1");
 
   const report = planAgentDraft(context, "draft_report", {
     title: "疑点巡检报告草案", sections: [{ heading: "机器线索", body: "待人工复核" }], evidenceRefs: [evidence]

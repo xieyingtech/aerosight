@@ -35,7 +35,7 @@ export const agentToolRegistry = Object.freeze({
     confirmation: "never"
   },
   query_events: {
-    description: "查询当前项目告警事件与证据",
+    description: "查询当前项目案件与证据",
     inputSchema: z.object({ eventIds: z.array(z.string().min(1)).max(100).optional(), window: timeWindowSchema.optional() }).strict(),
     risk: "read-only",
     permission: "project:view",

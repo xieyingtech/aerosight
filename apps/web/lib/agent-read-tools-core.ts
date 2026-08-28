@@ -11,7 +11,7 @@ export type AgentReadToolName = Extract<AgentToolName,
 const referenceType: Record<AgentReadToolName, string> = {
   query_devices: "device",
   query_missions: "task-run",
-  query_events: "event",
+  query_events: "issue",
   query_assets: "asset",
   query_tracks: "track",
   query_map_context: "map-context"
@@ -63,7 +63,7 @@ function referenceHref(projectId: number, name: AgentReadToolName, id: string) {
   const base = `/projects/${projectId}`;
   if (name === "query_devices") return `${base}/devices?selected=${encodeURIComponent(id)}`;
   if (name === "query_missions") return `${base}/tasks/runs/${encodeURIComponent(id)}`;
-  if (name === "query_events") return `${base}/events/${encodeURIComponent(id)}`;
+  if (name === "query_events") return `${base}/issues/${encodeURIComponent(id)}`;
   if (name === "query_assets") return `${base}/assets?selected=${encodeURIComponent(id)}`;
   return `${base}?selected=${encodeURIComponent(id)}`;
 }

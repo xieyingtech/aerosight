@@ -24,10 +24,12 @@ const sql: Record<AgentReadToolName, string> = {
     coalesce(run.finished_at,run.started_at,run.created_at) as "observedAt",'platform-state' as quality
     from task_runs run join tasks task on task.id=run.task_id and task.project_id=run.project_id
     where run.project_id=$1 order by run.created_at desc limit 101`,
-  query_events: `select event.id,event.title,event.severity,event.status,event.occurrence_count as "occurrenceCount",
-    event.last_detected_at as "observedAt",group_row.location_quality as quality
-    from perception_events event join detection_groups group_row on group_row.id=event.detection_group_id and group_row.project_id=event.project_id
-    where event.project_id=$1 order by event.last_detected_at desc limit 101`,
+  query_events: `select issue.id,issue.number,issue.title,issue.priority,issue.status,issue.occurrence_count as "occurrenceCount",
+    issue.last_seen_at as "observedAt",case when exists(select 1 from issue_links link join detections detection
+      on detection.project_id=link.project_id and detection.id=case when link.target_id~'^[0-9]+$' then link.target_id::bigint end
+      where link.project_id=issue.project_id and link.issue_id=issue.id and link.link_type='detection'
+      and detection.geographic_geometry is not null) then 'mapped-evidence' else 'image-evidence' end as quality
+    from issues issue where issue.project_id=$1 order by issue.last_seen_at desc limit 101`,
   query_assets: `select asset.id,asset.kind,asset.mime_type as "mimeType",asset.version,
     coalesce(asset.captured_at,asset.created_at) as "observedAt",
     case when asset.status='available' then 'verified-metadata' else asset.status end as quality
@@ -40,7 +42,7 @@ const sql: Record<AgentReadToolName, string> = {
     where pose.project_id=$1 and pose.standard_position is not null group by pose.device_id order by max(pose.captured_at) desc limit 101`,
   query_map_context: `select 'current' as id,now() as "observedAt",'aggregated' as quality,
     (select count(*)::int from devices where project_id=$1) as "deviceCount",
-    (select count(*)::int from perception_events where project_id=$1 and status in('open','acknowledged','investigating')) as "openEventCount",
+    (select count(*)::int from issues where project_id=$1 and status='open') as "openIssueCount",
     (select count(*)::int from task_runs where project_id=$1 and status in('queued','ready','dispatching','running','paused')) as "activeMissionCount"`
 };
 
