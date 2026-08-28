@@ -17,6 +17,7 @@ import (
 	"aerosight/worker/internal/dji"
 	"aerosight/worker/internal/driver"
 	"aerosight/worker/internal/heartbeat"
+	issueworker "aerosight/worker/internal/issue"
 	"aerosight/worker/internal/media"
 	"aerosight/worker/internal/mission"
 	"aerosight/worker/internal/observability"
@@ -151,7 +152,15 @@ func main() {
 	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
 	detectionSink := perception.NewSQLDetectionSink()
-	consumer.Register("asset.available", assetHandler)
+	consumer.Register("asset.available", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+		if err := assetHandler(ctx, tx, event); err != nil {
+			return err
+		}
+		return mission.CompleteCollectionStep(ctx, tx, event)
+	})
+	algorithmTrigger := algorithm.NewTrigger(assetSigner)
+	consumer.Register("task.step.algorithm.requested", algorithmTrigger.TaskStepHandler)
+	consumer.Register("task.step.issue.requested", issueworker.NewTaskStepProcessor(nil).Handler)
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,

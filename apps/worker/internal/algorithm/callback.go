@@ -261,6 +261,9 @@ func (handler *CallbackHandler) process(
 			message = "algorithm provider reported failure"
 		}
 		_, err = tx.ExecContext(ctx, `update algorithm_runs set status='failed', error_code=nullif($2,''), error_message=left($3,2000), finished_at=now() where id=$1`, runID, payload.ErrorCode, message)
+		if err == nil {
+			err = completeTaskAlgorithmStep(ctx, tx, projectID, runID, "failed", payload.ErrorCode)
+		}
 	} else {
 		_, err = tx.ExecContext(ctx, `update algorithm_runs set status='waiting_callback' where id=$1`, runID)
 	}

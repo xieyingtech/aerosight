@@ -288,9 +288,11 @@ func (processor *Processor) finishSucceeded(
 		return err
 	}
 	if processor.detectionSink != nil {
-		return processor.detectionSink.SaveDetections(ctx, tx, projectID, runID, outcome.Detections)
+		if err := processor.detectionSink.SaveDetections(ctx, tx, projectID, runID, outcome.Detections); err != nil {
+			return err
+		}
 	}
-	return nil
+	return completeTaskAlgorithmStep(ctx, tx, projectID, runID, "succeeded", "")
 }
 
 func nullableProviderValue(value string) any {
@@ -326,7 +328,10 @@ func (processor *Processor) finishFailed(
 		    canonical_result_json = $5, raw_result_object_key = nullif($6, ''),
 		    raw_result_checksum_sha256 = nullif($7, ''), finished_at = now()
 		where id = $1 and status = 'running'`, runID, status, code, message, canonical, object.Key, object.ChecksumSHA256)
-	return err
+	if err != nil {
+		return err
+	}
+	return completeTaskAlgorithmStep(ctx, tx, projectID, runID, "failed", code)
 }
 
 func (processor *Processor) failRun(ctx context.Context, tx *sql.Tx, runID, code, message string) error {
@@ -334,6 +339,100 @@ func (processor *Processor) failRun(ctx context.Context, tx *sql.Tx, runID, code
 		update algorithm_runs set status = 'failed', error_code = $2,
 		       error_message = left($3, 2000), finished_at = now()
 		where id = $1 and status in ('queued', 'running')`, runID, code, message)
+	if err != nil {
+		return err
+	}
+	return completeTaskAlgorithmStep(ctx, tx, 0, runID, "failed", code)
+}
+
+func completeTaskAlgorithmStep(ctx context.Context, tx *sql.Tx, projectID int, runID, outcome, errorCode string) error {
+	var stepID sql.NullInt64
+	var taskRunID, scopedProjectID, teamID, assetID int
+	var canonical []byte
+	var onFailure string
+	err := tx.QueryRowContext(ctx, `select run.task_run_step_id,coalesce(run.task_run_id,0),run.project_id,run.team_id,run.input_asset_id,
+		run.canonical_result_json,coalesce(step.failure_policy_json->>'onFailure','abort')
+		from algorithm_runs run left join task_run_steps run_step on run_step.id=run.task_run_step_id and run_step.project_id=run.project_id
+		left join task_steps step on step.id=run_step.task_step_id and step.project_id=run_step.project_id
+		where run.id=$1 and ($2=0 or run.project_id=$2)`, runID, projectID).Scan(&stepID, &taskRunID, &scopedProjectID, &teamID, &assetID, &canonical, &onFailure)
+	if err != nil {
+		return err
+	}
+	if !stepID.Valid {
+		return nil
+	}
+	stepStatus := "succeeded"
+	if outcome != "succeeded" {
+		stepStatus = "failed"
+		if onFailure == "continue" {
+			stepStatus = "skipped"
+		}
+	}
+	output := map[string]any{"algorithmRunId": runID, "assetId": assetID, "status": outcome}
+	if outcome == "succeeded" {
+		var result any
+		if json.Unmarshal(canonical, &result) == nil {
+			output["result"] = result
+		}
+		rows, err := tx.QueryContext(ctx, `select id,label,confidence from detections
+			where project_id=$1 and algorithm_run_id=$2 order by id`, scopedProjectID, runID)
+		if err != nil {
+			return err
+		}
+		detectionIDs := []int64{}
+		labels := []string{}
+		seenLabels := map[string]bool{}
+		maxConfidence := 0.0
+		for rows.Next() {
+			var detectionID int64
+			var label string
+			var confidence float64
+			if err := rows.Scan(&detectionID, &label, &confidence); err != nil {
+				rows.Close()
+				return err
+			}
+			detectionIDs = append(detectionIDs, detectionID)
+			if !seenLabels[label] {
+				labels = append(labels, label)
+				seenLabels[label] = true
+			}
+			if confidence > maxConfidence {
+				maxConfidence = confidence
+			}
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		output["detectionIds"] = detectionIDs
+		output["detectionCount"] = len(detectionIDs)
+		output["labels"] = labels
+		output["maxConfidence"] = maxConfidence
+	} else {
+		output["errorCode"] = errorCode
+	}
+	outputJSON, err := json.Marshal(output)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `update task_run_steps set status=$3,output_snapshot_json=$4,result_json=result_json||$4,
+		finished_at=now() where project_id=$1 and id=$2 and status in('pending','dispatching','running')`, scopedProjectID, stepID.Int64, stepStatus, outputJSON); err != nil {
+		return err
+	}
+	if outcome != "succeeded" && onFailure != "continue" {
+		runStatus := "failed"
+		if onFailure == "pause" {
+			runStatus = "paused"
+		}
+		_, err = tx.ExecContext(ctx, `update task_runs set status=$3,state_reason=$4,error_message=$5,
+			state_version=state_version+1,finished_at=case when $3='failed' then now() else finished_at end
+			where project_id=$1 and id=$2 and status in('dispatching','running')`, scopedProjectID, taskRunID, runStatus,
+			"algorithm_step_"+outcome, errorCode)
+		return err
+	}
+	payload := map[string]any{"taskRunId": taskRunID, "to": "running", "completedStepId": stepID.Int64}
+	_, err = tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+		values($1,$2,$3,'task_run.transitioned',$4) on conflict(event_id) do nothing`, scopedProjectID, teamID,
+		fmt.Sprintf("task-run-continue:%d:step:%d:%s", taskRunID, stepID.Int64, outcome), payload)
 	return err
 }
 

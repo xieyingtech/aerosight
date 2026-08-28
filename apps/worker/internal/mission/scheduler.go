@@ -25,6 +25,7 @@ const (
 	StepRunning   StepStatus = "running"
 	StepSucceeded StepStatus = "succeeded"
 	StepFailed    StepStatus = "failed"
+	StepSkipped   StepStatus = "skipped"
 
 	CommandSent         CommandStatus = "sent"
 	CommandAcknowledged CommandStatus = "acknowledged"
@@ -53,13 +54,22 @@ type Command struct {
 }
 
 type Step struct {
+	ID             int64
 	Position       int
+	Key            string
+	Uses           string
 	Status         StepStatus
 	CapabilityCode string
 	Action         string
 	FailurePolicy  FailurePolicy
 	Parameters     json.RawMessage
 	Command        *Command
+}
+
+type StepInvocation struct {
+	StepID int64
+	Key    string
+	Uses   string
 }
 
 type Snapshot struct {
@@ -80,6 +90,7 @@ type Decision struct {
 	StepPosition          int
 	StepStatus            StepStatus
 	IssueCommand          *Command
+	InvokeStep            *StepInvocation
 	CompleteCommandID     string
 	CompleteCommandStatus CommandStatus
 	RetryAt               *time.Time
@@ -102,7 +113,7 @@ func stableUUID(key string) string {
 
 func nextStep(snapshot Snapshot) *Step {
 	for index := range snapshot.Steps {
-		if snapshot.Steps[index].Status != StepSucceeded {
+		if snapshot.Steps[index].Status != StepSucceeded && snapshot.Steps[index].Status != StepSkipped {
 			return &snapshot.Steps[index]
 		}
 	}
@@ -113,12 +124,23 @@ func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error)
 	if snapshot.Status != RunDispatching && snapshot.Status != RunRunning {
 		return Decision{}, fmt.Errorf("run status %q cannot be scheduled", snapshot.Status)
 	}
-	if !snapshot.DeviceConnected {
-		return Decision{RunStatus: RunPaused, Reason: "device_disconnected"}, nil
-	}
 	step := nextStep(snapshot)
 	if step == nil {
 		return Decision{RunStatus: RunSucceeded, Reason: "all_steps_succeeded"}, nil
+	}
+	uses := step.Uses
+	if uses == "" {
+		uses = "device.command"
+	}
+	if uses != "device.command" && uses != "device.collect" {
+		if step.Status == StepPending {
+			return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning,
+				InvokeStep: &StepInvocation{StepID: step.ID, Key: step.Key, Uses: uses}, Reason: "task_step_dispatched"}, nil
+		}
+		return Decision{RunStatus: snapshot.Status, StepPosition: step.Position, StepStatus: step.Status, Reason: "awaiting_step_result"}, nil
+	}
+	if !snapshot.DeviceConnected {
+		return Decision{RunStatus: RunPaused, Reason: "device_disconnected"}, nil
 	}
 	if step.Command == nil {
 		id, key := stableCommand(snapshot.RunID, step.Position)
@@ -133,12 +155,19 @@ func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error)
 		return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning, IssueCommand: command, Reason: "step_dispatched"}, nil
 	}
 	command := step.Command
+	if uses == "device.collect" && command.Status == CommandAcknowledged {
+		return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning, Reason: "awaiting_collection_asset"}, nil
+	}
 	if signal != nil {
 		if signal.CommandID != command.ID {
 			return Decision{RunStatus: snapshot.Status, StepPosition: step.Position, StepStatus: step.Status, Reason: "unknown_ack_ignored"}, nil
 		}
 		switch signal.Outcome {
 		case "ack":
+			if uses == "device.collect" {
+				return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning,
+					CompleteCommandID: command.ID, CompleteCommandStatus: CommandAcknowledged, Reason: "collection_acknowledged"}, nil
+			}
 			if step.Position == snapshot.Steps[len(snapshot.Steps)-1].Position {
 				return Decision{RunStatus: RunSucceeded, StepPosition: step.Position, StepStatus: StepSucceeded,
 					CompleteCommandID: command.ID, CompleteCommandStatus: CommandAcknowledged, Reason: "final_step_acknowledged"}, nil

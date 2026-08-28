@@ -74,7 +74,7 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	if err != nil {
 		return err
 	}
-	if decision.Reason == "awaiting_ack" || decision.Reason == "unknown_ack_ignored" {
+	if decision.Reason == "awaiting_ack" || decision.Reason == "awaiting_step_result" || decision.Reason == "unknown_ack_ignored" {
 		return nil
 	}
 	return applyDecision(ctx, tx, event.ProjectID, event.TeamID, snapshot, version, decision, now)
@@ -95,10 +95,10 @@ func loadSnapshot(ctx context.Context, tx *sql.Tx, projectID, runID int) (Snapsh
 		return Snapshot{}, 0, err
 	}
 	rows, err := tx.QueryContext(ctx, `
-		select run_step.position, run_step.status, step.capability_code, step.action, step.parameters_json,
-		       coalesce((step.failure_policy_json->>'maxRetries')::int, 0),
-		       coalesce((step.failure_policy_json->>'retryBackoffSeconds')::int, 1),
-		       coalesce((step.failure_policy_json->>'timeoutSeconds')::int, 30),
+		select run_step.id,run_step.position,run_step.status,step.step_key,step.uses,step.capability_code,step.action,step.parameters_json,
+		       greatest(0,coalesce((step.retry_policy_json->>'maxAttempts')::int-1,(step.failure_policy_json->>'maxRetries')::int,0)),
+		       greatest(0,coalesce((step.retry_policy_json->>'backoffSeconds')::int,(step.failure_policy_json->>'retryBackoffSeconds')::int,1)),
+		       step.timeout_seconds,
 		       coalesce(step.failure_policy_json->>'idempotency', 'unsafe') = 'safe',
 		       coalesce(step.failure_policy_json->>'onFailure', 'abort') = 'pause',
 		       command.id::text, command.status, command.deadline_at,
@@ -121,7 +121,7 @@ func loadSnapshot(ctx context.Context, tx *sql.Tx, projectID, runID int) (Snapsh
 		var safe, pause bool
 		var commandID, commandStatus sql.NullString
 		var deadline sql.NullTime
-		if err := rows.Scan(&step.Position, &step.Status, &step.CapabilityCode, &step.Action, &step.Parameters,
+		if err := rows.Scan(&step.ID, &step.Position, &step.Status, &step.Key, &step.Uses, &step.CapabilityCode, &step.Action, &step.Parameters,
 			&retries, &backoff, &timeout, &safe, &pause, &commandID, &commandStatus, &deadline, &attempts); err != nil {
 			return Snapshot{}, 0, err
 		}
@@ -185,6 +185,24 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 		if _, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
 			values($1,$2,$3,'device.command.dispatch',$4) on conflict(event_id) do nothing`,
 			projectID, teamID, "device.command.dispatch:"+commandID, dispatchPayload); err != nil {
+			return err
+		}
+	}
+	if decision.InvokeStep != nil {
+		eventType := map[string]string{
+			"algorithm.run": "task.step.algorithm.requested", "issue.create-or-update": "task.step.issue.requested",
+			"copilot.run": "task.step.copilot.requested", "report.generate": "task.step.report.requested",
+		}[decision.InvokeStep.Uses]
+		if eventType == "" {
+			return fmt.Errorf("unsupported task step uses %q", decision.InvokeStep.Uses)
+		}
+		payload, err := json.Marshal(map[string]any{"taskRunId": snapshot.RunID, "taskRunStepId": decision.InvokeStep.StepID})
+		if err != nil {
+			return err
+		}
+		eventID := fmt.Sprintf("%s:run:%d:step:%d", eventType, snapshot.RunID, decision.InvokeStep.StepID)
+		if _, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
+			values($1,$2,$3,$4,$5) on conflict(event_id) do nothing`, projectID, teamID, eventID, eventType, payload); err != nil {
 			return err
 		}
 	}

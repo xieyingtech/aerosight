@@ -1323,6 +1323,92 @@ async function assertTaskRunCommandSchema(connectionString) {
   }
 }
 
+async function assertTaskStepIssueSchema(connectionString) {
+  const client = new Client({ connectionString });
+  await client.connect();
+  try {
+    const scope = (await client.query(
+      `select project.id, project.team_id, version.id as version_id, run.id as run_id, run_step.id as run_step_id
+         from projects project
+         join tasks task on task.project_id=project.id and task.name='versioned-task'
+         join task_versions version on version.task_id=task.id and version.project_id=project.id
+         join task_runs run on run.task_version_id=version.id and run.project_id=project.id
+         join task_run_steps run_step on run_step.task_run_id=run.id and run_step.project_id=project.id
+        where project.name='legacy-project' limit 1`
+    )).rows[0];
+    assert(scope, "task step issue fixture is missing");
+
+    const executionKey = `fixture:task-step:${scope.run_step_id}`;
+    await client.query(
+      `update task_run_steps set input_snapshot_json='{"assetId":41}'::jsonb,
+              output_snapshot_json='{"algorithmRunId":"fixture"}'::jsonb,
+              condition_result_json='{"result":true}'::jsonb, execution_key=$2
+        where project_id=$1 and id=$3`,
+      [scope.id, executionKey, scope.run_step_id]
+    );
+    const snapshots = (await client.query(
+      `select input_snapshot_json,output_snapshot_json,condition_result_json,execution_key
+         from task_run_steps where project_id=$1 and id=$2`,
+      [scope.id, scope.run_step_id]
+    )).rows[0];
+    assert(snapshots.input_snapshot_json.assetId === 41 && snapshots.condition_result_json.result === true,
+      "task step snapshots were not persisted");
+
+    const nextNumber = (await client.query(
+      "select coalesce(max(number),0)+1 as number from issues where project_id=$1", [scope.id]
+    )).rows[0].number;
+    const issue = await client.query(
+      `insert into issues(project_id,number,title,source_type,source_id,task_run_id,task_version_id,
+                          condition_scope_key,business_object_key)
+       values($1,$2,'task issue fixture','task',$3,$3,$4,'confidence-v1','object-41') returning id`,
+      [scope.id, nextNumber, scope.run_id, scope.version_id]
+    );
+    await client.query(
+      `insert into issues(project_id,number,title,source_type,source_id,task_run_id,task_version_id,
+                          condition_scope_key,business_object_key)
+       values($1,$2,'duplicate task issue','task',$3,$3,$4,'confidence-v1','object-41')`,
+      [scope.id, nextNumber + 1, scope.run_id, scope.version_id]
+    ).then(
+      () => assert(false, "duplicate task issue key should fail"),
+      (error) => assert(error.code === "23505", "duplicate task issue failed unexpectedly")
+    );
+    await client.query(
+      "update issues set occurrence_count=occurrence_count+1,last_seen_at=now() where id=$1 and project_id=$2",
+      [issue.rows[0].id, scope.id]
+    );
+    const occurrences = (await client.query(
+      "select occurrence_count from issues where id=$1 and project_id=$2", [issue.rows[0].id, scope.id]
+    )).rows[0].occurrence_count;
+    assert(occurrences === 2, "repeated task issue was not folded into one occurrence counter");
+
+    await client.query(
+      `update task_run_steps set status='skipped',condition_result_json='{"result":false}'::jsonb,
+              output_snapshot_json='{"created":false,"reason":"condition_false"}'::jsonb
+        where project_id=$1 and id=$2`, [scope.id, scope.run_step_id]
+    );
+    const falseIssueCount = Number((await client.query(
+      `select count(*) as count from issues where project_id=$1 and task_version_id=$2
+        and condition_scope_key='confidence-v1' and business_object_key='condition-false-object'`,
+      [scope.id, scope.version_id]
+    )).rows[0].count);
+    assert(falseIssueCount === 0, "false task condition unexpectedly produced an issue");
+
+    const otherProject = (await client.query(
+      "select id from projects where id<>$1 order by id limit 1", [scope.id]
+    )).rows[0];
+    assert(otherProject, "cross-project issue fixture is missing");
+    await client.query(
+      `insert into issue_links(project_id,issue_id,link_type,target_id)
+       values($1,$2,'task_run',$3)`, [otherProject.id, issue.rows[0].id, String(scope.run_id)]
+    ).then(
+      () => assert(false, "cross-project issue link should fail"),
+      (error) => assert(error.code === "23503", "cross-project issue link failed unexpectedly")
+    );
+  } finally {
+    await client.end();
+  }
+}
+
 async function assertAlgorithmRuntimeSchema(connectionString) {
   const client = new Client({ connectionString });
   await client.connect();
@@ -1565,6 +1651,7 @@ try {
     await assertSafetyPolicySchema(connectionString);
     await assertApprovalSchema(connectionString);
     await assertTaskRunCommandSchema(connectionString);
+    await assertTaskStepIssueSchema(connectionString);
     await assertAlgorithmRuntimeSchema(connectionString);
     await assertDetectionSchema(connectionString);
     await assertPerceptionEventSchema(connectionString);

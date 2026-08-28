@@ -13,12 +13,14 @@ const definition = {
     { key: "collect", name: "无人机采集", uses: "device.collect", requires: ["camera.capture"], with: {},
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: false }, outputSchema: { type: "object", properties: {}, required: [], additionalProperties: true },
       dependsOn: [], timeoutSeconds: 600, retry: { maxAttempts: 2, backoffSeconds: 10 }, onFailure: "abort" },
-    { key: "detect", name: "运行识别算法", uses: "algorithm.run", requires: [], with: { asset: "steps.collect.outputs.assetId" },
+    { key: "detect", name: "运行识别算法", uses: "algorithm.run", requires: [], with: {
+      assetId: "steps.collect.outputs.assetId", definitionVersionId: 1, parameters: {}
+    },
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: true }, outputSchema: { type: "object", properties: {}, required: [], additionalProperties: true },
       dependsOn: ["collect"], timeoutSeconds: 300, retry: { maxAttempts: 2, backoffSeconds: 5 }, onFailure: "abort" },
     { key: "createIssue", name: "创建案件", uses: "issue.create-or-update", requires: [], with: {},
       inputSchema: { type: "object", properties: {}, required: [], additionalProperties: true }, outputSchema: { type: "object", properties: {}, required: [], additionalProperties: true },
-      condition: { op: "gte", left: { ref: "steps.detect.outputs.confidence" }, right: { ref: "inputs.minimumConfidence" } },
+      condition: { op: "gte", left: { ref: "steps.detect.outputs.maxConfidence" }, right: { ref: "inputs.minimumConfidence" } },
       dependsOn: ["detect"], timeoutSeconds: 30, retry: { maxAttempts: 1, backoffSeconds: 0 }, onFailure: "pause" }
   ]
 };

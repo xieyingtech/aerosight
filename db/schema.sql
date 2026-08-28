@@ -170,6 +170,7 @@ CREATE TABLE "algorithm_runs" (
 	"algorithm_definition_version_id" bigint NOT NULL,
 	"input_asset_id" integer NOT NULL,
 	"task_run_id" integer,
+	"task_run_step_id" bigint,
 	"device_id" integer,
 	"idempotency_key" text NOT NULL,
 	"status" text DEFAULT 'queued' NOT NULL,
@@ -820,12 +821,21 @@ CREATE TABLE "issues" (
 	"status" text DEFAULT 'open' NOT NULL,
 	"priority" text DEFAULT 'medium' NOT NULL,
 	"task_run_id" integer,
+	"task_version_id" bigint,
+	"condition_scope_key" text,
+	"business_object_key" text,
+	"occurrence_count" integer DEFAULT 1 NOT NULL,
+	"first_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"labels_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"opened_by_user_id" integer,
 	"assignee_user_id" integer,
 	"closed_at" timestamp,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "issues_id_project_unique" UNIQUE("id", "project_id")
+	CONSTRAINT "issues_id_project_unique" UNIQUE("id", "project_id"),
+	CONSTRAINT "issues_occurrence_positive" CHECK (occurrence_count > 0),
+	CONSTRAINT "issues_labels_array" CHECK (jsonb_typeof(labels_json) = 'array')
 );
 --> statement-breakpoint
 CREATE TABLE "outbox_events" (
@@ -977,11 +987,19 @@ CREATE TABLE "task_run_steps" (
 	"status" text DEFAULT 'pending' NOT NULL,
 	"attempt_count" integer DEFAULT 0 NOT NULL,
 	"result_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"input_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"output_snapshot_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"condition_result_json" jsonb,
+	"execution_key" text,
 	"started_at" timestamp with time zone,
 	"finished_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "task_run_steps_status_valid" CHECK (status in ('pending','dispatching','running','succeeded','failed','skipped','paused')),
 	CONSTRAINT "task_run_steps_position_valid" CHECK (position > 0 and attempt_count >= 0),
+	CONSTRAINT "task_run_steps_input_object" CHECK (jsonb_typeof(input_snapshot_json) = 'object'),
+	CONSTRAINT "task_run_steps_output_object" CHECK (jsonb_typeof(output_snapshot_json) = 'object'),
+	CONSTRAINT "task_run_steps_condition_object" CHECK (condition_result_json is null or jsonb_typeof(condition_result_json) = 'object'),
+	CONSTRAINT "task_run_steps_project_execution_unique" UNIQUE("project_id", "execution_key"),
 	CONSTRAINT "task_run_steps_run_position_unique" UNIQUE("task_run_id", "position"),
 	CONSTRAINT "task_run_steps_id_project_unique" UNIQUE("id", "project_id")
 );
@@ -1591,6 +1609,7 @@ ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_project_team_fk" FOR
 ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_version_project_fk" FOREIGN KEY ("algorithm_definition_version_id","project_id") REFERENCES "public"."algorithm_definition_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_asset_project_fk" FOREIGN KEY ("input_asset_id","project_id") REFERENCES "public"."assets"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_task_step_project_fk" FOREIGN KEY ("task_run_step_id","project_id") REFERENCES "public"."task_run_steps"("id","project_id") ON DELETE SET NULL ("task_run_step_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_runs" ADD CONSTRAINT "algorithm_runs_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE SET NULL ("device_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "algorithm_run_attempts" ADD CONSTRAINT "algorithm_run_attempts_run_project_fk" FOREIGN KEY ("algorithm_run_id","project_id") REFERENCES "public"."algorithm_runs"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1692,14 +1711,18 @@ ALTER TABLE "poses" ADD CONSTRAINT "poses_observation_project_fk" FOREIGN KEY ("
 ALTER TABLE "poses" ADD CONSTRAINT "poses_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_events" ADD CONSTRAINT "issue_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "idempotency_records" ADD CONSTRAINT "idempotency_records_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_issue_id_issues_id_fk" FOREIGN KEY ("issue_id") REFERENCES "public"."issues"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_issue_project_fk" FOREIGN KEY ("issue_id","project_id") REFERENCES "public"."issues"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issue_links" ADD CONSTRAINT "issue_links_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_task_run_id_task_runs_id_fk" FOREIGN KEY ("task_run_id") REFERENCES "public"."task_runs"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issues" ADD CONSTRAINT "issues_task_run_project_fk" FOREIGN KEY ("task_run_id","project_id") REFERENCES "public"."task_runs"("id","project_id") ON DELETE SET NULL ("task_run_id") ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "issues" ADD CONSTRAINT "issues_task_version_project_fk" FOREIGN KEY ("task_version_id","project_id") REFERENCES "public"."task_versions"("id","project_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_opened_by_user_id_users_id_fk" FOREIGN KEY ("opened_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_assignee_user_id_users_id_fk" FOREIGN KEY ("assignee_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "outbox_events" ADD CONSTRAINT "outbox_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1770,6 +1793,7 @@ CREATE UNIQUE INDEX "algorithm_definition_versions_one_draft_idx" ON "algorithm_
 CREATE INDEX "algorithm_definition_versions_project_status_idx" ON "algorithm_definition_versions" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_runs_claim_idx" ON "algorithm_runs" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "algorithm_runs_task_step_idx" ON "algorithm_runs" USING btree ("task_run_step_id") WHERE "algorithm_runs"."task_run_step_id" is not null;--> statement-breakpoint
 CREATE INDEX "algorithm_run_attempts_run_idx" ON "algorithm_run_attempts" USING btree ("algorithm_run_id","attempt");--> statement-breakpoint
 CREATE INDEX "algorithm_callback_receipts_run_idx" ON "algorithm_callback_receipts" USING btree ("algorithm_run_id","received_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE INDEX "detections_project_captured_idx" ON "detections" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
@@ -1836,6 +1860,7 @@ CREATE UNIQUE INDEX "issues_project_number_unique" ON "issues" USING btree ("pro
 CREATE INDEX "issues_project_status_idx" ON "issues" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "issues_project_priority_idx" ON "issues" USING btree ("project_id","priority");--> statement-breakpoint
 CREATE INDEX "issues_task_run_idx" ON "issues" USING btree ("task_run_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "issues_task_business_unique" ON "issues" USING btree ("project_id","task_version_id","condition_scope_key","business_object_key") WHERE "issues"."task_version_id" is not null and "issues"."condition_scope_key" is not null and "issues"."business_object_key" is not null;--> statement-breakpoint
 CREATE INDEX "outbox_events_claim_idx" ON "outbox_events" USING btree ("status","available_at","locked_until","id");--> statement-breakpoint
 CREATE INDEX "outbox_events_project_created_idx" ON "outbox_events" USING btree ("project_id","created_at","id");--> statement-breakpoint
 CREATE UNIQUE INDEX "projects_team_name_unique" ON "projects" USING btree ("team_id","name");--> statement-breakpoint

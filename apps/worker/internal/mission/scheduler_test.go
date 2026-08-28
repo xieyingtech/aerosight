@@ -30,6 +30,39 @@ func TestMissionCommandRetainsPublishedStepParameters(t *testing.T) {
 	}
 }
 
+func TestNonDeviceStepDispatchesThroughTypedTaskExecutor(t *testing.T) {
+	snapshot := Snapshot{RunID: 42, Status: RunRunning, DeviceConnected: false, Steps: []Step{{
+		ID: 71, Position: 1, Key: "detect", Uses: "algorithm.run", Status: StepPending,
+	}}}
+	decision, err := Advance(snapshot, nil, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.InvokeStep == nil || decision.InvokeStep.StepID != 71 || decision.InvokeStep.Uses != "algorithm.run" || decision.StepStatus != StepRunning {
+		t.Fatalf("typed step was not dispatched: %+v", decision)
+	}
+}
+
+func TestCollectStepWaitsForAvailableAssetAfterAck(t *testing.T) {
+	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
+	snapshot := Snapshot{RunID: 17, Status: RunRunning, DeviceConnected: true, Steps: []Step{{
+		ID: 71, Position: 1, Key: "collect", Uses: "device.collect", Status: StepRunning,
+		Command: &Command{ID: "collect-command", Status: CommandSent, Deadline: now.Add(time.Minute)},
+	}}}
+	decision, err := Advance(snapshot, &Signal{CommandID: "collect-command", Outcome: "ack"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decision.StepStatus != StepRunning || decision.Reason != "collection_acknowledged" || decision.CompleteCommandStatus != CommandAcknowledged {
+		t.Fatalf("collect ACK completed before media was available: %+v", decision)
+	}
+	snapshot.Steps[0].Command.Status = CommandAcknowledged
+	decision, err = Advance(snapshot, nil, now)
+	if err != nil || decision.Reason != "awaiting_collection_asset" || decision.StepStatus != StepRunning {
+		t.Fatalf("acknowledged collection did not wait for its asset: %+v err=%v", decision, err)
+	}
+}
+
 func TestSimulatorSuccessAdvancesSequentially(t *testing.T) {
 	now := time.Date(2026, 8, 28, 10, 0, 0, 0, time.UTC)
 	start, err := Advance(fixture(), nil, now)
