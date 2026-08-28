@@ -109,3 +109,21 @@
 - **GIVEN** `AUTH_SECRET` 已轮换或密文 envelope 损坏
 - **WHEN** 服务端尝试解密外部凭据
 - **THEN** 系统 SHALL 将对应连接器或 Provider 标记为凭据不可用并要求管理员重新填写，不得删除原密文、回退环境变量或尝试明文调用
+
+### Requirement: Auth Secret 凭据轮换命令
+系统 SHALL 提供独立运维命令，使用当前 `AUTH_SECRET` 派生的旧 key 解密全部外部凭据，并使用新 Auth Secret 派生的 key、随机 nonce 和原 AAD 语义重新加密；轮换 MUST 原子完成，不得产生部分资源使用新密钥、部分资源仍使用旧密钥的状态。新 Auth Secret MUST 通过无回显交互输入或标准输入提供，不得作为命令行参数、日志或审计内容。
+
+#### Scenario: 计划内轮换成功
+- **GIVEN** 维护窗口已停止 Web/worker 外部调用，当前 `AUTH_SECRET` 正确且所有密文有效
+- **WHEN** 操作者先执行 dry-run，再运行轮换命令并输入新 Auth Secret
+- **THEN** 系统在单个事务内重新加密并验证全部连接器、算法 Provider 和 AI Provider 凭据，提交后仅输出处理数量、非秘密 key fingerprint 和更新部署变量的指引
+
+#### Scenario: 轮换过程中存在损坏密文
+- **GIVEN** 任一凭据无法用旧 key 解密、版本不受支持、AAD 不匹配或发生并发修改
+- **WHEN** 轮换命令验证或写入
+- **THEN** 系统 SHALL 回滚全部更新并以非零状态退出，所有可用凭据继续保持旧 key 加密状态
+
+#### Scenario: 旧 Auth Secret 已遗失
+- **GIVEN** 操作者无法提供加密现有凭据时使用的旧 Auth Secret
+- **WHEN** 尝试轮换或读取凭据
+- **THEN** 系统 SHALL 明确报告凭据不可恢复；管理员必须重新填写受影响凭据，系统不得尝试绕过认证标签或恢复明文
