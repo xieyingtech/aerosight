@@ -124,6 +124,18 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     syncSelection(next);
   };
   const selectStream = (streamId: number, deviceId: number) => syncSelection({ deviceId, streamId });
+  const activeStreamKeys = snapshot.liveStreams
+    .filter((stream) => Number(stream.deviceId) === selection.deviceId)
+    .map((stream) => String(stream.streamKey));
+  const handleStreamStarted = (session: Record<string, unknown> & { id: number; status: string }) => {
+    const optimisticSession = { ...session, deviceId: Number(selectedDevice?.id), status: session.status || "requested" };
+    setSnapshot((current) => ({
+      ...current,
+      liveStreams: [optimisticSession, ...current.liveStreams.filter((stream) => Number(stream.id) !== session.id)]
+    }));
+    syncSelection({ deviceId: Number(selectedDevice?.id), streamId: session.id });
+    window.setTimeout(() => { void refresh(session.id); }, 500);
+  };
 
   return <div className="space-y-4">
     <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={snapshot} />
@@ -151,7 +163,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
             <div className="mt-3 flex flex-wrap gap-1.5">{(selectedDevice.capabilities ?? []).map((capability) => <Badge key={capability.code} variant="secondary">{capability.code}</Badge>)}</div>
           </section>
           {actions.length ? <section className="rounded-xl border bg-card p-4"><h2 className="flex items-center gap-2 font-medium"><WrenchIcon className="size-4" />设备操作</h2><DeviceActionPanel actions={actions} deviceId={Number(selectedDevice.id)} onChanged={async () => { await refresh(); }} projectId={snapshot.project.id} /></section> : null}
-          <LiveChannelControls device={selectedDevice} onStarted={async (streamId) => { await refresh(streamId); }} projectId={snapshot.project.id} />
+          <LiveChannelControls activeStreamKeys={activeStreamKeys} device={selectedDevice} onStarted={handleStreamStarted} projectId={snapshot.project.id} />
           <section className="overflow-hidden rounded-xl border bg-card"><LiveStreamPanel cursor={null} mode="live" onStreamChanged={async () => { await refresh(); }} selectedStreamId={selection.streamId} selection={mapSelection} snapshot={snapshot} /></section>
         </> : <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
       </aside>
