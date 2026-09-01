@@ -92,6 +92,20 @@ func TestSQLResourceRepositoryTenantIsolationAndIdempotency(t *testing.T) {
 	if err := repository.LinkRemoteResource(ctx, Instance{ID: left.connectorID, ProjectID: left.projectID}, "wayline", resource.RemoteID, CanonicalResourceLink{TargetType: "task", TargetID: "7"}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := repository.ApplyRemoteResources(ctx, Instance{ID: left.connectorID, ProjectID: left.projectID}, RemoteResourceBatch{
+		Kind: "wayline", Resources: []RemoteResource{{RemoteID: resource.RemoteID, RemoteVersion: "3"}}, CompleteSnapshot: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var targetType, targetID string
+	if err := database.QueryRowContext(ctx, `select canonical_target_type,canonical_target_id from connector_remote_resources
+		where project_id=$1 and connector_instance_id=$2 and resource_kind='wayline' and remote_id=$3`,
+		left.projectID, left.connectorID, resource.RemoteID).Scan(&targetType, &targetID); err != nil {
+		t.Fatal(err)
+	}
+	if targetType != "task" || targetID != "7" {
+		t.Fatalf("resource upsert cleared canonical link: %s/%s", targetType, targetID)
+	}
 	missing, err := repository.ApplyRemoteResources(ctx, Instance{ID: left.connectorID, ProjectID: left.projectID}, RemoteResourceBatch{Kind: "wayline", CompleteSnapshot: true})
 	if err != nil || missing.Missing != 1 {
 		t.Fatalf("missing result=%#v err=%v", missing, err)

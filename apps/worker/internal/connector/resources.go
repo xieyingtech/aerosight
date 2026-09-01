@@ -211,7 +211,8 @@ func (repository *SQLResourceRepository) ApplyRemoteResources(
 			on conflict(project_id,connector_instance_id,resource_kind,remote_id) do update set
 			  remote_version=excluded.remote_version,remote_updated_at=excluded.remote_updated_at,
 			  status='active',summary_json=excluded.summary_json,
-			  canonical_target_type=excluded.canonical_target_type,canonical_target_id=excluded.canonical_target_id,
+			  canonical_target_type=coalesce(excluded.canonical_target_type,connector_remote_resources.canonical_target_type),
+			  canonical_target_id=coalesce(excluded.canonical_target_id,connector_remote_resources.canonical_target_id),
 			  last_seen_at=now(),missing_at=null,updated_at=now()`,
 			instance.ProjectID, teamID, instance.ID, batch.Kind, resource.RemoteID, nullableText(resource.RemoteVersion),
 			resource.RemoteUpdatedAt, summary, targetType, targetID)

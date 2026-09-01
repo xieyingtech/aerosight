@@ -35,18 +35,24 @@ type DeviceHealthProjector interface {
 	Apply(context.Context, connector.Instance, HealthPoll) error
 }
 
+type FlightCatalogProjector interface {
+	ApplyWaylines(context.Context, connector.Instance, []WaylineSummary) error
+	ApplyFlightTasks(context.Context, connector.Instance, []FlightTaskSummary) error
+}
+
 type SQLResourceStreamSink struct {
 	telemetry TelemetryBatchIngestor
 	resources RemoteResourceWriter
 	freshness DeviceFreshnessProjector
 	health    DeviceHealthProjector
+	flights   FlightCatalogProjector
 }
 
-func NewSQLResourceStreamSink(telemetryIngestor TelemetryBatchIngestor, resources RemoteResourceWriter, freshness DeviceFreshnessProjector, health DeviceHealthProjector) (*SQLResourceStreamSink, error) {
-	if telemetryIngestor == nil || resources == nil || freshness == nil || health == nil {
+func NewSQLResourceStreamSink(telemetryIngestor TelemetryBatchIngestor, resources RemoteResourceWriter, freshness DeviceFreshnessProjector, health DeviceHealthProjector, flights FlightCatalogProjector) (*SQLResourceStreamSink, error) {
+	if telemetryIngestor == nil || resources == nil || freshness == nil || health == nil || flights == nil {
 		return nil, errors.New("FlightHub resource stream sink dependencies are required")
 	}
-	return &SQLResourceStreamSink{telemetry: telemetryIngestor, resources: resources, freshness: freshness, health: health}, nil
+	return &SQLResourceStreamSink{telemetry: telemetryIngestor, resources: resources, freshness: freshness, health: health, flights: flights}, nil
 }
 
 func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instance connector.Instance, poll DeviceStatePoll) error {
@@ -264,7 +270,13 @@ func (sink *SQLResourceStreamSink) ApplyCatalog(ctx context.Context, instance co
 	_, err = sink.resources.ApplyRemoteResources(ctx, instance, connector.RemoteResourceBatch{
 		Kind: poll.Kind, Resources: resources, CompleteSnapshot: poll.CompleteSnapshot,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	if poll.Kind == "wayline" {
+		return sink.flights.ApplyWaylines(ctx, instance, poll.Waylines)
+	}
+	return sink.flights.ApplyFlightTasks(ctx, instance, poll.FlightTasks)
 }
 
 func waylineRemoteResources(items []WaylineSummary) ([]connector.RemoteResource, error) {

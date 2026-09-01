@@ -44,7 +44,7 @@ type freshnessProjectorFixture struct {
 func TestResourceSinkRejectsDisabledConnectorBeforeTelemetryWrite(t *testing.T) {
 	ingestor := &telemetryIngestorFixture{}
 	resources := &remoteResourceWriterFixture{writableErr: connector.ErrConnectorDisabled}
-	sink, _ := NewSQLResourceStreamSink(ingestor, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{})
+	sink, _ := NewSQLResourceStreamSink(ingestor, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{}, &flightCatalogProjectorFixture{})
 	snapshot := DeviceStateSnapshot{SN: "AIRCRAFT_REDACTED", Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{"mode_code": json.RawMessage(`14`)}}
 	err := sink.ApplyDeviceState(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, DeviceStatePoll{
 		Device:   connector.ManagedConnectorDevice{DeviceID: 11, TeamID: 2, Serial: snapshot.SN},
@@ -57,6 +57,21 @@ func TestResourceSinkRejectsDisabledConnectorBeforeTelemetryWrite(t *testing.T) 
 
 type healthProjectorFixture struct {
 	polls []HealthPoll
+}
+
+type flightCatalogProjectorFixture struct {
+	waylines int
+	tasks    int
+}
+
+func (fixture *flightCatalogProjectorFixture) ApplyWaylines(_ context.Context, _ connector.Instance, items []WaylineSummary) error {
+	fixture.waylines += len(items)
+	return nil
+}
+
+func (fixture *flightCatalogProjectorFixture) ApplyFlightTasks(_ context.Context, _ connector.Instance, items []FlightTaskSummary) error {
+	fixture.tasks += len(items)
+	return nil
 }
 
 func (fixture *healthProjectorFixture) Apply(_ context.Context, _ connector.Instance, poll HealthPoll) error {
@@ -82,7 +97,7 @@ func TestResourceSinkBuildsTransactionalStateAndPoseBatch(t *testing.T) {
 	ingestor := &telemetryIngestorFixture{}
 	resources := &remoteResourceWriterFixture{}
 	freshness := &freshnessProjectorFixture{}
-	sink, err := NewSQLResourceStreamSink(ingestor, resources, freshness, &healthProjectorFixture{})
+	sink, err := NewSQLResourceStreamSink(ingestor, resources, freshness, &healthProjectorFixture{}, &flightCatalogProjectorFixture{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +136,7 @@ func TestResourceSinkBuildsTransactionalStateAndPoseBatch(t *testing.T) {
 
 func TestResourceSinkKeepsInvalidCoordinatesOutOfPoseButRetainsState(t *testing.T) {
 	ingestor := &telemetryIngestorFixture{}
-	sink, _ := NewSQLResourceStreamSink(ingestor, &remoteResourceWriterFixture{}, &freshnessProjectorFixture{}, &healthProjectorFixture{})
+	sink, _ := NewSQLResourceStreamSink(ingestor, &remoteResourceWriterFixture{}, &freshnessProjectorFixture{}, &healthProjectorFixture{}, &flightCatalogProjectorFixture{})
 	snapshot := DeviceStateSnapshot{SN: "AIRCRAFT_REDACTED", Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{
 		"longitude": json.RawMessage(`999`), "latitude": json.RawMessage(`-999`), "mode_code": json.RawMessage(`14`),
 	}}
@@ -137,7 +152,7 @@ func TestResourceSinkKeepsInvalidCoordinatesOutOfPoseButRetainsState(t *testing.
 func TestResourceSinkFreshnessUsesUpstreamCaptureTimeInsteadOfPollTime(t *testing.T) {
 	ingestor := &telemetryIngestorFixture{}
 	freshness := &freshnessProjectorFixture{}
-	sink, _ := NewSQLResourceStreamSink(ingestor, &remoteResourceWriterFixture{}, freshness, &healthProjectorFixture{})
+	sink, _ := NewSQLResourceStreamSink(ingestor, &remoteResourceWriterFixture{}, freshness, &healthProjectorFixture{}, &flightCatalogProjectorFixture{})
 	capturedAt := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	receivedAt := capturedAt.Add(5 * time.Minute)
 	snapshot := DeviceStateSnapshot{SN: "AIRCRAFT_REDACTED", Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{
@@ -164,7 +179,7 @@ func TestResourceSinkFreshnessUsesUpstreamCaptureTimeInsteadOfPollTime(t *testin
 func TestResourceSinkProjectsHealthWithoutPersistingSerialsOrMessages(t *testing.T) {
 	resources := &remoteResourceWriterFixture{}
 	health := &healthProjectorFixture{}
-	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, health)
+	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, health, &flightCatalogProjectorFixture{})
 	alert := HMSAlert{ID: "HMS_REDACTED", Code: "CODE_REDACTED", Message: "vendor message must not persist", Level: "warning", Module: "hms", Status: 1}
 	poll := HealthPoll{
 		Devices: []connector.ManagedConnectorDevice{{DeviceID: 11, TeamID: 2, Serial: "AIRCRAFT_REDACTED"}},
@@ -188,7 +203,8 @@ func TestResourceSinkProjectsHealthWithoutPersistingSerialsOrMessages(t *testing
 
 func TestResourceSinkProjectsCatalogsWithStableIdentityAndSanitizedSummaries(t *testing.T) {
 	resources := &remoteResourceWriterFixture{}
-	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{})
+	flights := &flightCatalogProjectorFixture{}
+	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{}, flights)
 	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	waylinePoll := CatalogPoll{
 		Kind: "wayline", CompleteSnapshot: true, ReceivedAt: now,
@@ -214,6 +230,9 @@ func TestResourceSinkProjectsCatalogsWithStableIdentityAndSanitizedSummaries(t *
 	}
 	if len(resources.batches) != 4 {
 		t.Fatalf("catalog batches=%#v", resources.batches)
+	}
+	if flights.waylines != 2 || flights.tasks != 2 {
+		t.Fatalf("canonical projector calls waylines=%d tasks=%d", flights.waylines, flights.tasks)
 	}
 	firstWayline, secondWayline := resources.batches[0].Resources[0], resources.batches[2].Resources[0]
 	firstTask, secondTask := resources.batches[1].Resources[0], resources.batches[3].Resources[0]
@@ -266,7 +285,7 @@ func TestSQLResourceSinkIdempotencyOrderingAndInvalidCoordinates(t *testing.T) {
 
 	clock := &fixedHeartbeatClock{now: time.Date(2026, 9, 1, 10, 0, 1, 0, time.UTC)}
 	freshness := heartbeat.NewProjector(database, clock)
-	sink, err := NewSQLResourceStreamSink(telemetry.NewIngestor(database), connector.NewSQLResourceRepository(database), freshness, NewSQLDeviceHealthProjector(database))
+	sink, err := NewSQLResourceStreamSink(telemetry.NewIngestor(database), connector.NewSQLResourceRepository(database), freshness, NewSQLDeviceHealthProjector(database), &flightCatalogProjectorFixture{})
 	if err != nil {
 		t.Fatal(err)
 	}
