@@ -3,17 +3,19 @@ import test from "node:test";
 
 import { decideApproval } from "./approval-core.ts";
 import { assertStreamCanStart, transitionLiveStream } from "./live-stream-core.ts";
+import { planIssueMutation } from "./issue-collaboration-core.ts";
 import { evaluateMissionPreflight, type SafetyPolicy } from "./mission-preflight.ts";
-import { planPerceptionEventAction } from "./perception-event-actions-core.ts";
 import { createProjectMapModel } from "./project-map-model.ts";
 import type { ProjectReplay } from "./project-replay-core.ts";
 import { applyReplayToSnapshot } from "./replay-model.ts";
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 import { mapSuspectedConstructionDetections, suspectedConstructionTemplate } from "./suspected-construction-template.ts";
+import { evaluateTaskCondition } from "./task-condition-evaluator.ts";
 import { applyCommandAck, transitionTaskRun } from "./task-run-core.ts";
+import { planTaskTrigger } from "./task-trigger-core.ts";
 import { buildTimelineModel } from "./timeline-model.ts";
 
-test("simulator vertical acceptance covers inspection through alert handling and replay", () => {
+test("simulator vertical acceptance covers manual and scheduled task through issue collaboration and replay", () => {
   const startedAt = "2026-08-27T08:00:00.000Z";
   const initialSnapshot: ProjectSituationSnapshot = {
     project: { id: 17, name: "北区 simulator 试点", teamId: 5 },
@@ -23,13 +25,25 @@ test("simulator vertical acceptance covers inspection through alert handling and
       pose: { longitude: 120.15, latitude: 30.27, altitudeMeters: 80, capturedAt: startedAt } }],
     tracks: [{ projectId: 17, deviceId: 1, startedAt, endedAt: "2026-08-27T08:05:00.000Z", pointCount: 2,
       geometry: { type: "LineString", coordinates: [[120.15, 30.27, 80], [120.16, 30.28, 85]] } }],
-    activeTasks: [], liveStreams: [], mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
+    activeTasks: [], taskSteps: [], algorithmRuns: [], liveStreams: [], mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
     freshness: { latestCapturedAt: "2026-08-27T08:05:00.000Z", isRealtime: true },
     availability: { devices: "available", tasks: "available", media: "available", alerts: "available", liveStreams: "available" }
   };
   const overview = createProjectMapModel(initialSnapshot);
   assert.ok(overview.features.some((feature) => feature.properties.layerKind === "device-drone"));
   assert.ok(overview.features.some((feature) => feature.properties.layerKind === "track"));
+
+  const triggerAuthorization = { projectId: 17,taskProjectId: 17,taskVersionStatus: "published",taskStatus: "active",
+    concurrencyLimit: 1,activeRunCount: 0,actor: { type: "user" as const,id: "9" } };
+  const inputSchema = { type: "object",properties: { areaId: { type: "number" } },required: ["areaId"],additionalProperties: false };
+  const manualTrigger = planTaskTrigger({ trigger: { type: "manual" },inputSchema,
+    invocation: { type: "manual",idempotencyKey: "manual-1",occurredAt: startedAt,inputs: { areaId: 8 } },
+    authorization: triggerAuthorization });
+  const scheduledTrigger = planTaskTrigger({ trigger: { type: "schedule",cron: "0 8 * * *",timezone: "Asia/Shanghai",enabled: true },inputSchema,
+    invocation: { type: "schedule",idempotencyKey: "schedule-1",occurredAt: startedAt,scheduledFor: startedAt,inputs: { areaId: 8 } },
+    authorization: { ...triggerAuthorization,actor: { type: "service",id: "task-scheduler" } } });
+  assert.equal(manualTrigger.triggerKey,"manual:manual-1");
+  assert.equal(scheduledTrigger.triggerKey,"schedule:schedule-1");
 
   const policy: SafetyPolicy = {
     policyVersionId: "sim-policy-v1",
@@ -69,25 +83,33 @@ test("simulator vertical acceptance covers inspection through alert handling and
     inputAsset: { assetId: 21, version: 1, checksumSha256: "a".repeat(64), mimeType: "image/jpeg" }
   });
   assert.equal(detections[0].label, "suspected-construction:new-building");
-  const handled = planPerceptionEventAction({
-    action: "confirm", currentStatus: "open", actualVersion: 0, expectedVersion: 0,
-    permissions: new Set(["event:handle"]), actorUserId: 10
+  const condition = evaluateTaskCondition({ op: "gte",left: { ref: "steps.detect.outputs.maxConfidence" },right: { value: 0.8 } },{
+    inputs: { areaId: 8 },steps: { detect: { outputs: { maxConfidence: detections[0].confidence,count: detections.length } } }
   });
-  assert.equal(handled.status, "acknowledged");
+  assert.equal(condition.result,true);
+  const comment = planIssueMutation({ mutation: { action: "comment",body: "现场确认，安排复核" },permissions: new Set(["issue:handle"]),actualVersion: 0,expectedVersion: 0 });
+  const assignment = planIssueMutation({ mutation: { action: "assign",assigneeType: "user",assigneeId: 10 },permissions: new Set(["issue:assign"]),actualVersion: 1,expectedVersion: 1 });
+  assert.equal(comment.eventType,"comment.created");
+  assert.equal(assignment.eventType,"assignee.added");
 
   const completedSnapshot: ProjectSituationSnapshot = {
     ...initialSnapshot,
     activeTasks: [{ id: 42, projectId: 17, taskName: "疑似违建巡检", status: run.status, startedAt }],
+    taskSteps: [{ id: 43, projectId: 17, taskRunId: 42, name: "巡检采集", stepKey: "collect", uses: "device.collect",
+      status: "succeeded", occurredAt: "2026-08-27T08:04:00.000Z" }],
+    algorithmRuns: [{ id: "algorithm-run-1", projectId: 17, taskRunId: 42, definitionName: "疑似违建识别",
+      status: "succeeded", occurredAt: "2026-08-27T08:05:00.000Z" }],
     liveStreams: [{ id: 3, projectId: 17, deviceId: 1, status: "live", startedAt }],
     mediaPoints: [{ id: 21, projectId: 17, deviceId: 1, kind: "image", capturedAt: "2026-08-27T08:04:00.000Z",
       metadata: { longitude: 120.16, latitude: 30.28 } }],
     suspectedConstruction: [{ id: "group-1", projectId: 17, label: "疑似违建", status: "active",
       capturedAt: "2026-08-27T08:06:00.000Z", geometry: { type: "Polygon", coordinates: [[[120.16, 30.28], [120.17, 30.28], [120.17, 30.29], [120.16, 30.28]]] } }],
-    openIssues: [], openAlerts: [{ id: "event-1", projectId: 17, title: "疑似违建", status: handled.status,
-      updatedAt: "2026-08-27T08:07:00.000Z", longitude: 120.16, latitude: 30.28 }]
+    openIssues: [{ id: "issue-1", projectId: 17, title: "疑似违建复核", status: "open",
+      updatedAt: "2026-08-27T08:07:00.000Z", longitude: 120.16, latitude: 30.28 }],
+    openAlerts: []
   };
   const timeline = buildTimelineModel(completedSnapshot, { from: startedAt, to: completedSnapshot.generatedAt });
-  for (const lane of ["devices", "tasks", "media", "detections", "alerts"] as const) {
+  for (const lane of ["devices", "tasks", "media", "algorithms", "detections", "issues"] as const) {
     assert.ok(timeline.lanes.find((item) => item.key === lane)?.items.length, `timeline lacks ${lane}`);
   }
 
@@ -99,7 +121,7 @@ test("simulator vertical acceptance covers inspection through alert handling and
       { deviceId: 1, deviceName: "Simulator 无人机", deviceType: "drone", capturedAt: "2026-08-27T08:05:00.000Z", longitude: 120.16, latitude: 30.28, altitudeMeters: 85 }
     ],
     media: completedSnapshot.mediaPoints,
-    events: [{ eventType: "perception_event.acknowledged", occurredAt: "2026-08-27T08:07:00.000Z" }]
+    events: [{ eventType: "issue.updated", occurredAt: "2026-08-27T08:07:00.000Z" }]
   };
   const historical = applyReplayToSnapshot(completedSnapshot, replay);
   assert.equal(historical.freshness.isRealtime, false);

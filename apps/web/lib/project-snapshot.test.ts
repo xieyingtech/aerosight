@@ -28,7 +28,7 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   assert.equal(snapshot?.project.id, 7);
   assert.match(client.statements[0], /repeatable read read only/i);
   assert.equal(client.statements.at(-1), "commit");
-  for (const marker of ["snapshot:devices", "snapshot:device-grants", "snapshot:tracks", "snapshot:active-tasks", "snapshot:live-streams", "snapshot:realtime-channels", "snapshot:diagnostics", "snapshot:media", "snapshot:suspected-construction", "snapshot:issues", "snapshot:alerts"]) {
+  for (const marker of ["snapshot:devices", "snapshot:device-grants", "snapshot:tracks", "snapshot:active-tasks", "snapshot:task-steps", "snapshot:algorithm-runs", "snapshot:live-streams", "snapshot:realtime-channels", "snapshot:diagnostics", "snapshot:media", "snapshot:suspected-construction", "snapshot:issues", "snapshot:alerts", "snapshot:regions"]) {
     assert(client.statements.some((statement) => statement.includes(marker)));
   }
   const deviceStatement = client.statements.find((statement) => statement.includes("snapshot:devices"));
@@ -36,6 +36,9 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   assert.match(deviceStatement ?? "", /join driver_definitions/i);
   assert.match(deviceStatement ?? "", /rawCapabilities/);
   assert.match(deviceStatement ?? "", /rawChannels/);
+  const regionStatement = client.statements.find((statement) => statement.includes("snapshot:regions"));
+  assert.match(regionStatement ?? "", /version\.project_id=\$1/);
+  assert.match(regionStatement ?? "", /policy\.project_id=\$1/g);
   assert(!JSON.stringify(snapshot).includes("dependencyHealthJson"));
   assert(client.released);
 });

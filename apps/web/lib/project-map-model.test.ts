@@ -12,6 +12,7 @@ const snapshot: ProjectSituationSnapshot = {
   ],
   tracks: [{ deviceId: 1, geometry: { type: "LineString", coordinates: [[120.1, 30.2], [120.2, 30.3]] } }],
   activeTasks: [{ id: 3, taskName: "Route", status: "running", input: { route: { type: "LineString", coordinates: [[120, 30], [121, 31]] } } }],
+  taskSteps: [], algorithmRuns: [],
   regions: [{ id: 4, name: "Area", geometry: { type: "Polygon", coordinates: [[[120, 30], [121, 30], [121, 31], [120, 30]]] } }],
   mediaPoints: [{ id: 5, kind: "image", metadata: { longitude: 120.3, latitude: 30.4 } }],
   suspectedConstruction: [{ id: 6, label: "疑似违建", geometry: { type: "Point", coordinates: [120.4, 30.5] } }],

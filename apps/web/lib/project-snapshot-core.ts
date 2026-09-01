@@ -64,6 +64,8 @@ export type ProjectSituationSnapshot = {
   devices: ProjectSnapshotDevice[];
   tracks: Array<Record<string, unknown>>;
   activeTasks: Array<Record<string, unknown>>;
+  taskSteps: Array<Record<string, unknown>>;
+  algorithmRuns: Array<Record<string, unknown>>;
   liveStreams: Array<Record<string, unknown>>;
   realtimeChannels?: Array<Record<string, unknown>>;
   diagnostics?: OperationDiagnostic[];
@@ -183,6 +185,31 @@ export async function readProjectSituationSnapshot(
        order by run.created_at desc`,
       [projectId]
     )).rows;
+    const taskSteps = (await client.query<Record<string, unknown>>(
+      `/* snapshot:task-steps */
+       select run_step.id,run_step.project_id as "projectId",run_step.task_run_id as "taskRunId",
+              step.step_key as "stepKey",step.name,step.uses,run_step.status,
+              coalesce(run_step.finished_at,run_step.started_at,run_step.created_at) as "occurredAt"
+         from task_run_steps run_step
+         join task_steps step on step.id=run_step.task_step_id and step.project_id=run_step.project_id
+        where run_step.project_id=$1
+        order by coalesce(run_step.finished_at,run_step.started_at,run_step.created_at) desc limit 1000`,
+      [projectId]
+    )).rows;
+    const algorithmRuns = (await client.query<Record<string, unknown>>(
+      `/* snapshot:algorithm-runs */
+       select run.id,run.project_id as "projectId",run.task_run_id as "taskRunId",run.status,
+              definition.name as "definitionName",
+              coalesce(run.finished_at,run.started_at,run.created_at) as "occurredAt"
+         from algorithm_runs run
+         join algorithm_definition_versions version
+           on version.id=run.algorithm_definition_version_id and version.project_id=run.project_id
+         join algorithm_definitions definition
+           on definition.id=version.algorithm_definition_id and definition.project_id=version.project_id
+        where run.project_id=$1
+        order by coalesce(run.finished_at,run.started_at,run.created_at) desc limit 1000`,
+      [projectId]
+    )).rows;
     const tracks = (await client.query<Record<string, unknown>>(
       `/* snapshot:tracks */
        select recent.device_id as "deviceId", min(recent.captured_at) as "startedAt",
@@ -285,6 +312,28 @@ export async function readProjectSituationSnapshot(
        where issue.project_id=$1 and issue.status<>'closed'
        order by issue.last_seen_at desc limit 500`, [projectId]
     )).rows;
+    const regions = (await client.query<Record<string, unknown>>(
+      `/* snapshot:regions */
+       select 'task-version:'||version.id::text as id,version.project_id as "projectId",
+              coalesce(version.definition_json->>'name',task.name) as name,'inspection-area'::text as kind,
+              jsonb_build_object('type','Polygon','coordinates',version.definition_json#>'{spatialScope,rings}') as geometry
+         from task_versions version
+         join tasks task on task.id=version.task_id and task.project_id=version.project_id
+        where version.project_id=$1 and version.status='published'
+          and version.definition_json#>>'{spatialScope,type}'='area'
+          and jsonb_typeof(version.definition_json#>'{spatialScope,rings}')='array'
+       union all
+       select 'safety-boundary:'||policy.id::text,policy.project_id,'项目安全边界','safety-boundary',
+              ST_AsGeoJSON(policy.project_boundary)::jsonb
+         from safety_policy_versions policy
+        where policy.project_id=$1 and policy.status='published' and policy.project_boundary is not null
+       union all
+       select 'restricted-areas:'||policy.id::text,policy.project_id,'禁限区域','restricted-area',
+              ST_AsGeoJSON(policy.restricted_areas)::jsonb
+         from safety_policy_versions policy
+        where policy.project_id=$1 and policy.status='published' and policy.restricted_areas is not null`,
+      [projectId]
+    )).rows;
 
     const generatedAt = new Date();
     const latest = latestTimestamp([devices, tracks, activeTasks, liveStreams, realtimeChannels, mediaPoints, openIssues]);
@@ -297,6 +346,8 @@ export async function readProjectSituationSnapshot(
       devices,
       tracks,
       activeTasks,
+      taskSteps,
+      algorithmRuns,
       liveStreams,
       realtimeChannels,
       diagnostics,
@@ -304,7 +355,7 @@ export async function readProjectSituationSnapshot(
       suspectedConstruction,
       openIssues,
       openAlerts,
-      regions: [],
+      regions,
       freshness: {
         latestCapturedAt: latest?.toISOString() ?? null,
         isRealtime: Boolean(latest && generatedAt.getTime() - latest.getTime() <= 120_000)
@@ -313,7 +364,7 @@ export async function readProjectSituationSnapshot(
         devices: "available", tasks: "available", media: "available", issues: "available", alerts: "available",
         liveStreams: health.capabilityAvailability.realtime_device_control === "degraded" ? "degraded" : "available",
         suspectedConstruction: health.capabilityAvailability.algorithm_execution === "degraded" ? "degraded" : "available",
-        regions: "not-configured"
+        regions: regions.length ? "available" : "not-configured"
       },
       health
     };

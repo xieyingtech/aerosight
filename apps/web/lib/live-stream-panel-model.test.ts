@@ -6,7 +6,7 @@ import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 
 const snapshot = {
   project: { id: 17, name: "P", teamId: 5 }, generatedAt: "2026-08-27T00:10:00Z", consistency: "repeatable-read",
-  devices: [{ id: 1 }, { id: 2 }], tracks: [], activeTasks: [],
+  devices: [{ id: 1 }, { id: 2 }], tracks: [], activeTasks: [], taskSteps: [], algorithmRuns: [],
   liveStreams: [{ id: 7, deviceId: 1, status: "live" }, { id: 8, deviceId: 2, status: "degraded" }],
   mediaPoints: [
     { id: 20, deviceId: 1, capturedAt: "2026-08-27T00:05:00Z" },

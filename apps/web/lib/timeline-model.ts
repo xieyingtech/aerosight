@@ -1,6 +1,6 @@
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 
-export type TimelineLaneKey = "devices" | "tasks" | "media" | "algorithms" | "detections" | "alerts";
+export type TimelineLaneKey = "devices" | "tasks" | "media" | "algorithms" | "detections" | "issues";
 export type TimelineItem = {
   id: string;
   entityId: string;
@@ -15,7 +15,7 @@ export type TimelineLane = { key: TimelineLaneKey; label: string; items: Timelin
 export type TimelineModel = { from: string; to: string; lanes: TimelineLane[] };
 
 const laneLabels: Record<TimelineLaneKey, string> = {
-  devices: "设备", tasks: "任务步骤", media: "媒体", algorithms: "算法运行", detections: "检测", alerts: "告警"
+  devices: "设备", tasks: "任务步骤", media: "媒体", algorithms: "算法运行", detections: "检测", issues: "案件"
 };
 
 function dateValue(value: unknown) {
@@ -60,16 +60,20 @@ export function buildTimelineModel(snapshot: ProjectSituationSnapshot, options?:
   const to = options?.to ?? snapshot.generatedAt;
   const from = options?.from ?? new Date(Date.parse(to) - 60 * 60 * 1000).toISOString();
   const raw: Record<TimelineLaneKey, TimelineItem[]> = {
-    devices: [], tasks: [], media: [], algorithms: [], detections: [], alerts: []
+    devices: [], tasks: [], media: [], algorithms: [], detections: [], issues: []
   };
   for (const device of snapshot.devices) {
     const pose = device.pose as Record<string, unknown> | null;
     const timestamp = dateValue(pose?.capturedAt ?? device.lastSeenAt);
     if (timestamp) raw.devices.push({ id: `device-${device.id}-${timestamp}`, entityId: String(device.id), lane: "devices", label: String(device.name ?? "设备"), timestamp, count: 1, status: String(device.status ?? "unknown") });
   }
-  for (const task of snapshot.activeTasks) {
-    const timestamp = dateValue(task.startedAt ?? task.createdAt);
-    if (timestamp) raw.tasks.push({ id: `task-${task.id}-${timestamp}`, entityId: String(task.id), lane: "tasks", label: String(task.taskName ?? "任务"), timestamp, count: 1, status: String(task.status ?? "") });
+  for (const step of snapshot.taskSteps) {
+    const timestamp = dateValue(step.occurredAt);
+    if (timestamp) raw.tasks.push({ id: `task-step-${step.id}-${timestamp}`, entityId: String(step.id), lane: "tasks", label: String(step.name ?? step.stepKey ?? "任务步骤"), timestamp, count: 1, status: String(step.status ?? "") });
+  }
+  for (const run of snapshot.algorithmRuns) {
+    const timestamp = dateValue(run.occurredAt);
+    if (timestamp) raw.algorithms.push({ id: `algorithm-${run.id}-${timestamp}`, entityId: String(run.id), lane: "algorithms", label: String(run.definitionName ?? "算法运行"), timestamp, count: 1, status: String(run.status ?? "") });
   }
   for (const media of snapshot.mediaPoints) {
     const timestamp = dateValue(media.capturedAt ?? media.createdAt);
@@ -79,9 +83,9 @@ export function buildTimelineModel(snapshot: ProjectSituationSnapshot, options?:
     const timestamp = dateValue(detection.capturedAt ?? detection.createdAt);
     if (timestamp) raw.detections.push({ id: `detection-${detection.id}-${timestamp}`, entityId: String(detection.id), lane: "detections", label: String(detection.label ?? "疑似违建"), timestamp, count: 1, status: String(detection.status ?? "open") });
   }
-  for (const alert of snapshot.openAlerts) {
-    const timestamp = dateValue(alert.updatedAt ?? alert.createdAt);
-    if (timestamp) raw.alerts.push({ id: `alert-${alert.id}-${timestamp}`, entityId: String(alert.id), lane: "alerts", label: String(alert.title ?? "告警"), timestamp, count: 1, status: String(alert.status ?? "open") });
+  for (const issue of snapshot.openIssues) {
+    const timestamp = dateValue(issue.updatedAt ?? issue.createdAt);
+    if (timestamp) raw.issues.push({ id: `issue-${issue.id}-${timestamp}`, entityId: String(issue.id), lane: "issues", label: String(issue.title ?? "案件"), timestamp, count: 1, status: String(issue.status ?? "open") });
   }
   const aggregationWindow = options?.aggregateWindowMilliseconds ?? 2_000;
   const gapThreshold = options?.gapThresholdMilliseconds ?? 5 * 60_000;

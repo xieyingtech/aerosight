@@ -9,7 +9,7 @@ import { interpolateTimeline, type SituationSelection } from "@/lib/situation-st
 
 const laneColors = {
   devices: "bg-sky-500", tasks: "bg-violet-500", media: "bg-fuchsia-500",
-  algorithms: "bg-amber-500", detections: "bg-orange-500", alerts: "bg-red-500"
+  algorithms: "bg-amber-500", detections: "bg-orange-500", issues: "bg-red-500"
 };
 
 export function ProjectTimeline({ snapshot, cursor, range, onSelect, onCursorChange, onRangeChange, onReturnLive }: {
