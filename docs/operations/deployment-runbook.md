@@ -121,4 +121,11 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 
 ## 9. 全新环境演练记录
 
-历史演练记录不代表当前凭据与 Tasks/Copilot 变更已经验收。每个候选版本都必须重新执行 `pnpm drill:fresh-environment`、`pnpm test:migrations`、`pnpm check` 和生产构建，并保存实际输出；不得沿用旧迁移数量或旧 AI 环境变量检查结果。
+2026-09-01（Asia/Shanghai）在候选工作区 `d064286` 加当前 OpenSpec 实现变更上执行 `pnpm drill:fresh-environment`，结果通过：
+
+- `.env.example` 的 19 个数据库、认证、日志、对象存储、算法、callback、媒体和 FlightHub 变量均存在；`AI_PROVIDER`、`AI_MODEL`、`OPENAI_API_KEY` 均不存在，AI Provider 只通过管理后台和数据库配置。
+- 19/19 项运行配置、对象存储、算法出站、AI Provider registry 与依赖降级契约测试通过。
+- 全新 PostGIS、现有快照、旧版基线和重复执行迁移通过，当前 53 个迁移均由迁移器管理。
+- Next.js 生产构建、TypeScript 检查、静态页面生成和 Go Worker 二进制构建通过。
+
+该记录只证明当前候选工作区的全新环境契约。每个后续候选版本仍必须重新执行 `pnpm drill:fresh-environment`、`pnpm test:migrations`、`pnpm check` 和生产构建，并保存实际输出；不得沿用旧迁移数量或旧 AI 环境变量检查结果。

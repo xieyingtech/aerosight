@@ -2,13 +2,13 @@
 
 ## 结论
 
-2026-08-27 执行 `pnpm drill:upgrade-rollback`，演练通过。数据库 schema 只向前迁移，应用可以回滚到仍遵守兼容性契约的旧构建；回滚过程不降级 schema、不清理新数据。
+2026-09-01 执行 `pnpm drill:upgrade-rollback`，演练通过。数据库 schema 只向前迁移，应用可以回滚到仍遵守兼容性契约的旧构建；回滚过程不降级 schema、不清理新数据。
 
 ## 演练步骤与结果
 
 1. 在全新 `postgis/postgis:17-3.5` 中加载 `0001_baseline.sql`，写入旧项目、成员、设备、任务、任务运行和资产快照。
 2. 用旧页面 SQL 契约读取项目、设备、任务、运行和资产，确认升级前可用。
-3. 运行当前迁移器：baseline 被安全采用，31 个迁移全部登记并完成。
+3. 运行当前迁移器：baseline 被安全采用，53 个迁移全部登记并完成。
 4. 再次执行旧页面 SQL，返回内容与升级前一致。
 5. 用新版 schema 写入一项新证据，包含 available asset、published evidence link、`legal_hold=true` 和 active retention hold。
 6. 写入旧 Worker 未注册的 `future.evidence.sealed` outbox event，再按回滚 Worker 的已注册事件集合执行 claim。
