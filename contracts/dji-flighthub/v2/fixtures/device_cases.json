@@ -1,0 +1,214 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "device-detail-dock2",
+      "method": "GET",
+      "path": "/openapi/v2.0/project/device/DOCK_REDACTED_01",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "DOCK_REDACTED_01",
+          "device_model": { "key": "3-2-0", "domain": "3", "type": "2", "sub_type": "0", "name": "DJI Dock 2", "class": "airport" },
+          "is_org_device": true,
+          "device_organization_callsign": "脱敏机场",
+          "device_project_callsign": "脱敏机场"
+        }
+      }
+    },
+    {
+      "name": "state-dock2",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/DOCK_REDACTED_01/state",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "DOCK_REDACTED_01",
+          "device_model": { "key": "3-2-0", "domain": "3", "type": "2", "sub_type": "0", "name": "DJI Dock 2", "class": "airport" },
+          "device_state": {
+            "latitude": 30.000001,
+            "longitude": 120.000001,
+            "height": 12.5,
+            "mode_code": 0,
+            "network_state": { "quality": 4 },
+            "battery_store_mode": 1,
+            "environment_temperature": 24.5,
+            "live_status": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "state-m3td",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/AIRCRAFT_REDACTED_01/state",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "AIRCRAFT_REDACTED_01",
+          "device_model": { "key": "0-91-1", "domain": "0", "type": "91", "sub_type": "1", "name": "M3TD", "class": "drone" },
+          "device_state": {
+            "latitude": 30.000002,
+            "longitude": 120.000002,
+            "height": 48.2,
+            "attitude_pitch": -2.0,
+            "attitude_roll": 1.0,
+            "attitude_head": 180.0,
+            "mode_code": 14,
+            "battery": { "capacity_percent": 76 },
+            "network_state": { "quality": 3 },
+            "live_status": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "state-missing-fields",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/MISSING_REDACTED/state",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "MISSING_REDACTED",
+          "device_model": { "key": "3-2-0", "class": "airport" }
+        }
+      }
+    },
+    {
+      "name": "state-unknown-model",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/UNKNOWN_REDACTED/state",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "UNKNOWN_REDACTED",
+          "device_model": { "key": "9-9-9", "domain": "9", "type": "9", "sub_type": "9", "name": "Future Device", "class": "future" },
+          "device_state": { "future_field": { "value": 1 } }
+        }
+      }
+    },
+    {
+      "name": "state-invalid-coordinates",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/INVALID_COORD_REDACTED/state",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "device_sn": "INVALID_COORD_REDACTED",
+          "device_model": { "key": "0-91-1", "domain": "0", "type": "91", "sub_type": "1", "name": "M3TD", "class": "drone" },
+          "device_state": { "latitude": 999.0, "longitude": -999.0, "height": 0 }
+        }
+      }
+    },
+    {
+      "name": "device-hms",
+      "method": "GET",
+      "path": "/openapi/v2.0/device/hms?device_sn_list=DOCK_REDACTED_01%2CAIRCRAFT_REDACTED_01",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "list": [{
+            "device_sn": "DOCK_REDACTED_01",
+            "device_hms": {
+              "list": [{
+                "level": "notification",
+                "module": "device_management",
+                "in_the_sky": "on_the_ground",
+                "imminent": false,
+                "code": "HMS_REDACTED_CODE",
+                "message": "脱敏告警",
+                "args": {},
+                "hms_id": "HMS_REDACTED_01",
+                "status": 2,
+                "status_key": "HMS_STATUS_REDACTED",
+                "begin_time": 0,
+                "end_time": 0,
+                "device_data_create_time": 0,
+                "device_data_update_time": 0,
+                "domain_type": "drone_nest",
+                "sub_hms_list": []
+              }]
+            }
+          }]
+        }
+      }
+    },
+    {
+      "name": "historical-topology",
+      "method": "GET",
+      "path": "/openapi/v2.0/topologies/history",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "list": [{
+            "index": "TOPOLOGY_REDACTED_01",
+            "host": {
+              "device_sn": "AIRCRAFT_REDACTED_01",
+              "device_model": { "key": "0-91-1", "domain": "0", "type": "91", "sub_type": "1", "name": "M3TD", "class": "drone" },
+              "device_online_status": false,
+              "is_device_pending_offline": false,
+              "device_offline_position": null,
+              "device_project_callsign": "",
+              "is_organization_device": true,
+              "device_organization_callsign": "脱敏飞机",
+              "device_control_user_id": "",
+              "device_control_user_project_callsign": "",
+              "device_control_user_organization_callsign": "",
+              "device_state": null,
+              "device_index": "",
+              "parent_sns": ["DOCK_REDACTED_01"]
+            },
+            "parents": [{
+              "device_sn": "DOCK_REDACTED_01",
+              "device_model": { "key": "3-2-0", "domain": "3", "type": "2", "sub_type": "0", "name": "DJI Dock 2", "class": "airport" },
+              "device_online_status": false,
+              "is_device_pending_offline": false,
+              "device_offline_position": null,
+              "device_project_callsign": "",
+              "is_organization_device": true,
+              "device_organization_callsign": "脱敏机场",
+              "device_control_user_id": "",
+              "device_control_user_project_callsign": "",
+              "device_control_user_organization_callsign": "",
+              "device_state": null,
+              "device_index": "",
+              "parent_sns": []
+            }],
+            "nodes": [],
+            "project": null
+          }]
+        }
+      }
+    },
+    {
+      "name": "auto-record-config",
+      "method": "GET",
+      "path": "/openapi/v2.0/auto-record-configs",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "id": 8,
+          "project_id": "PROJECT_REDACTED",
+          "created_at": "1970-01-01T00:00:00Z",
+          "updated_at": "1970-01-01T00:00:00Z",
+          "auto_cleaning_time": 90,
+          "disabled_auto_clean": false,
+          "disable_dock_recording": false,
+          "disable_drone_recording": true,
+          "disable_base_station_recording": false,
+          "disable_rtmp_recording": true,
+          "recording_items": [{ "sn": "DOCK_REDACTED_01", "camera_index": "165-0-7", "camera_sn": "", "recording_strategy": 1 }]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+id	method	path	status	title	domain	scope	risk	pagination	deployment	verification
+454273347e0	GET	/openapi/v2.0/flight-alerts	released	查询飞行任务告警记录	flight	project	low	vendor-query	cn-public-cloud	documented
+454273351e0	POST	/openapi/v2.0/project/sts-token	released	获取项目存储上传 STS 凭证	security	project	medium	none	cn-public-cloud	documented
+454273353e0	POST	/openapi/v2.0/flight-task/sn-decrypt	released	SN 解密回显	security	project	high	none	cn-public-cloud	documented
+454273356e0	GET	/openapi/v2.0/organizations/{uuid}/users	released	获取组织用户列表	organization	organization	low	vendor-query	cn-public-cloud	documented
+454273357e0	GET	/openapi/v2.0/organizations/{uuid}/users/current	released	获取当前用户组织角色	organization	organization	low	none	cn-public-cloud	documented
+454273358e0	GET	/openapi/v2.0/organizations/{uuid}/roles	released	获取角色列表	organization	organization	low	vendor-query	cn-public-cloud	documented
+454273359e0	GET	/openapi/v2.0/organizations/{uuid}/permissions	released	获取权限列表	organization	organization	low	vendor-query	cn-public-cloud	documented
+454273360e0	GET	/openapi/v2.0/organizations/{uuid}/roles/permissions	released	获取角色权限	organization	organization	low	vendor-query	cn-public-cloud	documented
+454273364e0	GET	/openapi/v2.0/project	released	获取组织下的项目列表	project	organization	low	page-until-short	cn-public-cloud	live-read
+454273409e0	GET	/openapi/v2.0/organizations/{uuid}/manage-devices/cmds/control/status	released	查询设备控制权状态	control	organization	low	vendor-query	cn-public-cloud	documented
+454273416e0	GET	/openapi/v2.0/organizations/{uuid}/manage-devices/cmds	released	查询设备指令执行情况	control	organization	low	vendor-query	cn-public-cloud	documented
+454273417e0	POST	/openapi/v2.0/device/{device_sn}/command	released	实时控制指令下发	control	device	critical	none	cn-public-cloud	documented
+454273421e0	GET	/openapi/v2.0/workspaces/{workspace_id}/groups/tcas	released	查询起降协调区 TCA 实时状态	control	workspace	low	vendor-query	cn-public-cloud	documented
+454273423e0	GET	/openapi/v2.0/organizations/{uuid}/devices/{sn}/streams	released	获取组织设备的录制任务	live	organization-device	low	vendor-query	cn-public-cloud	documented
+454273432e0	POST	/openapi/v2.0/flight-task	released	创建飞行任务	flight	project	critical	none	cn-public-cloud	documented
+454273433e0	GET	/openapi/v2.0/workspaces/{workspace_id}/flight-tasks/recent	released	获取最近飞行任务列表	flight	workspace	low	vendor-query	cn-public-cloud	documented
+454273434e0	GET	/openapi/v2.0/workspaces/{workspace_id}/flight-tasks/default-name	released	获取创建任务时默认命名	flight	workspace	low	none	cn-public-cloud	documented
+454273435e0	GET	/openapi/v2.0/workspaces/{workspace_id}/flight-tasks/batch	released	获取飞行任务列表	flight	workspace	low	vendor-query	cn-public-cloud	documented
+454273436e0	GET	/openapi/v2.0/flight-task/{task_uuid}/track	released	获取飞行任务轨迹信息	flight	project	low	vendor-query	cn-public-cloud	documented
+454273437e0	GET	/openapi/v2.0/flight-task/detail	released	获取航线任务详情	flight	project	low	none	cn-public-cloud	documented
+454273438e0	GET	/openapi/v2.0/flight-task/{task_uuid}	released	获取飞行任务信息	flight	project	low	none	cn-public-cloud	documented
+454273439e0	GET	/openapi/v2.0/flight-task/list	released	获取飞行任务列表	flight	project	low	vendor-query	cn-public-cloud	live-read
+454273442e0	GET	/openapi/v2.0/flight-task/export	released	获取导出历史	flight	project	low	vendor-query	cn-public-cloud	documented
+454273443e0	GET	/openapi/v2.0/flight-task/oper	released	获取航线任务操作日志	flight	project	low	vendor-query	cn-public-cloud	documented
+454273444e0	GET	/openapi/v2.0/flight-task/oss-url-info/get	released	获取单个飞行记录下载链接	flight	project	low	none	cn-public-cloud	documented
+454273488e0	POST	/openapi/v2.0/map/element	released	创建地图标注	geospatial	project	medium	none	cn-public-cloud	documented
+456242199e0	GET	/openapi/v2.0/health	released	查询系统健康状态	system	global	low	none	cn-public-cloud	live-read
+456403938e0	GET	/openapi/v2.0/workspaces/{workspace_id}/air-sense-warnings	released	空域告警	geospatial	workspace	low	vendor-query	cn-public-cloud	documented
+456403940e0	GET	/openapi/v2.0/workspaces/{workspace_id}/flight-areas	released	获取区域列表工作空间版	geospatial	workspace	low	vendor-query	cn-public-cloud	documented
+456403943e0	GET	/openapi/v2.0/workspaces/{workspace_id}/offline-maps/url	released	获取离线地图 URL	geospatial	workspace	low	none	cn-public-cloud	documented
+456403944e0	GET	/openapi/v2.0/workspaces/{workspace_id}/offline-maps	released	获取离线地图详情	geospatial	workspace	low	vendor-query	cn-public-cloud	documented
+456425796e0	POST	/openapi/v2.0/workspaces/{workspace_id}/flight-tasks/resumptions	released	支持断点续飞的立即任务	flight	workspace	critical	none	cn-public-cloud	documented
+456425797e0	GET	/openapi/v2.0/workspaces/{workspace_id}/flight-tasks/dispatch-checks	released	检查飞行任务是否满足下发条件	flight	workspace	low	none	cn-public-cloud	documented
+456444816e0	GET	/openapi/v2.0/stream-converters	released	获取码流转码器列表	live	project	low	vendor-query	cn-public-cloud	documented
+456444818e0	DELETE	/openapi/v2.0/stream-converters/{converter_id}	released	删除码流转发器	live	project	high	none	cn-public-cloud	documented
+456447009e0	GET	/openapi/v2.0/projects/join-codes	released	获取项目快速加入信息	project	project	low	none	cn-public-cloud	documented
+456447011e0	GET	/openapi/v2.0/organizations	released	获取组织列表	organization	global	low	vendor-query	cn-public-cloud	documented
+456447012e0	GET	/openapi/v2.0/organizations/{uuid}	released	获取组织详情	organization	organization	low	none	cn-public-cloud	documented
+456458604e0	GET	/openapi/v2.0/cloud-controls	released	获取云控状态	control	project	low	vendor-query	cn-public-cloud	parameter-required
+456470750e0	POST	/openapi/v2.0/device/change-lens	released	飞行器镜头切换	control	device	high	none	cn-public-cloud	documented
+456471285e0	POST	/openapi/v2.0/device/change-camera	released	机场相机切换	control	device	high	none	cn-public-cloud	documented
+456680818e0	POST	/openapi/v2.0/device/{device_sn}/rtk	released	自定义网络 RTK 标定	control	device	critical	none	cn-public-cloud	documented
+456680819e0	POST	/openapi/v2.0/device/relay_model	released	指定设备进入中继对频模式	control	device	critical	none	cn-public-cloud	documented
+456680820e0	GET	/openapi/v2.0/device/{device_sn}/relay_model	released	查询中继对频结果	control	device	low	none	cn-public-cloud	documented
+456680821e0	GET	/openapi/v2.0/device	released	获取组织下的设备列表	device	organization	low	vendor-query	cn-public-cloud	documented
+456680822e0	GET	/openapi/v2.0/project/device	released	获取项目下的设备列表	device	project	low	bounded-1000	cn-public-cloud	live-read
+456680823e0	POST	/openapi/v2.0/wayline/finish-upload	released	航线上传完成通知	flight	project	high	none	cn-public-cloud	documented
+456680824e0	GET	/openapi/v2.0/wayline	released	获取项目下的航线列表	flight	project	low	vendor-query	cn-public-cloud	live-read
+456680825e0	GET	/openapi/v2.0/wayline/{wayline_id}	released	获取航线详情	flight	project	low	none	cn-public-cloud	documented
+456681372e0	PUT	/openapi/v2.0/device/active-project	released	更新设备绑定项目	control	device	critical	none	cn-public-cloud	documented
+456809558e0	POST	/openapi/v2.0/live-stream/start	released	开启直播	live	device	high	none	cn-public-cloud	documented
+457014318e0	GET	/openapi/v2.0/project/device/{sn}	released	获取项目设备详情	device	device	low	none	cn-public-cloud	live-read
+457048706e0	GET	/openapi/v2.0/topologies/history	released	获取项目设备历史拓扑	device	project	low	vendor-query	cn-public-cloud	live-read
+457309246e0	GET	/openapi/v2.0/flight-task/{task_uuid}/media	released	获取飞行任务媒体资源	flight	project	low	vendor-query	cn-public-cloud	documented
+457390250e0	GET	/openapi/v2.0/users	released	获取项目用户列表	project	project	low	vendor-query	cn-public-cloud	documented
+457494959e0	GET	/openapi/v2.0/members	released	获取项目独立人员列表	project	project	low	vendor-query	cn-public-cloud	documented
+457494960e0	GET	/openapi/v2.0/auto-record-configs	released	获取自动录制配置	live	project	low	vendor-query	cn-public-cloud	live-read
+457494961e0	GET	/openapi/v2.0/topologies/cmds/control/status	released	查询项目设备控制权状态	control	project	low	vendor-query	cn-public-cloud	documented
+457494963e0	GET	/openapi/v2.0/devices/{sn}/streams	released	获取项目设备录制任务	live	device	low	vendor-query	cn-public-cloud	documented
+457494964e0	GET	/openapi/v2.0/live-shares/{sn}	released	获取设备直播分享详情	live	device	low	none	cn-public-cloud	documented
+457494965e0	GET	/openapi/v2.0/live-shares	released	获取设备直播分享列表	live	project	low	vendor-query	cn-public-cloud	live-empty
+457494968e0	GET	/openapi/v2.0/flight-areas/url	released	获取区域文件 URL	geospatial	project	low	none	cn-public-cloud	documented
+457494969e0	GET	/openapi/v2.0/flight-areas	released	获取区域列表项目版	geospatial	project	low	vendor-query	cn-public-cloud	live-read
+458069497e0	POST	/openapi/v2.0/device/control	released	获取设备控制权	control	device	critical	none	cn-public-cloud	documented
+458069498e0	DELETE	/openapi/v2.0/device/control	released	释放设备控制权	control	device	critical	none	cn-public-cloud	documented
+458069499e0	GET	/openapi/v2.0/device/hms	released	获取 HMS 信息	device	project	low	vendor-query	cn-public-cloud	live-read
+458069500e0	PUT	/openapi/v2.0/device/stream/quality	released	设置图传清晰度	live	device	high	none	cn-public-cloud	documented
+458069501e0	GET	/openapi/v2.0/device/{device_sn}/state	released	获取设备物模型	device	device	low	none	cn-public-cloud	live-read
+458069502e0	PUT	/openapi/v2.0/flight-task/{task_uuid}/status	released	更新飞行任务状态	flight	project	critical	none	cn-public-cloud	documented
+458069503e0	POST	/openapi/v2.0/live-stream/converter	released	创建码流转发器	live	project	high	none	cn-public-cloud	documented
+458069507e0	GET	/openapi/v2.0/model	released	获取项目模型列表	model	project	low	vendor-query	cn-public-cloud	live-read
+458069508e0	POST	/openapi/v2.0/model/create	released	模型重建	model	project	high	none	cn-public-cloud	documented
+458069510e0	GET	/openapi/v2.0/model/{model_id}	released	获取模型详情	model	project	low	none	cn-public-cloud	documented
+458069511e0	POST	/openapi/v2.0/open_model/models/reconstruction/start	released	开始开放模型重建任务	model	project	high	none	cn-public-cloud	documented
+458069512e0	GET	/openapi/v2.0/open_model/models/running	released	获取正在重建的开放模型	model	project	low	vendor-query	cn-public-cloud	live-read
+458069513e0	GET	/openapi/v2.0/open_model/models/{model_uuid}	released	获取开放模型详情	model	project	low	none	cn-public-cloud	documented
+458069514e0	DELETE	/openapi/v2.0/open_model/models/{model_uuid}	released	删除开放模型	model	project	critical	none	cn-public-cloud	documented
+458069515e0	POST	/openapi/v2.0/open_model/models/{model_uuid}/reconstruction/stop	released	停止开放模型重建任务	model	project	high	none	cn-public-cloud	documented
+458069516e0	GET	/openapi/v2.0/open_model/resource/{resource_uuid}	released	获取开放模型资源详情	model	project	low	none	cn-public-cloud	documented
+458069517e0	DELETE	/openapi/v2.0/open_model/resource/{resource_uuid}	released	删除开放模型资源	model	project	critical	none	cn-public-cloud	documented
+458069518e0	POST	/openapi/v2.0/open_model/stores/obtain_token	released	获取开放模型上传凭证	model	project	medium	none	cn-public-cloud	documented
+458069519e0	POST	/openapi/v2.0/open_model/stores/upload_callback	released	开放模型上传回调	model	project	high	none	cn-public-cloud	documented
+458069520e0	PUT	/openapi/v2.0/project/member	released	添加人员到项目	organization	project	high	none	cn-public-cloud	documented
+458069521e0	GET	/openapi/v2.0/system_status	released	查询司空 2 系统状态	system	global	low	none	cn-public-cloud	live-read
+458354139e0	PUT	/openapi/v2.0/workspaces/{workspace_id}/elements/{id}	released	更新地图标注	geospatial	workspace	high	none	cn-public-cloud	documented
+458354140e0	DELETE	/openapi/v2.0/workspaces/{workspace_id}/elements/{id}	released	删除地图标注	geospatial	workspace	critical	none	cn-public-cloud	documented
+463460267e0	GET	/openapi/v2.0/model/download-url/{file_id}	released	获取模型文件下载链接	model	project	low	none	cn-public-cloud	documented
+480437503e0	PUT	/openapi/v2.0/live-stream/converter/{uuid}	released	开启或关闭码流转发器	live	project	high	none	cn-public-cloud	documented
+480437504e0	GET	/openapi/v2.0/ai-alert-record	released	查询 AI 告警明细	flight	project	low	vendor-query	cn-public-cloud	documented

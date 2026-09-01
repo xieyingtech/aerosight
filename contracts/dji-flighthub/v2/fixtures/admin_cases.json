@@ -1,0 +1,278 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "health",
+      "method": "GET",
+      "path": "/openapi/v2.0/health",
+      "scope": "global",
+      "body": { "code": 0, "message": "OK", "data": null }
+    },
+    {
+      "name": "system-status",
+      "method": "GET",
+      "path": "/openapi/v2.0/system_status",
+      "scope": "project",
+      "body": { "code": 0, "message": "OK" }
+    },
+    {
+      "name": "storage-sts",
+      "method": "POST",
+      "path": "/openapi/v2.0/project/sts-token",
+      "scope": "project",
+      "request": { "specify_path": "tests/object.bin", "file_uuid": "FILE_REDACTED_01" },
+      "body": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "endpoint": "https://objects.vendor.example",
+          "provider": "ali",
+          "region": "region-redacted",
+          "bucket": "bucket-redacted",
+          "object_key_prefix": "ORG_REDACTED/PROJECT_REDACTED/FILE_REDACTED",
+          "credentials": {
+            "access_key_id": "ACCESS_KEY_REDACTED",
+            "access_key_secret": "ACCESS_SECRET_REDACTED",
+            "expire": 900,
+            "security_token": "SECURITY_TOKEN_REDACTED",
+            "platform": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "sn-decrypt",
+      "method": "POST",
+      "path": "/openapi/v2.0/flight-task/sn-decrypt",
+      "scope": "project",
+      "request": { "encrypted_sns": ["ENCRYPTED_SN_REDACTED_01"] },
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": { "mapping": { "ENCRYPTED_SN_REDACTED_01": "PLAIN_SN_REDACTED_01" } }
+      }
+    },
+    {
+      "name": "organizations",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations?page=1&page_size=20&q=%E8%84%B1%E6%95%8F&sort_column=create_time&sort_type=desc",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "pagination": { "page": 1, "page_size": 20, "total": 1 },
+          "list": [{
+            "name": "脱敏组织",
+            "uuid": "ORG_REDACTED_01",
+            "organization_id": "ORG_CODE_REDACTED",
+            "created_at": 0,
+            "updated_at": 0,
+            "status": "organization-status-run",
+            "organization_device_bind_code": { "code": "BIND_REDACTED" },
+            "organization_industry_type": { "type": "other", "sub_type": "other", "others": "" },
+            "organization_units_system": { "measure_units_system": "metric", "temperature_units_system": "celsius" },
+            "user_experience_improvement": { "version": "", "improvement_type": 0, "latest_version": "" },
+            "organization_geo_caging_system": { "geo_caging_state": 0 },
+            "current_zone_id": "",
+            "mfa_enabled": false,
+            "logo_id": null,
+            "organization_user_role": "organization-admin",
+            "organization_user_callsign": "测试用户",
+            "join_organization_at": 0
+          }]
+        }
+      }
+    },
+    {
+      "name": "organization-detail",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "name": "脱敏组织",
+          "uuid": "ORG_REDACTED_01",
+          "organization_id": "ORG_CODE_REDACTED",
+          "created_at": 0,
+          "updated_at": 0,
+          "status": "organization-status-run",
+          "organization_device_bind_code": { "code": "BIND_REDACTED" },
+          "organization_industry_type": { "type": "other", "sub_type": "other", "others": "" },
+          "organization_units_system": { "measure_units_system": "metric", "temperature_units_system": "celsius" },
+          "user_experience_improvement": {},
+          "organization_geo_caging_system": { "geo_caging_state": 0 },
+          "current_zone_id": "",
+          "mfa_enabled": false,
+          "logo_id": null
+        }
+      }
+    },
+    {
+      "name": "organization-users",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/users?page=1&page_size=20&q=%E6%B5%8B%E8%AF%95&sort_column=create_time&sort_type=desc",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "pagination": { "page": 1, "page_size": 20, "total": 1 },
+          "list": [{
+            "user_id": "USER_REDACTED_01",
+            "account": "ACCOUNT_REDACTED",
+            "account_second": "",
+            "nickname": "测试用户",
+            "role": "organization-admin",
+            "created_at": 0,
+            "source_type": "organization",
+            "user_projects_infos": [{ "project_uuid": "PROJECT_REDACTED", "project_callsign": "测试用户" }]
+          }]
+        }
+      }
+    },
+    {
+      "name": "current-organization-role",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/users/current",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "account": "ACCOUNT_REDACTED",
+          "user_id": "USER_REDACTED_01",
+          "org_uuid": "ORG_REDACTED_01",
+          "role": "organization-admin",
+          "nickname": "测试用户",
+          "organization_name": "脱敏组织",
+          "mfa_enabled": false,
+          "units_config": { "measure_units_system": "metric", "temperature_units_system": "celsius" },
+          "geo_caging_config": { "geo_caging_state": 0 },
+          "auth_info": []
+        }
+      }
+    },
+    {
+      "name": "organization-roles",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/roles?page=1&page_size=20&type=organization",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "pagination": { "page": 1, "page_size": 20, "total": 1 },
+          "list": [{
+            "role_id": "ROLE_REDACTED_01",
+            "role_name": "组织管理员",
+            "role_description": "脱敏角色",
+            "workspace_id": "WORKSPACE_REDACTED",
+            "is_preset": true,
+            "is_add_to_org": true,
+            "role_type": "organization",
+            "created_at": "1970-01-01T00:00:00Z",
+            "updated_at": "1970-01-01T00:00:00Z",
+            "deleted_at": null,
+            "permissions": [{ "permission_id": "manage-project", "permission_name": "项目管理", "children": [] }]
+          }]
+        }
+      }
+    },
+    {
+      "name": "organization-permissions",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/permissions?type=organization",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": { "init_permissions": [{ "permission_id": "manage-project", "permission_name": "项目管理", "children": [] }] }
+      }
+    },
+    {
+      "name": "role-permissions",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/roles/permissions?role_id=ROLE_REDACTED_01&type=organization",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": { "init_permissions": [{ "permission_id": "manage-project", "permission_name": "项目管理", "children": [] }] }
+      }
+    },
+    {
+      "name": "project-users",
+      "method": "GET",
+      "path": "/openapi/v2.0/users?page=1&page_size=20&q=%E6%B5%8B%E8%AF%95&sort_column=create_time&sort_type=desc",
+      "scope": "project",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "pagination": { "page": 1, "page_size": 20, "total": 1 },
+          "list": [{
+            "user_id": "USER_REDACTED_01",
+            "account": "ACCOUNT_REDACTED",
+            "nickname": "测试用户",
+            "organization_user_callsign": "测试用户",
+            "is_user_project_callsign_updated": false,
+            "role": "project-commander",
+            "org_role": "organization-admin",
+            "roles_permissions": [],
+            "is_phone_filled": false,
+            "is_email_filled": true
+          }]
+        }
+      }
+    },
+    {
+      "name": "project-members",
+      "method": "GET",
+      "path": "/openapi/v2.0/members",
+      "scope": "project",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "list": [{
+            "user_id": "USER_REDACTED_01",
+            "user_account": "ACCOUNT_REDACTED",
+            "user_project_callsign": "测试用户",
+            "user_project_role": "project-commander",
+            "user_organization_callsign": "测试用户",
+            "user_organization_role": "organization-admin",
+            "user_online_status": true,
+            "is_user_pending_offline": false,
+            "user_platform": "web",
+            "user_offline_position": null,
+            "user_control_device_sn": null
+          }]
+        }
+      }
+    },
+    {
+      "name": "join-code-info",
+      "method": "GET",
+      "path": "/openapi/v2.0/projects/join-codes?association_drone_device_sn=AIRCRAFT_REDACTED_01&project_fast_join_code=JOIN_REDACTED&project_id=PROJECT_CODE_REDACTED",
+      "scope": "global",
+      "body": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "project_uuid": "PROJECT_REDACTED",
+          "project_id": "PROJECT_CODE_REDACTED",
+          "project_name": "脱敏项目",
+          "organization_name": "脱敏组织",
+          "organization_uuid": "ORG_REDACTED_01",
+          "organization_id": "ORG_CODE_REDACTED",
+          "is_user_in_organization": true,
+          "recommend_user_project_callsign": "测试用户",
+          "recommend_association_drone_project_callsign": "脱敏飞机"
+        }
+      }
+    }
+  ]
+}

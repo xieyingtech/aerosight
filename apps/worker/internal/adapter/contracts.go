@@ -69,6 +69,7 @@ type Quaternion struct {
 type Pose struct {
 	DeviceType               string         `json:"deviceType"`
 	CRS                      string         `json:"crs"`
+	TransformVersion         string         `json:"transformVersion,omitempty"`
 	VerticalDatum            string         `json:"verticalDatum,omitempty"`
 	Longitude                float64        `json:"longitude"`
 	Latitude                 float64        `json:"latitude"`

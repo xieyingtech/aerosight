@@ -91,6 +91,7 @@ func RegisterRuntime(registry *connector.Registry, client DirectoryClient, resol
 			CredentialSchema: json.RawMessage(`{"type":"object","required":["token"],"properties":{"token":{"type":"string"}}}`),
 			DiscoveryModes:   []connector.DiscoveryMode{connector.DiscoveryPoll}, Protocols: []string{"https"},
 			CompatibleDrivers: []string{"dji.cloud"},
+			Capabilities:      Capabilities(),
 			Lease:             connector.LeasePolicy{Duration: 60 * time.Second, RenewBefore: 20 * time.Second},
 		},
 		DiscoveryHandlers: map[connector.DiscoveryMode]connector.DiscoveryHandler{},

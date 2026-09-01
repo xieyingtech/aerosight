@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 const CORRELATION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
-const SENSITIVE_KEY_PATTERN = /authorization|cookie|credential|password|secret|token|api[-_]?key/i;
-const SENSITIVE_TEXT_PATTERNS = [
-  /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi,
-  /([?&](?:token|api_key|key|secret)=)[^&\s]+/gi
-];
+const SENSITIVE_KEY_PATTERN = /authorization|cookie|credential|password|secret|token|api[-_]?key|access[-_]?key|(^|[-_])sn($|[-_])|(^|[-_])sts($|[-_])|serial|sn[-_]?decrypt|mapping|object[-_]?key[-_]?prefix|signed[-_]?url|playback[-_]?url|publish[-_]?url|upstream.*(error|message|body)|response[-_]?body|raw[-_]?error/i;
+const BEARER_VALUE = /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/gi;
+const QUERY_SECRET = /([?&](?:token|api[-_]?key|key|secret|signature|x-amz-credential|x-amz-signature|x-amz-security-token|security-token|credential)=)[^&\s]+/gi;
+const JWT_VALUE = /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g;
+const LABELED_SECRET = /("?(?:x-user-token|access_key_id|access_key_secret|security_token|session_token|live_token|device_sn|encrypted_sns|sn|serial_number)"?\s*[:=]\s*"?)[^",\s}&]+/gi;
+const DJI_SERIAL = /\b(?:7CT|1581F)[A-Z0-9]{8,}\b/g;
 
 export type CorrelationContext = {
   requestId: string;
@@ -18,10 +19,12 @@ export function correlationId(candidate?: string | null) {
 }
 
 function redactText(value: string) {
-  return SENSITIVE_TEXT_PATTERNS.reduce(
-    (current, pattern) => current.replace(pattern, (_match, prefix) => prefix ? `${prefix}[REDACTED]` : "Bearer [REDACTED]"),
-    value
-  );
+  return value
+    .replace(BEARER_VALUE, "Bearer [REDACTED]")
+    .replace(QUERY_SECRET, "$1[REDACTED]")
+    .replace(JWT_VALUE, "[JWT_REDACTED]")
+    .replace(LABELED_SECRET, "$1[REDACTED]")
+    .replace(DJI_SERIAL, "[SN_REDACTED]");
 }
 
 export function redactSensitive(value: unknown, seen = new WeakSet<object>()): unknown {

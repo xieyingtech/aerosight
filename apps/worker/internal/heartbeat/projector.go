@@ -29,12 +29,15 @@ type Signal struct {
 	AdapterID               int64
 	DeviceID                int
 	SessionKey              string
+	ObservedAt              time.Time
 	ReceivedAt              time.Time
 	HeartbeatIntervalSecond int
 	LinkQuality             *float64
 	ReportedDegraded        bool
 	RawStatusReference      string
 }
+
+var ErrStaleSignal = errors.New("heartbeat is stale or conflicts with the bound session identity")
 
 type Projector struct {
 	db    *sql.DB
@@ -60,6 +63,9 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 	if signal.ReceivedAt.IsZero() {
 		return errors.New("heartbeat signal requires receivedAt")
 	}
+	if signal.ObservedAt.IsZero() {
+		signal.ObservedAt = signal.ReceivedAt
+	}
 	if signal.HeartbeatIntervalSecond == 0 {
 		signal.HeartbeatIntervalSecond = 30
 	}
@@ -75,9 +81,9 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 		return err
 	}
 	defer tx.Rollback()
-	projection := Evaluate(projector.clock.Now(), &signal.ReceivedAt, nil,
+	projection := Evaluate(projector.clock.Now(), &signal.ObservedAt, nil,
 		time.Duration(signal.HeartbeatIntervalSecond)*time.Second, signal.LinkQuality, signal.ReportedDegraded)
-	statusProjection := device.EvaluateStatus(projector.clock.Now(), &signal.ReceivedAt, nil,
+	statusProjection := device.EvaluateStatus(projector.clock.Now(), &signal.ObservedAt, nil,
 		time.Duration(signal.HeartbeatIntervalSecond)*time.Second, signal.LinkQuality,
 		signal.ReportedDegraded, signal.RawStatusReference)
 	var connectionID int64
@@ -98,9 +104,9 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 		       or excluded.last_heartbeat_at > device_connections.last_heartbeat_at)
 		returning id`, signal.ProjectID, signal.TeamID, signal.AdapterID, signal.DeviceID,
 		signal.SessionKey, projection.Status, signal.LinkQuality, projection.Reason,
-		signal.ReceivedAt, signal.HeartbeatIntervalSecond, projector.clock.Now()).Scan(&connectionID)
+		signal.ObservedAt, signal.HeartbeatIntervalSecond, projector.clock.Now()).Scan(&connectionID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return errors.New("heartbeat is stale or conflicts with the bound session identity")
+		return ErrStaleSignal
 	}
 	if err != nil {
 		return err
@@ -112,7 +118,7 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 		  status_projected_at = $6, data_freshness = $7, raw_status_ref = $8,
 		  updated_at = now()
 		where id = $1 and project_id = $2`, signal.DeviceID, signal.ProjectID,
-		projection.Status, projection.Reason, signal.ReceivedAt, statusProjection.ProjectedAt,
+		projection.Status, projection.Reason, signal.ObservedAt, statusProjection.ProjectedAt,
 		statusProjection.Freshness, nullableRawReference(signal.RawStatusReference)); err != nil {
 		return err
 	}

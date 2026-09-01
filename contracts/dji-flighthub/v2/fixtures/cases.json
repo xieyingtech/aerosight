@@ -144,6 +144,76 @@
       "httpStatus": 200,
       "body": { "code": 0, "message": "", "data": { "list": "not-an-array" } },
       "expected": { "kind": "error", "safeCode": "schema_incompatible", "retryable": false }
+    },
+    {
+      "name": "system-health",
+      "endpoint": "/openapi/v2.0/health",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "status": "ok" } },
+      "expected": { "kind": "success" }
+    },
+    {
+      "name": "organization-list",
+      "endpoint": "/openapi/v2.0/organizations",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": [{ "uuid": "ORG_REDACTED_01", "name": "脱敏组织" }] } },
+      "expected": { "kind": "success", "itemCount": 1 }
+    },
+    {
+      "name": "device-state-dock",
+      "endpoint": "/openapi/v2.0/device/{device_sn}/state",
+      "httpStatus": 200,
+      "body": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "device_model": { "key": "3-2-0", "domain": "3", "type": "2", "sub_type": "0", "name": "DJI Dock 2", "class": "airport" },
+          "device_state": { "latitude": 30.000001, "longitude": 120.000001, "height": 12.5, "mode_code": 0, "network_state": { "quality": 4 } }
+        }
+      },
+      "expected": { "kind": "success" }
+    },
+    {
+      "name": "control-context-required",
+      "endpoint": "/openapi/v2.0/cloud-controls",
+      "httpStatus": 400,
+      "body": { "code": 200610, "message": "required context missing", "data": {} },
+      "expected": { "kind": "error", "safeCode": "configuration_required", "retryable": false }
+    },
+    {
+      "name": "wayline-list",
+      "endpoint": "/openapi/v2.0/wayline",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": [{ "id": "WAYLINE_REDACTED_01", "name": "脱敏航线" }] } },
+      "expected": { "kind": "success", "itemCount": 1 }
+    },
+    {
+      "name": "live-share-empty",
+      "endpoint": "/openapi/v2.0/live-shares",
+      "httpStatus": 200,
+      "body": { "code": 231011, "message": "resource is empty", "data": {} },
+      "expected": { "kind": "empty", "itemCount": 0 }
+    },
+    {
+      "name": "flight-area-list",
+      "endpoint": "/openapi/v2.0/flight-areas",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": [{ "id": "AREA_REDACTED_01", "name": "脱敏区域", "geometry": { "type": "Polygon", "coordinates": [] } }] } },
+      "expected": { "kind": "success", "itemCount": 1 }
+    },
+    {
+      "name": "model-list",
+      "endpoint": "/openapi/v2.0/model",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": [{ "id": "MODEL_REDACTED_01", "name": "脱敏模型", "status": "completed" }] } },
+      "expected": { "kind": "success", "itemCount": 1 }
+    },
+    {
+      "name": "temporary-credential-redacted-shape",
+      "endpoint": "/openapi/v2.0/project/sts-token",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "access_key": "ACCESS_REDACTED", "secret_key": "SECRET_REDACTED", "session_token": "TOKEN_REDACTED", "expires_in": 900 } },
+      "expected": { "kind": "success" }
     }
   ]
 }

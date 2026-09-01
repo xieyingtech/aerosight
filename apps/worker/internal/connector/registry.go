@@ -28,6 +28,23 @@ type LeasePolicy struct {
 	RenewBefore time.Duration
 }
 
+type CapabilityKind string
+
+const (
+	CapabilityRead   CapabilityKind = "read"
+	CapabilityAction CapabilityKind = "action"
+)
+
+type CapabilityDefinition struct {
+	Code             string
+	Kind             CapabilityKind
+	Risk             driver.RiskLevel
+	EndpointDomains  []string
+	DriverCapability string
+	FeatureFlag      string
+	DefaultEnabled   bool
+}
+
 type Manifest struct {
 	ConnectorKey      string
 	Version           string
@@ -37,6 +54,7 @@ type Manifest struct {
 	DiscoveryModes    []DiscoveryMode
 	Protocols         []string
 	CompatibleDrivers []string
+	Capabilities      []CapabilityDefinition
 	Lease             LeasePolicy
 }
 
@@ -95,7 +113,10 @@ type Registry struct {
 	enabled  map[string]bool
 }
 
-var connectorKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`)
+var (
+	connectorKeyPattern        = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`)
+	connectorCapabilityPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
+)
 
 func NewRegistry() *Registry {
 	return &Registry{runtimes: make(map[string]Runtime), enabled: make(map[string]bool)}
@@ -155,6 +176,40 @@ func ValidateManifest(manifest Manifest) error {
 	}
 	if err := validateUniqueStrings(manifest.CompatibleDrivers, "compatible driver", true); err != nil {
 		return err
+	}
+	seenCapabilities := make(map[string]struct{}, len(manifest.Capabilities))
+	for _, capability := range manifest.Capabilities {
+		if !connectorCapabilityPattern.MatchString(capability.Code) {
+			return fmt.Errorf("invalid connector capability %q", capability.Code)
+		}
+		if _, duplicate := seenCapabilities[capability.Code]; duplicate {
+			return fmt.Errorf("duplicate connector capability %q", capability.Code)
+		}
+		seenCapabilities[capability.Code] = struct{}{}
+		if capability.Kind != CapabilityRead && capability.Kind != CapabilityAction {
+			return fmt.Errorf("connector capability %q has unsupported kind %q", capability.Code, capability.Kind)
+		}
+		switch capability.Risk {
+		case driver.RiskLow, driver.RiskMedium, driver.RiskHigh, driver.RiskCritical:
+		default:
+			return fmt.Errorf("connector capability %q has unsupported risk %q", capability.Code, capability.Risk)
+		}
+		if err := validateUniqueStrings(capability.EndpointDomains, "endpoint domain", false); err != nil {
+			return fmt.Errorf("connector capability %q: %w", capability.Code, err)
+		}
+		if capability.DriverCapability != "" && !connectorCapabilityPattern.MatchString(capability.DriverCapability) {
+			return fmt.Errorf("connector capability %q has invalid driver capability %q", capability.Code, capability.DriverCapability)
+		}
+		if capability.Kind == CapabilityAction {
+			if !connectorCapabilityPattern.MatchString(capability.FeatureFlag) {
+				return fmt.Errorf("connector action capability %q requires a stable feature flag", capability.Code)
+			}
+			if capability.DefaultEnabled {
+				return fmt.Errorf("connector action capability %q must default closed", capability.Code)
+			}
+		} else if capability.FeatureFlag != "" {
+			return fmt.Errorf("connector read capability %q cannot require a write feature flag", capability.Code)
+		}
 	}
 	if manifest.Lease.Duration <= 0 {
 		return errors.New("connector lease duration must be positive")

@@ -61,13 +61,16 @@ func TestGaugeRecordsCurrentValueInsteadOfAccumulating(t *testing.T) {
 
 func TestMetricLabelsRejectSecretsAndHighCardinalityTraffic(t *testing.T) {
 	registry := MustDefaultMetricRegistry()
-	secret := "Bearer sandbox-secret-token"
+	secrets := []string{"Bearer sandbox-secret-token", "1581FABCDEFGHIJKL", "temporary-security-token", "https://objects.example/item?signature=signed-value"}
 	identifier := "86c6a355-f1d8-4893-9147-cb93082ef7b0"
-	for _, labels := range []map[string]string{
-		{"outcome": secret},
+	unsafeLabels := []map[string]string{
 		{"outcome": identifier},
 		{"outcome": "opened", "project_id": "17"},
-	} {
+	}
+	for _, secret := range secrets {
+		unsafeLabels = append(unsafeLabels, map[string]string{"outcome": secret})
+	}
+	for _, labels := range unsafeLabels {
 		if err := registry.Record("aerosight_sse_connections_total", 1, labels); err == nil {
 			t.Fatalf("unsafe metric labels accepted: %#v", labels)
 		}
@@ -75,7 +78,9 @@ func TestMetricLabelsRejectSecretsAndHighCardinalityTraffic(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	registry.ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
 	body := recorder.Body.String()
-	if strings.Contains(body, secret) || strings.Contains(body, identifier) || strings.Contains(body, "project_id") {
-		t.Fatalf("rejected high-cardinality data reached metrics output: %s", body)
+	for _, secret := range append(secrets, identifier, "project_id") {
+		if strings.Contains(body, secret) {
+			t.Fatalf("rejected high-cardinality or sensitive data reached metrics output: %s", body)
+		}
 	}
 }

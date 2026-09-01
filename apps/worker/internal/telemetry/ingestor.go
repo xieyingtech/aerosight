@@ -200,12 +200,14 @@ func (ingestor *Ingestor) insertPoseObservation(ctx context.Context, tx *sql.Tx,
 			insert into observations (
 			  project_id, team_id, adapter_id, device_id, observation_type, source_event_id,
 			  captured_at, received_at, time_quality, original_crs_id,
-			  properties_json, quality_json, validity
-			) values ($1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9, $10, $11, $12)
+			  original_geometry, properties_json, quality_json, validity
+			) values ($1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9,
+			  ST_MakePoint($10, $11, $12), $13, $14, $15)
 			returning id`
 		observationArgs = []any{
 			item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
-			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID), properties, quality, validity,
+			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
+			pose.Longitude, pose.Latitude, altitude, properties, quality, validity,
 		}
 	}
 	if err := tx.QueryRowContext(ctx, observationQuery, observationArgs...).Scan(&observationID); err != nil {
@@ -213,6 +215,10 @@ func (ingestor *Ingestor) insertPoseObservation(ctx context.Context, tx *sql.Tx,
 	}
 
 	if supportedCRS {
+		transformVersion := pose.TransformVersion
+		if transformVersion == "" {
+			transformVersion = "1"
+		}
 		_, err := tx.ExecContext(ctx, `
 			insert into poses (
 			  observation_id, project_id, device_id, captured_at,
@@ -225,24 +231,36 @@ func (ingestor *Ingestor) insertPoseObservation(ctx context.Context, tx *sql.Tx,
 			  $1, $2, $3, $4,
 			  ST_SetSRID(ST_MakePoint($5, $6, $7), 4326),
 			  ST_SetSRID(ST_MakePoint($5, $6, $7), 4326),
-			  $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, '1', $19
+			  $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
 			)`, observationID, item.ProjectID, item.DeviceID, item.CapturedAt,
 			pose.Longitude, pose.Latitude, altitude,
 			quaternionValue(pose.Orientation, "x"), quaternionValue(pose.Orientation, "y"),
 			quaternionValue(pose.Orientation, "z"), quaternionValue(pose.Orientation, "w"),
 			vectorValue(pose.VelocityMetersPerSecond, "x"), vectorValue(pose.VelocityMetersPerSecond, "y"),
 			vectorValue(pose.VelocityMetersPerSecond, "z"), pose.HorizontalAccuracyMeters,
-			pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, spatialQuality)
+			pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, transformVersion, spatialQuality)
 		return err
+	}
+	transformVersion := pose.TransformVersion
+	if transformVersion == "" {
+		transformVersion = "1"
 	}
 	_, err := tx.ExecContext(ctx, `
 		insert into poses (
-		  observation_id, project_id, device_id, captured_at,
+		  observation_id, project_id, device_id, captured_at, original_position,
+		  orientation_x, orientation_y, orientation_z, orientation_w,
+		  velocity_x, velocity_y, velocity_z,
 		  horizontal_accuracy_m, vertical_accuracy_m, attitude_accuracy_deg,
-		  vertical_datum, spatial_quality
-		) values ($1, $2, $3, $4, $5, $6, $7, $8, 'unusable')`,
+		  vertical_datum, transform_version, spatial_quality
+		) values ($1, $2, $3, $4, ST_MakePoint($5, $6, $7),
+		  $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'unusable')`,
 		observationID, item.ProjectID, item.DeviceID, item.CapturedAt,
-		pose.HorizontalAccuracyMeters, pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum)
+		pose.Longitude, pose.Latitude, altitude,
+		quaternionValue(pose.Orientation, "x"), quaternionValue(pose.Orientation, "y"),
+		quaternionValue(pose.Orientation, "z"), quaternionValue(pose.Orientation, "w"),
+		vectorValue(pose.VelocityMetersPerSecond, "x"), vectorValue(pose.VelocityMetersPerSecond, "y"),
+		vectorValue(pose.VelocityMetersPerSecond, "z"), pose.HorizontalAccuracyMeters,
+		pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, transformVersion)
 	return err
 }
 

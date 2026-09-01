@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -69,7 +70,9 @@ func TestSharedContractFixtureCoverage(t *testing.T) {
 	required := []string{
 		"project-list", "project-empty", "device-directory", "device-directory-limit",
 		"http-401", "business-200401", "http-403", "http-404", "http-429",
-		"http-503", "malformed-response",
+		"http-503", "malformed-response", "system-health", "organization-list",
+		"device-state-dock", "control-context-required", "wayline-list", "live-share-empty",
+		"flight-area-list", "model-list", "temporary-credential-redacted-shape",
 	}
 	for _, name := range required {
 		if _, ok := byName[name]; !ok {
@@ -157,10 +160,24 @@ func TestSharedContractFixtureFieldsAndSanitization(t *testing.T) {
 		regexp.MustCompile(`eyJ[A-Za-z0-9_-]{10,}\.`),
 		regexp.MustCompile(`7CT[A-Z0-9]{8,}`),
 		regexp.MustCompile(`1581F[A-Z0-9]{8,}`),
+		regexp.MustCompile(`(?i)https?://[^"[:space:]]+[?&](token|signature|x-amz-credential)=`),
 	}
 	for _, pattern := range patterns {
 		if pattern.Match(contents) {
 			t.Fatalf("shared fixture contains forbidden credential or serial pattern %s", pattern)
+		}
+	}
+	credentialPattern := regexp.MustCompile(`(?i)"(access_key|secret_key|session_token)"\s*:\s*"([^"]+)"`)
+	for _, match := range credentialPattern.FindAllSubmatch(contents, -1) {
+		if len(match) != 3 || !strings.HasSuffix(string(match[2]), "REDACTED") {
+			t.Fatalf("shared fixture contains an unredacted temporary credential")
+		}
+	}
+
+	uuidPattern := regexp.MustCompile(`(?i)[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}`)
+	for _, match := range uuidPattern.FindAll(contents, -1) {
+		if !strings.HasPrefix(string(match), "00000000-0000-4000-8000-") {
+			t.Fatalf("shared fixture contains a non-placeholder UUID: %s", match)
 		}
 	}
 }

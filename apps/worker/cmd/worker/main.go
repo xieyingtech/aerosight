@@ -28,6 +28,7 @@ import (
 	"aerosight/worker/internal/perception"
 	reportworker "aerosight/worker/internal/report"
 	"aerosight/worker/internal/tasktrigger"
+	"aerosight/worker/internal/telemetry"
 	"aerosight/worker/internal/wakeup"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -106,13 +107,45 @@ func main() {
 			logger.Error("connector synchronizer initialization failed", "error", syncErr.Error())
 			os.Exit(1)
 		}
+		resourceRepository := connector.NewSQLResourceRepository(database)
+		resourceSink, resourceErr := flighthub.NewSQLResourceStreamSink(telemetry.NewIngestor(database), resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database))
+		if resourceErr != nil {
+			logger.Error("FlightHub resource sink initialization failed", "error", resourceErr.Error())
+			os.Exit(1)
+		}
+		resourceStreams, resourceErr := flighthub.NewResourceStreamCoordinator(
+			flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}, resourceRepository, resourceSink,
+			flighthub.ResourceStreamConfig{
+				OnlineInterval: 15 * time.Second, OfflineInterval: 60 * time.Second, HealthInterval: 5 * time.Minute,
+				MaxBackoff: 5 * time.Minute,
+				OnError: func(kind string, _ error) {
+					logger.Warn("FlightHub resource stream degraded", "stream", kind)
+				},
+			},
+		)
+		if resourceErr != nil {
+			logger.Error("FlightHub resource stream initialization failed", "error", resourceErr.Error())
+			os.Exit(1)
+		}
+		inventoryRunner, resourceErr := flighthub.NewScheduledInventoryRunner(
+			synchronizer, resourceRepository, workerConfig.FlightHubPollInterval, 5*time.Minute, nil,
+		)
+		if resourceErr != nil {
+			logger.Error("FlightHub inventory schedule initialization failed", "error", resourceErr.Error())
+			os.Exit(1)
+		}
+		resourceRunner, resourceErr := flighthub.NewConcurrentResourceRunner(inventoryRunner, resourceStreams)
+		if resourceErr != nil {
+			logger.Error("FlightHub concurrent resource runner initialization failed", "error", resourceErr.Error())
+			os.Exit(1)
+		}
 		flightHubScheduler, syncErr = connector.NewScheduler(
-			connector.NewSQLLeaseRepository(database), synchronizer, connector.NewSQLSyncOutcomeStore(database),
+			connector.NewSQLLeaseRepository(database), resourceRunner, connector.NewSQLSyncOutcomeStore(database),
 			connector.SchedulerConfig{
 				Owner: workerConfig.WorkerName + ":" + runID, ConnectorKey: flighthub.ConnectorKey, Version: flighthub.ConnectorVersion,
-				PollInterval:   workerConfig.FlightHubPollInterval,
-				JitterWindow:   min(workerConfig.FlightHubPollInterval/10, 30*time.Second),
-				ReconcileEvery: workerConfig.FlightHubReconcileEvery,
+				PollInterval:   min(workerConfig.FlightHubPollInterval, 15*time.Second),
+				JitterWindow:   min(workerConfig.FlightHubPollInterval/10, 5*time.Second),
+				ReconcileEvery: min(workerConfig.FlightHubReconcileEvery, 5*time.Second),
 				LeaseDuration:  60 * time.Second, RenewEvery: 20 * time.Second, BatchSize: 8, Logger: logger,
 				Metrics: observability.DefaultMetrics,
 			},
