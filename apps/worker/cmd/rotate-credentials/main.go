@@ -29,6 +29,7 @@ var credentialSources = []credentialSource{
 	{table: "device_adapters", resourceType: "device-adapter", scoped: true},
 	{table: "algorithm_providers", resourceType: "algorithm-provider", scoped: true},
 	{table: "ai_providers", resourceType: "ai-provider", scoped: false},
+	{table: "connector_asset_access_refs", resourceType: "flighthub-asset-reference", scoped: true},
 }
 
 type storedCredential struct {
@@ -72,12 +73,12 @@ func main() {
 		fatal(err)
 	}
 	if *dryRun {
-		fmt.Printf("Credential dry-run succeeded: device_adapters=%d algorithm_providers=%d ai_providers=%d\n",
-			counts["device_adapters"], counts["algorithm_providers"], counts["ai_providers"])
+		fmt.Printf("Credential dry-run succeeded: device_adapters=%d algorithm_providers=%d ai_providers=%d connector_asset_access_refs=%d\n",
+			counts["device_adapters"], counts["algorithm_providers"], counts["ai_providers"], counts["connector_asset_access_refs"])
 		return
 	}
-	fmt.Printf("Credential rotation succeeded: device_adapters=%d algorithm_providers=%d ai_providers=%d key_fingerprint=%s\n",
-		counts["device_adapters"], counts["algorithm_providers"], counts["ai_providers"], fingerprint)
+	fmt.Printf("Credential rotation succeeded: device_adapters=%d algorithm_providers=%d ai_providers=%d connector_asset_access_refs=%d key_fingerprint=%s\n",
+		counts["device_adapters"], counts["algorithm_providers"], counts["ai_providers"], counts["connector_asset_access_refs"], fingerprint)
 	fmt.Println("Update the deployment AUTH_SECRET to the new value and restart Web and worker before leaving maintenance mode.")
 }
 
@@ -209,7 +210,10 @@ func rotate(
 }
 
 func readCredentials(ctx context.Context, tx *sql.Tx) ([]storedCredential, map[string]int, error) {
-	counts := map[string]int{"device_adapters": 0, "algorithm_providers": 0, "ai_providers": 0}
+	counts := map[string]int{}
+	for _, source := range credentialSources {
+		counts[source.table] = 0
+	}
 	var stored []storedCredential
 	for _, source := range credentialSources {
 		scopeProjection := "null::bigint"

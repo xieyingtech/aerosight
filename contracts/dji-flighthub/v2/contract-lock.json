@@ -23,7 +23,7 @@
     },
     {
       "path": "fixtures/flight_cases.json",
-      "sha256": "5ed0d14b35b3759e6ec5f7642dff3d2377aa95e394cb6b87a9eba1a1de710cef",
+      "sha256": "c58821a256f3291ab105c20968fbeed94b942a72af93eddce8051cc5ba7b22fc",
       "domains": ["flight"]
     }
   ]

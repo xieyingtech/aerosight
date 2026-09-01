@@ -20,6 +20,8 @@ type ResourceStreamClient interface {
 	ListFlightTasks(context.Context, string, string, FlightTaskListOptions) ([]FlightTaskSummary, error)
 	GetFlightTaskTrack(context.Context, string, string, string) (FlightTaskTrack, error)
 	GetFlightTaskOperationTimeline(context.Context, string, string, string) (FlightTaskOperationTimeline, error)
+	ListFlightTaskMedia(context.Context, string, string, string) ([]FlightTaskMedia, error)
+	ListFlightTaskExports(context.Context, string, string, FlightExportOptions) (FlightExportPage, error)
 }
 
 type ResourceStreamStore interface {
@@ -53,17 +55,27 @@ type CatalogPoll struct {
 }
 
 type FlightArtifactTarget struct {
-	RemoteTaskID  string
-	TaskRunID     int
-	NeedTrack     bool
-	NeedOperation bool
+	RemoteTaskID     string
+	TaskRunID        int
+	RemoteVersion    string
+	NeedTrack        bool
+	NeedOperation    bool
+	NeedMedia        bool
+	MediaUploadFinal bool
 }
 
 type FlightArtifactPoll struct {
 	Target     FlightArtifactTarget
 	Track      *FlightTaskTrack
 	Operations *FlightTaskOperationTimeline
+	Media      *[]FlightTaskMedia
 	ReceivedAt time.Time
+}
+
+type FlightExportPoll struct {
+	Records          []FlightExportRecord
+	CompleteSnapshot bool
+	ReceivedAt       time.Time
 }
 
 type ResourceStreamSink interface {
@@ -72,6 +84,7 @@ type ResourceStreamSink interface {
 	ApplyCatalog(context.Context, connector.Instance, CatalogPoll) error
 	ListFlightArtifactTargets(context.Context, connector.Instance, int) ([]FlightArtifactTarget, error)
 	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
+	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
 }
 
 type ResourceStreamConfig struct {
@@ -148,7 +161,7 @@ func (coordinator *ResourceStreamCoordinator) pollFlightArtifacts(ctx context.Co
 		return nil, 0, err
 	}
 	now := coordinator.config.Now().UTC()
-	tracks, operations := 0, 0
+	tracks, operations, mediaTasks, exports := 0, 0, 0, 0
 	var pollErrors []error
 	for _, target := range targets {
 		poll := FlightArtifactPoll{Target: target, ReceivedAt: now}
@@ -168,7 +181,15 @@ func (coordinator *ResourceStreamCoordinator) pollFlightArtifacts(ctx context.Co
 				poll.Operations = &timeline
 			}
 		}
-		if poll.Track == nil && poll.Operations == nil {
+		if target.NeedMedia {
+			media, mediaErr := coordinator.client.ListFlightTaskMedia(ctx, token, scope.ProjectUUID, target.RemoteTaskID)
+			if mediaErr != nil {
+				pollErrors = append(pollErrors, mediaErr)
+			} else {
+				poll.Media = &media
+			}
+		}
+		if poll.Track == nil && poll.Operations == nil && poll.Media == nil {
 			continue
 		}
 		if applyErr := coordinator.sink.ApplyFlightArtifacts(ctx, instance, poll); applyErr != nil {
@@ -181,12 +202,57 @@ func (coordinator *ResourceStreamCoordinator) pollFlightArtifacts(ctx context.Co
 		if poll.Operations != nil {
 			operations++
 		}
+		if poll.Media != nil {
+			mediaTasks++
+		}
+	}
+	exportRecords, exportComplete, exportErr := coordinator.listAllFlightExports(ctx, token, scope.ProjectUUID)
+	if exportErr != nil {
+		pollErrors = append(pollErrors, exportErr)
+	} else if applyErr := coordinator.sink.ApplyFlightExports(ctx, instance, FlightExportPoll{
+		Records: exportRecords, CompleteSnapshot: exportComplete, ReceivedAt: now,
+	}); applyErr != nil {
+		pollErrors = append(pollErrors, applyErr)
+	} else {
+		exports = len(exportRecords)
 	}
 	cursor := map[string]any{
-		"targets": len(targets), "tracks": tracks, "operations": operations,
+		"targets": len(targets), "tracks": tracks, "operations": operations, "mediaTasks": mediaTasks, "exports": exports,
 		"complete": len(targets) < coordinator.config.ArtifactBatchSize && len(pollErrors) == 0,
 	}
 	return cursor, coordinator.config.CatalogInterval, errors.Join(pollErrors...)
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllFlightExports(ctx context.Context, token, projectUUID string) ([]FlightExportRecord, bool, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]FlightExportRecord, 0)
+	seen := make(map[string]struct{})
+	total := -1
+	for page := 1; page <= maxPages; page++ {
+		result, err := coordinator.client.ListFlightTaskExports(ctx, token, projectUUID, FlightExportOptions{Page: page, PageSize: pageSize})
+		if err != nil {
+			return items, false, err
+		}
+		if total < 0 {
+			total = result.Pagination.Total
+		} else if total != result.Pagination.Total {
+			return items, false, schemaError()
+		}
+		for _, item := range result.List {
+			if _, duplicate := seen[item.UUID]; duplicate {
+				return items, false, schemaError()
+			}
+			seen[item.UUID] = struct{}{}
+			items = append(items, item)
+		}
+		if len(items) == total {
+			return items, true, nil
+		}
+		if len(items) > total || len(result.List) == 0 || len(result.List) < pageSize {
+			return items, false, schemaError()
+		}
+	}
+	return items, false, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
 }
 
 func (coordinator *ResourceStreamCoordinator) pollWaylines(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {

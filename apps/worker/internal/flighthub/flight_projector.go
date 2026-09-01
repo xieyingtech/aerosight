@@ -2,7 +2,9 @@ package flighthub
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 
 	"aerosight/worker/internal/adapter"
 	"aerosight/worker/internal/connector"
+	"aerosight/worker/internal/credentials"
 	"aerosight/worker/internal/telemetry"
 )
 
@@ -23,16 +26,17 @@ type SQLFlightCatalogProjector struct {
 	telemetry    TelemetryBatchIngestor
 	now          func() time.Time
 	unknownAfter time.Duration
+	authSecret   string
 }
 
-func NewSQLFlightCatalogProjector(database *sql.DB, telemetryIngestor TelemetryBatchIngestor, now func() time.Time, unknownAfter time.Duration) *SQLFlightCatalogProjector {
+func NewSQLFlightCatalogProjector(database *sql.DB, telemetryIngestor TelemetryBatchIngestor, now func() time.Time, unknownAfter time.Duration, authSecret string) *SQLFlightCatalogProjector {
 	if now == nil {
 		now = time.Now
 	}
 	if unknownAfter <= 0 {
 		unknownAfter = 30 * time.Minute
 	}
-	return &SQLFlightCatalogProjector{db: database, telemetry: telemetryIngestor, now: now, unknownAfter: unknownAfter}
+	return &SQLFlightCatalogProjector{db: database, telemetry: telemetryIngestor, now: now, unknownAfter: unknownAfter, authSecret: authSecret}
 }
 
 func (projector *SQLFlightCatalogProjector) ApplyWaylines(ctx context.Context, instance connector.Instance, items []WaylineSummary) (returnedErr error) {
@@ -536,9 +540,11 @@ func (projector *SQLFlightCatalogProjector) ListArtifactTargets(ctx context.Cont
 			_ = tx.Rollback()
 		}
 	}()
-	rows, err := tx.QueryContext(ctx, `select resource.remote_id,run.id,
+	rows, err := tx.QueryContext(ctx, `select resource.remote_id,run.id,coalesce(resource.remote_version,''),
 		(run.status='succeeded' and track_marker.event_id is null) as need_track,
-		(operation_marker.event_id is null) as need_operation
+		(operation_marker.event_id is null) as need_operation,
+		(media_marker.event_id is null or coalesce(media_marker.payload_json->>'taskRemoteVersion','')<>coalesce(resource.remote_version,'')) as need_media,
+		(lower(coalesce(resource.summary_json->>'mediaUploadStatus','')) in('','uploaded','success','completed','upload_success','upload_complete')) as media_upload_final
 		from connector_remote_resources resource
 		join task_runs run on resource.project_id=run.project_id
 		 and resource.canonical_target_type='task_run' and resource.canonical_target_id=run.id::text
@@ -546,9 +552,12 @@ func (projector *SQLFlightCatalogProjector) ListArtifactTargets(ctx context.Cont
 		 and track_marker.event_id='flighthub-task-run:'||run.project_id::text||':'||run.id::text||':track-synced'
 		left join project_events operation_marker on operation_marker.project_id=run.project_id
 		 and operation_marker.event_id='flighthub-task-run:'||run.project_id::text||':'||run.id::text||':operations-synced'
+		left join project_events media_marker on media_marker.project_id=run.project_id
+		 and media_marker.event_id='flighthub-task-run:'||run.project_id::text||':'||run.id::text||':media-synced'
 		where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.resource_kind='flight-task'
 		 and resource.status='active' and run.status in('succeeded','failed','canceled')
-		 and ((run.status='succeeded' and track_marker.event_id is null) or operation_marker.event_id is null)
+		 and ((run.status='succeeded' and track_marker.event_id is null) or operation_marker.event_id is null
+		      or media_marker.event_id is null or coalesce(media_marker.payload_json->>'taskRemoteVersion','')<>coalesce(resource.remote_version,''))
 		order by run.finished_at nulls last,resource.id limit $3`, instance.ProjectID, instance.ID, limit)
 	if err != nil {
 		return nil, err
@@ -556,7 +565,7 @@ func (projector *SQLFlightCatalogProjector) ListArtifactTargets(ctx context.Cont
 	defer rows.Close()
 	for rows.Next() {
 		var target FlightArtifactTarget
-		if err := rows.Scan(&target.RemoteTaskID, &target.TaskRunID, &target.NeedTrack, &target.NeedOperation); err != nil {
+		if err := rows.Scan(&target.RemoteTaskID, &target.TaskRunID, &target.RemoteVersion, &target.NeedTrack, &target.NeedOperation, &target.NeedMedia, &target.MediaUploadFinal); err != nil {
 			return nil, err
 		}
 		targets = append(targets, target)
@@ -580,6 +589,9 @@ func validateFlightArtifactTarget(ctx context.Context, tx *sql.Tx, instance conn
 	}
 	if !resource.CanonicalType.Valid || resource.CanonicalType.String != "task_run" || !resource.CanonicalID.Valid || resource.CanonicalID.String != strconv.Itoa(target.TaskRunID) {
 		return errors.New("FlightHub flight artifact canonical link is invalid")
+	}
+	if target.RemoteVersion == "" || resource.RemoteVersion != target.RemoteVersion {
+		return connector.ErrRemoteResourceUnavailable
 	}
 	var runID int
 	err = tx.QueryRowContext(ctx, `select id from task_runs where project_id=$1 and id=$2 and status in('succeeded','failed','canceled') for update`,
@@ -701,7 +713,7 @@ func insertFlightOperationTimeline(ctx context.Context, tx *sql.Tx, projectID, t
 }
 
 func (projector *SQLFlightCatalogProjector) ApplyFlightArtifacts(ctx context.Context, instance connector.Instance, poll FlightArtifactPoll) (returnedErr error) {
-	if projector == nil || projector.db == nil || poll.ReceivedAt.IsZero() || (poll.Track == nil && poll.Operations == nil) {
+	if projector == nil || projector.db == nil || poll.ReceivedAt.IsZero() || (poll.Track == nil && poll.Operations == nil && poll.Media == nil) {
 		return errors.New("FlightHub flight artifact projection is invalid")
 	}
 	tx, teamID, err := projector.beginWritable(ctx, instance)
@@ -775,6 +787,262 @@ func (projector *SQLFlightCatalogProjector) ApplyFlightArtifacts(ctx context.Con
 				"controlChangeCount": len(poll.Operations.ControlChanges), "payloadChangeCount": len(poll.Operations.PayloadChanges),
 				"operationCount": len(poll.Operations.OperationLogs), "relatedUserCount": len(poll.Operations.RelatedUsers),
 			}); err != nil {
+			return err
+		}
+	}
+	if poll.Media != nil {
+		mediaCount, err := projector.applyFlightMedia(ctx, tx, instance, teamID, poll.Target, *poll.Media, poll.ReceivedAt.UTC())
+		if err != nil {
+			return err
+		}
+		if poll.Target.MediaUploadFinal {
+			payload := map[string]any{
+				"taskRunId": poll.Target.TaskRunID, "source": "dji-flighthub-openapi",
+				"mediaCount": mediaCount, "taskRemoteVersion": poll.Target.RemoteVersion,
+			}
+			payloadJSON, err := json.Marshal(payload)
+			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `insert into project_events(project_id,team_id,event_id,event_type,payload_json,occurred_at)
+				values($1,$2,$3,'task_run.vendor_media_synced',$4,$5)
+				on conflict(event_id) do update set payload_json=excluded.payload_json,occurred_at=excluded.occurred_at`,
+				instance.ProjectID, teamID, flightArtifactMarkerID(instance.ProjectID, poll.Target.TaskRunID, "media"), payloadJSON, poll.ReceivedAt.UTC()); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+func assetTimestamp(value string) (*time.Time, error) {
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return nil, schemaError()
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
+}
+
+func mediaAssetKind(fileType string) (string, string) {
+	switch fileType {
+	case "image":
+		return "image", "image/*"
+	case "video":
+		return "video", "video/*"
+	case "model_2d", "model_3d":
+		return "model", "application/octet-stream"
+	default:
+		return "file", "application/octet-stream"
+	}
+}
+
+func exportAssetMIME(fileTypes []string) string {
+	for _, value := range fileTypes {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "pdf":
+			return "application/pdf"
+		case "csv":
+			return "text/csv"
+		case "excel", "xlsx":
+			return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		}
+	}
+	return "application/octet-stream"
+}
+
+type externalAssetInput struct {
+	ResourceKind    string
+	RemoteID        string
+	RemoteVersion   string
+	RemoteUpdatedAt *time.Time
+	TaskRunID       *int
+	AssetKind       string
+	MIMEType        string
+	Status          string
+	SizeBytes       *int64
+	CapturedAt      *time.Time
+	Summary         map[string]any
+	Metadata        map[string]any
+	Locator         map[string]string
+}
+
+func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Context, tx *sql.Tx, instance connector.Instance, teamID int, input externalAssetInput) (int, error) {
+	if projector.authSecret == "" || strings.TrimSpace(input.RemoteID) == "" || strings.TrimSpace(input.RemoteVersion) == "" ||
+		!validEnum(input.ResourceKind, "flight-media", "flight-record") || !validEnum(input.Status, "pending", "available", "failed") {
+		return 0, errors.New("FlightHub external asset projection is invalid")
+	}
+	summaryJSON, err := json.Marshal(input.Summary)
+	if err != nil {
+		return 0, err
+	}
+	var remoteResourceID int64
+	err = tx.QueryRowContext(ctx, `insert into connector_remote_resources(
+		project_id,team_id,connector_instance_id,resource_kind,remote_id,remote_version,remote_updated_at,status,summary_json
+	) values($1,$2,$3,$4,$5,$6,$7,'active',$8)
+	 on conflict(project_id,connector_instance_id,resource_kind,remote_id) do update set
+		team_id=excluded.team_id,remote_version=excluded.remote_version,remote_updated_at=excluded.remote_updated_at,
+		status='active',summary_json=excluded.summary_json,last_seen_at=now(),missing_at=null,updated_at=now()
+	 returning id`, instance.ProjectID, teamID, instance.ID, input.ResourceKind, input.RemoteID, input.RemoteVersion, input.RemoteUpdatedAt, summaryJSON).Scan(&remoteResourceID)
+	if err != nil {
+		return 0, err
+	}
+	logicalKey := fmt.Sprintf("dji-flighthub/%d/%s/%s", instance.ID, input.ResourceKind, secureRemoteKey(input.RemoteID))
+	storageKey := fmt.Sprintf("projects/%d/remote/dji-flighthub/%s/%s", instance.ProjectID, input.ResourceKind, secureRemoteKey(input.RemoteID))
+	metadataJSON, err := json.Marshal(input.Metadata)
+	if err != nil {
+		return 0, err
+	}
+	var assetID int
+	err = tx.QueryRowContext(ctx, `insert into assets(
+		project_id,team_id,task_run_id,kind,mime_type,storage_key,logical_key,version,status,object_version,size_bytes,captured_at,metadata_json,available_at,failed_at,failure_code
+	) values($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10,$11,$12,
+		case when $8='available' then now() else null end,case when $8='failed' then now() else null end,
+		case when $8='failed' then 'DJI_FLIGHTHUB_EXPORT_FAILED' else null end)
+	 on conflict(project_id,logical_key,version) do update set
+		team_id=excluded.team_id,task_run_id=coalesce(excluded.task_run_id,assets.task_run_id),kind=excluded.kind,
+		mime_type=excluded.mime_type,storage_key=excluded.storage_key,status=excluded.status,object_version=excluded.object_version,
+		size_bytes=excluded.size_bytes,captured_at=excluded.captured_at,metadata_json=excluded.metadata_json,
+		available_at=case when excluded.status='available' then coalesce(assets.available_at,now()) else null end,
+		failed_at=case when excluded.status='failed' then coalesce(assets.failed_at,now()) else null end,
+		failure_code=excluded.failure_code,deleted_at=null
+	 returning id`, instance.ProjectID, teamID, input.TaskRunID, input.AssetKind, input.MIMEType, storageKey, logicalKey,
+		input.Status, input.RemoteVersion, input.SizeBytes, input.CapturedAt, metadataJSON).Scan(&assetID)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `update connector_remote_resources set canonical_target_type='asset',canonical_target_id=$4,updated_at=now()
+		where project_id=$1 and connector_instance_id=$2 and id=$3`, instance.ProjectID, instance.ID, remoteResourceID, strconv.Itoa(assetID)); err != nil {
+		return 0, err
+	}
+	if input.Locator == nil {
+		return assetID, nil
+	}
+	locatorJSON, err := json.Marshal(input.Locator)
+	if err != nil {
+		return 0, err
+	}
+	digest := sha256.Sum256(locatorJSON)
+	envelope, err := credentials.EncryptJSON(input.Locator, projector.authSecret,
+		credentials.AAD("flighthub-asset-reference", assetID, instance.ProjectID))
+	if err != nil {
+		return 0, err
+	}
+	envelopeJSON, err := json.Marshal(envelope)
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.ExecContext(ctx, `insert into connector_asset_access_refs(
+		id,project_id,team_id,connector_instance_id,remote_resource_id,access_kind,reference_digest,credential_envelope_json
+	) values($1,$2,$3,$4,$5,$6,$7,$8)
+	 on conflict(id) do update set team_id=excluded.team_id,connector_instance_id=excluded.connector_instance_id,
+		remote_resource_id=excluded.remote_resource_id,access_kind=excluded.access_kind,
+		reference_digest=excluded.reference_digest,credential_envelope_json=excluded.credential_envelope_json,updated_at=now()
+	 where connector_asset_access_refs.project_id=excluded.project_id`, assetID, instance.ProjectID, teamID, instance.ID,
+		remoteResourceID, input.ResourceKind, hex.EncodeToString(digest[:]), envelopeJSON)
+	return assetID, err
+}
+
+func (projector *SQLFlightCatalogProjector) applyFlightMedia(ctx context.Context, tx *sql.Tx, instance connector.Instance, teamID int, target FlightArtifactTarget, items []FlightTaskMedia, receivedAt time.Time) (int, error) {
+	seen := make(map[string]FlightTaskMedia, len(items))
+	for _, item := range items {
+		if !validFlightMedia(&item) {
+			return 0, schemaError()
+		}
+		if previous, duplicate := seen[item.UUID]; duplicate {
+			if previous.Name != item.Name || previous.FileType != item.FileType || previous.Suffix != item.Suffix || previous.SizeBytes != item.SizeBytes || previous.UpdatedAt != item.UpdatedAt {
+				return 0, schemaError()
+			}
+			continue
+		}
+		seen[item.UUID] = item
+		capturedAt, err := assetTimestamp(item.CreatedAt)
+		if err != nil {
+			return 0, err
+		}
+		updatedAt, err := assetTimestamp(item.UpdatedAt)
+		if err != nil {
+			return 0, err
+		}
+		kind, mimeType := mediaAssetKind(item.FileType)
+		remoteVersion := secureRemoteKey(strings.Join([]string{item.UpdatedAt, strconv.FormatInt(item.SizeBytes, 10), item.FileType, item.Suffix}, ":"))
+		size := item.SizeBytes
+		if _, err := projector.upsertExternalAsset(ctx, tx, instance, teamID, externalAssetInput{
+			ResourceKind: "flight-media", RemoteID: item.UUID, RemoteVersion: remoteVersion, RemoteUpdatedAt: updatedAt,
+			TaskRunID: &target.TaskRunID, AssetKind: kind, MIMEType: mimeType, Status: "available", SizeBytes: &size, CapturedAt: capturedAt,
+			Summary: map[string]any{"name": item.Name, "fileType": item.FileType, "suffix": item.Suffix, "sizeBytes": item.SizeBytes, "capturedAt": item.CreatedAt},
+			Metadata: map[string]any{
+				"source": "dji-flighthub-openapi", "sourceKind": "flight-media", "remoteReference": true,
+				"temporaryAccess": true, "fileType": item.FileType, "suffix": item.Suffix, "name": item.Name,
+			},
+			Locator: map[string]string{"taskUUID": target.RemoteTaskID, "mediaUUID": item.UUID},
+		}); err != nil {
+			return 0, err
+		}
+	}
+	return len(seen), nil
+}
+
+func (projector *SQLFlightCatalogProjector) ApplyFlightExports(ctx context.Context, instance connector.Instance, poll FlightExportPoll) (returnedErr error) {
+	if projector == nil || projector.db == nil || poll.ReceivedAt.IsZero() || poll.Records == nil {
+		return errors.New("FlightHub flight export projection is invalid")
+	}
+	tx, teamID, err := projector.beginWritable(ctx, instance)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if returnedErr != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	seen := make(map[string]FlightExportRecord, len(poll.Records))
+	for _, item := range poll.Records {
+		if !validFlightExport(&item) {
+			return schemaError()
+		}
+		if previous, duplicate := seen[item.UUID]; duplicate {
+			if previous.Status != item.Status || previous.Progress != item.Progress || previous.ObjectKey != item.ObjectKey {
+				return schemaError()
+			}
+			continue
+		}
+		seen[item.UUID] = item
+		createdAt, err := assetTimestamp(item.CreatedAt)
+		if err != nil {
+			return err
+		}
+		updatedAt := createdAt
+		if item.ExportTime != nil {
+			updatedAt, err = assetTimestamp(*item.ExportTime)
+			if err != nil {
+				return err
+			}
+		}
+		status := "pending"
+		if item.Status == "export_complete" {
+			status = "available"
+		} else if item.Status == "export_failed" {
+			status = "failed"
+		}
+		remoteVersion := secureRemoteKey(strings.Join([]string{item.Status, strconv.Itoa(item.Progress), updatedAt.Format(time.RFC3339Nano), strings.Join(item.FileTypes, ",")}, ":"))
+		var locator map[string]string
+		if item.ObjectKey != "" {
+			locator = map[string]string{"objectKey": item.ObjectKey}
+		}
+		if _, err := projector.upsertExternalAsset(ctx, tx, instance, teamID, externalAssetInput{
+			ResourceKind: "flight-record", RemoteID: item.UUID, RemoteVersion: remoteVersion, RemoteUpdatedAt: updatedAt,
+			AssetKind: "file", MIMEType: exportAssetMIME(item.FileTypes), Status: status, CapturedAt: createdAt,
+			Summary: map[string]any{
+				"name": item.FileName, "contentType": item.ContentType, "status": item.Status,
+				"progress": item.Progress, "fileTypes": item.FileTypes, "failedReasonCode": item.FailedReasonCode,
+			},
+			Metadata: map[string]any{
+				"source": "dji-flighthub-openapi", "sourceKind": "flight-record", "remoteReference": true,
+				"temporaryAccess": item.ObjectKey != "", "contentType": item.ContentType, "fileTypes": item.FileTypes, "name": item.FileName,
+			},
+			Locator: locator,
+		}); err != nil {
 			return err
 		}
 	}

@@ -82,6 +82,10 @@ func (fixture *flightCatalogProjectorFixture) ApplyFlightArtifacts(context.Conte
 	return nil
 }
 
+func (fixture *flightCatalogProjectorFixture) ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error {
+	return nil
+}
+
 func (fixture *healthProjectorFixture) Apply(_ context.Context, _ connector.Instance, poll HealthPoll) error {
 	fixture.polls = append(fixture.polls, poll)
 	return nil

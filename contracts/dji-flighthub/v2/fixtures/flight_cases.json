@@ -351,6 +351,73 @@
           ]
         }
       }
+    },
+    {
+      "name": "flight-task-media",
+      "endpointId": "457309246e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/TASK_REDACTED_01/media",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "list": [
+            {
+              "uuid": "MEDIA_REDACTED_01",
+              "name": "脱敏巡检照片",
+              "file_type": "image",
+              "suffix": "jpg",
+              "size": 4096,
+              "preview_url": "https://objects.vendor.example/media/MEDIA_REDACTED_01-preview.jpg",
+              "original_url": "https://objects.vendor.example/media/MEDIA_REDACTED_01.jpg",
+              "create_at": "2026-02-02T03:30:00Z",
+              "update_at": "2026-02-02T03:31:00Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-task-export-history",
+      "endpointId": "454273442e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/export?page=1&page_size=100",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "pagination": { "page": 1, "page_size": 100, "total": 1 },
+          "list": [
+            {
+              "uuid": "EXPORT_REDACTED_01",
+              "created_at": "2026-02-02T03:35:00Z",
+              "export_time": "2026-02-02T03:36:00Z",
+              "content_type": "details",
+              "export_status": "export_complete",
+              "progress": 100,
+              "file_name": "脱敏飞行记录",
+              "file_type": ["CSV"],
+              "object_key": "exports/PROJECT_REDACTED/RECORD_REDACTED_01.csv",
+              "user_name": "USER_REDACTED",
+              "failed_reason_code": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-record-download-url",
+      "endpointId": "454273444e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/oss-url-info/get?object_key=exports%2FPROJECT_REDACTED%2FRECORD_REDACTED_01.csv",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": "https://objects.vendor.example/exports/RECORD_REDACTED_01.csv"
+      }
     }
   ]
 }

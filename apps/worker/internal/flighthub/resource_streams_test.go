@@ -59,6 +59,10 @@ type resourceClientFixture struct {
 	trackErrors     map[string]error
 	operations      map[string]FlightTaskOperationTimeline
 	operationErrors map[string]error
+	media           map[string][]FlightTaskMedia
+	mediaErrors     map[string]error
+	exports         []FlightExportRecord
+	exportError     error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -114,6 +118,20 @@ func (client *resourceClientFixture) GetFlightTaskOperationTimeline(_ context.Co
 	return client.operations[taskID], client.operationErrors[taskID]
 }
 
+func (client *resourceClientFixture) ListFlightTaskMedia(_ context.Context, _, _, taskID string) ([]FlightTaskMedia, error) {
+	return append([]FlightTaskMedia(nil), client.media[taskID]...), client.mediaErrors[taskID]
+}
+
+func (client *resourceClientFixture) ListFlightTaskExports(_ context.Context, _, _ string, options FlightExportOptions) (FlightExportPage, error) {
+	if client.exportError != nil {
+		return FlightExportPage{}, client.exportError
+	}
+	if options.Page > 1 {
+		return FlightExportPage{Pagination: FlightExportPagination{Page: options.Page, PageSize: options.PageSize, Total: len(client.exports)}, List: []FlightExportRecord{}}, nil
+	}
+	return FlightExportPage{Pagination: FlightExportPagination{Page: options.Page, PageSize: options.PageSize, Total: len(client.exports)}, List: append([]FlightExportRecord(nil), client.exports...)}, nil
+}
+
 func (client *resourceClientFixture) calls() []string {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -128,6 +146,7 @@ type resourceSinkFixture struct {
 	catalogs        []CatalogPoll
 	artifactTargets []FlightArtifactTarget
 	artifacts       []FlightArtifactPoll
+	exportPolls     []FlightExportPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -172,6 +191,14 @@ func (sink *resourceSinkFixture) ApplyFlightArtifacts(_ context.Context, _ conne
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
 	sink.artifacts = append(sink.artifacts, poll)
+	return nil
+}
+
+func (sink *resourceSinkFixture) ApplyFlightExports(_ context.Context, _ connector.Instance, poll FlightExportPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.Records = append([]FlightExportRecord(nil), poll.Records...)
+	sink.exportPolls = append(sink.exportPolls, poll)
 	return nil
 }
 
@@ -396,9 +423,9 @@ func TestFlightTaskCatalogAtVendorLimitFailsSnapshotClosed(t *testing.T) {
 	}
 }
 
-func TestFlightArtifactStreamAppliesIndependentTrackAndOperationResults(t *testing.T) {
+func TestFlightArtifactStreamAppliesIndependentTrackOperationMediaAndExportResults(t *testing.T) {
 	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
-	target := FlightArtifactTarget{RemoteTaskID: "TASK_REDACTED_01", TaskRunID: 17, NeedTrack: true, NeedOperation: true}
+	target := FlightArtifactTarget{RemoteTaskID: "TASK_REDACTED_01", TaskRunID: 17, NeedTrack: true, NeedOperation: true, NeedMedia: true}
 	track := FlightTaskTrack{Track: FlightTrack{
 		ID: "TRACK_REDACTED", DroneSN: "AIRCRAFT_REDACTED", Points: []FlightTrackPoint{{Timestamp: now.UnixMilli(), Latitude: 30, Longitude: 120, Height: 10}},
 	}}
@@ -410,6 +437,8 @@ func TestFlightArtifactStreamAppliesIndependentTrackAndOperationResults(t *testi
 	client := &resourceClientFixture{
 		tracks: map[string]FlightTaskTrack{target.RemoteTaskID: track}, trackErrors: map[string]error{},
 		operations: map[string]FlightTaskOperationTimeline{target.RemoteTaskID: timeline}, operationErrors: map[string]error{},
+		media: map[string][]FlightTaskMedia{target.RemoteTaskID: {{UUID: "MEDIA_REDACTED", Name: "脱敏照片", FileType: "image"}}}, mediaErrors: map[string]error{},
+		exports: []FlightExportRecord{{UUID: "EXPORT_REDACTED", Status: "export_complete", Progress: 100}},
 	}
 	sink := &resourceSinkFixture{artifactTargets: []FlightArtifactTarget{target}}
 	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
@@ -420,11 +449,11 @@ func TestFlightArtifactStreamAppliesIndependentTrackAndOperationResults(t *testi
 		t.Fatal(err)
 	}
 	cursor, _, err := coordinator.pollFlightArtifacts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
-	if err != nil || cursor["tracks"] != 1 || cursor["operations"] != 1 || cursor["complete"] != true {
+	if err != nil || cursor["tracks"] != 1 || cursor["operations"] != 1 || cursor["mediaTasks"] != 1 || cursor["exports"] != 1 || cursor["complete"] != true {
 		t.Fatalf("artifact cursor=%#v err=%v", cursor, err)
 	}
 	applied := sink.appliedArtifacts()
-	if len(applied) != 1 || applied[0].Track == nil || applied[0].Operations == nil || applied[0].Target.TaskRunID != target.TaskRunID {
+	if len(applied) != 1 || applied[0].Track == nil || applied[0].Operations == nil || applied[0].Media == nil || applied[0].Target.TaskRunID != target.TaskRunID {
 		t.Fatalf("artifact projection=%#v", applied)
 	}
 
@@ -432,7 +461,7 @@ func TestFlightArtifactStreamAppliesIndependentTrackAndOperationResults(t *testi
 	sink.artifacts = nil
 	cursor, _, err = coordinator.pollFlightArtifacts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
 	applied = sink.appliedArtifacts()
-	if !IsSafeCode(err, "upstream_unavailable") || cursor["tracks"] != 0 || cursor["operations"] != 1 || cursor["complete"] != false || len(applied) != 1 || applied[0].Track != nil || applied[0].Operations == nil {
+	if !IsSafeCode(err, "upstream_unavailable") || cursor["tracks"] != 0 || cursor["operations"] != 1 || cursor["mediaTasks"] != 1 || cursor["exports"] != 1 || cursor["complete"] != false || len(applied) != 1 || applied[0].Track != nil || applied[0].Operations == nil || applied[0].Media == nil {
 		t.Fatalf("partial artifact cursor=%#v projection=%#v err=%v", cursor, applied, err)
 	}
 }

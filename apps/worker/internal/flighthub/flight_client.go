@@ -12,6 +12,8 @@ import (
 
 const maxFlightTaskBatch = 100
 
+const maxFlightTaskMedia = 10_000
+
 type WaylinePayload struct {
 	Domain   string `json:"domain"`
 	Type     string `json:"type"`
@@ -282,6 +284,56 @@ type FlightTaskOperationTimeline struct {
 	RelatedUsers   []FlightOperationUser `json:"related_users"`
 }
 
+type FlightTaskMedia struct {
+	UUID        string `json:"uuid"`
+	Name        string `json:"name"`
+	FileType    string `json:"file_type"`
+	Suffix      string `json:"suffix"`
+	SizeBytes   int64  `json:"size"`
+	PreviewURL  string `json:"preview_url"`
+	OriginalURL string `json:"original_url"`
+	CreatedAt   string `json:"create_at"`
+	UpdatedAt   string `json:"update_at"`
+}
+
+type FlightExportOptions struct {
+	Page        int
+	PageSize    int
+	ContentType string
+	Status      string
+	ExportID    string
+}
+
+type FlightExportPagination struct {
+	Page     int `json:"page"`
+	PageSize int `json:"page_size"`
+	Total    int `json:"total"`
+}
+
+type FlightExportRecord struct {
+	UUID             string   `json:"uuid"`
+	CreatedAt        string   `json:"created_at"`
+	ExportTime       *string  `json:"export_time"`
+	ContentType      string   `json:"content_type"`
+	Status           string   `json:"export_status"`
+	Progress         int      `json:"progress"`
+	FileName         string   `json:"file_name"`
+	FileTypes        []string `json:"file_type"`
+	ObjectKey        string   `json:"object_key"`
+	UserName         string   `json:"user_name"`
+	FailedReasonCode int      `json:"failed_reason_code"`
+}
+
+type FlightExportPage struct {
+	Pagination FlightExportPagination `json:"pagination"`
+	List       []FlightExportRecord   `json:"list"`
+}
+
+type TemporaryDownload struct {
+	URL       string
+	ExpiresAt time.Time
+}
+
 func validateIdentifierList(values []string, minimum, maximum int) ([]string, error) {
 	if len(values) < minimum || len(values) > maximum {
 		return nil, &APIError{SafeCode: "request_invalid"}
@@ -342,6 +394,46 @@ func requireFlightTaskID(value string) (string, error) {
 		return "", &APIError{SafeCode: "request_invalid"}
 	}
 	return value, nil
+}
+
+func validFlightMedia(item *FlightTaskMedia) bool {
+	if strings.TrimSpace(item.UUID) == "" || strings.TrimSpace(item.Name) == "" || item.SizeBytes < 0 ||
+		!validEnum(item.FileType, "image", "video", "ppk", "model_2d", "model_3d", "unsupported") ||
+		!validTimestamp(item.CreatedAt) || item.CreatedAt == "" || !validTimestamp(item.UpdatedAt) || item.UpdatedAt == "" {
+		return false
+	}
+	if len(item.Suffix) > 32 || strings.ContainsAny(item.Suffix, "/\\\x00\r\n") {
+		return false
+	}
+	return strings.TrimSpace(item.OriginalURL) != ""
+}
+
+func validObjectKey(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return value == trimmed && trimmed != "" && len(trimmed) <= 1024 && !strings.HasPrefix(trimmed, "/") &&
+		!strings.Contains(trimmed, "..") && !strings.ContainsAny(trimmed, "\\\x00\r\n")
+}
+
+func validFlightExport(item *FlightExportRecord) bool {
+	if strings.TrimSpace(item.UUID) == "" || strings.TrimSpace(item.FileName) == "" ||
+		!validTimestamp(item.CreatedAt) || item.CreatedAt == "" ||
+		!validEnum(item.ContentType, "summary", "details") ||
+		!validEnum(item.Status, "export_in_progress", "export_complete", "export_failed") ||
+		item.Progress < 0 || item.Progress > 100 || item.FileTypes == nil {
+		return false
+	}
+	if item.ExportTime != nil && (*item.ExportTime == "" || !validTimestamp(*item.ExportTime)) {
+		return false
+	}
+	for _, fileType := range item.FileTypes {
+		if _, err := optionalQuery(fileType); err != nil || strings.TrimSpace(fileType) == "" {
+			return false
+		}
+	}
+	if item.Status == "export_complete" {
+		return item.Progress == 100 && validObjectKey(item.ObjectKey)
+	}
+	return strings.TrimSpace(item.ObjectKey) == "" || validObjectKey(item.ObjectKey)
 }
 
 func validateWayline(item *WaylineSummary) bool {
@@ -734,4 +826,178 @@ func (client *Client) GetFlightTaskOperationTimeline(ctx context.Context, token,
 		}
 	}
 	return result, nil
+}
+
+func (client *Client) ListFlightTaskMedia(ctx context.Context, token, projectUUID, taskUUID string) ([]FlightTaskMedia, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return nil, err
+	}
+	taskUUID, err = requireFlightTaskID(taskUUID)
+	if err != nil {
+		return nil, &APIError{SafeCode: "request_invalid"}
+	}
+	path, err := resolvePathTemplate("/openapi/v2.0/flight-task/{task_uuid}/media", map[string]string{"task_uuid": taskUUID})
+	if err != nil {
+		return nil, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: path})
+	if err != nil {
+		return nil, err
+	}
+	items, err := decodeList(payload, false, validFlightMedia)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) >= maxFlightTaskMedia {
+		return nil, &APIError{SafeCode: "directory_limit_reached", Retryable: true}
+	}
+	for _, item := range items {
+		if item.PreviewURL != "" {
+			if _, err := client.validateResponseLink(LinkDownload, item.PreviewURL); err != nil {
+				return nil, err
+			}
+		}
+		if _, err := client.validateResponseLink(LinkDownload, item.OriginalURL); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
+}
+
+func (client *Client) ListFlightTaskExports(ctx context.Context, token, projectUUID string, options FlightExportOptions) (FlightExportPage, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return FlightExportPage{}, err
+	}
+	if options.Page == 0 {
+		options.Page = 1
+	}
+	if options.PageSize == 0 {
+		options.PageSize = 100
+	}
+	if options.Page < 1 || options.PageSize < 1 || options.PageSize > 100 ||
+		!validEnum(options.ContentType, "summary", "details") ||
+		!validEnum(options.Status, "export_in_progress", "export_complete", "export_failed") {
+		return FlightExportPage{}, &APIError{SafeCode: "request_invalid"}
+	}
+	query := url.Values{
+		"page":      {strconv.Itoa(options.Page)},
+		"page_size": {strconv.Itoa(options.PageSize)},
+	}
+	if options.ContentType != "" {
+		query.Set("content_type", options.ContentType)
+	}
+	if options.Status != "" {
+		query.Set("status", options.Status)
+	}
+	if options.ExportID != "" {
+		exportID, exportErr := requireFlightTaskID(options.ExportID)
+		if exportErr != nil {
+			return FlightExportPage{}, &APIError{SafeCode: "request_invalid"}
+		}
+		query.Set("export_id", exportID)
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodGet, Path: "/openapi/v2.0/flight-task/export", Query: query,
+	})
+	if err != nil {
+		return FlightExportPage{}, err
+	}
+	var result FlightExportPage
+	if err := json.Unmarshal(payload.Data, &result); err != nil || result.List == nil ||
+		result.Pagination.Page < 0 || result.Pagination.PageSize < 0 || result.Pagination.Total < 0 {
+		return FlightExportPage{}, schemaError()
+	}
+	if options.ExportID == "" && (result.Pagination.Page != options.Page || result.Pagination.PageSize != options.PageSize || len(result.List) > options.PageSize) {
+		return FlightExportPage{}, schemaError()
+	}
+	if options.ExportID != "" && len(result.List) > 1 {
+		return FlightExportPage{}, schemaError()
+	}
+	for index := range result.List {
+		if !validFlightExport(&result.List[index]) {
+			return FlightExportPage{}, schemaError()
+		}
+	}
+	return result, nil
+}
+
+func (client *Client) GetFlightRecordDownloadURL(ctx context.Context, token, projectUUID, objectKey string) (TemporaryDownload, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return TemporaryDownload{}, err
+	}
+	if !validObjectKey(objectKey) {
+		return TemporaryDownload{}, &APIError{SafeCode: "request_invalid"}
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodGet, Path: "/openapi/v2.0/flight-task/oss-url-info/get", Query: url.Values{"object_key": {objectKey}},
+	})
+	if err != nil {
+		return TemporaryDownload{}, err
+	}
+	var raw string
+	if err := json.Unmarshal(payload.Data, &raw); err != nil || strings.TrimSpace(raw) == "" {
+		return TemporaryDownload{}, schemaError()
+	}
+	return client.validateDownload(raw, time.Hour)
+}
+
+func (client *Client) validateDownload(raw string, documentedTTL time.Duration) (TemporaryDownload, error) {
+	parsed, err := client.validateResponseLink(LinkDownload, raw)
+	if err != nil {
+		return TemporaryDownload{}, err
+	}
+	expiresAt := temporaryLinkExpiry(parsed)
+	if expiresAt.IsZero() && documentedTTL > 0 {
+		expiresAt = client.now().UTC().Add(documentedTTL)
+	}
+	if _, err := client.ValidateTemporaryLink(LinkDownload, raw, expiresAt); err != nil {
+		return TemporaryDownload{}, err
+	}
+	return TemporaryDownload{URL: raw, ExpiresAt: expiresAt.UTC()}, nil
+}
+
+func temporaryLinkExpiry(parsed *url.URL) time.Time {
+	query := parsed.Query()
+	for _, key := range []string{"auth_key", "Expires", "expires"} {
+		value := strings.TrimSpace(query.Get(key))
+		if value == "" {
+			continue
+		}
+		if key == "auth_key" {
+			value, _, _ = strings.Cut(value, "-")
+		}
+		if seconds, err := strconv.ParseInt(value, 10, 64); err == nil && seconds > 0 {
+			return time.Unix(seconds, 0).UTC()
+		}
+	}
+	for _, prefix := range []string{"X-Amz-", "X-Goog-"} {
+		dateValue := query.Get(prefix + "Date")
+		ttlValue := query.Get(prefix + "Expires")
+		issuedAt, dateErr := time.Parse("20060102T150405Z", dateValue)
+		ttlSeconds, ttlErr := strconv.ParseInt(ttlValue, 10, 64)
+		if dateErr == nil && ttlErr == nil && ttlSeconds > 0 {
+			return issuedAt.UTC().Add(time.Duration(ttlSeconds) * time.Second)
+		}
+	}
+	return time.Time{}
+}
+
+func (client *Client) RefreshFlightTaskMediaURL(ctx context.Context, token, projectUUID, taskUUID, mediaUUID string) (TemporaryDownload, error) {
+	mediaUUID, err := requireFlightTaskID(mediaUUID)
+	if err != nil {
+		return TemporaryDownload{}, &APIError{SafeCode: "request_invalid"}
+	}
+	items, err := client.ListFlightTaskMedia(ctx, token, projectUUID, taskUUID)
+	if err != nil {
+		return TemporaryDownload{}, err
+	}
+	for _, item := range items {
+		if item.UUID == mediaUUID {
+			return client.validateDownload(item.OriginalURL, 0)
+		}
+	}
+	return TemporaryDownload{}, &APIError{SafeCode: "scope_not_found"}
 }

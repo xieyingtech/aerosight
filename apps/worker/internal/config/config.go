@@ -28,6 +28,7 @@ type Config struct {
 	FlightHubPollInterval     time.Duration
 	FlightHubReconcileEvery   time.Duration
 	FlightHubMaxResponseBytes int64
+	FlightHubAllowedLinkHosts []string
 }
 
 func Load() (Config, error) {
@@ -53,6 +54,11 @@ func Load() (Config, error) {
 	config.FlightHubReconcileEvery, problems = durationSeconds("DJI_FLIGHTHUB_RECONCILE_INTERVAL_SECONDS", 15*time.Second, problems)
 	responseBytes, problems := integerValue("DJI_FLIGHTHUB_MAX_RESPONSE_BYTES", 4<<20, 1024, 16<<20, problems)
 	config.FlightHubMaxResponseBytes = int64(responseBytes)
+	config.FlightHubAllowedLinkHosts, problems = hostnameList(
+		"DJI_FLIGHTHUB_ALLOWED_LINK_HOSTS",
+		"es-flight-api-cn.djigate.com,test-file-storage.djicdn.com,files-cdn.dbeta.me",
+		problems,
+	)
 
 	if config.DatabaseURL == "" {
 		problems = append(problems, errors.New("DATABASE_URL is required"))
@@ -127,6 +133,25 @@ func valueOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func hostnameList(name, fallback string, problems []error) ([]string, []error) {
+	raw := valueOrDefault(name, fallback)
+	items := strings.Split(raw, ",")
+	result := make([]string, 0, len(items))
+	seen := map[string]struct{}{}
+	for _, item := range items {
+		item = strings.ToLower(strings.TrimSpace(item))
+		if item == "" || strings.ContainsAny(item, "/:@?#*") || strings.Contains(item, " ") {
+			return nil, append(problems, fmt.Errorf("%s must contain comma-separated exact hostnames", name))
+		}
+		if _, duplicate := seen[item]; duplicate {
+			return nil, append(problems, fmt.Errorf("%s must not contain duplicate hostnames", name))
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+	return result, problems
 }
 
 func isLogLevel(value string) bool {

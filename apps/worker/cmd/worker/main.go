@@ -89,7 +89,8 @@ func main() {
 		flightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
 			Timeout: workerConfig.FlightHubHTTPTimeout, MaxRetries: workerConfig.FlightHubMaxRetries,
 			MaxProjectPages: 50, MaxResponseBytes: workerConfig.FlightHubMaxResponseBytes,
-			RequestID: func() string { return observability.CorrelationID("") },
+			RequestID:        func() string { return observability.CorrelationID("") },
+			AllowedLinkHosts: workerConfig.FlightHubAllowedLinkHosts,
 		})
 		if flightHubErr != nil {
 			logger.Error("FlightHub client initialization failed", "error", flightHubErr.Error())
@@ -111,7 +112,7 @@ func main() {
 		telemetryIngestor := telemetry.NewIngestor(database)
 		resourceSink, resourceErr := flighthub.NewSQLResourceStreamSink(
 			telemetryIngestor, resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database),
-			flighthub.NewSQLFlightCatalogProjector(database, telemetryIngestor, nil, 30*time.Minute),
+			flighthub.NewSQLFlightCatalogProjector(database, telemetryIngestor, nil, 30*time.Minute, workerConfig.AuthSecret),
 		)
 		if resourceErr != nil {
 			logger.Error("FlightHub resource sink initialization failed", "error", resourceErr.Error())

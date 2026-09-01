@@ -14,6 +14,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const flightProjectorTestSecret = "0123456789abcdef0123456789abcdef"
+
 func TestDesiredTaskRunStateMapsFlightHubLifecycle(t *testing.T) {
 	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	firstSeen := now.Add(-time.Minute)
@@ -103,7 +105,7 @@ func TestSQLFlightCatalogProjectorConvertsWaylinesAndReconcilesRuns(t *testing.T
 	}
 
 	clock := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
-	projector := NewSQLFlightCatalogProjector(database, telemetry.NewIngestor(database), func() time.Time { return clock }, 30*time.Minute)
+	projector := NewSQLFlightCatalogProjector(database, telemetry.NewIngestor(database), func() time.Time { return clock }, 30*time.Minute, flightProjectorTestSecret)
 	repository := connector.NewSQLResourceRepository(database)
 	sink, err := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, repository, &freshnessProjectorFixture{}, &healthProjectorFixture{}, projector)
 	if err != nil {
@@ -319,7 +321,7 @@ func TestSQLFlightArtifactProjectorStoresIdempotentTaskTrajectoryAndSanitizedTim
 
 	clock := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	ingestor := telemetry.NewIngestor(database)
-	projector := NewSQLFlightCatalogProjector(database, ingestor, func() time.Time { return clock }, 30*time.Minute)
+	projector := NewSQLFlightCatalogProjector(database, ingestor, func() time.Time { return clock }, 30*time.Minute, flightProjectorTestSecret)
 	repository := connector.NewSQLResourceRepository(database)
 	sink, err := NewSQLResourceStreamSink(ingestor, repository, &freshnessProjectorFixture{}, &healthProjectorFixture{}, projector)
 	if err != nil {
@@ -340,7 +342,7 @@ func TestSQLFlightArtifactProjectorStoresIdempotentTaskTrajectoryAndSanitizedTim
 		t.Fatal(err)
 	}
 	targets, err := projector.ListArtifactTargets(ctx, instance, 25)
-	if err != nil || len(targets) != 1 || !targets[0].NeedTrack || !targets[0].NeedOperation {
+	if err != nil || len(targets) != 1 || !targets[0].NeedTrack || !targets[0].NeedOperation || !targets[0].NeedMedia || !targets[0].MediaUploadFinal {
 		t.Fatalf("artifact targets=%#v err=%v", targets, err)
 	}
 	target := targets[0]
@@ -367,7 +369,8 @@ func TestSQLFlightArtifactProjectorStoresIdempotentTaskTrajectoryAndSanitizedTim
 		},
 		RelatedUsers: []FlightOperationUser{{UserName: userSecret, UserID: userSecret, OperType: "operator"}},
 	}
-	poll := FlightArtifactPoll{Target: target, Track: &track, Operations: &timeline, ReceivedAt: clock}
+	emptyMedia := []FlightTaskMedia{}
+	poll := FlightArtifactPoll{Target: target, Track: &track, Operations: &timeline, Media: &emptyMedia, ReceivedAt: clock}
 	if err := projector.ApplyFlightArtifacts(ctx, instance, poll); err != nil {
 		t.Fatal(err)
 	}

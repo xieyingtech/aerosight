@@ -44,7 +44,7 @@ func loadFlightFixture(t *testing.T) (map[string]flightContractCase, []byte) {
 	if err := json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 14 {
+	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 17 {
 		t.Fatalf("invalid flight fixture metadata: version=%q cases=%d", fixture.ContractVersion, len(fixture.Cases))
 	}
 	byName := make(map[string]flightContractCase, len(fixture.Cases))
@@ -167,6 +167,18 @@ func TestFlightOperationTypedClientsMatchEveryReleasedEndpointFixture(t *testing
 	if err != nil || len(timeline.ControlChanges) != 1 || len(timeline.OperationLogs) != 1 || timeline.OperationLogs[0].Method != "pause_task" {
 		t.Fatalf("timeline=%#v err=%v", timeline, err)
 	}
+	media, err := flightFixtureClient(t, cases["flight-task-media"]).ListFlightTaskMedia(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "TASK_REDACTED_01")
+	if err != nil || len(media) != 1 || media[0].UUID != "MEDIA_REDACTED_01" || media[0].FileType != "image" || media[0].SizeBytes != 4096 {
+		t.Fatalf("media=%#v err=%v", media, err)
+	}
+	exports, err := flightFixtureClient(t, cases["flight-task-export-history"]).ListFlightTaskExports(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightExportOptions{})
+	if err != nil || exports.Pagination.Total != 1 || len(exports.List) != 1 || exports.List[0].Status != "export_complete" {
+		t.Fatalf("exports=%#v err=%v", exports, err)
+	}
+	download, err := flightFixtureClient(t, cases["flight-record-download-url"]).GetFlightRecordDownloadURL(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "exports/PROJECT_REDACTED/RECORD_REDACTED_01.csv")
+	if err != nil || download.URL == "" || download.ExpiresAt.IsZero() {
+		t.Fatalf("download=%#v err=%v", download, err)
+	}
 }
 
 func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T) {
@@ -206,6 +218,18 @@ func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T
 		}},
 		{name: "unsafe operation task", call: func() error {
 			_, err := client.GetFlightTaskOperationTimeline(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "../task")
+			return err
+		}},
+		{name: "unsafe media task", call: func() error {
+			_, err := client.ListFlightTaskMedia(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "../task")
+			return err
+		}},
+		{name: "invalid export page", call: func() error {
+			_, err := client.ListFlightTaskExports(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightExportOptions{Page: -1})
+			return err
+		}},
+		{name: "unsafe record key", call: func() error {
+			_, err := client.GetFlightRecordDownloadURL(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "../secret")
 			return err
 		}},
 	}
