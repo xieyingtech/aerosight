@@ -26,7 +26,9 @@ type MapProperties = {
   entityId: string;
   label: string;
   status?: string;
-  capturedAt?: string;
+	capturedAt?: string;
+	markerKind?: "drone" | "dock" | "ground";
+	markerGlyph?: string;
 };
 
 function scoped(item: Record<string, unknown>, projectId: number) {
@@ -51,11 +53,15 @@ function feature(projectId: number, geometryValue: Geometry, properties: Omit<Ma
   return { type: "Feature", geometry: geometryValue, properties: { projectId, ...properties } };
 }
 
-function deviceLayer(type: unknown): MapProperties["layerKind"] {
-  const normalized = String(type ?? "").toLowerCase();
-  if (normalized.includes("dock") || normalized.includes("nest")) return "device-dock";
-  if (normalized.includes("drone") || normalized.includes("uav")) return "device-drone";
-  return "device-ground";
+function deviceAppearance(...values: unknown[]): Pick<MapProperties, "layerKind" | "markerKind" | "markerGlyph"> {
+	const normalized = values.map((value) => String(value ?? "").toLowerCase()).join(" ");
+	if (normalized.includes("dock") || normalized.includes("nest") || normalized.includes("airport")) {
+		return { layerKind: "device-dock", markerKind: "dock", markerGlyph: "▣" };
+	}
+	if (normalized.includes("aircraft") || normalized.includes("drone") || normalized.includes("uav")) {
+		return { layerKind: "device-drone", markerKind: "drone", markerGlyph: "✈" };
+	}
+	return { layerKind: "device-ground", markerKind: "ground", markerGlyph: "●" };
 }
 
 export function createProjectMapModel(snapshot: ProjectSituationSnapshot): FeatureCollection<Geometry, MapProperties> {
@@ -63,11 +69,12 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
   const features: Array<Feature<Geometry, MapProperties>> = [];
   for (const device of snapshot.devices) {
     if (!scoped(device, projectId)) continue;
-    const pose = device.pose as Record<string, unknown> | null;
-    const position = pose && point(pose.longitude, pose.latitude);
-    if (!position) continue;
-    features.push(feature(projectId, position, {
-      layerKind: deviceLayer(device.type), entityId: String(device.id), label: String(device.name ?? "未命名设备"),
+		const pose = device.pose as Record<string, unknown> | null;
+		const position = pose && point(pose.longitude, pose.latitude);
+		if (!position) continue;
+		const appearance = deviceAppearance(device.type, device.category, device.typeKey);
+		features.push(feature(projectId, position, {
+			...appearance, entityId: String(device.id), label: String(device.name ?? "未命名设备"),
       status: String(device.status ?? "unknown"), capturedAt: pose.capturedAt ? String(pose.capturedAt) : undefined
     }));
   }

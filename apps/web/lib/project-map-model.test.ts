@@ -5,10 +5,13 @@ import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 
 const snapshot: ProjectSituationSnapshot = {
   project: { id: 7, name: "North", teamId: 1 }, generatedAt: "2026-08-24T10:00:00Z", consistency: "repeatable-read",
-  devices: [
-    { id: 1, projectId: 7, name: "UAV", type: "drone", status: "online", pose: { longitude: 120.1, latitude: 30.2 } },
-    { id: 2, projectId: 7, name: "ROS", type: "ground_robot", status: "online", pose: { longitude: 120.2, latitude: 30.3 } },
-    { id: 99, projectId: 8, name: "Foreign", type: "drone", pose: { longitude: 121, latitude: 31 } }
+	devices: [
+		{ id: 1, projectId: 7, name: "Matrice 3TD", type: "aircraft", category: "aircraft", typeKey: "dji.matrice3td", status: "online", pose: { longitude: 120.1, latitude: 30.2 } },
+		{ id: 2, projectId: 7, name: "ROS", type: "ground_robot", status: "online", pose: { longitude: 120.2, latitude: 30.3 } },
+		{ id: 3, projectId: 7, name: "Dock 2", type: "dock", category: "dock", typeKey: "dji.dock2", status: "online", pose: { longitude: 120.11, latitude: 30.21 } },
+		{ id: 4, projectId: 7, name: "UAV alias", type: "uav", status: "online", pose: { longitude: 120.12, latitude: 30.22 } },
+		{ id: 5, projectId: 7, name: "Drone alias", type: "drone", status: "online", pose: { longitude: 120.13, latitude: 30.23 } },
+		{ id: 99, projectId: 8, name: "Foreign", type: "drone", pose: { longitude: 121, latitude: 31 } }
   ],
   tracks: [{ deviceId: 1, geometry: { type: "LineString", coordinates: [[120.1, 30.2], [120.2, 30.3]] } }],
   activeTasks: [{ id: 3, taskName: "Route", status: "running", input: { route: { type: "LineString", coordinates: [[120, 30], [121, 31]] } } }],
@@ -41,5 +44,19 @@ test("map model renders air-ground features and drops foreign project data", () 
     assert(kinds.has(kind as never), `missing ${kind}`);
   }
   assert(!model.features.some((item) => item.properties.entityId === "99"));
-  assert(model.features.every((item) => item.properties.projectId === 7));
+	assert(model.features.every((item) => item.properties.projectId === 7));
+});
+
+test("Dock 2 and M3TD snapshot uses facility and aircraft map icons", () => {
+	const model = createProjectMapModel(snapshot);
+	const devices = new Map(model.features.filter((item) => item.properties.layerKind.startsWith("device-"))
+		.map((item) => [item.properties.entityId, item.properties]));
+	assert.deepEqual(
+		[devices.get("1"), devices.get("4"), devices.get("5")].map((item) => [item?.layerKind, item?.markerKind, item?.markerGlyph]),
+		Array.from({ length: 3 }, () => ["device-drone", "drone", "✈"])
+	);
+	assert.deepEqual(
+		[devices.get("3")?.layerKind, devices.get("3")?.markerKind, devices.get("3")?.markerGlyph],
+		["device-dock", "dock", "▣"]
+	);
 });
