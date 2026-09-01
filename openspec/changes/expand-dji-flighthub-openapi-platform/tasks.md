@@ -34,7 +34,7 @@
 - [x] 4.2 持久化带证据级别、型号/固件范围、探测时间和过期时间的 capability snapshot，并用固件变化与过期测试证明高风险能力自动收窄而不扩张。
 - [x] 4.3 增加项目授权的连接器诊断 API，返回各资源流水位和 `supported/empty/forbidden/not_applicable/unverified/degraded/failed`，并用成员/管理员及跨租户 API 测试验证脱敏与权限。
 - [x] 4.4 在连接器页面实现能力矩阵、验证徽标、同步水位、限流/权限/兼容错误和只读重新探测入口，并用 UI 测试验证空状态不降低整体健康。
-- [ ] 4.5 增加官方 endpoint manifest/fixture 漂移检查，发现 method/path/schema 变化时将对应能力标为待验证，并用修改后的测试 manifest 验证高风险 action 不会自动开放。
+- [x] 4.5 增加官方 endpoint manifest/fixture 漂移检查，发现 method/path/schema 变化时将对应能力标为待验证，并用修改后的测试 manifest 验证高风险 action 不会自动开放。
 
 ## 5. 航线与飞行任务全链路
 

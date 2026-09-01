@@ -1,0 +1,25 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "files": [
+    {
+      "path": "endpoints.tsv",
+      "sha256": "25d0e01999bf0cc03f1a948dd232ec80d8d54e25d2376a9ed017f99864472704",
+      "domains": ["system", "security", "organization", "project", "device", "control", "flight", "live", "geospatial", "model"]
+    },
+    {
+      "path": "fixtures/cases.json",
+      "sha256": "c956c236cea651610fd85de08d1d5b0914ed6d6dfc1e06a891e8666bc388d14a",
+      "domains": ["system", "security", "organization", "project", "device", "control", "flight", "live", "geospatial", "model"]
+    },
+    {
+      "path": "fixtures/admin_cases.json",
+      "sha256": "ce7b216be6a4f4c5aab7fe814b8d0c4afe72bb1b52bedd8f8e342f008ac32081",
+      "domains": ["system", "security", "organization", "project"]
+    },
+    {
+      "path": "fixtures/device_cases.json",
+      "sha256": "68d9e2fcee8a84410b2400bcc46904630cb1f8b8fad2ba5781cad72465f4d277",
+      "domains": ["device"]
+    }
+  ]
+}
