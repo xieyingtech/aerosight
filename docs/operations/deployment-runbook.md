@@ -26,8 +26,26 @@
 | `ALGORITHM_ALLOWED_HOSTS` | 算法出站 allowlist | 逗号分隔主机名；不放 URL、IP、通配符或凭据 |
 | `CALLBACK_LISTEN_ADDRESS` | worker callback/健康监听 | 内网 `host:port`，默认 `127.0.0.1:8081` |
 | `CALLBACK_PUBLIC_BASE_URL` | 外部算法 callback 根地址 | 必须 HTTPS；经入口转发到 worker |
+| `DJI_FLIGHTHUB_ENABLED` | 启用 DJI 司空 2 连接器 | Web 与全部 Worker 必须一致；默认 `false` |
+| `DJI_FLIGHTHUB_API_BASE_URL` | 司空公有云 OpenAPI 区域主机 | 中国大陆固定为 `https://es-flight-api-cn.djigate.com`，其他主机启动失败 |
+| `DJI_FLIGHTHUB_HTTP_TIMEOUT_MS` | 单次司空请求超时 | 默认 `8000`，范围 500–30000 ms |
+| `DJI_FLIGHTHUB_MAX_RETRIES` | 429/5xx 有界重试 | 默认 `2`，范围 0–3；尊重 `Retry-After` |
+| `DJI_FLIGHTHUB_MAX_PROJECT_PAGES` | Web 项目发现页数上限 | 默认 `50`；仅 Web 使用 |
+| `DJI_FLIGHTHUB_MAX_RESPONSE_BYTES` | 司空响应大小上限 | 默认 4 MiB，Web/Worker 保持一致 |
+| `DJI_FLIGHTHUB_POLL_INTERVAL_SECONDS` | Worker 周期目录同步 | 默认 300 秒；仅 Worker 使用并附加抖动 |
+| `DJI_FLIGHTHUB_RECONCILE_INTERVAL_SECONDS` | Worker 调度扫描间隔 | 默认 15 秒；仅 Worker 使用 |
 
 DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AES-256-GCM envelope 加密后存入数据库。密钥通过 HKDF-SHA-256 从 `AUTH_SECRET` 派生；普通读取、审计摘要、日志和智能体上下文都不能得到原文或“是否已配置”标记。编辑表单的敏感 input 始终为空，留空保留旧值，填写非空值才覆盖。
+
+### DJI 司空 2 公有云连接器
+
+中国大陆部署只允许访问 `https://es-flight-api-cn.djigate.com:443`。Web 的 Token 验证/项目发现和 Worker 的设备目录同步都需要到该主机的 HTTPS 出站；防火墙、NAT、DNS 和 TLS 检查代理不得改写主机名或响应。Go Worker 使用标准传输并可遵循 `HTTPS_PROXY`/`NO_PROXY`；Web 当前未注入自定义代理 agent，如部署必须经过显式代理，应在平台网络层提供透明 HTTPS 出口并先完成项目发现验收。
+
+组织管理员在司空 2 的“我的组织 → 组织设置 → OpenAPI → 复制密钥”取得组织 Token。它不是 OAuth 授权码，当前没有由 DJI 托管的授权跳转/回调流程。Token 应只授予所需组织与项目访问，不能放入 URL、工单、日志或源码；轮换时在 AeroSight 连接器卡片选择“更新 Token”，系统会先验证所选项目仍可访问，成功后原子替换加密 envelope 并排队重同步，验证失败则保留旧凭据。撤销 Token 或项目权限后连接器进入失败/降级，不删除历史设备和审计。
+
+启用顺序：先为 Web 和 Worker 同时配置上述变量并确认 HTTPS 出站，再设置 `DJI_FLIGHTHUB_ENABLED=true`，滚动重启 Worker 后重启 Web。连接器默认每 300 秒同步一次目录；429 按 `Retry-After` 与指数退避处理。设备目录达到官方 1000 条上限时无法证明完整性，系统会失败关闭，不推进游标、不部分提交，也不会把未返回设备标记为 missing。
+
+选择接入方式时：已有机场在 DJI 司空 2 公有云且只需要目录/状态同步，使用“DJI 司空 2”；需要任务下发、返航、机场调试或直播控制，使用“DJI Cloud API 直连”并配置 AeroSight 自有 MQTT/API/媒体端点。不要为同一设备自动切换下行来源；跨来源同 SN 会进入人工冲突确认。
 
 ## 3. 全新部署
 
