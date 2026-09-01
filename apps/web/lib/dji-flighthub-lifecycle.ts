@@ -106,7 +106,7 @@ async function lockFlightHubConnector(client: PoolClient, projectId: number, con
 
 async function queueSync(
   client: PoolClient,
-  input: { projectId: number; teamId: number; connectorId: string; trigger: "manual" | "credential-update" }
+  input: { projectId: number; teamId: number; connectorId: string; trigger: "manual" | "credential-update" | "capability-probe" }
 ) {
   await client.query("select pg_advisory_xact_lock(hashtext($1))", [`flightHub-sync:${input.connectorId}`]);
   const queued = await client.query<{ eventId: string }>(
@@ -322,6 +322,49 @@ export async function requestFlightHubSync(
         trigger: "manual",
       });
       return { id: connectorId, syncQueued: true, ...sync };
+    }
+  );
+}
+
+export async function requestFlightHubCapabilityProbe(
+  projectId: number,
+  connectorId: string,
+  requestId?: string | null
+) {
+  const { user, access } = await requireFlightHubManager(projectId);
+  return withAuditedProjectWrite(
+    {
+      projectId,
+      teamId: access.teamId,
+      requestId: correlationId(requestId),
+      actorUserId: user.id,
+      action: "connector.flighthub.capability.probe",
+      resourceType: "connector",
+      resourceId: connectorId,
+      input: { upstreamMethods: ["GET"] },
+      policyResult: { permission: "device:configure", role: access.role, readOnlyUpstream: true },
+    },
+    async (client) => {
+      const connector = await lockFlightHubConnector(client, projectId, connectorId);
+      try {
+        assertFlightHubConnectorEnabled(connector.status);
+      } catch {
+        throw new FlightHubConnectionError("connector_disabled");
+      }
+      await client.query(
+        `update connector_capability_snapshots
+            set expires_at=case when verified_at<now() then now() else verified_at+interval '1 microsecond' end,
+                updated_at=now()
+          where project_id=$1 and connector_instance_id=$2 and evidence_level='live-read'`,
+        [projectId, connectorId]
+      );
+      const sync = await queueSync(client, {
+        projectId,
+        teamId: access.teamId,
+        connectorId,
+        trigger: "capability-probe",
+      });
+      return { id: connectorId, probeQueued: true, readOnlyUpstream: true, ...sync };
     }
   );
 }

@@ -270,6 +270,21 @@ func TestOutboxRetryableFailureRemainsRetryable(t *testing.T) {
 	}
 }
 
+func TestReadOnlyCapabilityProbeTriggerUsesTheSharedConnectorLease(t *testing.T) {
+	leases := newSchedulerLease()
+	runner := &schedulerRunnerFixture{}
+	outcomes := &schedulerOutcomeFixture{leases: leases}
+	scheduler := schedulerFixture(t, "worker-a", leases, runner, outcomes)
+	event := syncEvent()
+	event.Payload = json.RawMessage(`{"connectorInstanceId":"7","connectorKey":"dji.flighthub2","discoveryMode":"poll","trigger":"capability-probe"}`)
+	if err := scheduler.OutboxHandler(context.Background(), nil, event); err != nil {
+		t.Fatal(err)
+	}
+	if runner.runs != 1 || outcomes.succeeded != 1 {
+		t.Fatalf("capability probe escaped shared lease: runs=%d succeeded=%d", runner.runs, outcomes.succeeded)
+	}
+}
+
 func TestLeaseRenewalLossCancelsSyncAndRecordsFailure(t *testing.T) {
 	leases := newSchedulerLease()
 	leases.renew = false

@@ -16,6 +16,12 @@ import {
   flightHubStatusLabel,
   flightHubUnavailableActions,
 } from "@/lib/dji-flighthub-ui-core";
+import {
+  capabilityStatusLabels,
+  connectorDiagnosticHealth,
+  evidenceLevelLabels,
+  type FlightHubDiagnosticsPayload,
+} from "@/lib/dji-flighthub-diagnostics-ui-core";
 
 export type ConnectorSummary = {
   id: string;
@@ -209,6 +215,8 @@ export function DjiFlightHubConnections({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<Record<string, FlightHubDiagnosticsPayload>>({});
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
 
   useEffect(() => {
     setConnectors(initialConnectors);
@@ -224,6 +232,24 @@ export function DjiFlightHubConnections({
     setIdentities(data.identities);
     setSyncRuns(data.syncRuns);
   };
+
+  const loadDiagnostics = async (connectorId: string) => {
+    setDiagnosticsLoading(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, { cache: "no-store" });
+      if (!response.ok) return;
+      const data = await response.json() as FlightHubDiagnosticsPayload;
+      setDiagnostics((current) => ({ ...current, [connectorId]: data }));
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedConnectorId) void loadDiagnostics(selectedConnectorId);
+  // loadDiagnostics intentionally follows the selected connector only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConnectorId]);
 
   const runConnectorAction = async (connectorId: string, action: "sync" | "disconnect") => {
     if (action === "disconnect" && !window.confirm("断开后会停止新同步，但保留设备、身份和审计历史。确认断开？")) return;
@@ -264,9 +290,28 @@ export function DjiFlightHubConnections({
     }
   };
 
+  const reprobeCapabilities = async (connectorId: string) => {
+    setBusyAction(`probe:${connectorId}`); setError(null); setNotice(null);
+    try {
+      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, {
+        method: "POST", cache: "no-store",
+      });
+      const data = await response.json() as SafeErrorResponse & { deduplicated?: boolean };
+      if (!response.ok) throw new Error(data.error?.code ?? "upstream_error");
+      setNotice(data.deduplicated ? "只读能力探测已合并到等待中的同步。" : "只读能力探测已进入队列；只会调用官方 GET 接口。");
+      await loadDiagnostics(connectorId);
+    } catch (cause) {
+      setError(flightHubErrorMessage(cause instanceof Error ? cause.message : undefined));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const selectedConnector = connectors.find((connector) => connector.id === selectedConnectorId) ?? null;
   const selectedIdentities = identities.filter((identity) => identity.connectorId === selectedConnectorId);
   const selectedSyncRuns = syncRuns.filter((run) => run.connectorId === selectedConnectorId);
+  const selectedDiagnostics = selectedConnectorId ? diagnostics[selectedConnectorId] ?? null : null;
+  const diagnosticHealth = selectedDiagnostics ? connectorDiagnosticHealth(selectedDiagnostics) : null;
   const totalCount = connectors.length + otherConnectors.length;
 
   return <div className="space-y-5">
@@ -302,6 +347,7 @@ export function DjiFlightHubConnections({
         <div><div className="flex items-center gap-2"><h2 className="font-medium">{selectedConnector.projectName}</h2><Badge variant={statusVariant(selectedConnector.status)}>{flightHubStatusLabel(selectedConnector.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground">DJI 司空 2 · 项目 UUID {selectedConnector.projectUuid} · 最近验证 {formatDate(selectedConnector.lastValidatedAt)}</p></div>
         <div className="flex flex-wrap gap-2">
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void runConnectorAction(selectedConnector.id, "sync")} size="sm" type="button" variant="outline"><RefreshCwIcon />立即同步</Button>
+          <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void reprobeCapabilities(selectedConnector.id)} size="sm" type="button" variant="outline"><ShieldCheckIcon />只读重新探测</Button>
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void runConnectorAction(selectedConnector.id, "disconnect")} size="sm" type="button" variant="destructive"><UnplugIcon />断开</Button>
         </div>
       </div>
@@ -311,6 +357,34 @@ export function DjiFlightHubConnections({
         <div className="rounded-lg bg-muted/35 p-3"><span className="text-muted-foreground">缺失</span><p className="mt-1 font-medium">{selectedConnector.missingCount}</p></div>
         <div className="rounded-lg bg-muted/35 p-3"><span className="text-muted-foreground">健康</span><p className="mt-1 font-medium">{selectedConnector.lastErrorCode ?? selectedConnector.lastSyncStatus ?? "等待同步"}</p></div>
       </div>
+      <section className="space-y-3 rounded-lg border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2"><h3 className="text-sm font-medium">能力与同步诊断</h3>{diagnosticHealth && <Badge variant={diagnosticHealth.status === "failed" ? "destructive" : diagnosticHealth.status === "degraded" ? "secondary" : "default"}>{diagnosticHealth.label}</Badge>}</div>
+          <Button disabled={diagnosticsLoading} onClick={() => void loadDiagnostics(selectedConnector.id)} size="sm" type="button" variant="ghost"><RefreshCwIcon className={diagnosticsLoading ? "animate-spin" : ""} />刷新诊断</Button>
+        </div>
+        {!selectedDiagnostics ? <p className="text-xs text-muted-foreground">{diagnosticsLoading ? "正在读取能力证据…" : "暂无能力快照；可执行只读重新探测。"}</p> : <>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {selectedDiagnostics.resourceWatermarks.map((watermark) => <div className="rounded-md bg-muted/35 p-2 text-xs" key={watermark.resourceKind}>
+              <div className="flex items-center justify-between gap-2"><span className="font-medium">{watermark.resourceKind}</span><Badge variant={statusVariant(watermark.status)}>{watermark.status}</Badge></div>
+              <p className="mt-1 text-muted-foreground">成功水位 {formatDate(watermark.lastSucceededAt)} · 尝试 {watermark.attemptCount}</p>
+              {watermark.lastErrorCode && <p className="mt-1 text-destructive">{watermark.lastErrorCode} · 下次 {formatDate(watermark.nextAttemptAt)}</p>}
+            </div>)}
+            {selectedDiagnostics.resourceWatermarks.length === 0 && <p className="text-xs text-muted-foreground">暂无资源流水位。</p>}
+          </div>
+          <div className="overflow-x-auto rounded-md border"><Table>
+            <TableHeader><TableRow><TableHead>能力</TableHead><TableHead>状态</TableHead><TableHead>验证证据</TableHead><TableHead>型号 / 固件</TableHead><TableHead>验证时间</TableHead><TableHead>说明</TableHead></TableRow></TableHeader>
+            <TableBody>{selectedDiagnostics.capabilities.map((capability) => <TableRow key={`${capability.capabilityCode}:${capability.deviceModel ?? "all"}:${capability.firmwareVersion ?? "all"}`}>
+              <TableCell className="font-mono text-xs">{capability.capabilityCode}</TableCell>
+              <TableCell><Badge variant={capability.status === "failed" || capability.status === "forbidden" ? "destructive" : capability.status === "supported" || capability.status === "empty" ? "default" : "secondary"}>{capabilityStatusLabels[capability.status]}</Badge></TableCell>
+              <TableCell><Badge variant="outline">{evidenceLevelLabels[capability.evidenceLevel] ?? capability.evidenceLevel}</Badge></TableCell>
+              <TableCell className="text-xs">{capability.deviceModel ?? "全部"} / {capability.firmwareVersion ?? "全部"}</TableCell>
+              <TableCell className="text-xs">{formatDate(capability.verifiedAt)}</TableCell>
+              <TableCell className="max-w-64 text-xs text-muted-foreground">{capability.reason ?? "—"}</TableCell>
+            </TableRow>)}
+            {selectedDiagnostics.capabilities.length === 0 && <TableRow><TableCell className="text-center text-muted-foreground" colSpan={6}>暂无能力证据。</TableCell></TableRow>}</TableBody>
+          </Table></div>
+        </>}
+      </section>
       <details><summary className="cursor-pointer text-sm">更新 Token</summary><div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <Input autoComplete="new-password" onChange={(event) => setUpdateTokens((current) => ({ ...current, [selectedConnector.id]: event.target.value }))} placeholder="新 Token；提交后立即清除" type="password" value={updateTokens[selectedConnector.id] ?? ""} />
         <Button disabled={busyAction !== null || !(updateTokens[selectedConnector.id]?.trim())} onClick={() => void updateToken(selectedConnector.id)} size="sm" type="button">验证并替换</Button>

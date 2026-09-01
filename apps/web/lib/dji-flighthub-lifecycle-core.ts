@@ -8,7 +8,7 @@ export type FlightHubSyncRequest = {
   connectorInstanceId: string;
   connectorKey: "dji.flighthub2";
   discoveryMode: "poll";
-  trigger: "initial" | "manual" | "credential-update";
+  trigger: "initial" | "manual" | "credential-update" | "capability-probe";
 };
 
 export function buildFlightHubSyncRequest(

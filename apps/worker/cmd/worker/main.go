@@ -139,8 +139,16 @@ func main() {
 			logger.Error("FlightHub concurrent resource runner initialization failed", "error", resourceErr.Error())
 			os.Exit(1)
 		}
+		capabilityRunner, resourceErr := flighthub.NewCapabilityProbeRunner(
+			resourceRunner, flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret},
+			resourceRepository, 15*time.Minute, nil,
+		)
+		if resourceErr != nil {
+			logger.Error("FlightHub capability probe initialization failed", "error", resourceErr.Error())
+			os.Exit(1)
+		}
 		flightHubScheduler, syncErr = connector.NewScheduler(
-			connector.NewSQLLeaseRepository(database), resourceRunner, connector.NewSQLSyncOutcomeStore(database),
+			connector.NewSQLLeaseRepository(database), capabilityRunner, connector.NewSQLSyncOutcomeStore(database),
 			connector.SchedulerConfig{
 				Owner: workerConfig.WorkerName + ":" + runID, ConnectorKey: flighthub.ConnectorKey, Version: flighthub.ConnectorVersion,
 				PollInterval:   min(workerConfig.FlightHubPollInterval, 15*time.Second),

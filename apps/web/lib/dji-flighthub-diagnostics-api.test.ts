@@ -4,12 +4,14 @@ import test from "node:test";
 
 const read = (path: string) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
 
-test("FlightHub diagnostics route is private, read-only, and uses the authorized diagnostic service", () => {
+test("FlightHub diagnostics route is private and uses authorized read/probe services", () => {
   const route = read("apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/diagnostics/route.ts");
   assert.match(route, /export async function GET/);
   assert.match(route, /readFlightHubConnectorDiagnostics/);
+  assert.match(route, /requestFlightHubCapabilityProbe/);
   assert.match(route, /private, no-store/);
-  assert(!/export async function (POST|PUT|PATCH|DELETE)/.test(route));
+  assert.match(route, /export async function POST/);
+  assert(!/export async function (PUT|PATCH|DELETE)/.test(route));
 });
 
 test("diagnostic SQL exposes watermarks and evidence without secret-bearing columns", () => {

@@ -16,7 +16,7 @@ test("token update accepts only an in-memory replacement credential", () => {
 });
 
 test("sync requests are stable, read-only, and credential free", () => {
-  for (const trigger of ["initial", "manual", "credential-update"] as const) {
+  for (const trigger of ["initial", "manual", "credential-update", "capability-probe"] as const) {
     const request = buildFlightHubSyncRequest("42", trigger);
     assert.deepEqual(request, {
       connectorInstanceId: "42",
