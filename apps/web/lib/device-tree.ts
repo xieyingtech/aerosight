@@ -13,6 +13,29 @@ export async function readProjectDeviceTree(projectId: number) {
               device.status_reason as "statusReason",device_type.display_name as "typeName",
               device_type.type_key as "typeKey",driver.driver_key as "driverKey",driver.version as "driverVersion",
               device_type.vendor,device_type.model,
+              case
+                when telemetry.payload_json#>>'{position,validity}'='invalid'
+                  and (pose.observation_id is null or telemetry.captured_at>=pose.captured_at) then 'invalid'
+                when pose.observation_id is null then 'missing'
+                when pose.standard_position is null then 'unverified'
+                else 'available'
+              end as "positionStatus",
+              case
+                when telemetry.payload_json#>>'{position,validity}'='invalid'
+                  and (pose.observation_id is null or telemetry.captured_at>=pose.captured_at)
+                  then coalesce(telemetry.payload_json#>>'{position,reason}','coordinate_invalid')
+                when pose.observation_id is null then 'position_missing'
+                when pose.standard_position is null then 'coordinate_reference_unverified'
+                else null
+              end as "positionReason",
+              coalesce(telemetry.quality_json->>'source',driver.driver_key) as "positionSource",
+              case when pose.observation_id is null then null else json_build_object(
+                'longitude',ST_X(coalesce(pose.standard_position,pose.original_position)),
+                'latitude',ST_Y(coalesce(pose.standard_position,pose.original_position)),
+                'altitudeMeters',ST_Z(coalesce(pose.standard_position,pose.original_position)),
+                'capturedAt',pose.captured_at,
+                'calibrationStatus',case when pose.standard_position is null then 'unverified' else 'calibrated' end
+              ) end as pose,
               coalesce((select jsonb_agg(jsonb_build_object(
                 'code',capability.capability_code,'availability',capability.availability,
                 'reason',capability.availability_reason,'risk',capability.risk_level
@@ -26,6 +49,14 @@ export async function readProjectDeviceTree(projectId: number) {
          from devices device
          join device_types device_type on device_type.id=device.device_type_id
          join driver_definitions driver on driver.id=device_type.driver_definition_id
+         left join lateral(
+           select observation_id,standard_position,original_position,captured_at
+             from poses where project_id=device.project_id and device_id=device.id
+            order by captured_at desc limit 1
+         ) pose on true
+         left join device_latest_telemetry telemetry
+           on telemetry.project_id=device.project_id and telemetry.device_id=device.id
+          and telemetry.telemetry_type='dji.flighthub.state'
         where device.project_id=$1 order by device.id`, [projectId]
     ),
     query<DeviceTreeRelation>(

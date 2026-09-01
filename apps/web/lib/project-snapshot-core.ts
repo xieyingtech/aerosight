@@ -32,6 +32,11 @@ export type ProjectSnapshotDevice = Record<string, unknown> & {
   driverStatus?: string;
   statusReason?: string | null;
   lastSeenAt?: string | Date | null;
+  dataFreshness?: string;
+  statusObservedAt?: string | Date | null;
+  positionStatus?: string;
+  positionReason?: string | null;
+  positionSource?: string;
   pose?: Record<string, unknown> | null;
   capabilities?: ProjectedDeviceCapability[];
   channels?: ProjectSnapshotChannel[];
@@ -52,6 +57,11 @@ type SnapshotDeviceRow = {
   driverStatus: string;
   statusReason: string | null;
   lastSeenAt: string | Date | null;
+  dataFreshness: string;
+  statusObservedAt: string | Date | null;
+  positionStatus: string;
+  positionReason: string | null;
+  positionSource: string;
   pose: Record<string, unknown> | null;
   rawCapabilities: Array<Omit<ProjectedDeviceCapability, "authorized" | "actions">>;
   rawChannels: ProjectSnapshotChannel[];
@@ -129,6 +139,23 @@ export async function readProjectSituationSnapshot(
               driver.driver_key as "driverKey", driver.version as "driverVersion",
               driver.status as "driverStatus",
               device.status_reason as "statusReason", device.last_seen_at as "lastSeenAt",
+              device.data_freshness as "dataFreshness",device.status_observed_at as "statusObservedAt",
+              case
+                when telemetry.payload_json#>>'{position,validity}'='invalid'
+                  and (pose.observation_id is null or telemetry.captured_at>=pose.captured_at) then 'invalid'
+                when pose.observation_id is null then 'missing'
+                when pose.standard_position is null then 'unverified'
+                else 'available'
+              end as "positionStatus",
+              case
+                when telemetry.payload_json#>>'{position,validity}'='invalid'
+                  and (pose.observation_id is null or telemetry.captured_at>=pose.captured_at)
+                  then coalesce(telemetry.payload_json#>>'{position,reason}','coordinate_invalid')
+                when pose.observation_id is null then 'position_missing'
+                when pose.standard_position is null then 'coordinate_reference_unverified'
+                else null
+              end as "positionReason",
+              coalesce(telemetry.quality_json->>'source',driver.driver_key) as "positionSource",
               coalesce((select jsonb_agg(jsonb_build_object(
                 'code',capability.capability_code,'availability',capability.availability,
                 'reason',capability.availability_reason,'risk',capability.risk_level
@@ -142,21 +169,26 @@ export async function readProjectSituationSnapshot(
               ) order by channel.channel_key) from device_stream_channels channel
                 where channel.project_id=device.project_id and channel.device_id=device.id),'[]') as "rawChannels",
               case when pose.observation_id is null then null else json_build_object(
-                'longitude', ST_X(pose.standard_position),
-                'latitude', ST_Y(pose.standard_position),
-                'altitudeMeters', ST_Z(pose.standard_position),
+                'longitude', ST_X(coalesce(pose.standard_position,pose.original_position)),
+                'latitude', ST_Y(coalesce(pose.standard_position,pose.original_position)),
+                'altitudeMeters', ST_Z(coalesce(pose.standard_position,pose.original_position)),
                 'capturedAt', pose.captured_at,
                 'spatialQuality', pose.spatial_quality,
-                'horizontalAccuracyMeters', pose.horizontal_accuracy_m
+                'horizontalAccuracyMeters', pose.horizontal_accuracy_m,
+                'calibrationStatus',case when pose.standard_position is null then 'unverified' else 'calibrated' end,
+                'transformVersion',pose.transform_version
               ) end as pose
        from devices device
        join device_types device_type on device_type.id = device.device_type_id
        join driver_definitions driver on driver.id = device_type.driver_definition_id
        left join lateral (
-         select observation_id, standard_position, captured_at, spatial_quality, horizontal_accuracy_m
+         select observation_id, standard_position, original_position, captured_at, spatial_quality, horizontal_accuracy_m,transform_version
          from poses where poses.project_id = $1 and poses.device_id = device.id
          order by captured_at desc limit 1
        ) pose on true
+       left join device_latest_telemetry telemetry
+         on telemetry.project_id=device.project_id and telemetry.device_id=device.id
+        and telemetry.telemetry_type='dji.flighthub.state'
        where device.project_id = $1 order by device.id`,
       [projectId]
     )).rows;

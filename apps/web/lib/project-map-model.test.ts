@@ -6,9 +6,9 @@ import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 const snapshot: ProjectSituationSnapshot = {
   project: { id: 7, name: "North", teamId: 1 }, generatedAt: "2026-08-24T10:00:00Z", consistency: "repeatable-read",
 	devices: [
-		{ id: 1, projectId: 7, name: "Matrice 3TD", type: "aircraft", category: "aircraft", typeKey: "dji.matrice3td", status: "online", pose: { longitude: 120.1, latitude: 30.2 } },
+		{ id: 1, projectId: 7, name: "Matrice 3TD", type: "aircraft", category: "aircraft", typeKey: "dji.matrice3td", status: "online", dataFreshness: "fresh", positionStatus: "unverified", positionReason: "coordinate_reference_unverified", positionSource: "dji-flighthub-openapi", pose: { longitude: 120.1, latitude: 30.2, calibrationStatus: "unverified" } },
 		{ id: 2, projectId: 7, name: "ROS", type: "ground_robot", status: "online", pose: { longitude: 120.2, latitude: 30.3 } },
-		{ id: 3, projectId: 7, name: "Dock 2", type: "dock", category: "dock", typeKey: "dji.dock2", status: "online", pose: { longitude: 120.11, latitude: 30.21 } },
+		{ id: 3, projectId: 7, name: "Dock 2", type: "dock", category: "dock", typeKey: "dji.dock2", status: "online", dataFreshness: "fresh", positionStatus: "unverified", positionSource: "dji-flighthub-openapi", pose: { longitude: 120.11, latitude: 30.21, calibrationStatus: "unverified" } },
 		{ id: 4, projectId: 7, name: "UAV alias", type: "uav", status: "online", pose: { longitude: 120.12, latitude: 30.22 } },
 		{ id: 5, projectId: 7, name: "Drone alias", type: "drone", status: "online", pose: { longitude: 120.13, latitude: 30.23 } },
 		{ id: 99, projectId: 8, name: "Foreign", type: "drone", pose: { longitude: 121, latitude: 31 } }
@@ -59,4 +59,6 @@ test("Dock 2 and M3TD snapshot uses facility and aircraft map icons", () => {
 		[devices.get("3")?.layerKind, devices.get("3")?.markerKind, devices.get("3")?.markerGlyph],
 		["device-dock", "dock", "▣"]
 	);
+	assert.equal(devices.get("1")?.positionStatus, "unverified");
+	assert.equal(devices.get("3")?.positionSource, "dji-flighthub-openapi");
 });

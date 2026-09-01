@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import {
   ActivityIcon, ArrowRightIcon, BotIcon, BoxIcon, CameraIcon, ChevronRightIcon,
-  CpuIcon, PlaneIcon, RadioIcon, SearchIcon, WarehouseIcon
+  CpuIcon, MapPinIcon, PlaneIcon, RadioIcon, SearchIcon, WarehouseIcon
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { filterDeviceTree, flattenDeviceTree } from "@/lib/device-manager-core";
+import { presentDevicePosition } from "@/lib/device-position-presentation";
 import type { DeviceTreeNode } from "@/lib/device-tree-core";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +81,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectId: number }) {
   const Icon = CATEGORY_ICONS[device.category] ?? BoxIcon;
+  const position = presentDevicePosition(device);
   return <div className="flex h-full min-h-0 flex-col">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
       <div className="flex min-w-0 items-start gap-3">
@@ -101,6 +103,16 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
           <DetailItem label="厂商 / 型号" value={[device.vendor, device.model].filter(Boolean).join(" · ") || "未设置"} />
         </dl>
         {device.statusReason && <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{device.statusReason}</p>}
+      </section>
+      <section>
+        <div className="mb-3 flex items-center gap-2"><MapPinIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">位置与数据来源</h3><Badge variant="outline">{position.label}</Badge></div>
+        <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <DetailItem label="位置" value={position.coordinate ?? "不可用"} />
+          <DetailItem label="采集时间" value={position.capturedAt ? new Date(position.capturedAt).toLocaleString("zh-CN") : "暂无"} />
+          <DetailItem label="数据新鲜度" value={device.dataFreshness} />
+          <DetailItem label="来源" value={position.source} />
+        </dl>
+        <p className={cn("mt-2 rounded-lg px-3 py-2 text-xs", position.state === "available" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-amber-500/10 text-amber-700 dark:text-amber-400")}>{position.reason}</p>
       </section>
       <section>
         <div className="mb-3 flex items-center gap-2"><CpuIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">设备能力</h3><Badge variant="secondary">{device.capabilities.length}</Badge></div>

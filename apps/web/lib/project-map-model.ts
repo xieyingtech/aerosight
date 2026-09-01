@@ -1,4 +1,5 @@
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
+import { presentDevicePosition } from "./device-position-presentation.ts";
 
 type Point = { type: "Point"; coordinates: number[] };
 type LineString = { type: "LineString"; coordinates: number[][] };
@@ -29,6 +30,10 @@ type MapProperties = {
 	capturedAt?: string;
 	markerKind?: "drone" | "dock" | "ground";
 	markerGlyph?: string;
+	dataFreshness?: string;
+	positionStatus?: string;
+	positionReason?: string;
+	positionSource?: string;
 };
 
 function scoped(item: Record<string, unknown>, projectId: number) {
@@ -73,10 +78,13 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
 		const position = pose && point(pose.longitude, pose.latitude);
 		if (!position) continue;
 		const appearance = deviceAppearance(device.type, device.category, device.typeKey);
+		const presentedPosition = presentDevicePosition(device);
 		features.push(feature(projectId, position, {
 			...appearance, entityId: String(device.id), label: String(device.name ?? "未命名设备"),
-      status: String(device.status ?? "unknown"), capturedAt: pose.capturedAt ? String(pose.capturedAt) : undefined
-    }));
+			status: String(device.status ?? "unknown"), capturedAt: pose.capturedAt ? String(pose.capturedAt) : undefined,
+			dataFreshness: String(device.dataFreshness ?? "unknown"), positionStatus: presentedPosition.state,
+			positionReason: presentedPosition.reason, positionSource: presentedPosition.source
+		}));
   }
   for (const track of snapshot.tracks) {
     if (!scoped(track, projectId)) continue;

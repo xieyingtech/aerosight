@@ -56,9 +56,9 @@ export function ProjectMap({ snapshot, className, selection, range, onSelect }: 
           {visible.has("media") && <Layer id="media-points" type="circle" filter={["==", ["get", "layerKind"], "media"]} paint={{ "circle-color": "#a855f7", "circle-radius": 5, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("issues") && <Layer id="issue-points" type="circle" filter={["==", ["get", "layerKind"], "issue"]} paint={{ "circle-color": "#ef4444", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("suspected-construction") && <Layer id="suspected-points" type="circle" filter={["all", ["==", ["get", "layerKind"], "suspected-construction"], ["==", ["geometry-type"], "Point"]]} paint={{ "circle-color": "#f97316", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
-			{visible.has("drones") && <Layer id="device-drones" type="circle" filter={["==", ["get", "layerKind"], "device-drone"]} paint={{ "circle-color": "#0ea5e9", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
+          {visible.has("drones") && <Layer id="device-drones" type="circle" filter={["==", ["get", "layerKind"], "device-drone"]} paint={{ "circle-color": ["match", ["get", "positionStatus"], "unverified", "#f59e0b", "stale", "#64748b", "invalid", "#ef4444", "#0ea5e9"], "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
 			{visible.has("drones") && <Layer id="device-drone-icons" type="symbol" filter={["==", ["get", "layerKind"], "device-drone"]} layout={{ "text-field": ["get", "markerGlyph"], "text-size": 12, "text-allow-overlap": true }} paint={{ "text-color": "#ffffff" }} />}
-			{visible.has("docks") && <Layer id="device-docks" type="circle" filter={["==", ["get", "layerKind"], "device-dock"]} paint={{ "circle-color": "#334155", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
+          {visible.has("docks") && <Layer id="device-docks" type="circle" filter={["==", ["get", "layerKind"], "device-dock"]} paint={{ "circle-color": ["match", ["get", "positionStatus"], "unverified", "#f59e0b", "stale", "#64748b", "invalid", "#ef4444", "#334155"], "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
 			{visible.has("docks") && <Layer id="device-dock-icons" type="symbol" filter={["==", ["get", "layerKind"], "device-dock"]} layout={{ "text-field": ["get", "markerGlyph"], "text-size": 11, "text-allow-overlap": true }} paint={{ "text-color": "#ffffff" }} />}
           {visible.has("ground-robots") && <Layer id="device-ground" type="circle" filter={["==", ["get", "layerKind"], "device-ground"]} paint={{ "circle-color": "#22c55e", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
           {selection && <Layer id="selected-map-point" type="circle" filter={["==", ["get", "entityId"], selection.entityId]} paint={{ "circle-color": "transparent", "circle-radius": 13, "circle-stroke-color": "#111827", "circle-stroke-width": 3 }} />}
@@ -66,6 +66,9 @@ export function ProjectMap({ snapshot, className, selection, range, onSelect }: 
       </Map>
       <div className="absolute bottom-3 left-3 rounded-md border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
         {snapshot.freshness.isRealtime ? "实时数据" : "历史/等待数据"} · {model.features.length} 个地图要素
+      </div>
+      <div className="absolute right-3 bottom-3 rounded-md border bg-background/90 px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
+        橙色：未校准 · 灰色：已过期 · 红色：当前位置无效
       </div>
     </div>
   );

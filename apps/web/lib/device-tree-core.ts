@@ -6,6 +6,10 @@ export type DeviceTreeItem = {
   status: string;
   dataFreshness: string;
   statusReason: string | null;
+  positionStatus: string;
+  positionReason: string | null;
+  positionSource: string;
+  pose: { longitude: number; latitude: number; altitudeMeters: number | null; capturedAt: string; calibrationStatus: "calibrated" | "unverified" } | null;
   typeName: string;
   typeKey: string;
   driverKey: string;

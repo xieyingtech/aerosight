@@ -5,6 +5,7 @@ import { buildDeviceTree, type DeviceTreeItem } from "./device-tree-core.ts";
 
 const device = (id: number, category: string): DeviceTreeItem => ({
   id, deviceTypeId: String(id), name: `${category}-${id}`, category, status: "online", dataFreshness: "fresh", statusReason: null,
+  positionStatus: "missing", positionReason: "position_missing", positionSource: "fixture.driver", pose: null,
   typeName: category, typeKey: `fixture.${category}`, driverKey: "fixture.driver", driverVersion: "1.0.0",
   vendor: category === "unknown" ? null : "Fixture", model: null,
   capabilities: [{ code: "state.read", availability: "available", reason: null, risk: "low", authorized: true, actions: [] }], channels: []

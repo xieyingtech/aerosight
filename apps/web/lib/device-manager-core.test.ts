@@ -7,6 +7,7 @@ import { filterDeviceTree, flattenDeviceTree } from "./device-manager-core.ts";
 const device = (id: number, name: string, children: DeviceTreeNode[] = []): DeviceTreeNode => ({
   id, deviceTypeId: String(id), name, category: id === 1 ? "dock" : "aircraft", status: "online",
   dataFreshness: "fresh", statusReason: null, typeName: name, typeKey: `fixture.${name}`,
+  positionStatus: "missing", positionReason: "position_missing", positionSource: "fixture.driver", pose: null,
   driverKey: "fixture.driver", driverVersion: "1.0.0", vendor: "Fixture", model: null,
   capabilities: [], channels: [], relationType: id === 1 ? null : "contains", children
 });
