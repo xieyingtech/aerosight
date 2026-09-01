@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 var ErrSyncCursorAdvanced = errors.New("connector sync cursor advanced concurrently")
@@ -81,10 +82,14 @@ func NewSQLSyncStore(db *sql.DB) *SQLSyncStore { return &SQLSyncStore{db: db} }
 func (store *SQLSyncStore) CurrentCursor(ctx context.Context, instance Instance) (json.RawMessage, error) {
 	var cursor []byte
 	err := store.db.QueryRowContext(ctx, `
-		select sync_cursor_json
-		  from connector_instances
-		 where id=$1 and project_id=$2 and connector_key=$3 and connector_version=$4`,
-		instance.ID, instance.ProjectID, instance.ConnectorKey, instance.Version).Scan(&cursor)
+		select adapter.sync_cursor_json
+		  from device_adapters adapter
+		  join connector_definitions definition on definition.id=adapter.connector_definition_id
+		 where adapter.id=$1 and adapter.project_id=$2
+		   and definition.connector_key=$3 and definition.version=$4
+		   and ($5='' or (adapter.lease_owner=$5 and adapter.connection_epoch=$6 and adapter.lease_expires_at>=now()))`,
+		instance.ID, instance.ProjectID, instance.ConnectorKey, instance.Version,
+		instance.LeaseOwner, instance.LeaseEpoch).Scan(&cursor)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, errors.New("connector instance is unavailable or out of scope")
 	}
@@ -115,8 +120,10 @@ func (store *SQLSyncStore) ApplyBatch(
 	var currentCursor, scope []byte
 	err = tx.QueryRowContext(ctx, `
 		select team_id, sync_cursor_json, discovery_scope_json
-		  from device_adapters where id=$1 and project_id=$2 for update`,
-		instance.ID, instance.ProjectID).Scan(&teamID, &currentCursor, &scope)
+		  from device_adapters where id=$1 and project_id=$2
+		   and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now()))
+		 for update`,
+		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&teamID, &currentCursor, &scope)
 	if errors.Is(err, sql.ErrNoRows) {
 		return result, errors.New("connector instance is unavailable or out of scope")
 	}
@@ -146,11 +153,14 @@ func (store *SQLSyncStore) ApplyBatch(
 			}
 			_, err = tx.ExecContext(ctx, `
 				insert into device_external_identities (
-				  project_id,team_id,adapter_id,external_device_id,external_device_type,identity_json,
+				  project_id,team_id,adapter_id,external_device_id,external_device_type,suggested_device_type_id,identity_json,
 				  discovery_status,source_version,last_sync_run_id,first_seen_at,last_seen_at
-				) values ($1,$2,$3,$4,$5,$6,'discovered',$7,$8,now(),now())
+				) values ($1,$2,$3,$4,$5,
+				  (select id from device_types where type_key=$5 and version=1 and status='active'),
+				  $6,'discovered',$7,$8,now(),now())
 				on conflict (adapter_id,external_device_id) do update set
 				  external_device_type=excluded.external_device_type,
+				  suggested_device_type_id=excluded.suggested_device_type_id,
 				  identity_json=excluded.identity_json,
 				  discovery_status=case
 				    when device_external_identities.discovery_status in ('managed','ignored','conflicted')
@@ -160,6 +170,40 @@ func (store *SQLSyncStore) ApplyBatch(
 				identity, batch.SourceVersion, result.RunID)
 			if err != nil {
 				return result, err
+			}
+			serial, hasSerial := device.Attributes["serialNumber"].(string)
+			serial = strings.TrimSpace(serial)
+			if hasSerial && serial != "" {
+				conflict, conflictErr := tx.ExecContext(ctx, `
+					update device_external_identities identity
+					   set discovery_status='conflicted'
+					 where identity.project_id=$1 and identity.adapter_id=$2 and identity.external_device_id=$3
+					   and identity.discovery_status in ('discovered','managed','conflicted')
+					   and exists (
+					     select 1 from device_external_identities other
+					      where other.project_id=identity.project_id and other.adapter_id<>identity.adapter_id
+					        and other.discovery_status in ('discovered','managed','conflicted')
+					        and (other.external_device_id=$4 or other.identity_json#>>'{attributes,serialNumber}'=$4)
+					   )`, instance.ProjectID, instance.ID, device.ExternalID, serial)
+				if conflictErr != nil {
+					return result, conflictErr
+				}
+				conflicted, rowsErr := conflict.RowsAffected()
+				if rowsErr != nil {
+					return result, rowsErr
+				}
+				if conflicted > 0 {
+					_, err = tx.ExecContext(ctx, `
+						update device_external_identities other
+						   set discovery_status='conflicted'
+						 where other.project_id=$1 and other.adapter_id<>$2
+						   and other.discovery_status in ('discovered','managed','conflicted')
+						   and (other.external_device_id=$3 or other.identity_json#>>'{attributes,serialNumber}'=$3)`,
+						instance.ProjectID, instance.ID, serial)
+					if err != nil {
+						return result, err
+					}
+				}
 			}
 		}
 		result.Discovered = len(batch.Devices)

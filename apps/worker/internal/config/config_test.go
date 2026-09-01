@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadRequiresDatabaseURL(t *testing.T) {
@@ -21,8 +22,40 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.LogLevel != "info" || config.WorkerName != "aerosight-worker" || config.CallbackListenAddress != "127.0.0.1:8081" {
+	if config.LogLevel != "info" || config.WorkerName != "aerosight-worker" || config.CallbackListenAddress != "127.0.0.1:8081" ||
+		config.FlightHubEnabled || config.FlightHubAPIBaseURL != "https://es-flight-api-cn.djigate.com" || config.FlightHubHTTPTimeout != 8*time.Second || config.FlightHubMaxRetries != 2 ||
+		config.FlightHubPollInterval != 5*time.Minute || config.FlightHubReconcileEvery != 15*time.Second || config.FlightHubMaxResponseBytes != 4<<20 {
 		t.Fatalf("unexpected defaults: %#v", config)
+	}
+}
+
+func TestLoadFlightHubConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://database.example/aerosight")
+	t.Setenv("DJI_FLIGHTHUB_ENABLED", "true")
+	t.Setenv("DJI_FLIGHTHUB_HTTP_TIMEOUT_MS", "12000")
+	t.Setenv("DJI_FLIGHTHUB_MAX_RETRIES", "3")
+	t.Setenv("DJI_FLIGHTHUB_POLL_INTERVAL_SECONDS", "600")
+	t.Setenv("DJI_FLIGHTHUB_RECONCILE_INTERVAL_SECONDS", "20")
+	t.Setenv("DJI_FLIGHTHUB_MAX_RESPONSE_BYTES", "8388608")
+	config, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !config.FlightHubEnabled || config.FlightHubHTTPTimeout != 12*time.Second || config.FlightHubMaxRetries != 3 ||
+		config.FlightHubPollInterval != 10*time.Minute || config.FlightHubReconcileEvery != 20*time.Second || config.FlightHubMaxResponseBytes != 8<<20 {
+		t.Fatalf("unexpected FlightHub configuration: %#v", config)
+	}
+}
+
+func TestLoadRejectsInvalidFlightHubConfiguration(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://database.example/aerosight")
+	t.Setenv("DJI_FLIGHTHUB_ENABLED", "sometimes")
+	t.Setenv("DJI_FLIGHTHUB_MAX_RETRIES", "9")
+	t.Setenv("DJI_FLIGHTHUB_API_BASE_URL", "https://example.test")
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "DJI_FLIGHTHUB_ENABLED") || !strings.Contains(err.Error(), "DJI_FLIGHTHUB_MAX_RETRIES") ||
+		!strings.Contains(err.Error(), "DJI_FLIGHTHUB_API_BASE_URL") {
+		t.Fatalf("expected FlightHub configuration errors, got %v", err)
 	}
 }
 

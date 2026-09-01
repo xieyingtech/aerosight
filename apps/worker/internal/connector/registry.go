@@ -41,13 +41,16 @@ type Manifest struct {
 }
 
 type Instance struct {
-	ID             int64
-	ProjectID      int
-	ConnectorKey   string
-	Version        string
-	Config         json.RawMessage
-	CredentialRef  string
-	DiscoveryScope json.RawMessage
+	ID                 int64
+	ProjectID          int
+	ConnectorKey       string
+	Version            string
+	Config             json.RawMessage
+	CredentialRef      string
+	CredentialEnvelope json.RawMessage
+	DiscoveryScope     json.RawMessage
+	LeaseOwner         string
+	LeaseEpoch         int64
 }
 
 type ExternalDevice struct {

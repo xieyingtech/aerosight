@@ -15,8 +15,10 @@ import (
 	"aerosight/worker/internal/agent"
 	"aerosight/worker/internal/algorithm"
 	"aerosight/worker/internal/config"
+	"aerosight/worker/internal/connector"
 	"aerosight/worker/internal/dji"
 	"aerosight/worker/internal/driver"
+	"aerosight/worker/internal/flighthub"
 	"aerosight/worker/internal/heartbeat"
 	issueworker "aerosight/worker/internal/issue"
 	"aerosight/worker/internal/media"
@@ -79,10 +81,60 @@ func main() {
 	}
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
+	var flightHubScheduler *connector.Scheduler
+	if workerConfig.FlightHubEnabled {
+		flightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
+			Timeout: workerConfig.FlightHubHTTPTimeout, MaxRetries: workerConfig.FlightHubMaxRetries,
+			MaxProjectPages: 50, MaxResponseBytes: workerConfig.FlightHubMaxResponseBytes,
+			RequestID: func() string { return observability.CorrelationID("") },
+		})
+		if flightHubErr != nil {
+			logger.Error("FlightHub client initialization failed", "error", flightHubErr.Error())
+			os.Exit(1)
+		}
+		connectorRegistry := connector.NewRegistry()
+		if flightHubErr = flighthub.RegisterRuntime(
+			connectorRegistry, flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret},
+		); flightHubErr != nil {
+			logger.Error("FlightHub runtime registration failed", "error", flightHubErr.Error())
+			os.Exit(1)
+		}
+		synchronizer, syncErr := connector.NewSynchronizer(connectorRegistry, connector.NewSQLSyncStore(database))
+		if syncErr != nil {
+			logger.Error("connector synchronizer initialization failed", "error", syncErr.Error())
+			os.Exit(1)
+		}
+		flightHubScheduler, syncErr = connector.NewScheduler(
+			connector.NewSQLLeaseRepository(database), synchronizer, connector.NewSQLSyncOutcomeStore(database),
+			connector.SchedulerConfig{
+				Owner: workerConfig.WorkerName + ":" + runID, ConnectorKey: flighthub.ConnectorKey, Version: flighthub.ConnectorVersion,
+				PollInterval:   workerConfig.FlightHubPollInterval,
+				JitterWindow:   min(workerConfig.FlightHubPollInterval/10, 30*time.Second),
+				ReconcileEvery: workerConfig.FlightHubReconcileEvery,
+				LeaseDuration:  60 * time.Second, RenewEvery: 20 * time.Second, BatchSize: 8, Logger: logger,
+				Metrics: observability.DefaultMetrics,
+			},
+		)
+		if syncErr != nil {
+			logger.Error("FlightHub scheduler initialization failed", "error", syncErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register("connector.sync.requested", flightHubScheduler.OutboxHandler)
+		logger.Info("FlightHub connector enabled", "region", "cn", "poll_interval", workerConfig.FlightHubPollInterval.String())
+	}
 	driverRegistry := driver.NewRegistry()
 	if err := dji.RegisterDriver(driverRegistry, func(context.Context, driver.AdapterConfig) error { return nil }); err != nil {
 		logger.Error("DJI driver registration failed", "error", err.Error())
 		os.Exit(1)
+	}
+	djiDeviceTypes := driver.NewDeviceTypeRegistry(driverRegistry)
+	for _, register := range []func(*driver.DeviceTypeRegistry) error{
+		dji.RegisterUnknownDJIDeviceType, dji.RegisterDock2DeviceTypes, dji.RegisterDock3DeviceTypes,
+	} {
+		if err := register(djiDeviceTypes); err != nil {
+			logger.Error("DJI DeviceType registration failed", "error", err.Error())
+			os.Exit(1)
+		}
 	}
 	djiIngestor := dji.NewMessageIngestor(dji.NewSQLIngressStore(database))
 	djiProjector := dji.NewProjector()
@@ -191,8 +243,11 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
 		IdleTimeout: 60 * time.Second,
 	}
-	runErrors := make(chan error, 5)
+	runErrors := make(chan error, 12)
 	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
+	if flightHubScheduler != nil {
+		go func() { runErrors <- flightHubScheduler.Run(runContext) }()
+	}
 	go func() { runErrors <- heartbeat.NewProjector(database, nil).Run(runContext, 15*time.Second) }()
 	go func() {
 		runErrors <- (agent.JobProcessor{Database: database, AuthSecret: workerConfig.AuthSecret}).Run(runContext, 2*time.Second)

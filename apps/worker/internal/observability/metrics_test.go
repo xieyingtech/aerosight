@@ -23,6 +23,9 @@ func TestOperationalMetricCatalogCoversRequiredSignals(t *testing.T) {
 		{"aerosight_sse_connections_total", 1, map[string]string{"outcome": "resumed"}},
 		{"aerosight_ai_tool_rejections_total", 1, map[string]string{"tool": "request_mission_start", "reason": "confirmation"}},
 		{"aerosight_report_failures_total", 1, map[string]string{"operation": "export", "reason": "storage"}},
+		{"aerosight_connector_sync_total", 1, map[string]string{"connector": "dji_flighthub2", "outcome": "schema_incompatible"}},
+		{"aerosight_connector_sync_duration_seconds", 2.4, map[string]string{"connector": "dji_flighthub2", "outcome": "failed"}},
+		{"aerosight_connector_sync_backlog", 3, map[string]string{"connector": "dji_flighthub2"}},
 	}
 	for _, sample := range traffic {
 		if err := registry.Record(sample.name, sample.value, sample.labels); err != nil {
@@ -36,6 +39,22 @@ func TestOperationalMetricCatalogCoversRequiredSignals(t *testing.T) {
 		if !strings.Contains(body, sample.name) {
 			t.Fatalf("metrics output lacks %s", sample.name)
 		}
+	}
+}
+
+func TestGaugeRecordsCurrentValueInsteadOfAccumulating(t *testing.T) {
+	registry := MustDefaultMetricRegistry()
+	labels := map[string]string{"connector": "dji_flighthub2"}
+	if err := registry.Record("aerosight_connector_sync_backlog", 9, labels); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Record("aerosight_connector_sync_backlog", 2, labels); err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	registry.ServeHTTP(recorder, httptest.NewRequest("GET", "/metrics", nil))
+	if !strings.Contains(recorder.Body.String(), `aerosight_connector_sync_backlog{connector="dji_flighthub2"} 2`) {
+		t.Fatalf("gauge did not retain current value: %s", recorder.Body.String())
 	}
 }
 

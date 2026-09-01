@@ -15,6 +15,7 @@ type MetricKind string
 const (
 	Counter   MetricKind = "counter"
 	Histogram MetricKind = "histogram"
+	Gauge     MetricKind = "gauge"
 )
 
 type MetricDefinition struct {
@@ -36,6 +37,9 @@ func DefaultMetricDefinitions() []MetricDefinition {
 		{Name: "aerosight_sse_connections_total", Help: "Project SSE connection outcomes.", Kind: Counter, AllowedLabels: labels("outcome", "opened,resumed,closed,rejected")},
 		{Name: "aerosight_ai_tool_rejections_total", Help: "AI tool requests rejected before effects.", Kind: Counter, AllowedLabels: labels("tool", "query_devices,query_missions,query_alerts,query_media,query_tracks,query_map_context,create_report_draft,create_issue_draft,request_mission_start", "reason", "permission,scope,schema,confirmation,kill_switch,prompt_injection")},
 		{Name: "aerosight_report_failures_total", Help: "Generated report failures.", Kind: Counter, AllowedLabels: labels("operation", "aggregate,publish,export", "reason", "incomplete,data_query,storage,authorization,unknown")},
+		{Name: "aerosight_connector_sync_total", Help: "Connector synchronization outcomes.", Kind: Counter, AllowedLabels: labels("connector", "dji_flighthub2", "outcome", "succeeded,failed,rate_limited,credential_invalid,schema_incompatible,directory_incomplete,lease_lost")},
+		{Name: "aerosight_connector_sync_duration_seconds", Help: "Connector synchronization duration.", Kind: Histogram, AllowedLabels: labels("connector", "dji_flighthub2", "outcome", "succeeded,failed")},
+		{Name: "aerosight_connector_sync_backlog", Help: "Pending connector synchronization requests.", Kind: Gauge, AllowedLabels: labels("connector", "dji_flighthub2")},
 	}
 }
 
@@ -63,7 +67,7 @@ type Registry struct {
 func NewMetricRegistry(definitions []MetricDefinition) (*Registry, error) {
 	registry := &Registry{definitions: map[string]MetricDefinition{}, samples: map[string]map[string]*metricSample{}}
 	for _, definition := range definitions {
-		if definition.Name == "" || definition.Help == "" || (definition.Kind != Counter && definition.Kind != Histogram) {
+		if definition.Name == "" || definition.Help == "" || (definition.Kind != Counter && definition.Kind != Histogram && definition.Kind != Gauge) {
 			return nil, errors.New("invalid metric definition")
 		}
 		if _, duplicate := registry.definitions[definition.Name]; duplicate {
@@ -121,6 +125,8 @@ func (registry *Registry) Record(name string, value float64, provided map[string
 	}
 	if definition.Kind == Counter {
 		sample.value += value
+	} else if definition.Kind == Gauge {
+		sample.value = value
 	} else {
 		sample.count++
 		sample.value += value
@@ -153,7 +159,7 @@ func (registry *Registry) ServeHTTP(writer http.ResponseWriter, _ *http.Request)
 		for _, key := range keys {
 			sample := registry.samples[name][key]
 			labelText := renderLabels(sample.labels)
-			if definition.Kind == Counter {
+			if definition.Kind == Counter || definition.Kind == Gauge {
 				_, _ = fmt.Fprintf(writer, "%s%s %s\n", name, labelText, strconv.FormatFloat(sample.value, 'f', -1, 64))
 			} else {
 				for _, boundary := range defaultHistogramBuckets {
