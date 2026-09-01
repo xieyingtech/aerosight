@@ -18,7 +18,9 @@ test("discovery writes remain permission gated and route binding is explicit", (
   const service = read("apps/web/lib/device-discoveries.ts");
   assert.match(service, /device:configure/);
   assert.match(service, /canManageDeviceAdapters/);
-  assert.match(service, /device_connector_bindings/);
-  assert.match(service, /status='standby'/);
+	assert.match(service, /device_connector_bindings/);
+	assert.match(service, /adapter\.status as "connectorStatus"/);
+	assert.match(service, /assertFlightHubConnectorEnabled\(identity\.connectorStatus\)/);
+	assert.match(service, /status='standby'/);
   assert.match(service, /discovery_status='managed'/);
 });

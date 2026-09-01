@@ -15,17 +15,20 @@ import (
 var partitionNamePattern = regexp.MustCompile(`^device_telemetry_\d{6}$`)
 
 type Telemetry struct {
-	ProjectID  int
-	TeamID     int
-	AdapterID  int64
-	DeviceID   int
-	EventID    string
-	Type       string
-	Sequence   *int64
-	CapturedAt time.Time
-	ReceivedAt time.Time
-	Payload    json.RawMessage
-	Quality    json.RawMessage
+	ProjectID            int
+	TeamID               int
+	AdapterID            int64
+	DeviceID             int
+	EventID              string
+	Type                 string
+	Sequence             *int64
+	CapturedAt           time.Time
+	ReceivedAt           time.Time
+	Payload              json.RawMessage
+	Quality              json.RawMessage
+	RequireActiveAdapter bool
+	AdapterLeaseOwner    string
+	AdapterLeaseEpoch    int64
 }
 
 type Ingestor struct {
@@ -59,7 +62,22 @@ func (ingestor *Ingestor) IngestBatch(ctx context.Context, batch []Telemetry) (i
 	}
 	defer tx.Rollback()
 	inserted := 0
+	validatedAdapters := map[int64]bool{}
 	for _, item := range batch {
+		if item.RequireActiveAdapter && !validatedAdapters[item.AdapterID] {
+			var adapterID int64
+			err := tx.QueryRowContext(ctx, `select id from device_adapters where id=$1 and project_id=$2
+				and status in('connecting','connected','degraded')
+				and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now())) for share`,
+				item.AdapterID, item.ProjectID, item.AdapterLeaseOwner, item.AdapterLeaseEpoch).Scan(&adapterID)
+			if errors.Is(err, sql.ErrNoRows) {
+				return 0, errors.New("connector adapter is disabled or its lease is no longer active")
+			}
+			if err != nil {
+				return 0, err
+			}
+			validatedAdapters[item.AdapterID] = true
+		}
 		result, err := tx.ExecContext(ctx, `
 			insert into telemetry_event_dedup (adapter_id, event_id, project_id, captured_at, received_at)
 			values ($1, $2, $3, $4, $5)

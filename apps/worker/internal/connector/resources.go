@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrRemoteResourceUnavailable = errors.New("CONNECTOR_REMOTE_RESOURCE_UNAVAILABLE")
+	ErrConnectorDisabled         = errors.New("CONNECTOR_DISABLED")
 	resourceKinds                = stringSet(
 		"wayline", "flight-task", "flight-media", "flight-record", "flight-alert", "ai-alert",
 		"map-element", "flight-area", "offline-map", "air-sense-warning", "model", "model-resource",
@@ -110,6 +111,31 @@ func validateInstance(instance Instance) error {
 	return nil
 }
 
+func (repository *SQLResourceRepository) AssertWritable(ctx context.Context, instance Instance) error {
+	if repository == nil || repository.db == nil {
+		return errors.New("connector resource repository is unavailable")
+	}
+	if err := validateInstance(instance); err != nil {
+		return err
+	}
+	var status string
+	var leaseValid bool
+	err := repository.db.QueryRowContext(ctx, `select adapter.status,
+		($3='' or (adapter.lease_owner=$3 and adapter.connection_epoch=$4 and adapter.lease_expires_at>=now()))
+		from device_adapters adapter where adapter.id=$1 and adapter.project_id=$2`,
+		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&status, &leaseValid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrRemoteResourceUnavailable
+	}
+	if err != nil {
+		return err
+	}
+	if !validSetValue(stringSet("connecting", "connected", "degraded"), status) || !leaseValid {
+		return ErrConnectorDisabled
+	}
+	return nil
+}
+
 func validateRemoteBatch(batch RemoteResourceBatch) error {
 	if !validSetValue(resourceKinds, batch.Kind) {
 		return fmt.Errorf("unsupported connector remote resource kind %q", batch.Kind)
@@ -140,6 +166,9 @@ func (repository *SQLResourceRepository) ApplyRemoteResources(
 	if err := validateInstance(instance); err != nil {
 		return result, err
 	}
+	if err := repository.AssertWritable(ctx, instance); err != nil {
+		return result, err
+	}
 	if err := validateRemoteBatch(batch); err != nil {
 		return result, err
 	}
@@ -153,8 +182,10 @@ func (repository *SQLResourceRepository) ApplyRemoteResources(
 		}
 	}()
 	var teamID int
-	err = tx.QueryRowContext(ctx, `select team_id from device_adapters where id=$1 and project_id=$2 for update`,
-		instance.ID, instance.ProjectID).Scan(&teamID)
+	err = tx.QueryRowContext(ctx, `select team_id from device_adapters where id=$1 and project_id=$2
+		and status in('connecting','connected','degraded')
+		and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now())) for update`,
+		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&teamID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return result, ErrRemoteResourceUnavailable
 	}
@@ -221,6 +252,9 @@ func (repository *SQLResourceRepository) LinkRemoteResource(
 	if err := validateInstance(instance); err != nil {
 		return err
 	}
+	if err := repository.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
 	if !validSetValue(resourceKinds, kind) || strings.TrimSpace(remoteID) == "" || strings.TrimSpace(link.TargetType) == "" || strings.TrimSpace(link.TargetID) == "" {
 		return errors.New("connector remote resource link is invalid")
 	}
@@ -248,6 +282,11 @@ func (repository *SQLResourceRepository) SaveResourceSyncState(
 	if err := validateInstance(instance); err != nil {
 		return err
 	}
+	if update.Status != "disabled" {
+		if err := repository.AssertWritable(ctx, instance); err != nil {
+			return err
+		}
+	}
 	if !validSetValue(syncResourceKinds, update.Kind) || !validSetValue(stringSet("idle", "running", "backoff", "failed", "disabled"), update.Status) || update.AttemptCount < 0 {
 		return errors.New("connector resource sync state is invalid")
 	}
@@ -261,12 +300,15 @@ func (repository *SQLResourceRepository) SaveResourceSyncState(
 		  last_error_code,last_started_at,last_succeeded_at,next_attempt_at,created_at,updated_at
 		) select $1,adapter.team_id,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now()
 		    from device_adapters adapter where adapter.id=$2 and adapter.project_id=$1
+		      and (adapter.status in('connecting','connected','degraded') or $4='disabled')
+		      and ($11='' or (adapter.lease_owner=$11 and adapter.connection_epoch=$12 and adapter.lease_expires_at>=now()))
 		on conflict(project_id,connector_instance_id,resource_kind) do update set
 		  status=excluded.status,cursor_json=excluded.cursor_json,attempt_count=excluded.attempt_count,
 		  last_error_code=excluded.last_error_code,last_started_at=excluded.last_started_at,
 		  last_succeeded_at=excluded.last_succeeded_at,next_attempt_at=excluded.next_attempt_at,updated_at=now()`,
 		instance.ProjectID, instance.ID, update.Kind, update.Status, cursor, update.AttemptCount,
-		nullableText(update.LastErrorCode), update.StartedAt, update.SucceededAt, update.NextAttemptAt)
+		nullableText(update.LastErrorCode), update.StartedAt, update.SucceededAt, update.NextAttemptAt,
+		instance.LeaseOwner, instance.LeaseEpoch)
 	if err != nil {
 		return err
 	}
@@ -330,6 +372,9 @@ func (repository *SQLResourceRepository) ListManagedDevices(
 	if err := validateInstance(instance); err != nil {
 		return nil, err
 	}
+	if err := repository.AssertWritable(ctx, instance); err != nil {
+		return nil, err
+	}
 	rows, err := repository.db.QueryContext(ctx, `
 		select identity.device_id,identity.team_id,identity.external_device_id,
 		       identity.identity_json#>>'{attributes,serialNumber}',
@@ -368,6 +413,9 @@ func (repository *SQLResourceRepository) SaveCapabilitySnapshot(
 	ctx context.Context, instance Instance, snapshot CapabilitySnapshot,
 ) error {
 	if err := validateInstance(instance); err != nil {
+		return err
+	}
+	if err := repository.AssertWritable(ctx, instance); err != nil {
 		return err
 	}
 	if strings.TrimSpace(snapshot.CapabilityCode) == "" || !validSetValue(capabilityStatuses, snapshot.Status) ||

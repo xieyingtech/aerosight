@@ -30,6 +30,10 @@ test("sync requests are stable, read-only, and credential free", () => {
 });
 
 test("disabled connectors cannot enqueue another synchronization", () => {
-  assert.doesNotThrow(() => assertFlightHubConnectorEnabled("connected"));
-  assert.throws(() => assertFlightHubConnectorEnabled("disabled"), /CONNECTOR_DISABLED/);
+	for (const status of ["connecting", "connected", "degraded"]) {
+		assert.doesNotThrow(() => assertFlightHubConnectorEnabled(status));
+	}
+	for (const status of ["disabled", "failed", "unknown", ""]) {
+		assert.throws(() => assertFlightHubConnectorEnabled(status), /CONNECTOR_DISABLED/);
+	}
 });

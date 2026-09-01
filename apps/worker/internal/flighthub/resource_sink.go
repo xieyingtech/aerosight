@@ -23,6 +23,7 @@ type TelemetryBatchIngestor interface {
 }
 
 type RemoteResourceWriter interface {
+	AssertWritable(context.Context, connector.Instance) error
 	ApplyRemoteResources(context.Context, connector.Instance, connector.RemoteResourceBatch) (connector.RemoteResourceApplyResult, error)
 }
 
@@ -49,6 +50,9 @@ func NewSQLResourceStreamSink(telemetryIngestor TelemetryBatchIngestor, resource
 }
 
 func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instance connector.Instance, poll DeviceStatePoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
 	if instance.ID <= 0 || instance.ProjectID <= 0 || poll.Device.DeviceID <= 0 || poll.Device.TeamID <= 0 || poll.ReceivedAt.IsZero() || poll.Snapshot.SN != poll.Device.Serial {
 		return errors.New("FlightHub device state projection scope is invalid")
 	}
@@ -79,12 +83,14 @@ func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instanc
 			ProjectID: instance.ProjectID, TeamID: poll.Device.TeamID, AdapterID: instance.ID, DeviceID: poll.Device.DeviceID,
 			EventID: eventPrefix + ":pose", Type: "telemetry.pose", Sequence: &poseSequence,
 			CapturedAt: capturedAt, ReceivedAt: poll.ReceivedAt, Payload: posePayload, Quality: quality,
+			RequireActiveAdapter: true, AdapterLeaseOwner: instance.LeaseOwner, AdapterLeaseEpoch: instance.LeaseEpoch,
 		})
 	}
 	batch = append(batch, telemetry.Telemetry{
 		ProjectID: instance.ProjectID, TeamID: poll.Device.TeamID, AdapterID: instance.ID, DeviceID: poll.Device.DeviceID,
 		EventID: eventPrefix + ":state", Type: "dji.flighthub.state", Sequence: &stateSequence,
 		CapturedAt: capturedAt, ReceivedAt: poll.ReceivedAt, Payload: mappedPayload, Quality: quality,
+		RequireActiveAdapter: true, AdapterLeaseOwner: instance.LeaseOwner, AdapterLeaseEpoch: instance.LeaseEpoch,
 	})
 	if _, err = sink.telemetry.IngestBatch(ctx, batch); err != nil {
 		return err
@@ -98,6 +104,7 @@ func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instanc
 		SessionKey: fmt.Sprintf("flighthub-state:%d:%d", instance.ID, poll.Device.DeviceID),
 		ObservedAt: capturedAt, ReceivedAt: poll.ReceivedAt, HeartbeatIntervalSecond: int(heartbeatInterval / time.Second),
 		RawStatusReference: poll.Mapped.MapperVersion,
+		LeaseOwner:         instance.LeaseOwner, LeaseEpoch: instance.LeaseEpoch, RequireActiveAdapter: true,
 	})
 	if errors.Is(err, heartbeat.ErrStaleSignal) {
 		return nil
@@ -182,6 +189,9 @@ func eulerQuaternion(roll, pitch, heading *float64) *adapter.Quaternion {
 }
 
 func (sink *SQLResourceStreamSink) ApplyHealth(ctx context.Context, instance connector.Instance, poll HealthPoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
 	bySerial := make(map[string]connector.ManagedConnectorDevice, len(poll.Devices))
 	for _, device := range poll.Devices {
 		bySerial[device.Serial] = device
@@ -223,6 +233,9 @@ func (sink *SQLResourceStreamSink) ApplyHealth(ctx context.Context, instance con
 			"items": items,
 		},
 	}}, CompleteSnapshot: true}); err != nil {
+		return err
+	}
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
 		return err
 	}
 	return sink.health.Apply(ctx, instance, poll)

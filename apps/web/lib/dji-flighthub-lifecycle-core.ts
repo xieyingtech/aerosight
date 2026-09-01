@@ -25,5 +25,7 @@ export function buildFlightHubSyncRequest(
 }
 
 export function assertFlightHubConnectorEnabled(status: string) {
-  if (status === "disabled") throw new Error("DJI_FLIGHTHUB_CONNECTOR_DISABLED");
+	if (!["connecting", "connected", "degraded"].includes(status)) {
+		throw new Error("DJI_FLIGHTHUB_CONNECTOR_DISABLED");
+	}
 }

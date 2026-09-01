@@ -37,6 +37,17 @@ func (projector *SQLDeviceHealthProjector) Apply(ctx context.Context, instance c
 		return err
 	}
 	defer tx.Rollback()
+	var adapterID int64
+	err = tx.QueryRowContext(ctx, `select id from device_adapters where id=$1 and project_id=$2
+		and status in('connecting','connected','degraded')
+		and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now())) for share`,
+		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&adapterID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return connector.ErrConnectorDisabled
+	}
+	if err != nil {
+		return err
+	}
 	for _, deviceHMS := range poll.HMS {
 		device, ok := bySerial[deviceHMS.SN]
 		if !ok {

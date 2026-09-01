@@ -13,6 +13,6 @@ export async function POST(
     ));
   } catch (error) {
     const code = error instanceof Error ? error.message : "DEVICE_BINDING_FAILED";
-    return NextResponse.json({ error: code }, { status: code === "PROJECT_ACCESS_DENIED" ? 403 : 400 });
+		return NextResponse.json({ error: code }, { status: code === "PROJECT_ACCESS_DENIED" ? 403 : code === "CONNECTOR_DISABLED" ? 409 : 400 });
   }
 }

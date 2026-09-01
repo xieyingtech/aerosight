@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -28,11 +29,30 @@ func (fixture *telemetryIngestorFixture) IngestBatch(_ context.Context, batch []
 }
 
 type remoteResourceWriterFixture struct {
-	batches []connector.RemoteResourceBatch
+	batches     []connector.RemoteResourceBatch
+	writableErr error
+}
+
+func (fixture *remoteResourceWriterFixture) AssertWritable(context.Context, connector.Instance) error {
+	return fixture.writableErr
 }
 
 type freshnessProjectorFixture struct {
 	signals []heartbeat.Signal
+}
+
+func TestResourceSinkRejectsDisabledConnectorBeforeTelemetryWrite(t *testing.T) {
+	ingestor := &telemetryIngestorFixture{}
+	resources := &remoteResourceWriterFixture{writableErr: connector.ErrConnectorDisabled}
+	sink, _ := NewSQLResourceStreamSink(ingestor, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{})
+	snapshot := DeviceStateSnapshot{SN: "AIRCRAFT_REDACTED", Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{"mode_code": json.RawMessage(`14`)}}
+	err := sink.ApplyDeviceState(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, DeviceStatePoll{
+		Device:   connector.ManagedConnectorDevice{DeviceID: 11, TeamID: 2, Serial: snapshot.SN},
+		Snapshot: snapshot, Mapped: MapDeviceState(snapshot), ReceivedAt: time.Now().UTC(),
+	})
+	if !errors.Is(err, connector.ErrConnectorDisabled) || len(ingestor.batches) != 0 {
+		t.Fatalf("disabled connector wrote telemetry: batches=%d err=%v", len(ingestor.batches), err)
+	}
 }
 
 type healthProjectorFixture struct {

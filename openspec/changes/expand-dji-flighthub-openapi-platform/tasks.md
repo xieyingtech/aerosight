@@ -24,7 +24,7 @@
 - [x] 3.4 将有效物模型数据事务写入 `device_telemetry`、`device_latest_telemetry`、`observations` 和 `poses`，保留采集/接收时间、来源、原坐标和转换版本，并用数据库集成测试验证幂等、乱序与无效坐标行为。
 - [x] 3.5 将状态新鲜度映射为 online/degraded/offline/unknown，并用轮询失败和时间推进测试证明旧值不会被当前时间伪装为实时事实。
 - [x] 3.6 将 HMS 生命周期映射到 `issues`、拓扑历史映射为带有效时间关系、自动录制映射到只读配置投影，并用重复告警和拓扑变更集成测试验证。
-- [ ] 3.7 修复禁用/断开连接器仍能触发同步、纳管和 active binding 的生命周期门禁，并用 Web API、outbox 与 Worker 三层测试证明历史可读但新写入被拒绝。
+- [x] 3.7 修复禁用/断开连接器仍能触发同步、纳管和 active binding 的生命周期门禁，并用 Web API、outbox 与 Worker 三层测试证明历史可读但新写入被拒绝。
 - [ ] 3.8 修正地图分类以将 `aircraft`/`drone`/`uav` 统一归入无人机，并用 map model 单元测试及 Dock + M3TD 快照测试验证图层和图标。
 - [ ] 3.9 在设备详情和项目地图展示位置、状态、数据新鲜度、来源及无效/未校准原因，并用 Web 组件测试验证有位置、无位置和过期三种状态。
 

@@ -6,6 +6,7 @@ import { canManageDeviceAdapters } from "@/lib/device-adapter-policy";
 import type { DeviceDiscovery, DeviceTypeOption, DiscoveryConnector, DiscoveryStatus } from "@/lib/device-discovery-core";
 import { query } from "@/lib/db";
 import { requireCurrentProjectPermission } from "@/lib/data";
+import { assertFlightHubConnectorEnabled } from "@/lib/dji-flighthub-lifecycle-core";
 
 export async function readProjectDiscoveries(projectId: number) {
   const { access } = await requireCurrentProjectPermission(projectId, "project:view");
@@ -91,12 +92,17 @@ export async function bindDiscoveredDeviceRecord(
     policyResult: { permission: "device:configure", role: access.role },
   }, async (client) => {
     const identity = (await client.query<{
-      id: string; adapterId: string; deviceId: number | null; status: DiscoveryStatus;
-      parentExternalId: string | null; teamId: number;
-    }>(`select id::text,adapter_id::text as "adapterId",device_id as "deviceId",discovery_status as status,
-      nullif(identity_json->>'parentExternalId','') as "parentExternalId",team_id as "teamId"
-      from device_external_identities where project_id=$1 and id=$2 for update`, [projectId, identityId])).rows[0];
-    if (!identity) throw new Error("DEVICE_IDENTITY_NOT_FOUND");
+		id: string; adapterId: string; deviceId: number | null; status: DiscoveryStatus;
+		parentExternalId: string | null; teamId: number; connectorStatus: string;
+	}>(`select id::text,adapter_id::text as "adapterId",device_id as "deviceId",discovery_status as status,
+		nullif(identity.identity_json->>'parentExternalId','') as "parentExternalId",identity.team_id as "teamId",
+		adapter.status as "connectorStatus"
+		from device_external_identities identity
+		join device_adapters adapter on adapter.id=identity.adapter_id and adapter.project_id=identity.project_id
+		where identity.project_id=$1 and identity.id=$2 for update of identity,adapter`, [projectId, identityId])).rows[0];
+	if (!identity) throw new Error("DEVICE_IDENTITY_NOT_FOUND");
+	try { assertFlightHubConnectorEnabled(identity.connectorStatus); }
+	catch { throw new Error("CONNECTOR_DISABLED"); }
     if (identity.deviceId) return { deviceId: identity.deviceId, replayed: true };
     if (identity.status !== "discovered") throw new Error("DEVICE_IDENTITY_NOT_CONFIRMABLE");
     const type = (await client.query<{ id: string; category: string }>(`select id::text,category from device_types

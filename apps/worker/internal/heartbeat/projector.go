@@ -35,6 +35,9 @@ type Signal struct {
 	LinkQuality             *float64
 	ReportedDegraded        bool
 	RawStatusReference      string
+	LeaseOwner              string
+	LeaseEpoch              int64
+	RequireActiveAdapter    bool
 }
 
 var ErrStaleSignal = errors.New("heartbeat is stale or conflicts with the bound session identity")
@@ -81,6 +84,19 @@ func (projector *Projector) Record(ctx context.Context, signal Signal) error {
 		return err
 	}
 	defer tx.Rollback()
+	if signal.RequireActiveAdapter {
+		var adapterID int64
+		err := tx.QueryRowContext(ctx, `select id from device_adapters where id=$1 and project_id=$2
+			and status in('connecting','connected','degraded')
+			and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now())) for share`,
+			signal.AdapterID, signal.ProjectID, signal.LeaseOwner, signal.LeaseEpoch).Scan(&adapterID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrStaleSignal
+		}
+		if err != nil {
+			return err
+		}
+	}
 	projection := Evaluate(projector.clock.Now(), &signal.ObservedAt, nil,
 		time.Duration(signal.HeartbeatIntervalSecond)*time.Second, signal.LinkQuality, signal.ReportedDegraded)
 	statusProjection := device.EvaluateStatus(projector.clock.Now(), &signal.ObservedAt, nil,

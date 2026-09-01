@@ -88,6 +88,7 @@ func (store *SQLSyncStore) CurrentCursor(ctx context.Context, instance Instance)
 		  join connector_definitions definition on definition.id=adapter.connector_definition_id
 		 where adapter.id=$1 and adapter.project_id=$2
 		   and definition.connector_key=$3 and definition.version=$4
+		   and adapter.status in('connecting','connected','degraded')
 		   and ($5='' or (adapter.lease_owner=$5 and adapter.connection_epoch=$6 and adapter.lease_expires_at>=now()))`,
 		instance.ID, instance.ProjectID, instance.ConnectorKey, instance.Version,
 		instance.LeaseOwner, instance.LeaseEpoch).Scan(&cursor)
@@ -123,6 +124,7 @@ func (store *SQLSyncStore) ApplyBatch(
 	err = tx.QueryRowContext(ctx, `
 		select team_id, sync_cursor_json, discovery_scope_json, onboarding_policy
 		  from device_adapters where id=$1 and project_id=$2
+		   and status in('connecting','connected','degraded')
 		   and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now()))
 		 for update`,
 		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&teamID, &currentCursor, &scope, &onboardingPolicy)
