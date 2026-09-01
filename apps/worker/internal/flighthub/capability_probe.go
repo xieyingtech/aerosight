@@ -288,6 +288,10 @@ func effectiveProbeStatus(layers CapabilityProbeLayers, reason string) (Capabili
 		return ProbeUnverified, "implementation_unavailable"
 	}
 	if layers.Acceptance != ProbeSupported {
+		switch layers.Acceptance {
+		case ProbeForbidden, ProbeDegraded, ProbeFailed, ProbeNotApplicable:
+			return layers.Acceptance, "acceptance_" + string(layers.Acceptance)
+		}
 		return ProbeUnverified, "acceptance_required"
 	}
 	if layers.Account == ProbeEmpty {

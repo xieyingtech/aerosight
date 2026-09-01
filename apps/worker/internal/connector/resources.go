@@ -453,6 +453,55 @@ func (repository *SQLResourceRepository) SaveCapabilitySnapshot(
 	return nil
 }
 
+func (repository *SQLResourceRepository) ListCapabilitySnapshots(
+	ctx context.Context, instance Instance, region, deployment string,
+) ([]CapabilitySnapshot, error) {
+	if repository == nil || repository.db == nil {
+		return nil, errors.New("connector resource repository is unavailable")
+	}
+	if err := validateInstance(instance); err != nil {
+		return nil, err
+	}
+	region, deployment = strings.TrimSpace(region), strings.TrimSpace(deployment)
+	if region == "" || deployment == "" {
+		return nil, errors.New("connector capability snapshot scope is invalid")
+	}
+	rows, err := repository.db.QueryContext(ctx, `
+		select capability_code,status,evidence_level,region,deployment,
+		       device_model,firmware_version,details_json,verified_at,expires_at
+		  from connector_capability_snapshots
+		 where project_id=$1 and connector_instance_id=$2 and region=$3 and deployment=$4
+		 order by capability_code,verified_at desc,device_model nulls first,firmware_version nulls first`,
+		instance.ProjectID, instance.ID, region, deployment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	snapshots := make([]CapabilitySnapshot, 0)
+	for rows.Next() {
+		var snapshot CapabilitySnapshot
+		var deviceModel, firmwareVersion sql.NullString
+		var details []byte
+		var expiresAt sql.NullTime
+		if err := rows.Scan(
+			&snapshot.CapabilityCode, &snapshot.Status, &snapshot.EvidenceLevel, &snapshot.Region, &snapshot.Deployment,
+			&deviceModel, &firmwareVersion, &details, &snapshot.VerifiedAt, &expiresAt,
+		); err != nil {
+			return nil, err
+		}
+		if json.Unmarshal(details, &snapshot.Details) != nil || snapshot.Details == nil {
+			return nil, errors.New("connector capability snapshot details are invalid")
+		}
+		snapshot.DeviceModel = deviceModel.String
+		snapshot.FirmwareVersion = firmwareVersion.String
+		if expiresAt.Valid {
+			snapshot.ExpiresAt = &expiresAt.Time
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots, rows.Err()
+}
+
 func firstNonNilMap(value map[string]any) map[string]any {
 	if value == nil {
 		return map[string]any{}
