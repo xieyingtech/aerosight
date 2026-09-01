@@ -5,7 +5,15 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 function run(command, args, options = {}) {
-  const result = spawnSync(command, args, { cwd: root, stdio: "inherit", ...options });
+  const useWindowsCommandShell = process.platform === "win32" && command === "pnpm";
+  const executable = useWindowsCommandShell ? (process.env.ComSpec ?? "cmd.exe") : command;
+  const commandArgs = useWindowsCommandShell ? ["/d", "/s", "/c", command, ...args] : args;
+  const result = spawnSync(executable, commandArgs, {
+    cwd: root,
+    stdio: "inherit",
+    ...options
+  });
+  if (result.error) console.error(`Unable to start ${command}:`, result.error.message);
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
