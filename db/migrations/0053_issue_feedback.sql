@@ -1,0 +1,31 @@
+create table issue_feedback (
+  id bigserial primary key,
+  project_id integer not null,
+  team_id integer not null,
+  issue_id integer not null,
+  detection_id bigint not null,
+  algorithm_definition_version_id bigint not null,
+  task_version_id bigint,
+  task_run_step_id bigint,
+  action text not null,
+  corrected_label text,
+  disposition text,
+  reason text not null,
+  client_key uuid not null,
+  evidence_snapshot_json jsonb not null,
+  actor_user_id integer not null references users(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  constraint issue_feedback_project_team_fk foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
+  constraint issue_feedback_issue_project_fk foreign key(issue_id,project_id) references issues(id,project_id) on delete cascade,
+  constraint issue_feedback_detection_project_fk foreign key(detection_id,project_id) references detections(id,project_id) on delete restrict,
+  constraint issue_feedback_algorithm_version_project_fk foreign key(algorithm_definition_version_id,project_id) references algorithm_definition_versions(id,project_id) on delete restrict,
+  constraint issue_feedback_task_version_project_fk foreign key(task_version_id,project_id) references task_versions(id,project_id) on delete restrict,
+  constraint issue_feedback_task_step_project_fk foreign key(task_run_step_id,project_id) references task_run_steps(id,project_id) on delete restrict,
+  constraint issue_feedback_action_valid check(action in('confirm','false_positive','category_correction','disposition')),
+  constraint issue_feedback_correction_valid check((action='category_correction')=(corrected_label is not null)),
+  constraint issue_feedback_disposition_valid check(disposition is null or disposition in('resolved','monitoring','remediated','accepted_risk','not_applicable')),
+  constraint issue_feedback_project_client_unique unique(project_id,client_key),
+  constraint issue_feedback_id_project_unique unique(id,project_id)
+);
+--> statement-breakpoint
+create index issue_feedback_quality_idx on issue_feedback(project_id,algorithm_definition_version_id,task_version_id,action,created_at desc);
