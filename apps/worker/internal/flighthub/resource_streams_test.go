@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -50,6 +51,10 @@ type resourceClientFixture struct {
 	stateErr      error
 	hmsErr        error
 	autoRecordErr error
+	waylines      []WaylineSummary
+	waylineErr    error
+	taskPages     map[string][]FlightTaskSummary
+	taskErrors    map[string]error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -83,6 +88,20 @@ func (client *resourceClientFixture) GetAutoRecordingConfig(context.Context, str
 	return AutoRecordingConfig{ID: 1, ProjectID: "PROJECT_REDACTED", Items: []AutoRecordingItem{}}, nil
 }
 
+func (client *resourceClientFixture) ListWaylines(context.Context, string, string) ([]WaylineSummary, error) {
+	return append([]WaylineSummary(nil), client.waylines...), client.waylineErr
+}
+
+func (client *resourceClientFixture) ListFlightTasks(_ context.Context, _, _ string, options FlightTaskListOptions) ([]FlightTaskSummary, error) {
+	serial := ""
+	if len(options.SNs) == 1 {
+		serial = options.SNs[0]
+	}
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return append([]FlightTaskSummary(nil), client.taskPages[serial]...), client.taskErrors[serial]
+}
+
 func (client *resourceClientFixture) calls() []string {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -94,6 +113,7 @@ type resourceSinkFixture struct {
 	mu           sync.Mutex
 	health       int
 	states       int
+	catalogs     []CatalogPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -117,6 +137,26 @@ func (sink *resourceSinkFixture) ApplyHealth(context.Context, connector.Instance
 	sink.health++
 	sink.mu.Unlock()
 	return nil
+}
+
+func (sink *resourceSinkFixture) ApplyCatalog(_ context.Context, _ connector.Instance, poll CatalogPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.Waylines = append([]WaylineSummary(nil), poll.Waylines...)
+	poll.FlightTasks = append([]FlightTaskSummary(nil), poll.FlightTasks...)
+	sink.catalogs = append(sink.catalogs, poll)
+	return nil
+}
+
+func (sink *resourceSinkFixture) catalog(kind string) CatalogPoll {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	for index := len(sink.catalogs) - 1; index >= 0; index-- {
+		if sink.catalogs[index].Kind == kind {
+			return sink.catalogs[index]
+		}
+	}
+	return CatalogPoll{}
 }
 
 type blockingInventoryRunner struct {
@@ -241,6 +281,85 @@ func TestDeviceStateStreamUsesAdaptiveIntervalsAndRecoversPersistedBackoff(t *te
 	coordinator.Run(context.Background(), instance)
 	if recovered := store.state("device-state"); recovered.Status != "idle" || recovered.AttemptCount != 0 {
 		t.Fatalf("stream did not recover from backoff: %#v", recovered)
+	}
+}
+
+func catalogTask(uuid, status string) FlightTaskSummary {
+	return FlightTaskSummary{
+		UUID: uuid, Name: "脱敏任务", TaskType: "immediate", Status: status,
+		SN: "DOCK_REDACTED", WaylineUUID: "WAYLINE_REDACTED", BeginAt: "2026-09-01T10:00:00Z",
+	}
+}
+
+func TestCatalogStreamsDeduplicateRepeatedPagesAndProtectPartialSnapshots(t *testing.T) {
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{
+		{DeviceID: 1, Serial: "DOCK_REDACTED_01", Class: "airport"},
+		{DeviceID: 2, Serial: "DOCK_REDACTED_02", Class: "airport"},
+		{DeviceID: 3, Serial: "AIRCRAFT_REDACTED", Class: "drone"},
+	}}
+	client := &resourceClientFixture{
+		waylines: []WaylineSummary{{
+			ID: "WAYLINE_REDACTED", Name: "脱敏航线", DeviceModelKey: "0-91-1", TemplateTypes: []string{"waypoint"},
+			PayloadInformation: []WaylinePayload{{Domain: "1", Type: "98", LensType: "wide"}}, UpdatedAt: now.UnixMilli(), SizeBytes: 1024,
+		}},
+		taskPages: map[string][]FlightTaskSummary{
+			"DOCK_REDACTED_01": {catalogTask("TASK_REDACTED_01", "executing"), catalogTask("TASK_REDACTED_02", "waiting")},
+			"DOCK_REDACTED_02": {catalogTask("TASK_REDACTED_01", "executing")},
+		},
+		taskErrors: map[string]error{},
+	}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
+		MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := resourceStreamInstance()
+	for iteration := 0; iteration < 2; iteration++ {
+		waylineCursor, _, err := coordinator.pollWaylines(context.Background(), instance, "TOKEN_REDACTED")
+		if err != nil || waylineCursor["complete"] != true {
+			t.Fatalf("wayline cursor=%#v err=%v", waylineCursor, err)
+		}
+		taskCursor, _, err := coordinator.pollFlightTasks(context.Background(), instance, "TOKEN_REDACTED")
+		if err != nil || taskCursor["complete"] != true || taskCursor["resources"] != 2 {
+			t.Fatalf("task cursor=%#v err=%v", taskCursor, err)
+		}
+		projected := sink.catalog("flight-task")
+		if !projected.CompleteSnapshot || len(projected.FlightTasks) != 2 || projected.FlightTasks[0].UUID != "TASK_REDACTED_01" || projected.FlightTasks[1].UUID != "TASK_REDACTED_02" {
+			t.Fatalf("deduplicated task projection=%#v", projected)
+		}
+	}
+
+	client.taskErrors["DOCK_REDACTED_02"] = &APIError{SafeCode: "upstream_unavailable", Retryable: true}
+	cursor, _, err := coordinator.pollFlightTasks(context.Background(), instance, "TOKEN_REDACTED")
+	partial := sink.catalog("flight-task")
+	if !IsSafeCode(err, "upstream_unavailable") || cursor["complete"] != false || partial.CompleteSnapshot || len(partial.FlightTasks) != 2 {
+		t.Fatalf("partial cursor=%#v poll=%#v err=%v", cursor, partial, err)
+	}
+}
+
+func TestFlightTaskCatalogAtVendorLimitFailsSnapshotClosed(t *testing.T) {
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	page := make([]FlightTaskSummary, maxFlightTaskBatch)
+	for index := range page {
+		page[index] = catalogTask(fmt.Sprintf("TASK_REDACTED_%03d", index), "success")
+	}
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{{DeviceID: 1, Serial: "DOCK_REDACTED", Class: "airport"}}}
+	client := &resourceClientFixture{taskPages: map[string][]FlightTaskSummary{"DOCK_REDACTED": page}, taskErrors: map[string]error{}}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
+		MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor, _, err := coordinator.pollFlightTasks(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	if !IsSafeCode(err, "snapshot_incomplete") || cursor["complete"] != false || sink.catalog("flight-task").CompleteSnapshot {
+		t.Fatalf("vendor limit cursor=%#v err=%v", cursor, err)
 	}
 }
 

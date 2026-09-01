@@ -116,7 +116,7 @@ func main() {
 		resourceStreams, resourceErr := flighthub.NewResourceStreamCoordinator(
 			flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}, resourceRepository, resourceSink,
 			flighthub.ResourceStreamConfig{
-				OnlineInterval: 15 * time.Second, OfflineInterval: 60 * time.Second, HealthInterval: 5 * time.Minute,
+				OnlineInterval: 15 * time.Second, OfflineInterval: 60 * time.Second, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
 				MaxBackoff: 5 * time.Minute,
 				OnError: func(kind string, _ error) {
 					logger.Warn("FlightHub resource stream degraded", "stream", kind)

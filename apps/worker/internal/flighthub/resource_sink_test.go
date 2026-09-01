@@ -186,6 +186,48 @@ func TestResourceSinkProjectsHealthWithoutPersistingSerialsOrMessages(t *testing
 	}
 }
 
+func TestResourceSinkProjectsCatalogsWithStableIdentityAndSanitizedSummaries(t *testing.T) {
+	resources := &remoteResourceWriterFixture{}
+	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{})
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	waylinePoll := CatalogPoll{
+		Kind: "wayline", CompleteSnapshot: true, ReceivedAt: now,
+		Waylines: []WaylineSummary{{
+			ID: "WAYLINE_REDACTED", Name: "脱敏航线", DeviceModelKey: "0-91-1", TemplateTypes: []string{"waypoint"},
+			PayloadInformation: []WaylinePayload{{Domain: "1", Type: "98", LensType: "wide"}}, UpdatedAt: now.UnixMilli(), SizeBytes: 1024,
+		}},
+	}
+	taskPoll := CatalogPoll{
+		Kind: "flight-task", CompleteSnapshot: true, ReceivedAt: now,
+		FlightTasks: []FlightTaskSummary{{
+			UUID: "TASK_REDACTED", Name: "脱敏任务", TaskType: "immediate", Status: "success",
+			SN: "DOCK_REDACTED", WaylineUUID: "WAYLINE_REDACTED", BeginAt: "2026-09-01T09:00:00Z", CompletedAt: "2026-09-01T10:00:00Z",
+		}},
+	}
+	for iteration := 0; iteration < 2; iteration++ {
+		if err := sink.ApplyCatalog(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, waylinePoll); err != nil {
+			t.Fatal(err)
+		}
+		if err := sink.ApplyCatalog(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, taskPoll); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(resources.batches) != 4 {
+		t.Fatalf("catalog batches=%#v", resources.batches)
+	}
+	firstWayline, secondWayline := resources.batches[0].Resources[0], resources.batches[2].Resources[0]
+	firstTask, secondTask := resources.batches[1].Resources[0], resources.batches[3].Resources[0]
+	if firstWayline.RemoteID != secondWayline.RemoteID || firstWayline.RemoteVersion != secondWayline.RemoteVersion || firstTask.RemoteID != secondTask.RemoteID || firstTask.RemoteVersion != secondTask.RemoteVersion {
+		t.Fatalf("repeated catalog projection was not idempotent: waylines=%#v/%#v tasks=%#v/%#v", firstWayline, secondWayline, firstTask, secondTask)
+	}
+	for _, resource := range []connector.RemoteResource{firstWayline, firstTask} {
+		summary, _ := json.Marshal(resource.Summary)
+		if strings.Contains(string(summary), "WAYLINE_REDACTED") || strings.Contains(string(summary), "TASK_REDACTED") || strings.Contains(string(summary), "DOCK_REDACTED") || strings.Contains(string(summary), "http") {
+			t.Fatalf("catalog summary persisted remote identity or URL: %s", summary)
+		}
+	}
+}
+
 func TestSQLResourceSinkIdempotencyOrderingAndInvalidCoordinates(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
 	if databaseURL == "" {

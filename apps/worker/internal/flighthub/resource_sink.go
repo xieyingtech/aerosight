@@ -241,6 +241,94 @@ func (sink *SQLResourceStreamSink) ApplyHealth(ctx context.Context, instance con
 	return sink.health.Apply(ctx, instance, poll)
 }
 
+func (sink *SQLResourceStreamSink) ApplyCatalog(ctx context.Context, instance connector.Instance, poll CatalogPoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
+	if instance.ID <= 0 || instance.ProjectID <= 0 || poll.ReceivedAt.IsZero() {
+		return errors.New("FlightHub catalog projection scope is invalid")
+	}
+	var resources []connector.RemoteResource
+	var err error
+	switch poll.Kind {
+	case "wayline":
+		resources, err = waylineRemoteResources(poll.Waylines)
+	case "flight-task":
+		resources, err = flightTaskRemoteResources(poll.FlightTasks)
+	default:
+		return errors.New("FlightHub catalog projection kind is invalid")
+	}
+	if err != nil {
+		return err
+	}
+	_, err = sink.resources.ApplyRemoteResources(ctx, instance, connector.RemoteResourceBatch{
+		Kind: poll.Kind, Resources: resources, CompleteSnapshot: poll.CompleteSnapshot,
+	})
+	return err
+}
+
+func waylineRemoteResources(items []WaylineSummary) ([]connector.RemoteResource, error) {
+	resources := make([]connector.RemoteResource, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		if _, duplicate := seen[item.ID]; duplicate {
+			return nil, schemaError()
+		}
+		seen[item.ID] = struct{}{}
+		var updatedAt *time.Time
+		if item.UpdatedAt > 0 {
+			value := time.UnixMilli(item.UpdatedAt).UTC()
+			updatedAt = &value
+		}
+		resources = append(resources, connector.RemoteResource{
+			RemoteID: item.ID, RemoteVersion: fmt.Sprintf("%d:%d", item.UpdatedAt, item.SizeBytes), RemoteUpdatedAt: updatedAt,
+			Summary: map[string]any{
+				"name": item.Name, "deviceModelKey": item.DeviceModelKey, "templateTypes": item.TemplateTypes,
+				"updatedAt": item.UpdatedAt, "sizeBytes": item.SizeBytes, "payloadCount": len(item.PayloadInformation),
+			},
+		})
+	}
+	return resources, nil
+}
+
+func flightTaskRemoteResources(items []FlightTaskSummary) ([]connector.RemoteResource, error) {
+	resources := make([]connector.RemoteResource, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		if _, duplicate := seen[item.UUID]; duplicate {
+			return nil, schemaError()
+		}
+		seen[item.UUID] = struct{}{}
+		summary := map[string]any{
+			"name": item.Name, "taskType": item.TaskType, "status": item.Status,
+			"beginAt": item.BeginAt, "endAt": item.EndAt, "runAt": item.RunAt, "completedAt": item.CompletedAt,
+			"mediaUploadStatus": item.MediaUploadStatus, "resumableStatus": item.ResumableStatus,
+			"breakPointResume": item.BreakPointResume, "currentWaypoint": item.CurrentWaypoint,
+			"totalWaypoints": item.TotalWaypoints, "exceptionCount": len(item.Exceptions),
+		}
+		serialized, err := json.Marshal(summary)
+		if err != nil {
+			return nil, err
+		}
+		digest := sha256.Sum256(serialized)
+		resources = append(resources, connector.RemoteResource{
+			RemoteID: item.UUID, RemoteVersion: hex.EncodeToString(digest[:16]), RemoteUpdatedAt: latestFlightTaskTime(item), Summary: summary,
+		})
+	}
+	return resources, nil
+}
+
+func latestFlightTaskTime(item FlightTaskSummary) *time.Time {
+	for _, value := range []string{item.CompletedAt, item.RunAt, item.BeginAt, item.EndAt} {
+		parsed, err := time.Parse(time.RFC3339Nano, value)
+		if err == nil {
+			parsed = parsed.UTC()
+			return &parsed
+		}
+	}
+	return nil
+}
+
 func topologyRemoteResources(poll HealthPoll) ([]connector.RemoteResource, error) {
 	bySerial := make(map[string]connector.ManagedConnectorDevice, len(poll.Devices))
 	for _, device := range poll.Devices {

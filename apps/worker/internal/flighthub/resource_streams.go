@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +16,8 @@ type ResourceStreamClient interface {
 	ListDeviceHMS(context.Context, string, string, []string) ([]DeviceHMS, error)
 	ListHistoricalTopologies(context.Context, string, string) ([]HistoricalTopology, error)
 	GetAutoRecordingConfig(context.Context, string, string) (AutoRecordingConfig, error)
+	ListWaylines(context.Context, string, string) ([]WaylineSummary, error)
+	ListFlightTasks(context.Context, string, string, FlightTaskListOptions) ([]FlightTaskSummary, error)
 }
 
 type ResourceStreamStore interface {
@@ -39,15 +42,25 @@ type HealthPoll struct {
 	ReceivedAt time.Time
 }
 
+type CatalogPoll struct {
+	Kind             string
+	Waylines         []WaylineSummary
+	FlightTasks      []FlightTaskSummary
+	CompleteSnapshot bool
+	ReceivedAt       time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
+	ApplyCatalog(context.Context, connector.Instance, CatalogPoll) error
 }
 
 type ResourceStreamConfig struct {
 	OnlineInterval  time.Duration
 	OfflineInterval time.Duration
 	HealthInterval  time.Duration
+	CatalogInterval time.Duration
 	MaxBackoff      time.Duration
 	Now             func() time.Time
 	OnError         func(string, error)
@@ -64,7 +77,10 @@ type ResourceStreamCoordinator struct {
 }
 
 func NewResourceStreamCoordinator(client ResourceStreamClient, resolver TokenResolver, store ResourceStreamStore, sink ResourceStreamSink, config ResourceStreamConfig) (*ResourceStreamCoordinator, error) {
-	if client == nil || resolver == nil || store == nil || sink == nil || config.OnlineInterval <= 0 || config.OfflineInterval < config.OnlineInterval || config.HealthInterval <= 0 || config.MaxBackoff <= 0 {
+	if config.CatalogInterval == 0 {
+		config.CatalogInterval = 15 * time.Minute
+	}
+	if client == nil || resolver == nil || store == nil || sink == nil || config.OnlineInterval <= 0 || config.OfflineInterval < config.OnlineInterval || config.HealthInterval <= 0 || config.CatalogInterval <= 0 || config.MaxBackoff <= 0 {
 		return nil, errors.New("FlightHub resource stream configuration is invalid")
 	}
 	if config.Now == nil {
@@ -84,6 +100,8 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 	}{
 		{kind: "device-state", run: coordinator.pollDeviceStates},
 		{kind: "health", run: coordinator.pollHealth},
+		{kind: "waylines", run: coordinator.pollWaylines},
+		{kind: "flight-tasks", run: coordinator.pollFlightTasks},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -95,6 +113,78 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollWaylines(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	waylines, err := coordinator.client.ListWaylines(ctx, token, scope.ProjectUUID)
+	if err != nil {
+		return map[string]any{"resources": 0, "complete": false}, 0, err
+	}
+	poll := CatalogPoll{Kind: "wayline", Waylines: waylines, CompleteSnapshot: true, ReceivedAt: coordinator.config.Now().UTC()}
+	if err := coordinator.sink.ApplyCatalog(ctx, instance, poll); err != nil {
+		return map[string]any{"resources": len(waylines), "complete": false}, 0, err
+	}
+	return map[string]any{"resources": len(waylines), "pages": 1, "completePages": 1, "complete": true}, coordinator.config.CatalogInterval, nil
+}
+
+func (coordinator *ResourceStreamCoordinator) pollFlightTasks(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	devices, err := coordinator.store.ListManagedDevices(ctx, instance)
+	if err != nil {
+		return nil, 0, err
+	}
+	docks := make([]connector.ManagedConnectorDevice, 0, len(devices))
+	for _, device := range devices {
+		if device.Class == "airport" {
+			docks = append(docks, device)
+		}
+	}
+	if len(docks) == 0 {
+		if err := coordinator.sink.ApplyCatalog(ctx, instance, CatalogPoll{Kind: "flight-task", FlightTasks: []FlightTaskSummary{}, CompleteSnapshot: false, ReceivedAt: coordinator.config.Now().UTC()}); err != nil {
+			return map[string]any{"resources": 0, "pages": 0, "completePages": 0, "complete": false}, 0, err
+		}
+		return map[string]any{"resources": 0, "pages": 0, "completePages": 0, "complete": false}, coordinator.config.CatalogInterval, nil
+	}
+
+	byID := make(map[string]FlightTaskSummary)
+	completedPages := 0
+	var pageErrors []error
+	for _, dock := range docks {
+		page, pageErr := coordinator.client.ListFlightTasks(ctx, token, scope.ProjectUUID, FlightTaskListOptions{SNs: []string{dock.Serial}})
+		if pageErr != nil {
+			pageErrors = append(pageErrors, pageErr)
+			continue
+		}
+		completedPages++
+		for _, task := range page {
+			if _, exists := byID[task.UUID]; !exists {
+				byID[task.UUID] = task
+			}
+		}
+		if len(page) == maxFlightTaskBatch {
+			pageErrors = append(pageErrors, &APIError{SafeCode: "snapshot_incomplete", Retryable: true})
+		}
+	}
+	tasks := make([]FlightTaskSummary, 0, len(byID))
+	for _, task := range byID {
+		tasks = append(tasks, task)
+	}
+	sort.Slice(tasks, func(left, right int) bool { return tasks[left].UUID < tasks[right].UUID })
+	complete := len(pageErrors) == 0 && completedPages == len(docks)
+	poll := CatalogPoll{Kind: "flight-task", FlightTasks: tasks, CompleteSnapshot: complete, ReceivedAt: coordinator.config.Now().UTC()}
+	if sinkErr := coordinator.sink.ApplyCatalog(ctx, instance, poll); sinkErr != nil {
+		pageErrors = append(pageErrors, sinkErr)
+		complete = false
+	}
+	cursor := map[string]any{"resources": len(tasks), "pages": len(docks), "completePages": completedPages, "complete": complete}
+	return cursor, coordinator.config.CatalogInterval, errors.Join(pageErrors...)
 }
 
 func (coordinator *ResourceStreamCoordinator) runStream(

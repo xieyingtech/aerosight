@@ -106,6 +106,24 @@ func TestSQLResourceRepositoryTenantIsolationAndIdempotency(t *testing.T) {
 	if leftCount != 1 || rightCount != 1 {
 		t.Fatalf("remote resources crossed project boundary: left=%d right=%d", leftCount, rightCount)
 	}
+	flightTask := RemoteResource{RemoteID: resource.RemoteID, RemoteVersion: "accepted", Summary: map[string]any{"status": "waiting"}}
+	for _, item := range []scope{left, right, left} {
+		result, err := repository.ApplyRemoteResources(ctx, Instance{ID: item.connectorID, ProjectID: item.projectID}, RemoteResourceBatch{
+			Kind: "flight-task", Resources: []RemoteResource{flightTask}, CompleteSnapshot: true,
+		})
+		if err != nil || result.Upserted != 1 || result.Missing != 0 {
+			t.Fatalf("flight task apply result=%#v err=%v", result, err)
+		}
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from connector_remote_resources where project_id=$1 and resource_kind='flight-task' and remote_id=$2`, left.projectID, flightTask.RemoteID).Scan(&leftCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from connector_remote_resources where project_id=$1 and resource_kind='flight-task' and remote_id=$2`, right.projectID, flightTask.RemoteID).Scan(&rightCount); err != nil {
+		t.Fatal(err)
+	}
+	if leftCount != 1 || rightCount != 1 {
+		t.Fatalf("flight task UUID crossed project boundary or duplicated: left=%d right=%d", leftCount, rightCount)
+	}
 }
 
 func TestDisabledConnectorRejectsOutboxLeaseSyncAndResourceWritesButKeepsHistory(t *testing.T) {
