@@ -1,0 +1,240 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "live-start-volc",
+      "endpointId": "456809558e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/live-stream/start",
+      "projectHeader": true,
+      "requestBody": {
+        "sn": "AIRCRAFT_REDACTED_01",
+        "camera_index": "165-0-7",
+        "video_expire": 3600,
+        "quality_type": "adaptive"
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "expire_ts": 1779443600,
+          "url": "VOLC_PLAYBACK_CREDENTIAL_REDACTED",
+          "url_type": "volc"
+        }
+      }
+    },
+    {
+      "name": "live-start-agora",
+      "endpointId": "456809558e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/live-stream/start",
+      "projectHeader": true,
+      "requestBody": {
+        "sn": "AIRCRAFT_REDACTED_01",
+        "camera_index": "165-0-7",
+        "video_expire": 3600,
+        "quality_type": "smooth"
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "expire_ts": 1779443600,
+          "url": "AGORA_PLAYBACK_CREDENTIAL_REDACTED",
+          "url_type": "agora"
+        }
+      }
+    },
+    {
+      "name": "live-start-srs",
+      "endpointId": "456809558e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/live-stream/start",
+      "projectHeader": true,
+      "requestBody": {
+        "sn": "AIRCRAFT_REDACTED_01",
+        "camera_index": "165-0-7",
+        "video_expire": 3600,
+        "quality_type": "ultra_high_definition"
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "expire_ts": 1779443600,
+          "url": "https://media.vendor.example/live/SRS_STREAM_REDACTED.m3u8",
+          "url_type": "srs"
+        }
+      }
+    },
+    {
+      "name": "stream-quality",
+      "endpointId": "458069500e0",
+      "method": "PUT",
+      "path": "/openapi/v2.0/device/stream/quality",
+      "projectHeader": true,
+      "requestBody": {
+        "sn": "AIRCRAFT_REDACTED_01",
+        "camera_index": "165-0-7",
+        "quality_type": "adaptive"
+      },
+      "responseBody": { "code": 0, "message": "" }
+    },
+    {
+      "name": "organization-recordings-empty",
+      "endpointId": "454273423e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/organizations/ORG_REDACTED_01/devices/AIRCRAFT_REDACTED_01/streams",
+      "projectHeader": false,
+      "responseBody": { "code": 0, "message": "OK", "data": { "list": [] } }
+    },
+    {
+      "name": "project-recordings-empty",
+      "endpointId": "457494963e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/devices/AIRCRAFT_REDACTED_01/streams",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "OK", "data": { "list": [] } }
+    },
+    {
+      "name": "auto-record-config",
+      "endpointId": "457494960e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/auto-record-configs",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "id": 9,
+          "project_id": "PROJECT_REDACTED",
+          "created_at": "2026-08-31T00:00:00Z",
+          "updated_at": "2026-09-01T00:00:00Z",
+          "auto_cleaning_time": 30,
+          "disabled_auto_clean": false,
+          "disable_dock_recording": false,
+          "disable_drone_recording": false,
+          "disable_base_station_recording": true,
+          "disable_rtmp_recording": true,
+          "recording_items": [
+            {
+              "sn": "AIRCRAFT_REDACTED_01",
+              "camera_index": "165-0-7",
+              "camera_sn": "CAMERA_REDACTED_01",
+              "recording_strategy": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "live-shares-empty-code",
+      "endpointId": "457494965e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/live-shares?page=1&page_size=20&status=0",
+      "projectHeader": true,
+      "responseBody": { "code": 231011, "message": "NO_RESOURCE_REDACTED", "data": {} }
+    },
+    {
+      "name": "live-shares-empty-list",
+      "endpointId": "457494965e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/live-shares?page=2&page_size=10&status=2",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "OK", "data": [] }
+    },
+    {
+      "name": "live-share-detail-empty",
+      "endpointId": "457494964e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/live-shares/AIRCRAFT_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "OK", "data": null }
+    },
+    {
+      "name": "stream-converters",
+      "endpointId": "456444816e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/stream-converters?camera_index=165-0-7&device_sn=AIRCRAFT_REDACTED_01&enable=true&page=1&page_size=20&schema=rtsp",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "pagination": { "page": 1, "page_size": 20, "total": 1 },
+          "list": [
+            {
+              "converter_name": "脱敏转发通道",
+              "update_ts": "2026-09-01T00:00:00Z",
+              "converter_id": "CONVERTER_REDACTED_01",
+              "state": "initialized",
+              "code": 0,
+              "bypass_option": {
+                "url": "",
+                "server_id": "",
+                "server_ip": "",
+                "server_port": "",
+                "device_password": "DEVICE_PASSWORD_REDACTED",
+                "local_port": "",
+                "device_id": "",
+                "local_channel": "",
+                "rtsp_url": "rtsp://media.vendor.example/live/STREAM_REDACTED",
+                "username": "USERNAME_REDACTED",
+                "password": "PASSWORD_REDACTED",
+                "enable_ts": 1779440000
+              },
+              "sn": "AIRCRAFT_REDACTED_01",
+              "camera": "165-0-7",
+              "video": "normal-0",
+              "video_type": "wide",
+              "schema": "rtsp",
+              "auto_push_stream": true,
+              "device_online_status": true,
+              "device_callsign": "脱敏飞行器"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "stream-converter-create-rtsp",
+      "endpointId": "458069503e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/live-stream/converter",
+      "projectHeader": true,
+      "requestBody": {
+        "converter_name": "脱敏转发通道",
+        "sn": "AIRCRAFT_REDACTED_01",
+        "camera_index": "165-0-7",
+        "schema": "rtsp",
+        "schema_option": {
+          "username": "USERNAME_REDACTED",
+          "password": "PASSWORD_REDACTED",
+          "enable_ts": false
+        }
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": { "converter_id": "CONVERTER_REDACTED_02" }
+      }
+    },
+    {
+      "name": "stream-converter-enable",
+      "endpointId": "480437503e0",
+      "method": "PUT",
+      "path": "/openapi/v2.0/live-stream/converter/CONVERTER_REDACTED_01",
+      "projectHeader": true,
+      "requestBody": { "auto_push_stream": true },
+      "responseBody": { "code": 0, "message": "OK" }
+    },
+    {
+      "name": "stream-converter-delete",
+      "endpointId": "456444818e0",
+      "method": "DELETE",
+      "path": "/openapi/v2.0/stream-converters/CONVERTER_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "success", "data": {} }
+    }
+  ]
+}
