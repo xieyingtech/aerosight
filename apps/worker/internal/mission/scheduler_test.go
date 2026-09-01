@@ -43,6 +43,16 @@ func TestNonDeviceStepDispatchesThroughTypedTaskExecutor(t *testing.T) {
 	}
 }
 
+func TestTriggeredQueuedRunStartsWithoutDeviceForNonDeviceStep(t *testing.T) {
+	snapshot := Snapshot{RunID: 44, Status: RunQueued, DeviceConnected: false, Steps: []Step{{
+		ID: 72, Position: 1, Key: "report", Uses: "report.generate", Status: StepPending,
+	}}}
+	decision, err := Advance(snapshot, nil, time.Now())
+	if err != nil || decision.RunStatus != RunRunning || decision.InvokeStep == nil || decision.InvokeStep.Uses != "report.generate" {
+		t.Fatalf("queued triggered run did not enter the unified executor: decision=%+v err=%v", decision, err)
+	}
+}
+
 func TestCollectStepWaitsForAvailableAssetAfterAck(t *testing.T) {
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	snapshot := Snapshot{RunID: 17, Status: RunRunning, DeviceConnected: true, Steps: []Step{{

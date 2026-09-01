@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/orchestration"
 	"aerosight/worker/internal/outbox"
 )
@@ -160,6 +161,7 @@ func loadContext(ctx context.Context, tx *sql.Tx, record taskStepRecord) (orches
 }
 
 func (processor *TaskStepProcessor) createOrUpdate(ctx context.Context, tx *sql.Tx, record taskStepRecord, parameters issueParameters, inputJSON, conditionJSON []byte) error {
+	started := time.Now()
 	lockKey := taskIssueKey(record.ProjectID, record.TaskVersionID, parameters.ConditionScopeKey, parameters.BusinessObjectKey)
 	if _, err := tx.ExecContext(ctx, "select pg_advisory_xact_lock(hashtextextended($1,0))", lockKey); err != nil {
 		return err
@@ -251,6 +253,11 @@ func (processor *TaskStepProcessor) createOrUpdate(ctx context.Context, tx *sql.
 		record.ProjectID, record.TeamID, projectEventID, projectEventType, issueID, record.TaskRunID); err != nil {
 		return err
 	}
+	outcome := "updated"
+	if created {
+		outcome = "created"
+	}
+	_ = observability.DefaultMetrics.Record("aerosight_issue_creation_latency_seconds", time.Since(started).Seconds(), map[string]string{"source": "task", "outcome": outcome})
 	return enqueueContinuation(ctx, tx, record, "succeeded")
 }
 

@@ -26,6 +26,8 @@ import (
 	"aerosight/worker/internal/observability"
 	"aerosight/worker/internal/outbox"
 	"aerosight/worker/internal/perception"
+	reportworker "aerosight/worker/internal/report"
+	"aerosight/worker/internal/tasktrigger"
 	"aerosight/worker/internal/wakeup"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -181,7 +183,14 @@ func main() {
 		}
 	}
 	missionProcessor := mission.NewProcessor(nil)
-	consumer.Register("task_run.transitioned", missionProcessor.Handler)
+	taskTriggerScheduler := tasktrigger.NewScheduler(database, nil, 30*time.Second, logger)
+	consumer.Register("task_run.triggered", missionProcessor.Handler)
+	consumer.Register("task_run.transitioned", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+		if err := missionProcessor.Handler(ctx, tx, event); err != nil {
+			return err
+		}
+		return taskTriggerScheduler.UpstreamHandler(ctx, tx, event)
+	})
 	consumer.Register("mission.control", missionProcessor.Handler)
 	consumer.Register("command.ack", missionProcessor.Handler)
 	var rawStore algorithm.RawResultStore
@@ -212,9 +221,10 @@ func main() {
 		return mission.CompleteCollectionStep(ctx, tx, event)
 	})
 	algorithmTrigger := algorithm.NewTrigger(assetSigner)
-	consumer.Register("task.step.algorithm.requested", algorithmTrigger.TaskStepHandler)
-	consumer.Register("task.step.issue.requested", issueworker.NewTaskStepProcessor(nil).Handler)
-	consumer.Register("task.step.copilot.requested", agent.TaskStepHandler)
+	consumer.Register("task.step.algorithm.requested", mission.WithTaskStepFailurePolicy(algorithmTrigger.TaskStepHandler))
+	consumer.Register("task.step.issue.requested", mission.WithTaskStepFailurePolicy(issueworker.NewTaskStepProcessor(nil).Handler))
+	consumer.Register("task.step.copilot.requested", mission.WithTaskStepFailurePolicy(agent.TaskStepHandler))
+	consumer.Register("task.step.report.requested", mission.WithTaskStepFailurePolicy(reportworker.NewProcessor(nil).Handler))
 	algorithmProcessor := algorithm.NewProcessor(
 		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
@@ -245,6 +255,7 @@ func main() {
 	}
 	runErrors := make(chan error, 12)
 	go func() { runErrors <- consumer.RunWithWake(runContext, wake) }()
+	go func() { runErrors <- taskTriggerScheduler.Run(runContext) }()
 	if flightHubScheduler != nil {
 		go func() { runErrors <- flightHubScheduler.Run(runContext) }()
 	}

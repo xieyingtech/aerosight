@@ -13,6 +13,7 @@ type StepStatus string
 type CommandStatus string
 
 const (
+	RunQueued      RunStatus = "queued"
 	RunDispatching RunStatus = "dispatching"
 	RunRunning     RunStatus = "running"
 	RunPaused      RunStatus = "paused"
@@ -26,6 +27,7 @@ const (
 	StepSucceeded StepStatus = "succeeded"
 	StepFailed    StepStatus = "failed"
 	StepSkipped   StepStatus = "skipped"
+	StepPaused    StepStatus = "paused"
 
 	CommandSent         CommandStatus = "sent"
 	CommandAcknowledged CommandStatus = "acknowledged"
@@ -121,7 +123,7 @@ func nextStep(snapshot Snapshot) *Step {
 }
 
 func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error) {
-	if snapshot.Status != RunDispatching && snapshot.Status != RunRunning {
+	if snapshot.Status != RunQueued && snapshot.Status != RunDispatching && snapshot.Status != RunRunning {
 		return Decision{}, fmt.Errorf("run status %q cannot be scheduled", snapshot.Status)
 	}
 	step := nextStep(snapshot)
@@ -133,7 +135,7 @@ func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error)
 		uses = "device.command"
 	}
 	if uses != "device.command" && uses != "device.collect" {
-		if step.Status == StepPending {
+		if step.Status == StepPending || step.Status == StepPaused {
 			return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning,
 				InvokeStep: &StepInvocation{StepID: step.ID, Key: step.Key, Uses: uses}, Reason: "task_step_dispatched"}, nil
 		}
@@ -227,10 +229,16 @@ func Control(snapshot Snapshot, action ControlAction, now time.Time) (Decision, 
 		}
 		return Decision{RunStatus: RunPaused, Reason: "operator_paused"}, nil
 	case ControlResume:
-		if snapshot.Status != RunPaused || !snapshot.DeviceConnected {
+		step := nextStep(snapshot)
+		needsDevice := step != nil && (step.Uses == "" || step.Uses == "device.command" || step.Uses == "device.collect")
+		if snapshot.Status != RunPaused || (needsDevice && !snapshot.DeviceConnected) {
 			return Decision{}, errors.New("run cannot be resumed")
 		}
-		return Decision{RunStatus: RunRunning, Reason: "operator_resumed"}, nil
+		decision := Decision{RunStatus: RunRunning, Reason: "operator_resumed"}
+		if step != nil && step.Status == StepPaused {
+			decision.StepPosition, decision.StepStatus = step.Position, StepPending
+		}
+		return decision, nil
 	case ControlCancel, ControlEmergency:
 		priority := 90
 		actionName := "device.stop"
