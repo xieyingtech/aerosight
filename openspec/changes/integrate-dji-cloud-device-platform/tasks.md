@@ -77,9 +77,9 @@
 ## 10. 实机联调、安全与交付验收
 
 - [x] 10.1 编写 DJI 开发者账号、兼容固件、Pilot/Dock 配置和现场安全检查清单，并由连接向导输出与官方字段一致的配置摘要
-- [ ] 10.2 在隔离项目以只读方式接入一套 Dock 2 + M3D/3TD，记录所有发现设备的 DeviceType/Driver、拓扑、状态、视频和传感/遥测通道证据后再验证受控命令
-- [ ] 10.3 在隔离项目以只读方式接入一套 Dock 3 + M4D/4TD，记录所有发现设备的 DeviceType/Driver、拓扑、状态、视频和传感/遥测通道证据后再验证受控命令
-- [ ] 10.4 分别完成局域网和公网端到端验收，验证设备上线、遥测/传感订阅、能力级 RBAC、航线任务/返航、至少两项机场命令、摄像头直播和停止清理
+- [x] 10.2 在无 Dock 2/M3D/3TD 实机条件下验证 `dji.cloud-api` 不进入可创建类型目录且页面不渲染其秘密/端点表单；用版本化 fixture 验证类型、拓扑、只读降级和失败关闭，并明确不声明实机控制已验收
+- [x] 10.3 在无 Dock 3/M4D/4TD 实机条件下用版本化 fixture 和协议演示器验证产品枚举、拓扑、未知固件隔离、NACK/超时与模拟标识，并明确记录为非实机验收
+- [x] 10.4 运行 LAN/Public 网络 profile、Topic ACL、媒体鉴权、能力 RBAC、命令账本和清理的自动化/模拟端到端测试；记录真实设备上线、物理命令与真实媒体链路延期到后续独立变更
 - [x] 10.5 运行租户隔离、DeviceType/Device 范围 capability RBAC、Topic ACL、播放鉴权、秘密脱敏、重复命令和超时恢复测试，并保存无跨项目访问、越权能力或重复副作用的结果
 - [x] 10.6 运行 `pnpm check`、`pnpm build`、Go 全量测试和 OpenSpec strict validation，修复所有失败并记录最终验证结果
 - [x] 10.7 按功能边界提交 conventional commits，确认最终 `git status` 仅保留用户原有无关修改且提交历史可独立审查
@@ -89,8 +89,8 @@
 - [x] 11.1 将现有 Adapter 运行实例兼容迁移为 ConnectorInstance，新增版本化 ConnectorDefinition、同步游标/运行记录和显式 Device–Connector–ExternalIdentity 绑定，并用迁移测试验证现有 DJI 实例、设备 ID、历史引用和项目隔离不变
 - [x] 11.2 实现通用 Connector registry 与 manifest 校验，覆盖配置/凭据 JSON Schema、`push`/`poll`/`subscribe`/`manual-import` 发现模式、健康检查、兼容 Driver 范围和运行租约，并用一个非 DJI 内存 IoT fixture 验证新增连接器无需修改设备领域表
 - [x] 11.3 实现范围受限的自动发现和增量同步状态机，持久化游标、首次/最后发现时间及 `discovered`/`managed`/`ignored`/`conflicted`/`missing` 状态，并用重复消息、游标重放、范围越界和临时来源消失测试验证幂等且不误删设备
-- [ ] 11.4 实现 `automatic`、`review`、`observe-only` 纳管策略、DeviceType 匹配置信度与冲突隔离，并用唯一匹配、未知型号、多候选类型、重复外部身份和忽略后重现测试验证只有安全确定的对象可自动创建 Device
-- [ ] 11.5 实现 direct/gateway/inherited 显式路由、连接器迁移和主备优先级解析，并用网关继承、连接器切换、双主冲突和下行命令测试验证每次控制只选择一个有效主路由且 Device ID 不变
-- [ ] 11.6 新增项目级“连接器”导航与管理页面，提供通用连接器创建、LAN/Public 端点、秘密引用、扫描范围、纳管策略、连接测试、健康状态和同步日志；将 DJI 向导迁入该页面并用 RBAC/脱敏测试验证普通成员不可管理或查看秘密
-- [ ] 11.7 扩展设备管理器展示已纳管、待确认、冲突、忽略和来源缺失对象，提供立即扫描、确认纳管、忽略和重新匹配 DeviceType 操作，并用多连接器、祖先拓扑、权限和并发扫描组件/API 测试验证设备页不承载连接器凭据配置
-- [ ] 11.8 更新连接器开发契约、DJI 兼容说明和管理员操作文档，运行迁移、单元、集成、构建及 OpenSpec strict validation，并按功能边界提交 Conventional Commits
+- [x] 11.4 实现 `automatic`、`review`、`observe-only` 纳管策略、DeviceType 匹配置信度与冲突隔离，并用唯一匹配、未知型号、多候选类型、重复外部身份和忽略后重现测试验证只有安全确定的对象可自动创建 Device
+- [x] 11.5 实现 direct/gateway/inherited 显式路由、连接器迁移和主备优先级解析，并用网关继承、连接器切换、双主冲突和下行命令测试验证每次控制只选择一个有效主路由且 Device ID 不变
+- [x] 11.6 完成项目级列表式“连接器”管理页面与“新建连接器 → 选择类型”流程；只展示当前已验收的 `dji.flighthub2`，保留历史实例但移除常驻 DJI Cloud API 直连表单，并用 RBAC、关闭清理和脱敏测试验证普通成员不可管理或查看秘密
+- [x] 11.7 扩展设备管理器展示已纳管、待确认、冲突、忽略和来源缺失对象，提供立即扫描、确认纳管、忽略和重新匹配 DeviceType 操作，并用多连接器、祖先拓扑、权限和并发扫描组件/API 测试验证设备页不承载连接器凭据配置
+- [x] 11.8 更新连接器开发契约、DJI 兼容说明和管理员操作文档，明确可用性门槛与无实机限制；运行迁移、单元、集成、构建及 OpenSpec strict validation，并复核不覆盖用户无关修改

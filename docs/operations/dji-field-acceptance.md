@@ -1,55 +1,63 @@
-# DJI Dock 2/3 实机接入与现场验收清单
+# DJI Cloud API 兼容验证与实机验收边界
 
-本清单用于 AeroSight 接入 DJI Dock 2 + Matrice 3D/3TD 与 DJI Dock 3 + Matrice 4D/4TD。它不替代 DJI 产品手册、当地空域规则、现场风险评估或持证操作要求。任何控制测试必须由现场负责人授权并具备立即人工接管条件。
+本文记录 `dji.cloud-api` 的当前交付证据和未来实机验收清单。当前团队没有 Dock 2/3、Matrice 3D/3TD/4D/4TD 实机，因此 AeroSight **不开放 DJI Cloud API 直连接器的新建入口，也不声明物理控制或真实媒体链路已验收**。连接器页面目前只开放已验证的只读 `dji.flighthub2` 类型；历史直连实例和审计记录继续保留。
 
-## 1. 账号、应用与版本基线
+## 当前已完成的非实机验证
 
-- [ ] 注册 DJI 开发者账号，在开发者中心创建类型为 **Cloud API** 的应用，取得 `app_id`、`app_key`、`app_license`。官方说明要求先完成 License 校验，之后才能使用 Cloud API/JSBridge：[DJI Cloud API 部署步骤](https://developer.dji.com/doc/cloud-api-tutorial/en/quick-start/source-code-deployment-steps.html)。
-- [ ] 在连接器向导填写上述三项、MQTT 账号和媒体推流账号。AeroSight 使用 `AUTH_SECRET` 派生的 AES key 加密存库；读取 API、浏览器回显、审计和日志都不得包含原文。
-- [ ] 在当天重新核对 [DJI Cloud API release notes](https://developer.dji.com/doc/cloud-api-tutorial/en/) 与 [产品支持矩阵](https://developer.dji.com/doc/cloud-api-tutorial/en/overview/product-support.html)，记录实际固件版本与 Cloud API 版本。
-- [ ] 当前功能基线参考 Cloud API v1.16.1（2025-12-17）：Dock 2 与 Matrice 3D/3TD 为 `14.03.07.01`，Dock 3 与 Matrice 4D/4TD 为 `14.03.00.03`。这只是该版本新增功能的最低版本，不应当作永久固定值。
-- [ ] 确认机场与配套飞行器型号匹配，飞机已与机场对频，序列号与拟认领的 `gateway_sn`/子设备 SN 完全一致。
+以下结论来自版本化 fixture、协议模拟器、数据库约束和自动化测试，可以用于回归兼容性，但不能代替现场签字：
 
-## 2. AeroSight 网络与 Adapter 配置
+- Dock 2 + Matrice 3D/3TD、Dock 3 + Matrice 4D/4TD 的产品枚举、父子拓扑、DeviceType、能力与实时通道投影。
+- 未知产品或未知固件只读降级，不获得控制能力；跨连接器外部身份冲突进入 `conflicted`，不自动改写下行路由。
+- `automatic` 只接受唯一、精确、无冲突的 DeviceType 匹配；`review`、`observe-only`、未知、多候选和已忽略对象不会自动创建 Device。
+- direct/gateway/inherited 显式绑定、主备优先级、连接器切换和双主失败关闭；下行控制发布前必须解析出唯一活动主路由。
+- ACK、NACK、超时、断连和迟到回复写入同一命令账本；模拟结果带 fixture/simulator 边界，不转换为物理成功。
+- LAN/Public profile 策略、Topic ACL 模板、短期媒体权限、能力 RBAC、直播租约清理和历史证据保留由自动化检查覆盖。
 
-- [ ] 先在“项目设置 → DJI Cloud API 接入”创建 LAN 或 Public profile；公网必须使用 `mqtts`、`https`、`wss`、`rtmps`，关闭匿名 MQTT，并使用受信任证书。
-- [ ] 为每个项目/Adapter 签发独立 MQTT 身份和最小 Topic ACL；设备端只允许自己的 `sys/product/{gateway_sn}/#` 与 `thing/product/{gateway_sn}/#` 范围。
-- [ ] 确认机场网络可以访问 MQTT、AeroSight API、WebSocket、RTMP/RTMPS、播放网关和 NTP；不要把 `localhost` 或回环地址提供给机场。
-- [ ] 运行“连接自检”，保存每个端点的 `server_verified`/失败诊断；`deviceVerification=pending` 必须在机场侧实际联网后再关闭。
-- [ ] 导出并双人复核向导生成的脱敏摘要。字段必须与 DJI 协议一致：
+回归入口：
 
-  - `gateway_sn`
-  - `mqtt_broker.address`
-  - `mqtt_broker.client_id`
-  - `mqtt_broker.username` / `mqtt_broker.password`（摘要中只能显示 `[ENCRYPTED]`）
-  - `mqtt_broker.enable_tls`
-  - `config.app_id` / `config.app_key` / `config.app_license`（只能显示 `[ENCRYPTED]`）
-  - `config.ntp_server_host` / `config.ntp_server_port`
+```sh
+pnpm check
+pnpm test:migrations
+pnpm test:security
+pnpm build
+pnpm exec openspec validate integrate-dji-cloud-device-platform --strict
+```
 
-  DJI Dock 2 的 config 回复字段见 [Dock configuration update](https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dock-to-cloud/mqtt/dock/config.html)，Dock 3 还显式支持 `ntp_server_port`，见 [Dock 3 configuration update](https://developer.dji.com/doc/cloud-api-tutorial/en/api-reference/dock-to-cloud/mqtt/dock/dock3/config.html)。
+## 可用性门槛
 
-## 3. DJI Pilot 2 / 机场上云
+只有同时满足以下条件，后续独立 OpenSpec 变更才可以重新开放 `dji.cloud-api` 新建类型：
 
-- [ ] 使用与目标机场兼容的遥控器和 DJI Pilot 2；按 Pilot 引导检查急停按钮、网络、飞机在舱状态和对频状态。DJI 官方机场上云流程明确要求这些检查并填写 MQTT 账号密码：[Dock access to cloud](https://developer.dji.com/doc/cloud-api-tutorial/en/feature-set/dock-feature-set/dock-access-to-cloud.html)。
-- [ ] 在 Pilot 2 中完成 Cloud API License 校验；若通过 H5/Open Platforms 接入，配置实际可达的 HTTP/HTTPS 入口并验证 token 生命周期。
-- [ ] 输入或下发 MQTT Broker 地址、账号密码、TLS 设置、组织 ID/设备绑定码；确认机场和飞行器绑定到预期项目，而不是共享测试组织。
-- [ ] 等待 topology、state、osd 与 config 请求进入 AeroSight；未知产品枚举或未知固件必须显示为只读/降级，禁止强行赋予控制能力。
+1. 有明确型号、固件基线和可安全操作的真实 Dock/飞行器。
+2. LAN 或 Public profile 在设备侧完成 MQTT、API、WebSocket、NTP、媒体摄取与播放的真实连通验证。
+3. 每项目、每连接器的独立身份和最小 Topic ACL 已部署；浏览器、日志、审计和普通数据库字段不出现秘密原文。
+4. 现场负责人批准测试空域、地理围栏、天气、应急联系人、物理急停和人工接管方案。
+5. 只读遥测稳定后再逐级开放低风险维护命令、媒体、任务和返航；任一断线、NACK、超时或未知固件立即停止扩大范围。
 
-## 4. 现场安全门禁
+fixture 或模拟器通过只能证明协议处理和失败语义，不能满足上述门槛。
 
-- [ ] 指定现场负责人、远程操作者、观察员和紧急联系人；确认谁有权按下物理急停、谁有权批准返航/机场调试命令。
-- [ ] 核对空域许可、地理围栏、天气、能见度、风速、GNSS/RTK、备用降落点、人员车辆隔离区、障碍物和通信覆盖。
-- [ ] 清空桨叶与舱盖活动范围；首次上电、舱盖、充电、声光和重启测试在不装桨或制造商允许的维护状态完成。
-- [ ] 在 AeroSight RBAC 中先只授予 `project:view` 和 `stream.*`；控制能力按 DeviceType/Device 范围逐项开放，返航和其他高风险动作保留二次确认与独立审批。
-- [ ] 遥测稳定至少 15 分钟且时间同步正确后，才从只读进入受控命令阶段；任何断线、NACK、超时、固件不兼容或媒体未到流都停止升级测试范围。
+## 后续真实设备验收清单
 
-## 5. 分阶段证据与验收顺序
+### 网络与身份
 
-1. 只读发现：记录机场、飞行器、摄像头、传感器的 Device ID、DeviceType 版本、Driver 版本、父子关系、固件、在线/新鲜度与有效能力。
-2. 实时数据：保存遥测/传感 channel ID、schema、单位、样本时间和权限撤销结果。
-3. 视频：分别启动两路相机，确认实际媒体到达后才显示 `live`；验证 WebRTC/HLS 授权、停止命令和摄取会话清理。
-4. 低风险机场命令：在维护状态验证声光或允许的调试项，保存 command ID、`tid`/`bid`、请求人、审批、ACK/NACK 和设备最终状态。
-5. 飞行命令：在批准空域内依次验证任务下发/开始/取消与安全返航；任何结果只以匹配的 DJI reply 和后续遥测为准。
-6. 归档证据：保存脱敏配置摘要、网络自检、Topic ACL、固件矩阵、现场签字、截图/媒体、命令账本、审计事件和异常处置记录。
+- [ ] 为目标项目和连接器签发独立 MQTT/媒体身份，关闭匿名访问，只允许该网关的 Topic 范围。
+- [ ] 从设备网段验证 MQTT、AeroSight API、WebSocket、NTP、RTMP/RTMPS；从用户网段验证 HLS/WebRTC。
+- [ ] 保存服务端自检和设备侧握手证据；只有两侧均成功才关闭 `deviceVerification=pending`。
+- [ ] 核对 TLS 证书、时间同步、DNS、固件、机场与飞行器配对及序列号。
 
-未接入真实硬件时，不得勾选 OpenSpec 10.2–10.4；协议模拟器通过不能替代实机与现场安全验收。
+### 只读与拓扑
+
+- [ ] 验证机场、飞行器、摄像头和传感器的稳定 Device ID、DeviceType、Driver、父子关系、在线状态和数据新鲜度。
+- [ ] 断开并恢复连接器，确认外部身份不重复创建设备，历史记录不丢失。
+- [ ] 切换主备连接器，确认 Device ID 不变且任一时刻只有一个有效主路由。
+
+### 媒体与控制
+
+- [ ] 实际媒体到达后才显示 `live`；错误发布/播放身份、随机路径外推流和停止后的继续读取都必须失败。
+- [ ] 在制造商允许的维护状态验证低风险命令，保存 command ID、请求人、审批、协议关联、ACK/NACK 和最终遥测。
+- [ ] 在批准空域验证任务开始/取消和返航；UI 成功只能来自匹配回复与后续设备事实，不能来自发送成功。
+- [ ] 验证断连、NACK、超时、迟到 ACK、Worker 重启和直播租约过期均失败关闭并可清理。
+
+### 证据归档
+
+- [ ] 归档脱敏配置摘要、网络自检、Topic ACL、固件矩阵、现场签字、截图/媒体、命令账本、审计事件和异常处置。
+- [ ] 在验收记录中区分 `fixture`、`simulator` 与 `physical-device`，不得混用结论。

@@ -7,8 +7,9 @@
 | 领域 | 既有事实来源 | 本次处理 |
 | --- | --- | --- |
 | 设备实例 | `devices` | 保留实例 ID、项目归属、状态和历史引用，新增 `device_type_id` |
-| 项目连接实例 | `device_adapters` | 继续保存项目网络配置、AES 凭据 envelope、健康状态和 Worker 租约所需信息 |
+| 项目连接实例 | `device_adapters` / `connector_definitions` | 保存版本化类型、项目配置、AES 凭据 envelope、健康状态、纳管策略和 Worker 租约；可创建目录受验收门槛控制 |
 | 外部身份 | `device_external_identities` | 继续作为 Adapter 外部 ID 到 Device 的唯一绑定，不新增身份表 |
+| 设备路由 | `device_connector_bindings` | direct/gateway/inherited 显式绑定和主备优先级；下行必须解析唯一活动主路由 |
 | 连接与遥测 | `device_connections`、`device_telemetry`、`device_latest_telemetry` | 继续作为连接历史、高频事实和最新投影，不建立 DJI 遥测专表 |
 | 有效能力 | `device_capabilities` | 扩展为 Driver、DeviceType 和运行状态计算后的有效能力投影，不新增平行能力表 |
 | 下行控制 | `device_commands`、`command_attempts` | 继续作为唯一命令账本和投递尝试账本，DJI 服务回复必须关联到这里 |
@@ -38,3 +39,5 @@
 ## 基线验证
 
 在新增迁移前执行 `pnpm test:migrations`，验证结果覆盖 PostGIS、空库迁移、既有库升级和重复执行，全部通过。后续迁移测试将在相同入口增加 Driver/DeviceType 回填、项目隔离和跨项目关系拒绝断言。
+
+当前连接器扩展边界见 [连接器开发契约](./connector-development-contract.md)。由于没有 DJI Dock 实机，`dji.cloud-api` 只保留协议实现、fixture 和历史兼容，不进入新建类型目录；当前可创建类型只有只读 `dji.flighthub2`。

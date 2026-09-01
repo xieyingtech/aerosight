@@ -14,8 +14,10 @@ DJI 当前公开的司空 2 OpenAPI 组织令牌模式不是 OAuth 授权码流�
 - 创建连接后通过 outbox 请求首次同步；Go Worker 注册司空 `poll` runtime，单次获取所选司空项目最多 1000 条设备拓扑，完整校验后写入现有 `device_external_identities` 和 `connector_sync_runs`。
 - 已确认的 Dock 2/3 与配套飞行器继续使用现有 DJI DeviceType/Driver 产品矩阵；未知型号保持待确认或只读，不因来自司空而自动获得控制能力。
 - 提供连接状态、最近验证、最近同步、同步数量、脱敏错误、立即同步、更新 Token 和断开操作；所有管理操作仅允许项目 owner/admin。
+- 将项目“连接器”页改为列表优先的管理页面：默认展示已有连接器实例，owner/admin 点击“新建连接器”后先选择类型，再进入该类型的配置流程。
+- 当前发布只开放已完成无设备依赖验收的 `dji.flighthub2` 创建入口；DJI Cloud API 直连和其他依赖现场设备的接入方式暂不作为可选类型，也不再以内联表单常驻页面。
 - 司空连接器首版为只读目录同步。远程任务、设备控制、直播、遥测订阅和 EventAPI 只有在对应官方接口、权限与契约另行确认后才能扩展，不复用直连 MQTT 能力做虚假承诺。
-- 非目标：不实现 DJI OAuth、账号密码托管、浏览器直连司空、任意 OpenAPI URL、司空项目自动跨 AeroSight 项目共享、司空与直连 Cloud API 的自动合并，也不在本变更中新增物理设备控制。
+- 非目标：不实现 DJI OAuth、账号密码托管、浏览器直连司空、任意 OpenAPI URL、司空项目自动跨 AeroSight 项目共享、司空与直连 Cloud API 的自动合并，也不在本变更中新增或开放依赖物理设备验收的接入与控制入口。
 
 ## Capabilities
 
@@ -29,10 +31,10 @@ DJI 当前公开的司空 2 OpenAPI 组织令牌模式不是 OAuth 授权码流�
 
 ## Impact
 
-- Web/API：扩展 `apps/web` 的连接器页面、Adapter policy、项目级 Route Handler、审计和凭据 envelope 使用方式；项目发现是唯一允许同步调用司空 OpenAPI 的临时握手路径。
+- Web/API：扩展 `apps/web` 的连接器列表、类型选择流程、Adapter policy、项目级 Route Handler、审计和凭据 envelope 使用方式；项目发现是唯一允许同步调用司空 OpenAPI 的临时握手路径。
 - Worker：在 `apps/worker` 注册司空 HTTP 客户端和 Connector runtime，接入现有 outbox、租约、同步游标、完整快照和退避机制。
 - 数据库：为 Connector Definition 增加司空种子记录，并为通用 Connector Instance 增加可约束的外部作用域键或等效唯一性约束；不新建 Token 表、设备表或事件表。
 - 设备模型：复用 `device_external_identities`、`device_connector_bindings`、DeviceType、Driver 和能力求交集；同一序列号不会因重复同步重复创建设备。
 - 安全：复用现有 AES-GCM credential envelope 和 AAD；新增 Token 泄漏、SSRF、跨项目、重放和错误脱敏测试。
-- 运维：部署方必须配置目标区域的官方司空 OpenAPI 基地址、请求超时、同步周期和出口 HTTPS；真实验收需要具备 OpenAPI 权限的司空 2 测试组织。
+- 运维：部署方必须配置目标区域的官方司空 OpenAPI 基地址、请求超时、同步周期和出口 HTTPS；当前交付以真实司空目录和版本化 fixture 完成验收，不要求补齐仓库团队并不具备的 Dock 3 等现场硬件。
 - 兼容性：现有 `dji` 直连 Cloud API Adapter 不迁移、不改变；同一物理设备同时来自两种连接器时进入身份冲突/人工认领流程，不自动合并或切换下行主路由。

@@ -4,6 +4,26 @@
 
 ## ADDED Requirements
 
+### Requirement: 生产直连接入必须通过实机可用性门槛
+系统 SHALL 将协议/fixture 验证与真实设备可用性分开记录。没有完成对应产品、网络和安全检查的实机验收时，DJI Cloud API 直连类型 MUST NOT 出现在可创建连接器目录中，系统 MUST NOT 声称任务、返航、机场调试或直播已经可用于现场设备；既有后端实现和历史记录可以保留。
+
+#### Scenario: 当前部署没有现场设备
+- **GIVEN** 团队当前没有可用于验收的 Dock 2/3 与配套飞行器
+- **WHEN** 管理员打开新建连接器类型目录
+- **THEN** 系统不提供 DJI Cloud API 直连创建选项
+- **AND** 页面不渲染其端点、凭据或设备序列号配置表单
+
+#### Scenario: fixture 验证产品矩阵
+- **GIVEN** Dock 2/3 协议 fixture 和演示器测试通过
+- **WHEN** 系统记录交付能力
+- **THEN** 仅可声明协议映射、失败关闭和模拟流程已验证
+- **AND** 不得把结果标记为实机上线、真实媒体或物理命令成功
+
+#### Scenario: 未来具备实机条件
+- **GIVEN** 后续获得兼容硬件、账号权限和可达网络
+- **WHEN** 团队准备开放 DJI Cloud API 直连
+- **THEN** 系统 SHALL 通过独立变更完成只读接入、LAN/Public、安全控制和媒体验收后再注册为可创建类型
+
 ### Requirement: 支持两代机场产品族
 DJI Driver SHALL 支持 Dock 2 + Matrice 3D/3TD 与 Dock 3 + Matrice 4D/4TD，并为机场、飞行器、可独立识别相机和传感器映射对应 DeviceType、设备拓扑、能力与状态；未知型号 MUST 以受限能力接入而非套用错误型号配置。
 

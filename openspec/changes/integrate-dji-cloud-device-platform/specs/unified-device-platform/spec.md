@@ -84,6 +84,12 @@
 - **WHEN** 系统归一化发现结果和消息
 - **THEN** 系统 SHALL 隔离该扩展且不得将其直接开放为设备 capability、命令或权限 action
 
+#### Scenario: 类型目录只开放已验收连接器
+- **GIVEN** ConnectorDefinition 已注册但其生产接入依赖当前不具备的现场设备验收
+- **WHEN** 管理员打开新建连接器类型目录
+- **THEN** 系统 SHALL 不把该定义展示为可创建类型
+- **AND** 既有实例、历史数据和后端兼容代码保持可读取
+
 ### Requirement: Connector 自动发现与增量同步
 每个启用的 ConnectorInstance SHALL 根据 ConnectorDefinition 支持的 `push`、`poll`、`subscribe` 或 `manual-import` 模式，在配置的租户、workspace、Topic 或资源范围内自动发现设备和拓扑，并以持久同步游标或等效幂等边界更新 ExternalDeviceIdentity。重复扫描 MUST 不重复创建 Device，且不得扫描 ConnectorInstance 配置范围之外的资源。
 

@@ -1,6 +1,6 @@
 # 设备网络 Profile 部署指南
 
-实机接入前还必须完成 [DJI Dock 2/3 实机接入与现场验收清单](./dji-field-acceptance.md)。
+实机接入前还必须完成 [DJI Cloud API 兼容验证与实机验收边界](./dji-field-acceptance.md)。当前无真实 Dock，网络 Profile 仅由策略、模拟器和自动化测试覆盖；这不授权开放 `dji.cloud-api` 新建入口。
 
 设备网络 Profile 是项目 Adapter 引用的显式连接配置。它分别描述机场或协议模拟器可达的 MQTT、API、WebSocket、媒体摄取地址，以及用户浏览器可达的媒体播放地址。不得从浏览器当前 Host 自动推导这些地址。
 
