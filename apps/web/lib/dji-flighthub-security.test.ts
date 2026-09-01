@@ -70,6 +70,11 @@ test("connection mutations serialize connector rows and never expose credential 
 
   assert.match(lifecycleSource, /for update of adapter/i);
   assert.match(lifecycleSource, /pg_advisory_xact_lock/);
+  assert.match(
+    lifecycleSource,
+    /projectRevalidated:\s*false[\s\S]*errorCode:\s*safeError\.safeCode[\s\S]*tokenUpdated:\s*false/,
+    "failed token validation must create a credential-free audit result before rethrowing"
+  );
   assert.match(connectionSource, /withAuditedProjectWrite/);
   assert.match(connectionSource, /credential_envelope_json/);
   assert(!routeSource.includes("credential_envelope_json"));

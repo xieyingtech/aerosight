@@ -1,5 +1,5 @@
-import { DjiAdapterWizard } from "@/components/dji-adapter-wizard";
-import { DjiFlightHubWizard } from "@/components/dji-flighthub-wizard";
+import { ConnectorCreateDialog } from "@/components/connector-create-dialog";
+import { DjiFlightHubConnections, type OtherConnectorSummary } from "@/components/dji-flighthub-wizard";
 import { Page } from "@/components/page";
 import { getProject } from "@/lib/data";
 import { listDeviceAdapters } from "@/lib/device-adapters";
@@ -17,22 +17,31 @@ export default async function ConnectorsPage({ params }: { params: Promise<{ id:
     listFlightHubDiscoveryActivity(projectId),
   ]);
   const flightHubEnabled = parseFlightHubWebConfig(process.env).enabled;
+  const flightHubIds = new Set(flightHubConnections.map((connector) => connector.id));
+  const otherConnectors: OtherConnectorSummary[] = connectors
+    .filter((connector) => !flightHubIds.has(connector.id))
+    .map((connector) => ({
+      id: connector.id,
+      name: connector.name,
+      status: connector.status,
+      typeLabel: connector.adapterType === "dji" ? "DJI Cloud API" : "模拟器",
+      version: connector.protocolVersion,
+      lastCheckedAt: connector.lastCheckedAt,
+    }));
 
   return (
     <Page
-      description="管理外部 IoT 平台连接、网络端点、加密凭据和设备发现范围"
+      actions={<ConnectorCreateDialog flightHubEnabled={flightHubEnabled} projectId={projectId} />}
+      description="查看和管理项目已接入的平台连接"
       title="连接器"
     >
-      <div className="space-y-5">
-        <DjiFlightHubWizard
-          enabled={flightHubEnabled}
-          initialConnectors={flightHubConnections}
-          initialIdentities={flightHubActivity.identities}
-          initialSyncRuns={flightHubActivity.syncRuns}
-          projectId={projectId}
-        />
-        <DjiAdapterWizard initialAdapters={connectors} projectId={projectId} />
-      </div>
+      <DjiFlightHubConnections
+        initialConnectors={flightHubConnections}
+        initialIdentities={flightHubActivity.identities}
+        initialSyncRuns={flightHubActivity.syncRuns}
+        otherConnectors={otherConnectors}
+        projectId={projectId}
+      />
     </Page>
   );
 }

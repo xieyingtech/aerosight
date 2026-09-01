@@ -217,11 +217,38 @@ export async function updateFlightHubToken(
     [connectorId, projectId]
   );
   if (current.rowCount !== 1) throw new FlightHubConnectionError("connector_not_found");
-  const selected = await revalidateSelectedFlightHubProject(
-    createFlightHubProjectClient(),
-    input.token,
-    current.rows[0].projectUuid
-  );
+  let selected;
+  try {
+    selected = await revalidateSelectedFlightHubProject(
+      createFlightHubProjectClient(),
+      input.token,
+      current.rows[0].projectUuid
+    );
+  } catch (error) {
+    const safeError = error instanceof FlightHubConnectionError
+      ? error
+      : new FlightHubConnectionError("upstream_error");
+    await withAuditedProjectWrite(
+      {
+        projectId,
+        teamId: access.teamId,
+        requestId: correlationId(requestId),
+        actorUserId: user.id,
+        action: "connector.flighthub.credential.update",
+        resourceType: "connector",
+        resourceId: connectorId,
+        input: { externalScopeFingerprint: flightHubScopeFingerprint(current.rows[0].projectUuid) },
+        policyResult: {
+          permission: "device:configure",
+          role: access.role,
+          projectRevalidated: false,
+          errorCode: safeError.safeCode,
+        },
+      },
+      async () => ({ tokenUpdated: false, errorCode: safeError.safeCode })
+    );
+    throw safeError;
+  }
 
   return withAuditedProjectWrite(
     {
