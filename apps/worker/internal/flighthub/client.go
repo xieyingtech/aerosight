@@ -170,6 +170,7 @@ type requestSpec struct {
 	Body         any
 	Profile      string
 	DataOptional bool
+	DisableRetry bool
 }
 
 var endpointBusinessProfiles = map[string]map[int]struct{}{
@@ -428,7 +429,11 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 	target := *client.baseURL
 	target.Path = spec.Path
 	target.RawQuery = spec.Query.Encode()
-	for attempt := 0; attempt <= client.maxRetries; attempt++ {
+	maxRetries := client.maxRetries
+	if spec.DisableRetry {
+		maxRetries = 0
+	}
+	for attempt := 0; attempt <= maxRetries; attempt++ {
 		release, gateErr := client.gate.enter(ctx)
 		if gateErr != nil {
 			return envelope{}, gateErr
@@ -463,7 +468,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 			if errors.Is(attemptContext.Err(), context.DeadlineExceeded) {
 				safeErr.SafeCode = "request_timeout"
 			}
-			if attempt == client.maxRetries {
+			if attempt == maxRetries {
 				return envelope{}, safeErr
 			}
 			if err := client.sleep(ctx, client.retryDelay(attempt)); err != nil {
@@ -476,7 +481,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 		cancel()
 		release()
 		if readErr != nil {
-			if attempt == client.maxRetries {
+			if attempt == maxRetries {
 				return envelope{}, &APIError{SafeCode: "upstream_unavailable", Retryable: true, HTTPStatus: response.StatusCode}
 			}
 			continue
@@ -492,7 +497,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 					statusErr = businessErr
 				}
 			}
-			if !statusErr.Retryable || attempt == client.maxRetries {
+			if !statusErr.Retryable || attempt == maxRetries {
 				return envelope{}, statusErr
 			}
 			delay := statusErr.RetryAfter
@@ -509,7 +514,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 		}
 		businessErr, empty := classifyBusinessCode(decoded.Code, response.StatusCode, emptyCodes)
 		if businessErr != nil {
-			if !businessErr.Retryable || attempt == client.maxRetries {
+			if !businessErr.Retryable || attempt == maxRetries {
 				return envelope{}, businessErr
 			}
 			if err := client.sleep(ctx, client.retryDelay(attempt)); err != nil {

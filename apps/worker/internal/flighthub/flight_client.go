@@ -607,7 +607,9 @@ func (client *Client) NotifyWaylineUploadComplete(ctx context.Context, token, pr
 	if input.ObjectKey == "" || len(input.ObjectKey) > 1024 || strings.HasPrefix(input.ObjectKey, "/") || strings.Contains(input.ObjectKey, "..") || strings.ContainsAny(input.ObjectKey, "\x00\r\n\\") {
 		return WaylineUploadResult{}, &APIError{SafeCode: "request_invalid"}
 	}
-	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPost, Path: "/openapi/v2.0/wayline/finish-upload", Body: input})
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodPost, Path: "/openapi/v2.0/wayline/finish-upload", Body: input, DisableRetry: true,
+	})
 	if err != nil {
 		return WaylineUploadResult{}, err
 	}

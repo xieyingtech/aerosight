@@ -55,6 +55,14 @@ func (store algorithmRawStore) ReadAlgorithmAsset(ctx context.Context, key strin
 	return algorithm.AlgorithmAsset{Body: object.Body, ContentType: object.ContentType}, nil
 }
 
+func (store algorithmRawStore) ReadWaylineSource(ctx context.Context, key string) (flighthub.WaylineSourceObject, error) {
+	object, err := store.storage.GetObject(ctx, key)
+	if err != nil {
+		return flighthub.WaylineSourceObject{}, err
+	}
+	return flighthub.WaylineSourceObject{Body: object.Body, ContentType: object.ContentType}, nil
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -85,8 +93,10 @@ func main() {
 
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
 	var flightHubScheduler *connector.Scheduler
+	var flightHubClient *flighthub.Client
+	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
 	if workerConfig.FlightHubEnabled {
-		flightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
+		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
 			Timeout: workerConfig.FlightHubHTTPTimeout, MaxRetries: workerConfig.FlightHubMaxRetries,
 			MaxProjectPages: 50, MaxResponseBytes: workerConfig.FlightHubMaxResponseBytes,
 			RequestID:        func() string { return observability.CorrelationID("") },
@@ -96,9 +106,10 @@ func main() {
 			logger.Error("FlightHub client initialization failed", "error", flightHubErr.Error())
 			os.Exit(1)
 		}
+		flightHubClient = createdFlightHubClient
 		connectorRegistry := connector.NewRegistry()
 		if flightHubErr = flighthub.RegisterRuntime(
-			connectorRegistry, flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret},
+			connectorRegistry, flightHubClient, flightHubTokenResolver,
 		); flightHubErr != nil {
 			logger.Error("FlightHub runtime registration failed", "error", flightHubErr.Error())
 			os.Exit(1)
@@ -119,7 +130,7 @@ func main() {
 			os.Exit(1)
 		}
 		resourceStreams, resourceErr := flighthub.NewResourceStreamCoordinator(
-			flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}, resourceRepository, resourceSink,
+			flightHubClient, flightHubTokenResolver, resourceRepository, resourceSink,
 			flighthub.ResourceStreamConfig{
 				OnlineInterval: 15 * time.Second, OfflineInterval: 60 * time.Second, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
 				MaxBackoff: 5 * time.Minute,
@@ -145,7 +156,7 @@ func main() {
 			os.Exit(1)
 		}
 		capabilityRunner, resourceErr := flighthub.NewCapabilityProbeRunner(
-			resourceRunner, flightHubClient, flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret},
+			resourceRunner, flightHubClient, flightHubTokenResolver,
 			resourceRepository, 15*time.Minute, nil,
 		)
 		if resourceErr != nil {
@@ -242,6 +253,7 @@ func main() {
 	var rawStore algorithm.RawResultStore
 	var assetStore algorithm.AlgorithmAssetStore
 	var assetHandler outbox.Handler
+	var waylineSource flighthub.WaylineSourceReader
 	if workerConfig.ObjectStorageLocalRoot == "" {
 		assetHandler = func(context.Context, *sql.Tx, outbox.Event) error {
 			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")
@@ -257,6 +269,20 @@ func main() {
 		assetHandler = processor.Handler
 		rawStore = algorithmRawStore{storage: storage}
 		assetStore = algorithmRawStore{storage: storage}
+		waylineSource = algorithmRawStore{storage: storage}
+	}
+	if flightHubClient != nil && waylineSource != nil {
+		waylineUploadHandler, uploadErr := flighthub.NewWaylineUploadHandler(
+			flighthub.NewSQLWaylineUploadStore(database), flightHubClient, flightHubTokenResolver,
+			waylineSource, flighthub.NewMinIOWaylineObjectUploader(), workerConfig.AuthSecret,
+		)
+		if uploadErr != nil {
+			logger.Error("FlightHub wayline upload initialization failed", "error", uploadErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.WaylineUploadEventType, waylineUploadHandler.Handler)
+	} else if workerConfig.FlightHubEnabled {
+		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
 	detectionSink := perception.NewSQLDetectionSink()
