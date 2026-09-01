@@ -246,6 +246,30 @@ func TestExpiredLeaseCanBeRecoveredAfterWorkerRestart(t *testing.T) {
 	}
 }
 
+func TestOutboxCredentialFailureIsRecordedWithoutRetryingTheEvent(t *testing.T) {
+	leases := newSchedulerLease()
+	runner := &schedulerRunnerFixture{err: safeConnectorError("credential_invalid")}
+	outcomes := &schedulerOutcomeFixture{leases: leases}
+	scheduler := schedulerFixture(t, "worker-a", leases, runner, outcomes)
+	if err := scheduler.OutboxHandler(context.Background(), nil, syncEvent()); err != nil {
+		t.Fatalf("terminal credential failure should complete the outbox event: %v", err)
+	}
+	if runner.runs != 1 || len(outcomes.failed) != 1 || outcomes.failed[0] != "credential_invalid" {
+		t.Fatalf("credential failure outcome mismatch: runs=%d failures=%v", runner.runs, outcomes.failed)
+	}
+}
+
+func TestOutboxRetryableFailureRemainsRetryable(t *testing.T) {
+	leases := newSchedulerLease()
+	runner := &schedulerRunnerFixture{err: safeConnectorError("rate_limited")}
+	outcomes := &schedulerOutcomeFixture{leases: leases}
+	scheduler := schedulerFixture(t, "worker-a", leases, runner, outcomes)
+	err := scheduler.OutboxHandler(context.Background(), nil, syncEvent())
+	if err == nil || connectorErrorCode(err) != "rate_limited" {
+		t.Fatalf("retryable failure was swallowed: %v", err)
+	}
+}
+
 func TestLeaseRenewalLossCancelsSyncAndRecordsFailure(t *testing.T) {
 	leases := newSchedulerLease()
 	leases.renew = false

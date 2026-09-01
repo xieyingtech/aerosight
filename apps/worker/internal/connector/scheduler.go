@@ -22,6 +22,11 @@ var (
 	safeCodePattern              = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 )
 
+type terminalConnectorSyncError struct{ cause error }
+
+func (err *terminalConnectorSyncError) Error() string { return err.cause.Error() }
+func (err *terminalConnectorSyncError) Unwrap() error { return err.cause }
+
 type SyncRunner interface {
 	Run(context.Context, Instance, DiscoveryMode) (SyncApplyResult, error)
 }
@@ -203,6 +208,15 @@ func connectorMetricOutcome(err error) string {
 	}
 }
 
+func terminalConnectorErrorCode(code string) bool {
+	switch code {
+	case "credential_invalid", "credential_unavailable", "scope_forbidden", "scope_not_found":
+		return true
+	default:
+		return false
+	}
+}
+
 func (scheduler *Scheduler) recordSync(duration time.Duration, err error) {
 	if scheduler.config.Metrics == nil {
 		return
@@ -256,6 +270,9 @@ func (scheduler *Scheduler) executeLease(ctx context.Context, lease InstanceLeas
 		if outcomeErr := scheduler.outcomes.Failed(ctx, lease, scheduler.config.Owner, DiscoveryPoll, code); outcomeErr != nil {
 			return result, errors.Join(syncErr, outcomeErr)
 		}
+		if terminalConnectorErrorCode(code) {
+			return result, &terminalConnectorSyncError{cause: syncErr}
+		}
 		return result, syncErr
 	}
 	if err := scheduler.outcomes.Succeeded(ctx, lease, scheduler.config.Owner, result); err != nil {
@@ -296,6 +313,10 @@ func (scheduler *Scheduler) OutboxHandler(ctx context.Context, _ *sql.Tx, event 
 		return ErrConnectorLeaseUnavailable
 	}
 	_, err = scheduler.executeLease(ctx, lease)
+	var terminalError *terminalConnectorSyncError
+	if errors.As(err, &terminalError) {
+		return nil
+	}
 	return err
 }
 

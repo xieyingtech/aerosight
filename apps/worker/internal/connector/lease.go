@@ -107,7 +107,11 @@ func (repository *SQLLeaseRepository) ClaimInstance(
 		 where adapter.id=$2 and adapter.project_id=$3
 		   and definition.id=adapter.connector_definition_id
 		   and definition.connector_key=$4 and definition.version=$5 and definition.status='active'
-		   and adapter.status in ('connecting','connected','degraded')
+		   -- Explicit outbox work may resume after a terminal failure so a worker crash
+		   -- between recording the failed outcome and completing the event cannot turn
+		   -- into repeated CONNECTOR_LEASE_UNAVAILABLE retries. Periodic ClaimDue still
+		   -- excludes failed connectors.
+		   and adapter.status in ('connecting','connected','degraded','failed')
 		   and (adapter.lease_expires_at is null or adapter.lease_expires_at < now())
 		returning `+leaseProjection,
 		owner, instanceID, projectID, connectorKey, version, duration.Milliseconds())
