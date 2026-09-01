@@ -213,6 +213,38 @@ type FlightTaskDispatchCheck struct {
 	DevicePosition *FlightTaskDispatchPosition `json:"device_position"`
 }
 
+type FlightTaskRepeatOption struct {
+	Interval    int   `json:"interval,omitempty"`
+	DaysOfWeek  []int `json:"days_of_week,omitempty"`
+	DaysOfMonth []int `json:"days_of_month,omitempty"`
+	WeekOfMonth int   `json:"week_of_month,omitempty"`
+}
+
+type FlightTaskCreateRequest struct {
+	Name                       string                  `json:"name"`
+	SN                         string                  `json:"sn"`
+	WaylineUUID                string                  `json:"wayline_uuid"`
+	TimeZone                   string                  `json:"time_zone"`
+	TaskType                   string                  `json:"task_type"`
+	RTHAltitude                int                     `json:"rth_altitude,omitempty"`
+	RTHMode                    string                  `json:"rth_mode,omitempty"`
+	OutOfControlActionInFlight string                  `json:"out_of_control_action_in_flight,omitempty"`
+	WaylinePrecisionType       string                  `json:"wayline_precision_type,omitempty"`
+	ResumableStatus            string                  `json:"resumable_status,omitempty"`
+	RepeatType                 string                  `json:"repeat_type,omitempty"`
+	RepeatOption               *FlightTaskRepeatOption `json:"repeat_option,omitempty"`
+	LandingDockSN              string                  `json:"landing_dock_sn,omitempty"`
+	BeginAt                    int64                   `json:"begin_at,omitempty"`
+	EndAt                      int64                   `json:"end_at,omitempty"`
+	RecurringTaskStartTimes    []int64                 `json:"recurring_task_start_time_list,omitempty"`
+	ContinuousTaskPeriods      [][]int64               `json:"continuous_task_periods,omitempty"`
+	MinimumBatteryCapacity     int                     `json:"min_battery_capacity,omitempty"`
+}
+
+type FlightTaskCreateResult struct {
+	TaskUUID string `json:"task_uuid"`
+}
+
 type FlightTaskStatusUpdate struct {
 	Status string `json:"status"`
 }
@@ -815,6 +847,133 @@ func (client *Client) CheckFlightTaskDispatch(ctx context.Context, token, worksp
 	return result, nil
 }
 
+func validateFlightTaskCreate(input FlightTaskCreateRequest) (FlightTaskCreateRequest, error) {
+	var err error
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" || len(input.Name) > 200 || strings.ContainsAny(input.Name, "\x00\r\n") {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	if input.SN, err = requireScope(input.SN); err != nil {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	if input.WaylineUUID, err = requireScope(input.WaylineUUID); err != nil {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	input.TimeZone = strings.TrimSpace(input.TimeZone)
+	if input.TimeZone == "" || len(input.TimeZone) > 100 {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	if _, err = time.LoadLocation(input.TimeZone); err != nil {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	input.TaskType = strings.TrimSpace(input.TaskType)
+	if !validEnum(input.TaskType, "immediate", "timed", "recurring", "continuous") {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	optionalEnums := []struct {
+		value   string
+		allowed []string
+	}{
+		{input.RTHMode, []string{"optimal", "preset"}},
+		{input.OutOfControlActionInFlight, []string{"return_home", "continue_task"}},
+		{input.WaylinePrecisionType, []string{"gps", "rtk"}},
+		{input.ResumableStatus, []string{"auto", "manual"}},
+		{input.RepeatType, []string{"nonrepeating", "daily", "weekly", "absolute_monthly", "relative_monthly"}},
+	}
+	for _, item := range optionalEnums {
+		if item.value != "" && !validEnum(item.value, item.allowed...) {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	if input.RTHAltitude < 0 || input.RTHAltitude > 1000 || input.BeginAt < 0 || input.EndAt < 0 ||
+		(input.EndAt > 0 && input.EndAt < input.BeginAt) ||
+		(input.MinimumBatteryCapacity != 0 && (input.MinimumBatteryCapacity < 50 || input.MinimumBatteryCapacity > 100)) {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	if input.LandingDockSN != "" {
+		if input.LandingDockSN, err = requireScope(input.LandingDockSN); err != nil {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	if input.RepeatOption != nil {
+		for _, value := range input.RepeatOption.DaysOfWeek {
+			if value < 0 || value > 6 {
+				return input, &APIError{SafeCode: "request_invalid"}
+			}
+		}
+		for _, value := range input.RepeatOption.DaysOfMonth {
+			if value < 1 || value > 31 {
+				return input, &APIError{SafeCode: "request_invalid"}
+			}
+		}
+		if input.RepeatOption.Interval < 0 || input.RepeatOption.WeekOfMonth < 0 || input.RepeatOption.WeekOfMonth > 4 {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	for _, timestamp := range input.RecurringTaskStartTimes {
+		if timestamp <= 0 {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	for _, period := range input.ContinuousTaskPeriods {
+		if len(period) != 2 || period[0] <= 0 || period[1] < period[0] {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	if input.TaskType == "timed" && input.BeginAt <= 0 ||
+		(input.TaskType == "recurring" || input.TaskType == "continuous") && (input.BeginAt <= 0 || input.EndAt <= 0) {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	if input.TaskType == "recurring" {
+		if input.RepeatType == "" || input.RepeatOption == nil || input.RepeatOption.Interval < 1 || len(input.RecurringTaskStartTimes) == 0 {
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+		switch input.RepeatType {
+		case "weekly":
+			if len(input.RepeatOption.DaysOfWeek) == 0 {
+				return input, &APIError{SafeCode: "request_invalid"}
+			}
+		case "absolute_monthly":
+			if len(input.RepeatOption.DaysOfMonth) == 0 {
+				return input, &APIError{SafeCode: "request_invalid"}
+			}
+		case "relative_monthly":
+			if len(input.RepeatOption.DaysOfWeek) == 0 || input.RepeatOption.WeekOfMonth == 0 {
+				return input, &APIError{SafeCode: "request_invalid"}
+			}
+		case "daily":
+		default:
+			return input, &APIError{SafeCode: "request_invalid"}
+		}
+	}
+	if input.TaskType == "continuous" && (len(input.ContinuousTaskPeriods) == 0 || input.MinimumBatteryCapacity == 0) {
+		return input, &APIError{SafeCode: "request_invalid"}
+	}
+	return input, nil
+}
+
+func (client *Client) CreateFlightTask(ctx context.Context, token, projectUUID string, input FlightTaskCreateRequest) (FlightTaskCreateResult, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return FlightTaskCreateResult{}, err
+	}
+	input, err = validateFlightTaskCreate(input)
+	if err != nil {
+		return FlightTaskCreateResult{}, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodPost, Path: "/openapi/v2.0/flight-task", Body: input, DisableRetry: true,
+	})
+	if err != nil {
+		return FlightTaskCreateResult{}, err
+	}
+	var result FlightTaskCreateResult
+	if err := json.Unmarshal(payload.Data, &result); err != nil || strings.TrimSpace(result.TaskUUID) == "" {
+		return FlightTaskCreateResult{}, schemaError()
+	}
+	return result, nil
+}
+
 func (client *Client) UpdateFlightTaskStatus(ctx context.Context, token, projectUUID, taskUUID, status string) error {
 	projectUUID, err := requireScope(projectUUID)
 	if err != nil {
@@ -832,7 +991,7 @@ func (client *Client) UpdateFlightTaskStatus(ctx context.Context, token, project
 	if err != nil {
 		return err
 	}
-	_, err = client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPut, Path: path, Body: FlightTaskStatusUpdate{Status: status}, DataOptional: true})
+	_, err = client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPut, Path: path, Body: FlightTaskStatusUpdate{Status: status}, DataOptional: true, DisableRetry: true})
 	return err
 }
 
@@ -849,7 +1008,7 @@ func (client *Client) CreateFlightTaskResumption(ctx context.Context, token, pro
 	if err != nil {
 		return FlightTaskResumption{}, &APIError{SafeCode: "request_invalid"}
 	}
-	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPost, Path: path, Body: FlightTaskResumptionRequest{TaskUUID: taskUUID}})
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPost, Path: path, Body: FlightTaskResumptionRequest{TaskUUID: taskUUID}, DisableRetry: true})
 	if err != nil {
 		return FlightTaskResumption{}, err
 	}

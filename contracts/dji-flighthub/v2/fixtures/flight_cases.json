@@ -284,6 +284,31 @@
       "responseBody": { "code": 0, "message": "success", "data": null }
     },
     {
+      "name": "flight-task-create",
+      "endpointId": "454273432e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/flight-task",
+      "projectHeader": true,
+      "requestBody": {
+        "name": "inspection-redacted",
+        "sn": "DOCK_REDACTED_01",
+        "wayline_uuid": "WAYLINE_REDACTED_01",
+        "time_zone": "Asia/Shanghai",
+        "task_type": "immediate",
+        "rth_altitude": 120,
+        "rth_mode": "preset",
+        "out_of_control_action_in_flight": "return_home",
+        "wayline_precision_type": "rtk",
+        "resumable_status": "manual",
+        "repeat_type": "nonrepeating"
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": { "task_uuid": "TASK_REDACTED_03" }
+      }
+    },
+    {
       "name": "flight-task-resumption",
       "endpointId": "456425796e0",
       "method": "POST",

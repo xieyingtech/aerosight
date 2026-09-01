@@ -1934,7 +1934,8 @@ try {
                 to_regclass('public.alert_automation_drafts') as alert_automation_drafts,
                 to_regclass('public.generated_reports') as generated_reports,
                 to_regclass('public.generated_report_versions') as generated_report_versions,
-                to_regclass('public.generated_report_evidence') as generated_report_evidence`
+                to_regclass('public.generated_report_evidence') as generated_report_evidence,
+                to_regclass('public.connector_action_jobs') as connector_action_jobs`
       );
       assert(
         result.rows[0].users && result.rows[0].adapters && result.rows[0].connector_definitions &&
@@ -1953,7 +1954,8 @@ try {
         result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback &&
         result.rows[0].agent_drafts && result.rows[0].agent_draft_evidence && result.rows[0].agent_tool_jobs &&
         result.rows[0].alert_automation_policies && result.rows[0].alert_automation_policy_versions && result.rows[0].alert_automation_runs && result.rows[0].alert_automation_drafts &&
-        result.rows[0].generated_reports && result.rows[0].generated_report_versions && result.rows[0].generated_report_evidence,
+        result.rows[0].generated_reports && result.rows[0].generated_report_versions && result.rows[0].generated_report_evidence &&
+        result.rows[0].connector_action_jobs,
         "schema snapshot is incomplete"
       );
       const flightHubReuseBoundary = await client.query(

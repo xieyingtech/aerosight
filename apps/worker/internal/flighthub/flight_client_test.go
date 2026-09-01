@@ -44,7 +44,7 @@ func loadFlightFixture(t *testing.T) (map[string]flightContractCase, []byte) {
 	if err := json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 19 {
+	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 20 {
 		t.Fatalf("invalid flight fixture metadata: version=%q cases=%d", fixture.ContractVersion, len(fixture.Cases))
 	}
 	byName := make(map[string]flightContractCase, len(fixture.Cases))
@@ -155,6 +155,14 @@ func TestFlightOperationTypedClientsMatchEveryReleasedEndpointFixture(t *testing
 	if err := flightFixtureClient(t, cases["flight-task-status"]).UpdateFlightTaskStatus(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "TASK_REDACTED_01", "suspended"); err != nil {
 		t.Fatalf("status update error=%v", err)
 	}
+	created, err := flightFixtureClient(t, cases["flight-task-create"]).CreateFlightTask(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightTaskCreateRequest{
+		Name: "inspection-redacted", SN: "DOCK_REDACTED_01", WaylineUUID: "WAYLINE_REDACTED_01", TimeZone: "Asia/Shanghai",
+		TaskType: "immediate", RTHAltitude: 120, RTHMode: "preset", OutOfControlActionInFlight: "return_home",
+		WaylinePrecisionType: "rtk", ResumableStatus: "manual", RepeatType: "nonrepeating",
+	})
+	if err != nil || created.TaskUUID != "TASK_REDACTED_03" {
+		t.Fatalf("created=%#v err=%v", created, err)
+	}
 	resumption, err := flightFixtureClient(t, cases["flight-task-resumption"]).CreateFlightTaskResumption(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "WORKSPACE_REDACTED", "TASK_REDACTED_01")
 	if err != nil || resumption.Task.UUID != "TASK_REDACTED_02" || resumption.Task.ParentTask == nil || resumption.Task.ParentTask.UUID != "TASK_REDACTED_01" {
 		t.Fatalf("resumption=%#v err=%v", resumption, err)
@@ -222,6 +230,12 @@ func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T
 		}},
 		{name: "bad status", call: func() error {
 			return client.UpdateFlightTaskStatus(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "TASK_REDACTED", "completed")
+		}},
+		{name: "bad create task timezone", call: func() error {
+			_, err := client.CreateFlightTask(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightTaskCreateRequest{
+				Name: "inspection", SN: "DOCK_REDACTED", WaylineUUID: "WAYLINE_REDACTED", TimeZone: "Not/AZone", TaskType: "immediate",
+			})
+			return err
 		}},
 		{name: "unsafe object key", call: func() error {
 			_, err := client.NotifyWaylineUploadComplete(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", WaylineUploadCompleteRequest{Name: "test", ObjectKey: "../secret"})

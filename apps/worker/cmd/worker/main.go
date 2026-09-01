@@ -284,6 +284,16 @@ func main() {
 	} else if workerConfig.FlightHubEnabled {
 		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	}
+	if flightHubClient != nil {
+		flightActionHandler, actionErr := flighthub.NewFlightActionHandler(
+			flighthub.NewSQLFlightActionStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
+		)
+		if actionErr != nil {
+			logger.Error("FlightHub flight action initialization failed", "error", actionErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightActionEventType, flightActionHandler.Handler)
+	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
 	detectionSink := perception.NewSQLDetectionSink()
 	consumer.Register("asset.available", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
