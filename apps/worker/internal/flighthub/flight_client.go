@@ -14,6 +14,8 @@ const maxFlightTaskBatch = 100
 
 const maxFlightTaskMedia = 10_000
 
+const maxFlightAlertBatch = 100
+
 type WaylinePayload struct {
 	Domain   string `json:"domain"`
 	Type     string `json:"type"`
@@ -332,6 +334,95 @@ type FlightExportPage struct {
 type TemporaryDownload struct {
 	URL       string
 	ExpiresAt time.Time
+}
+
+type FlightAlertOptions struct {
+	DroneSN          string
+	BeginAt          int64
+	EndAt            int64
+	AlgorithmSource  *int
+	AlgorithmSources []int
+	Page             int
+	PageSize         int
+}
+
+type FlightAlertSummary struct {
+	FlightID    string `json:"flight_id"`
+	Count       int64  `json:"count"`
+	TaskName    string `json:"flight_task_name"`
+	TaskType    int    `json:"flight_task_type"`
+	StartTime   int64  `json:"start_time"`
+	Status      int    `json:"status"`
+	IsCommented bool   `json:"is_commented"`
+}
+
+type FlightAlertPage struct {
+	Data      []FlightAlertSummary `json:"data"`
+	Total     int                  `json:"total"`
+	Page      int                  `json:"page"`
+	PageSize  int                  `json:"page_size"`
+	PageCount int                  `json:"page_count"`
+}
+
+type AIAlertOptions struct {
+	FlightIDs        []string
+	DroneSNs         []string
+	AlgorithmSources []int
+	TargetTypes      []int
+	BeginAt          int64
+	EndAt            int64
+	Page             int
+	PageSize         int
+}
+
+type AIAlertLocation struct {
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
+	Altitude  *float64 `json:"altitude"`
+}
+
+type AIAlertTriggerAction struct {
+	Action   int `json:"action"`
+	Duration int `json:"duration"`
+}
+
+type AIAlertTarget struct {
+	TargetType       int     `json:"target_type"`
+	Confidence       float64 `json:"target_value"`
+	UseMinThreshold  bool    `json:"use_min_threshold"`
+	UseMaxThreshold  bool    `json:"use_max_threshold"`
+	MaximumThreshold float64 `json:"target_max_threshold"`
+	MinimumThreshold float64 `json:"target_min_threshold"`
+	Label            string  `json:"label"`
+}
+
+type AIAlertRecord struct {
+	AlertUUID       string                 `json:"alert_uuid"`
+	FlightID        string                 `json:"flight_id"`
+	ProjectID       string                 `json:"project_id"`
+	DroneSN         string                 `json:"drone_sn"`
+	GatewaySN       string                 `json:"gateway_sn"`
+	Status          int                    `json:"status"`
+	Reason          string                 `json:"reason"`
+	AlgorithmSource int                    `json:"algorithm_source"`
+	Location        *AIAlertLocation       `json:"location"`
+	FileID          int64                  `json:"file_id"`
+	MediaIndex      int64                  `json:"media_index"`
+	TaskName        string                 `json:"task_name"`
+	TriggerActions  []AIAlertTriggerAction `json:"trigger_actions"`
+	Targets         []AIAlertTarget        `json:"target_alert_infos"`
+	Timestamp       int64                  `json:"timestamp"`
+	ThumbnailURL    string                 `json:"thumbnail_url"`
+	Labels          []string               `json:"labels"`
+	IntervalSeconds int                    `json:"interval_seconds"`
+}
+
+type AIAlertPage struct {
+	Data      map[string][]AIAlertRecord `json:"data"`
+	Total     int                        `json:"total"`
+	Page      int                        `json:"page"`
+	PageSize  int                        `json:"page_size"`
+	PageCount int                        `json:"page_count"`
 }
 
 func validateIdentifierList(values []string, minimum, maximum int) ([]string, error) {
@@ -919,6 +1010,200 @@ func (client *Client) ListFlightTaskExports(ctx context.Context, token, projectU
 		if !validFlightExport(&result.List[index]) {
 			return FlightExportPage{}, schemaError()
 		}
+	}
+	return result, nil
+}
+
+func normalizedAlertPage(page, pageSize int) (int, int, error) {
+	if page == 0 {
+		page = 1
+	}
+	if pageSize == 0 {
+		pageSize = 50
+	}
+	if page < 1 || pageSize < 1 || pageSize > 100 {
+		return 0, 0, &APIError{SafeCode: "request_invalid"}
+	}
+	return page, pageSize, nil
+}
+
+func addIntegerList(query url.Values, key string, values []int, repeated bool) error {
+	if len(values) > 32 {
+		return &APIError{SafeCode: "request_invalid"}
+	}
+	seen := make(map[int]struct{}, len(values))
+	encoded := make([]string, 0, len(values))
+	for _, value := range values {
+		if value < 0 {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		seen[value] = struct{}{}
+		encoded = append(encoded, strconv.Itoa(value))
+	}
+	if repeated {
+		for _, value := range encoded {
+			query.Add(key, value)
+		}
+	} else if len(encoded) > 0 {
+		query.Set(key, strings.Join(encoded, ","))
+	}
+	return nil
+}
+
+func validAlertPagination(page, pageSize, total, pageCount, itemCount int) bool {
+	if page < 1 || pageSize < 1 || total < 0 || pageCount < 0 || itemCount < 0 || itemCount > pageSize || itemCount > total {
+		return false
+	}
+	wantPages := 0
+	if total > 0 {
+		wantPages = (total + pageSize - 1) / pageSize
+	}
+	return pageCount == wantPages && (pageCount == 0 || page <= pageCount)
+}
+
+func (client *Client) ListFlightAlerts(ctx context.Context, token, projectUUID string, options FlightAlertOptions) (FlightAlertPage, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return FlightAlertPage{}, err
+	}
+	droneSN, err := requireScope(options.DroneSN)
+	if err != nil {
+		return FlightAlertPage{}, &APIError{SafeCode: "request_invalid"}
+	}
+	if (options.BeginAt == 0) != (options.EndAt == 0) || options.BeginAt < 0 || options.EndAt < options.BeginAt {
+		return FlightAlertPage{}, &APIError{SafeCode: "request_invalid"}
+	}
+	page, pageSize, err := normalizedAlertPage(options.Page, options.PageSize)
+	if err != nil {
+		return FlightAlertPage{}, err
+	}
+	query := url.Values{
+		"drone_sn": {droneSN}, "page": {strconv.Itoa(page)}, "page_size": {strconv.Itoa(pageSize)},
+	}
+	if options.BeginAt > 0 {
+		query.Set("begin_at", strconv.FormatInt(options.BeginAt, 10))
+		query.Set("end_at", strconv.FormatInt(options.EndAt, 10))
+	}
+	if options.AlgorithmSource != nil {
+		if *options.AlgorithmSource < 0 {
+			return FlightAlertPage{}, &APIError{SafeCode: "request_invalid"}
+		}
+		query.Set("algorithm_source", strconv.Itoa(*options.AlgorithmSource))
+	}
+	if err := addIntegerList(query, "algorithm_sources[]", options.AlgorithmSources, true); err != nil {
+		return FlightAlertPage{}, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: "/openapi/v2.0/flight-alerts", Query: query})
+	if err != nil {
+		return FlightAlertPage{}, err
+	}
+	var result FlightAlertPage
+	if err := json.Unmarshal(payload.Data, &result); err != nil || result.Data == nil || result.Page != page || result.PageSize != pageSize ||
+		!validAlertPagination(result.Page, result.PageSize, result.Total, result.PageCount, len(result.Data)) {
+		return FlightAlertPage{}, schemaError()
+	}
+	seen := make(map[string]struct{}, len(result.Data))
+	for _, item := range result.Data {
+		if strings.TrimSpace(item.FlightID) == "" || item.Count < 0 || item.TaskType < 0 || item.TaskType > 2 || item.StartTime <= 0 || item.Status < 0 || item.Status > 1 {
+			return FlightAlertPage{}, schemaError()
+		}
+		if _, duplicate := seen[item.FlightID]; duplicate {
+			return FlightAlertPage{}, schemaError()
+		}
+		seen[item.FlightID] = struct{}{}
+	}
+	return result, nil
+}
+
+func (client *Client) ListAIAlertRecords(ctx context.Context, token, projectUUID string, options AIAlertOptions) (AIAlertPage, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return AIAlertPage{}, err
+	}
+	flightIDs, err := validateIdentifierList(options.FlightIDs, 1, maxFlightAlertBatch)
+	if err != nil {
+		return AIAlertPage{}, err
+	}
+	droneSNs, err := validateIdentifierList(options.DroneSNs, 0, maxFlightAlertBatch)
+	if err != nil {
+		return AIAlertPage{}, err
+	}
+	if (options.BeginAt == 0) != (options.EndAt == 0) || options.BeginAt < 0 || options.EndAt < options.BeginAt {
+		return AIAlertPage{}, &APIError{SafeCode: "request_invalid"}
+	}
+	page, pageSize, err := normalizedAlertPage(options.Page, options.PageSize)
+	if err != nil {
+		return AIAlertPage{}, err
+	}
+	query := url.Values{
+		"flight_id": {strings.Join(flightIDs, ",")}, "page": {strconv.Itoa(page)}, "page_size": {strconv.Itoa(pageSize)},
+	}
+	if len(droneSNs) > 0 {
+		query.Set("drone_sn", strings.Join(droneSNs, ","))
+	}
+	if options.BeginAt > 0 {
+		query.Set("begin_at", strconv.FormatInt(options.BeginAt, 10))
+		query.Set("end_at", strconv.FormatInt(options.EndAt, 10))
+	}
+	if err := addIntegerList(query, "algorithm_sources", options.AlgorithmSources, false); err != nil {
+		return AIAlertPage{}, err
+	}
+	if err := addIntegerList(query, "target_type", options.TargetTypes, false); err != nil {
+		return AIAlertPage{}, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: "/openapi/v2.0/ai-alert-record", Query: query})
+	if err != nil {
+		return AIAlertPage{}, err
+	}
+	var result AIAlertPage
+	if err := json.Unmarshal(payload.Data, &result); err != nil || result.Data == nil || result.Page != page || result.PageSize != pageSize {
+		return AIAlertPage{}, schemaError()
+	}
+	requested := make(map[string]struct{}, len(flightIDs))
+	for _, flightID := range flightIDs {
+		requested[flightID] = struct{}{}
+	}
+	seen := make(map[string]struct{})
+	itemCount := 0
+	for flightID, items := range result.Data {
+		if _, ok := requested[flightID]; !ok || items == nil {
+			return AIAlertPage{}, schemaError()
+		}
+		for index := range items {
+			item := &items[index]
+			if item.FlightID != flightID || strings.TrimSpace(item.AlertUUID) == "" || strings.TrimSpace(item.ProjectID) == "" || strings.TrimSpace(item.DroneSN) == "" ||
+				item.Status < 0 || item.Status > 5 || item.AlgorithmSource < 0 || item.Timestamp <= 0 || item.FileID < 0 || item.MediaIndex < 0 || item.IntervalSeconds < 0 {
+				return AIAlertPage{}, schemaError()
+			}
+			if _, duplicate := seen[item.AlertUUID]; duplicate {
+				return AIAlertPage{}, schemaError()
+			}
+			seen[item.AlertUUID] = struct{}{}
+			for _, action := range item.TriggerActions {
+				if action.Action < 0 || action.Action > 2 || action.Duration < 0 {
+					return AIAlertPage{}, schemaError()
+				}
+			}
+			for _, target := range item.Targets {
+				if target.TargetType < 0 || target.TargetType > 5 || target.Confidence < 0 || target.Confidence > 1 ||
+					target.MinimumThreshold < 0 || target.MaximumThreshold < 0 {
+					return AIAlertPage{}, schemaError()
+				}
+			}
+			if item.ThumbnailURL != "" {
+				if _, err := client.validateDownload(item.ThumbnailURL, 12*time.Hour); err != nil {
+					return AIAlertPage{}, err
+				}
+			}
+			itemCount++
+		}
+		result.Data[flightID] = items
+	}
+	if !validAlertPagination(result.Page, result.PageSize, result.Total, result.PageCount, itemCount) {
+		return AIAlertPage{}, schemaError()
 	}
 	return result, nil
 }

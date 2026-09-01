@@ -44,7 +44,7 @@ func loadFlightFixture(t *testing.T) (map[string]flightContractCase, []byte) {
 	if err := json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 17 {
+	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 19 {
 		t.Fatalf("invalid flight fixture metadata: version=%q cases=%d", fixture.ContractVersion, len(fixture.Cases))
 	}
 	byName := make(map[string]flightContractCase, len(fixture.Cases))
@@ -179,6 +179,21 @@ func TestFlightOperationTypedClientsMatchEveryReleasedEndpointFixture(t *testing
 	if err != nil || download.URL == "" || download.ExpiresAt.IsZero() {
 		t.Fatalf("download=%#v err=%v", download, err)
 	}
+	algorithmSource := 1
+	alerts, err := flightFixtureClient(t, cases["flight-alerts"]).ListFlightAlerts(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightAlertOptions{
+		DroneSN: "AIRCRAFT_REDACTED_01", BeginAt: 1770000000, EndAt: 1770003600,
+		AlgorithmSource: &algorithmSource, AlgorithmSources: []int{1, 2},
+	})
+	if err != nil || alerts.Total != 1 || len(alerts.Data) != 1 || alerts.Data[0].FlightID != "FLIGHT_REDACTED_01" || alerts.Data[0].Count != 1 {
+		t.Fatalf("alerts=%#v err=%v", alerts, err)
+	}
+	details, err := flightFixtureClient(t, cases["ai-alert-record"]).ListAIAlertRecords(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", AIAlertOptions{
+		FlightIDs: []string{"FLIGHT_REDACTED_01"}, DroneSNs: []string{"AIRCRAFT_REDACTED_01"},
+		AlgorithmSources: []int{1, 2}, TargetTypes: []int{0, 1},
+	})
+	if err != nil || details.Total != 1 || len(details.Data["FLIGHT_REDACTED_01"]) != 1 || details.Data["FLIGHT_REDACTED_01"][0].Targets[0].Confidence != 0.95 {
+		t.Fatalf("details=%#v err=%v", details, err)
+	}
 }
 
 func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T) {
@@ -230,6 +245,14 @@ func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T
 		}},
 		{name: "unsafe record key", call: func() error {
 			_, err := client.GetFlightRecordDownloadURL(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "../secret")
+			return err
+		}},
+		{name: "missing alert drone", call: func() error {
+			_, err := client.ListFlightAlerts(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", FlightAlertOptions{})
+			return err
+		}},
+		{name: "duplicate alert flight", call: func() error {
+			_, err := client.ListAIAlertRecords(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", AIAlertOptions{FlightIDs: []string{"FLIGHT_REDACTED", "FLIGHT_REDACTED"}})
 			return err
 		}},
 	}

@@ -22,6 +22,8 @@ type ResourceStreamClient interface {
 	GetFlightTaskOperationTimeline(context.Context, string, string, string) (FlightTaskOperationTimeline, error)
 	ListFlightTaskMedia(context.Context, string, string, string) ([]FlightTaskMedia, error)
 	ListFlightTaskExports(context.Context, string, string, FlightExportOptions) (FlightExportPage, error)
+	ListFlightAlerts(context.Context, string, string, FlightAlertOptions) (FlightAlertPage, error)
+	ListAIAlertRecords(context.Context, string, string, AIAlertOptions) (AIAlertPage, error)
 }
 
 type ResourceStreamStore interface {
@@ -78,6 +80,13 @@ type FlightExportPoll struct {
 	ReceivedAt       time.Time
 }
 
+type FlightAlertPoll struct {
+	Aggregates       []FlightAlertSummary
+	Alerts           []AIAlertRecord
+	CompleteSnapshot bool
+	ReceivedAt       time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
@@ -85,6 +94,7 @@ type ResourceStreamSink interface {
 	ListFlightArtifactTargets(context.Context, connector.Instance, int) ([]FlightArtifactTarget, error)
 	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
 	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
+	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
 }
 
 type ResourceStreamConfig struct {
@@ -138,6 +148,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "waylines", run: coordinator.pollWaylines},
 		{kind: "flight-tasks", run: coordinator.pollFlightTasks},
 		{kind: "flight-artifacts", run: coordinator.pollFlightArtifacts},
+		{kind: "active-operations", run: coordinator.pollFlightAlerts},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -149,6 +160,141 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollFlightAlerts(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	devices, err := coordinator.store.ListManagedDevices(ctx, instance)
+	if err != nil {
+		return nil, 0, err
+	}
+	drones := make([]connector.ManagedConnectorDevice, 0, len(devices))
+	for _, device := range devices {
+		if device.Class == "drone" || device.Class == "aircraft" || device.Class == "uav" {
+			drones = append(drones, device)
+		}
+	}
+	if len(drones) == 0 {
+		return map[string]any{"drones": 0, "flights": 0, "alerts": 0, "complete": false}, coordinator.config.CatalogInterval, nil
+	}
+	aggregates := make(map[string]FlightAlertSummary)
+	for _, drone := range drones {
+		items, listErr := coordinator.listAllFlightAlerts(ctx, token, scope.ProjectUUID, drone.Serial)
+		if listErr != nil {
+			return map[string]any{"drones": len(drones), "flights": len(aggregates), "alerts": 0, "complete": false}, 0, listErr
+		}
+		for _, item := range items {
+			if previous, duplicate := aggregates[item.FlightID]; duplicate {
+				if previous.Count != item.Count || previous.TaskName != item.TaskName || previous.StartTime != item.StartTime {
+					return map[string]any{"drones": len(drones), "flights": len(aggregates), "alerts": 0, "complete": false}, 0, schemaError()
+				}
+				continue
+			}
+			aggregates[item.FlightID] = item
+		}
+	}
+	flightIDs := make([]string, 0, len(aggregates))
+	for flightID := range aggregates {
+		flightIDs = append(flightIDs, flightID)
+	}
+	sort.Strings(flightIDs)
+	alerts := make([]AIAlertRecord, 0)
+	for start := 0; start < len(flightIDs); start += maxFlightAlertBatch {
+		end := start + maxFlightAlertBatch
+		if end > len(flightIDs) {
+			end = len(flightIDs)
+		}
+		items, listErr := coordinator.listAllAIAlerts(ctx, token, scope.ProjectUUID, flightIDs[start:end])
+		if listErr != nil {
+			return map[string]any{"drones": len(drones), "flights": len(aggregates), "alerts": len(alerts), "complete": false}, 0, listErr
+		}
+		alerts = append(alerts, items...)
+	}
+	orderedAggregates := make([]FlightAlertSummary, 0, len(flightIDs))
+	for _, flightID := range flightIDs {
+		orderedAggregates = append(orderedAggregates, aggregates[flightID])
+	}
+	poll := FlightAlertPoll{Aggregates: orderedAggregates, Alerts: alerts, CompleteSnapshot: true, ReceivedAt: coordinator.config.Now().UTC()}
+	if err := coordinator.sink.ApplyFlightAlerts(ctx, instance, poll); err != nil {
+		return map[string]any{"drones": len(drones), "flights": len(aggregates), "alerts": len(alerts), "complete": false}, 0, err
+	}
+	return map[string]any{"drones": len(drones), "flights": len(aggregates), "alerts": len(alerts), "complete": true}, coordinator.config.CatalogInterval, nil
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllFlightAlerts(ctx context.Context, token, projectUUID, droneSN string) ([]FlightAlertSummary, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]FlightAlertSummary, 0)
+	seen := make(map[string]struct{})
+	total := -1
+	for page := 1; page <= maxPages; page++ {
+		result, err := coordinator.client.ListFlightAlerts(ctx, token, projectUUID, FlightAlertOptions{DroneSN: droneSN, Page: page, PageSize: pageSize})
+		if err != nil {
+			return nil, err
+		}
+		if total < 0 {
+			total = result.Total
+		} else if total != result.Total {
+			return nil, schemaError()
+		}
+		for _, item := range result.Data {
+			if _, duplicate := seen[item.FlightID]; duplicate {
+				return nil, schemaError()
+			}
+			seen[item.FlightID] = struct{}{}
+			items = append(items, item)
+		}
+		if len(items) == total {
+			return items, nil
+		}
+		if len(items) > total || len(result.Data) == 0 || len(result.Data) < pageSize {
+			return nil, schemaError()
+		}
+	}
+	return nil, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllAIAlerts(ctx context.Context, token, projectUUID string, flightIDs []string) ([]AIAlertRecord, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]AIAlertRecord, 0)
+	seen := make(map[string]struct{})
+	total := -1
+	for page := 1; page <= maxPages; page++ {
+		result, err := coordinator.client.ListAIAlertRecords(ctx, token, projectUUID, AIAlertOptions{FlightIDs: flightIDs, Page: page, PageSize: pageSize})
+		if err != nil {
+			return nil, err
+		}
+		if total < 0 {
+			total = result.Total
+		} else if total != result.Total {
+			return nil, schemaError()
+		}
+		keys := make([]string, 0, len(result.Data))
+		for flightID := range result.Data {
+			keys = append(keys, flightID)
+		}
+		sort.Strings(keys)
+		pageItems := 0
+		for _, flightID := range keys {
+			for _, item := range result.Data[flightID] {
+				if _, duplicate := seen[item.AlertUUID]; duplicate {
+					return nil, schemaError()
+				}
+				seen[item.AlertUUID] = struct{}{}
+				items = append(items, item)
+				pageItems++
+			}
+		}
+		if len(items) == total {
+			return items, nil
+		}
+		if len(items) > total || pageItems == 0 || pageItems < pageSize {
+			return nil, schemaError()
+		}
+	}
+	return nil, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
 }
 
 func (coordinator *ResourceStreamCoordinator) pollFlightArtifacts(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {

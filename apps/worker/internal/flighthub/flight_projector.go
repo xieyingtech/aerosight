@@ -857,6 +857,7 @@ type externalAssetInput struct {
 	RemoteVersion   string
 	RemoteUpdatedAt *time.Time
 	TaskRunID       *int
+	DeviceID        *int
 	AssetKind       string
 	MIMEType        string
 	Status          string
@@ -895,18 +896,18 @@ func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Cont
 	}
 	var assetID int
 	err = tx.QueryRowContext(ctx, `insert into assets(
-		project_id,team_id,task_run_id,kind,mime_type,storage_key,logical_key,version,status,object_version,size_bytes,captured_at,metadata_json,available_at,failed_at,failure_code
-	) values($1,$2,$3,$4,$5,$6,$7,1,$8,$9,$10,$11,$12,
-		case when $8='available' then now() else null end,case when $8='failed' then now() else null end,
-		case when $8='failed' then 'DJI_FLIGHTHUB_EXPORT_FAILED' else null end)
+		project_id,team_id,device_id,task_run_id,kind,mime_type,storage_key,logical_key,version,status,object_version,size_bytes,captured_at,metadata_json,available_at,failed_at,failure_code
+	) values($1,$2,$3,$4,$5,$6,$7,$8,1,$9,$10,$11,$12,$13,
+		case when $9='available' then now() else null end,case when $9='failed' then now() else null end,
+		case when $9='failed' then 'DJI_FLIGHTHUB_EXPORT_FAILED' else null end)
 	 on conflict(project_id,logical_key,version) do update set
-		team_id=excluded.team_id,task_run_id=coalesce(excluded.task_run_id,assets.task_run_id),kind=excluded.kind,
+		team_id=excluded.team_id,device_id=coalesce(excluded.device_id,assets.device_id),task_run_id=coalesce(excluded.task_run_id,assets.task_run_id),kind=excluded.kind,
 		mime_type=excluded.mime_type,storage_key=excluded.storage_key,status=excluded.status,object_version=excluded.object_version,
 		size_bytes=excluded.size_bytes,captured_at=excluded.captured_at,metadata_json=excluded.metadata_json,
 		available_at=case when excluded.status='available' then coalesce(assets.available_at,now()) else null end,
 		failed_at=case when excluded.status='failed' then coalesce(assets.failed_at,now()) else null end,
 		failure_code=excluded.failure_code,deleted_at=null
-	 returning id`, instance.ProjectID, teamID, input.TaskRunID, input.AssetKind, input.MIMEType, storageKey, logicalKey,
+	 returning id`, instance.ProjectID, teamID, input.DeviceID, input.TaskRunID, input.AssetKind, input.MIMEType, storageKey, logicalKey,
 		input.Status, input.RemoteVersion, input.SizeBytes, input.CapturedAt, metadataJSON).Scan(&assetID)
 	if err != nil {
 		return 0, err

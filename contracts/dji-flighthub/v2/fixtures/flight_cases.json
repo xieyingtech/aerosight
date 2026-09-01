@@ -418,6 +418,85 @@
         "message": "",
         "data": "https://objects.vendor.example/exports/RECORD_REDACTED_01.csv"
       }
+    },
+    {
+      "name": "flight-alerts",
+      "endpointId": "454273347e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-alerts?algorithm_source=1&algorithm_sources%5B%5D=1&algorithm_sources%5B%5D=2&begin_at=1770000000&drone_sn=AIRCRAFT_REDACTED_01&end_at=1770003600&page=1&page_size=50",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "data": [
+            {
+              "flight_id": "FLIGHT_REDACTED_01",
+              "count": 1,
+              "flight_task_name": "脱敏巡检任务",
+              "flight_task_type": 1,
+              "start_time": 1770000000,
+              "status": 1,
+              "is_commented": false
+            }
+          ],
+          "total": 1,
+          "page": 1,
+          "page_size": 50,
+          "page_count": 1
+        }
+      }
+    },
+    {
+      "name": "ai-alert-record",
+      "endpointId": "480437504e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/ai-alert-record?algorithm_sources=1%2C2&drone_sn=AIRCRAFT_REDACTED_01&flight_id=FLIGHT_REDACTED_01&page=1&page_size=50&target_type=0%2C1",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "OK",
+        "data": {
+          "data": {
+            "FLIGHT_REDACTED_01": [
+              {
+                "alert_uuid": "ALERT_REDACTED_01",
+                "flight_id": "FLIGHT_REDACTED_01",
+                "project_id": "PROJECT_REDACTED",
+                "drone_sn": "AIRCRAFT_REDACTED_01",
+                "gateway_sn": "DOCK_REDACTED_01",
+                "status": 2,
+                "reason": "目标检测",
+                "algorithm_source": 1,
+                "location": { "latitude": 30.000003, "longitude": 120.000003, "altitude": 42.5 },
+                "file_id": 1001,
+                "media_index": 7,
+                "task_name": "脱敏巡检任务",
+                "trigger_actions": [{ "action": 0, "duration": 0 }],
+                "target_alert_infos": [
+                  {
+                    "target_type": 0,
+                    "target_value": 0.95,
+                    "use_min_threshold": true,
+                    "use_max_threshold": false,
+                    "target_max_threshold": 1,
+                    "target_min_threshold": 0.8,
+                    "label": "person"
+                  }
+                ],
+                "timestamp": 1770000001000,
+                "thumbnail_url": "https://objects.vendor.example/alerts/ALERT_REDACTED_01.jpg",
+                "labels": ["person"],
+                "interval_seconds": 30
+              }
+            ]
+          },
+          "total": 1,
+          "page": 1,
+          "page_size": 50,
+          "page_count": 1
+        }
+      }
     }
   ]
 }

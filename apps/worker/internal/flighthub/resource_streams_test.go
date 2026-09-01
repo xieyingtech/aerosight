@@ -63,6 +63,10 @@ type resourceClientFixture struct {
 	mediaErrors     map[string]error
 	exports         []FlightExportRecord
 	exportError     error
+	flightAlerts    map[string][]FlightAlertSummary
+	flightAlertErrs map[string]error
+	aiAlerts        []AIAlertRecord
+	aiAlertError    error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -132,6 +136,45 @@ func (client *resourceClientFixture) ListFlightTaskExports(_ context.Context, _,
 	return FlightExportPage{Pagination: FlightExportPagination{Page: options.Page, PageSize: options.PageSize, Total: len(client.exports)}, List: append([]FlightExportRecord(nil), client.exports...)}, nil
 }
 
+func (client *resourceClientFixture) ListFlightAlerts(_ context.Context, _, _ string, options FlightAlertOptions) (FlightAlertPage, error) {
+	if err := client.flightAlertErrs[options.DroneSN]; err != nil {
+		return FlightAlertPage{}, err
+	}
+	items := append([]FlightAlertSummary(nil), client.flightAlerts[options.DroneSN]...)
+	if options.Page > 1 {
+		items = []FlightAlertSummary{}
+	}
+	return FlightAlertPage{Data: items, Total: len(client.flightAlerts[options.DroneSN]), Page: options.Page, PageSize: options.PageSize, PageCount: boolPageCount(len(client.flightAlerts[options.DroneSN]))}, nil
+}
+
+func boolPageCount(total int) int {
+	if total > 0 {
+		return 1
+	}
+	return 0
+}
+
+func (client *resourceClientFixture) ListAIAlertRecords(_ context.Context, _, _ string, options AIAlertOptions) (AIAlertPage, error) {
+	if client.aiAlertError != nil {
+		return AIAlertPage{}, client.aiAlertError
+	}
+	requested := make(map[string]struct{}, len(options.FlightIDs))
+	for _, flightID := range options.FlightIDs {
+		requested[flightID] = struct{}{}
+	}
+	data := make(map[string][]AIAlertRecord)
+	total := 0
+	if options.Page == 1 {
+		for _, alert := range client.aiAlerts {
+			if _, ok := requested[alert.FlightID]; ok {
+				data[alert.FlightID] = append(data[alert.FlightID], alert)
+				total++
+			}
+		}
+	}
+	return AIAlertPage{Data: data, Total: total, Page: options.Page, PageSize: options.PageSize, PageCount: boolPageCount(total)}, nil
+}
+
 func (client *resourceClientFixture) calls() []string {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -147,6 +190,7 @@ type resourceSinkFixture struct {
 	artifactTargets []FlightArtifactTarget
 	artifacts       []FlightArtifactPoll
 	exportPolls     []FlightExportPoll
+	alertPolls      []FlightAlertPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -199,6 +243,15 @@ func (sink *resourceSinkFixture) ApplyFlightExports(_ context.Context, _ connect
 	defer sink.mu.Unlock()
 	poll.Records = append([]FlightExportRecord(nil), poll.Records...)
 	sink.exportPolls = append(sink.exportPolls, poll)
+	return nil
+}
+
+func (sink *resourceSinkFixture) ApplyFlightAlerts(_ context.Context, _ connector.Instance, poll FlightAlertPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.Aggregates = append([]FlightAlertSummary(nil), poll.Aggregates...)
+	poll.Alerts = append([]AIAlertRecord(nil), poll.Alerts...)
+	sink.alertPolls = append(sink.alertPolls, poll)
 	return nil
 }
 
@@ -463,6 +516,42 @@ func TestFlightArtifactStreamAppliesIndependentTrackOperationMediaAndExportResul
 	applied = sink.appliedArtifacts()
 	if !IsSafeCode(err, "upstream_unavailable") || cursor["tracks"] != 0 || cursor["operations"] != 1 || cursor["mediaTasks"] != 1 || cursor["exports"] != 1 || cursor["complete"] != false || len(applied) != 1 || applied[0].Track != nil || applied[0].Operations == nil || applied[0].Media == nil {
 		t.Fatalf("partial artifact cursor=%#v projection=%#v err=%v", cursor, applied, err)
+	}
+}
+
+func TestFlightAlertStreamPagesDronesAndAppliesOnlyCompleteSnapshot(t *testing.T) {
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{
+		{DeviceID: 1, Serial: "AIRCRAFT_REDACTED_01", Class: "drone"},
+		{DeviceID: 2, Serial: "DOCK_REDACTED_01", Class: "airport"},
+	}}
+	client := &resourceClientFixture{
+		flightAlerts: map[string][]FlightAlertSummary{
+			"AIRCRAFT_REDACTED_01": {{FlightID: "FLIGHT_REDACTED_01", Count: 1, TaskName: "脱敏任务", TaskType: 1, StartTime: now.Unix(), Status: 1}},
+		},
+		flightAlertErrs: map[string]error{},
+		aiAlerts: []AIAlertRecord{{AlertUUID: "ALERT_REDACTED_01", FlightID: "FLIGHT_REDACTED_01", ProjectID: runtimeProjectUUID,
+			DroneSN: "AIRCRAFT_REDACTED_01", Status: 2, Timestamp: now.UnixMilli()}},
+	}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
+		MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor, _, err := coordinator.pollFlightAlerts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	if err != nil || cursor["complete"] != true || cursor["drones"] != 1 || cursor["flights"] != 1 || cursor["alerts"] != 1 {
+		t.Fatalf("alert cursor=%#v err=%v", cursor, err)
+	}
+	if len(sink.alertPolls) != 1 || !sink.alertPolls[0].CompleteSnapshot || len(sink.alertPolls[0].Aggregates) != 1 || len(sink.alertPolls[0].Alerts) != 1 {
+		t.Fatalf("alert poll=%#v", sink.alertPolls)
+	}
+	client.aiAlertError = &APIError{SafeCode: "upstream_unavailable", Retryable: true}
+	cursor, _, err = coordinator.pollFlightAlerts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	if !IsSafeCode(err, "upstream_unavailable") || cursor["complete"] != false || len(sink.alertPolls) != 1 {
+		t.Fatalf("partial alert cursor=%#v polls=%d err=%v", cursor, len(sink.alertPolls), err)
 	}
 }
 

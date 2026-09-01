@@ -62,6 +62,7 @@ type healthProjectorFixture struct {
 type flightCatalogProjectorFixture struct {
 	waylines int
 	tasks    int
+	alerts   int
 }
 
 func (fixture *flightCatalogProjectorFixture) ApplyWaylines(_ context.Context, _ connector.Instance, items []WaylineSummary) error {
@@ -83,6 +84,11 @@ func (fixture *flightCatalogProjectorFixture) ApplyFlightArtifacts(context.Conte
 }
 
 func (fixture *flightCatalogProjectorFixture) ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error {
+	return nil
+}
+
+func (fixture *flightCatalogProjectorFixture) ApplyFlightAlerts(_ context.Context, _ connector.Instance, poll FlightAlertPoll) error {
+	fixture.alerts += len(poll.Alerts)
 	return nil
 }
 
