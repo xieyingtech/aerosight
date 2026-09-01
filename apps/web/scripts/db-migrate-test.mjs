@@ -703,6 +703,106 @@ async function assertConnectorCompatibilitySchema(connectionString) {
     assert(connector.rows[0].connector_key === "simulator.memory", "legacy Adapter type mapped to the wrong ConnectorDefinition");
     assert(connector.rows[0].onboarding_policy === "review", "Connector did not default to review onboarding");
 
+    const directDji = await client.query(
+      `insert into device_adapters (project_id, team_id, name, adapter_type)
+       values ($1, $2, 'legacy-dji-routing-fixture', 'dji') returning id`,
+      [north.id, north.team_id]
+    );
+    const directDjiConnector = await client.query(
+      `select connector_key from connector_instances where id=$1 and project_id=$2`,
+      [directDji.rows[0].id, north.id]
+    );
+    assert(
+      directDjiConnector.rows[0].connector_key === "dji.cloud-api",
+      "FlightHub registration changed the legacy DJI Cloud API mapping"
+    );
+
+    const flightHubDefinition = await client.query(
+      `select id, status, manifest_json as manifest
+         from connector_definitions
+        where connector_key='dji.flighthub2' and version='1.0.0'`
+    );
+    assert(flightHubDefinition.rowCount === 1, "FlightHub Connector Definition is missing");
+    const flightHubManifest = flightHubDefinition.rows[0].manifest;
+    assert(
+      flightHubDefinition.rows[0].status === "active" &&
+      flightHubManifest.readOnly === true &&
+      JSON.stringify(flightHubManifest.discoveryModes) === JSON.stringify(["poll"]) &&
+      JSON.stringify(flightHubManifest.protocols) === JSON.stringify(["https"]) &&
+      flightHubManifest.credentialSchema?.properties?.token?.writeOnly === true &&
+      flightHubManifest.discoveryScopeSchema?.properties?.projectUuid?.format === "uuid" &&
+      flightHubManifest.compatibleDrivers?.includes("dji.cloud"),
+      "FlightHub Connector Definition manifest is incomplete"
+    );
+
+    const sharedScope = "00000000-0000-4000-8000-000000000101";
+    const flightHubNorth = await client.query(
+      `insert into device_adapters (
+         project_id, team_id, name, adapter_type, connector_definition_id,
+         vendor, protocol_version, external_scope_key, discovery_scope_json
+       ) values ($1,$2,'flighthub-north-fixture','dji',$3,'dji','flighthub-openapi-v2',$4,$5::jsonb)
+       returning id`,
+      [
+        north.id,
+        north.team_id,
+        flightHubDefinition.rows[0].id,
+        sharedScope,
+        JSON.stringify({ projectUuid: sharedScope, projectName: "脱敏项目" })
+      ]
+    );
+    const flightHubInstance = await client.query(
+      `select connector_key, connector_version, external_scope_key, discovery_scope_json,
+              credential_envelope_json
+         from connector_instances where id=$1 and project_id=$2`,
+      [flightHubNorth.rows[0].id, north.id]
+    );
+    assert(
+      flightHubInstance.rows[0].connector_key === "dji.flighthub2" &&
+      flightHubInstance.rows[0].connector_version === "1.0.0" &&
+      flightHubInstance.rows[0].external_scope_key === sharedScope &&
+      flightHubInstance.rows[0].discovery_scope_json.projectUuid === sharedScope &&
+      flightHubInstance.rows[0].credential_envelope_json === null,
+      "FlightHub Connector Instance did not reuse the generic compatibility view"
+    );
+
+    await client.query(
+      `insert into device_adapters (
+         project_id, team_id, name, adapter_type, connector_definition_id, external_scope_key
+       ) values ($1,$2,'flighthub-duplicate-fixture','dji',$3,$4)`,
+      [north.id, north.team_id, flightHubDefinition.rows[0].id, sharedScope]
+    ).then(
+      () => assert(false, "duplicate FlightHub project scope should fail within one AeroSight project"),
+      (error) => assert(error.code === "23505", "duplicate FlightHub project scope failed unexpectedly")
+    );
+
+    const flightHubSouth = await client.query(
+      `insert into device_adapters (
+         project_id, team_id, name, adapter_type, connector_definition_id, external_scope_key
+       ) values ($1,$2,'flighthub-south-fixture','dji',$3,$4) returning id`,
+      [south.id, south.team_id, flightHubDefinition.rows[0].id, sharedScope]
+    );
+    assert(flightHubSouth.rowCount === 1, "same external scope must remain isolated across AeroSight projects");
+
+    await client.query(
+      `insert into device_adapters (
+         project_id, team_id, name, adapter_type, connector_definition_id, external_scope_key
+       ) values ($1,$2,'flighthub-invalid-scope-fixture','dji',$3,' scope-with-whitespace ')`,
+      [north.id, north.team_id, flightHubDefinition.rows[0].id]
+    ).then(
+      () => assert(false, "non-normalized external scope should fail"),
+      (error) => assert(error.code === "23514", "external scope normalization failed unexpectedly")
+    );
+
+    await client.query(
+      `insert into device_adapters (
+         project_id, team_id, name, adapter_type, connector_definition_id
+       ) values ($1,$2,'flighthub-invalid-definition-fixture','dji',9223372036854775807)`,
+      [north.id, north.team_id]
+    ).then(
+      () => assert(false, "unknown Connector Definition should fail"),
+      (error) => assert(error.code === "23503", "Connector Definition foreign key failed unexpectedly")
+    );
+
     const device = await client.query("select id from devices where project_id=$1 order by id limit 1", [north.id]);
     const identity = await client.query(
       `insert into device_external_identities (
@@ -1855,6 +1955,32 @@ try {
         result.rows[0].alert_automation_policies && result.rows[0].alert_automation_policy_versions && result.rows[0].alert_automation_runs && result.rows[0].alert_automation_drafts &&
         result.rows[0].generated_reports && result.rows[0].generated_report_versions && result.rows[0].generated_report_evidence,
         "schema snapshot is incomplete"
+      );
+      const flightHubReuseBoundary = await client.query(
+        `select
+           exists (
+             select 1 from information_schema.columns
+              where table_schema='public' and table_name='device_adapters'
+                and column_name='external_scope_key'
+           ) as external_scope_key,
+           exists (
+             select 1 from information_schema.columns
+              where table_schema='public' and table_name='connector_instances'
+                and column_name='credential_envelope_json'
+           ) as connector_credential_envelope,
+           to_regclass('public.flighthub_connections') as special_connections,
+           to_regclass('public.flighthub_devices') as special_devices,
+           to_regclass('public.flighthub_sync_runs') as special_sync_runs,
+           to_regclass('public.flighthub_events') as special_events`
+      );
+      assert(
+        flightHubReuseBoundary.rows[0].external_scope_key &&
+        flightHubReuseBoundary.rows[0].connector_credential_envelope &&
+        !flightHubReuseBoundary.rows[0].special_connections &&
+        !flightHubReuseBoundary.rows[0].special_devices &&
+        !flightHubReuseBoundary.rows[0].special_sync_runs &&
+        !flightHubReuseBoundary.rows[0].special_events,
+        "FlightHub schema did not preserve the generic Connector/Device boundary"
       );
     } finally {
       await client.end();

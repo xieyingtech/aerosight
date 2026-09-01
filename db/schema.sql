@@ -2632,3 +2632,65 @@ update algorithm_providers
        health_json = jsonb_build_object('ok', false, 'code', 'CREDENTIAL_REENTRY_REQUIRED'),
        updated_at = now()
  where secret_ref is not null and credential_envelope_json is null;
+--> statement-breakpoint
+insert into connector_definitions (connector_key, version, display_name, status, manifest_json)
+values (
+  'dji.flighthub2',
+  '1.0.0',
+  'DJI FlightHub 2',
+  'active',
+  '{
+    "discoveryModes":["poll"],
+    "protocols":["https"],
+    "compatibleDrivers":["dji.cloud"],
+    "readOnly":true,
+    "capabilities":["inventory.read","state.read"],
+    "configSchema":{"type":"object","additionalProperties":false,"properties":{}},
+    "credentialSchema":{"type":"object","additionalProperties":false,"required":["token"],"properties":{"token":{"type":"string","minLength":1,"writeOnly":true}}},
+    "discoveryScopeSchema":{"type":"object","additionalProperties":false,"required":["projectUuid","projectName"],"properties":{"projectUuid":{"type":"string","format":"uuid"},"projectName":{"type":"string","minLength":1}}}
+  }'::jsonb
+)
+on conflict (connector_key, version) do nothing;
+--> statement-breakpoint
+alter table device_adapters
+  add column external_scope_key text,
+  add constraint device_adapters_external_scope_key_normalized
+    check (
+      external_scope_key is null
+      or (
+        length(external_scope_key) between 1 and 512
+        and external_scope_key = btrim(external_scope_key)
+      )
+    );
+--> statement-breakpoint
+create unique index device_adapters_connector_external_scope_unique
+  on device_adapters(project_id, connector_definition_id, external_scope_key)
+  where external_scope_key is not null;
+--> statement-breakpoint
+create or replace view connector_instances as
+select adapter.id,
+       adapter.project_id,
+       adapter.team_id,
+       adapter.name,
+       adapter.connector_definition_id,
+       definition.connector_key,
+       definition.version as connector_version,
+       adapter.adapter_type as legacy_adapter_type,
+       adapter.vendor,
+       adapter.protocol_version,
+       adapter.status,
+       adapter.secret_ref,
+       adapter.config_json,
+       adapter.capabilities_json,
+       adapter.network_profile_id,
+       adapter.onboarding_policy,
+       adapter.discovery_scope_json,
+       adapter.sync_cursor_json,
+       adapter.last_health_json,
+       adapter.last_checked_at,
+       adapter.created_at,
+       adapter.updated_at,
+       adapter.external_scope_key,
+       adapter.credential_envelope_json
+  from device_adapters adapter
+  join connector_definitions definition on definition.id = adapter.connector_definition_id;

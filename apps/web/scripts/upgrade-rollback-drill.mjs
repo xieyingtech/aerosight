@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import pg from "pg";
@@ -9,7 +9,11 @@ import { migrateDatabase } from "./db-migrate.mjs";
 
 const { Client } = pg;
 const databaseImage = process.env.ROLLBACK_DRILL_POSTGIS_IMAGE ?? "postgis/postgis:17-3.5";
-const legacySchema = await readFile(resolve(import.meta.dirname, "../../../db/migrations/0001_baseline.sql"), "utf8");
+const migrationsDirectory = resolve(import.meta.dirname, "../../../db/migrations");
+const legacySchema = await readFile(resolve(migrationsDirectory, "0001_baseline.sql"), "utf8");
+const migrationCount = (await readdir(migrationsDirectory))
+  .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
+  .length;
 const silentLogger = { info() {} };
 
 function assert(condition, message) {
@@ -165,7 +169,7 @@ try {
     beforeUpgrade.runs.length === 1 && beforeUpgrade.assets.length === 1, "legacy snapshot is incomplete");
 
   const migration = await migrateDatabase({ connectionString: postgis.url, logger: silentLogger });
-  assert(migration.total === 31 && migration.applied.length === 31 && migration.applied[0].adopted,
+  assert(migration.total === migrationCount && migration.applied.length === migrationCount && migration.applied[0].adopted,
     "legacy snapshot was not adopted and upgraded through every migration");
   const afterUpgrade = await readLegacyPageContract(client, scope);
   assert(JSON.stringify(afterUpgrade) === JSON.stringify(beforeUpgrade), "legacy page data changed during upgrade");
