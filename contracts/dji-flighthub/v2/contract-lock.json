@@ -28,7 +28,7 @@
     },
     {
       "path": "fixtures/live_cases.json",
-      "sha256": "b6eeafcc0b33ee78abfc4867815e4df2e2d6f3f6697b131a960f9ec07536903f",
+      "sha256": "ef3590696576d1c0b8c57715a152f458f06b140478e304caf8c1e38a62237f6a",
       "domains": ["live"]
     }
   ]

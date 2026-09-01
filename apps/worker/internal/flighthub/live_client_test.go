@@ -94,6 +94,7 @@ func liveFixtureClient(t *testing.T, item liveContractCase) *Client {
 		return response(http.StatusOK, item.ResponseBody, nil), nil
 	}), func(config *Config) {
 		config.Now = func() time.Time { return time.Unix(1779440000, 0).UTC() }
+		config.AllowedLinkHosts = []string{"media.vendor.example"}
 	})
 }
 

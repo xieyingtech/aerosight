@@ -18,7 +18,7 @@
         "message": "",
         "data": {
           "expire_ts": 1779443600,
-          "url": "VOLC_PLAYBACK_CREDENTIAL_REDACTED",
+          "url": "app_id=APP_ID_REDACTED&expire_time=1779443600&room_id=ROOM_REDACTED&token=TOKEN_REDACTED&user_id=USER_REDACTED",
           "url_type": "volc"
         }
       }
@@ -40,7 +40,7 @@
         "message": "",
         "data": {
           "expire_ts": 1779443600,
-          "url": "AGORA_PLAYBACK_CREDENTIAL_REDACTED",
+          "url": "{\"app_id\":\"APP_ID_REDACTED\",\"channel_name\":\"CHANNEL_REDACTED\",\"token\":\"TOKEN_REDACTED\",\"uid\":\"USER_REDACTED\",\"expire_ts\":1779443600}",
           "url_type": "agora"
         }
       }
