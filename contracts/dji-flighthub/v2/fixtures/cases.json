@@ -1,0 +1,149 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "deviceDirectoryLimit": 1000,
+  "cases": [
+    {
+      "name": "project-list",
+      "endpoint": "/openapi/v2.0/project",
+      "httpStatus": 200,
+      "body": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "list": [
+            {
+              "name": "脱敏项目甲",
+              "introduction": "",
+              "uuid": "00000000-0000-4000-8000-000000000001",
+              "org_uuid": "00000000-0000-4000-8000-000000000010",
+              "created_at": 0,
+              "updated_at": 0
+            },
+            {
+              "name": "脱敏项目乙",
+              "introduction": "只用于契约测试",
+              "uuid": "00000000-0000-4000-8000-000000000002",
+              "org_uuid": "00000000-0000-4000-8000-000000000010",
+              "created_at": 0,
+              "updated_at": 0
+            }
+          ]
+        }
+      },
+      "expected": { "kind": "success", "itemCount": 2 }
+    },
+    {
+      "name": "project-empty",
+      "endpoint": "/openapi/v2.0/project",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": [] } },
+      "expected": { "kind": "success", "itemCount": 0 }
+    },
+    {
+      "name": "device-directory",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 200,
+      "body": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "list": [
+            {
+              "gateway": {
+                "sn": "DOCK_REDACTED_01",
+                "callsign": "脱敏机场",
+                "device_model": {
+                  "key": "3-2-0",
+                  "domain": "3",
+                  "type": "2",
+                  "sub_type": "0",
+                  "name": "DJI Dock 2",
+                  "class": "airport"
+                },
+                "device_online_status": true,
+                "mode_code": 0,
+                "camera_list": []
+              },
+              "drone": {
+                "sn": "AIRCRAFT_REDACTED_01",
+                "callsign": "",
+                "device_model": {
+                  "key": "0-91-1",
+                  "domain": "0",
+                  "type": "91",
+                  "sub_type": "1",
+                  "name": "M3TD",
+                  "class": "drone"
+                },
+                "device_online_status": false,
+                "mode_code": 14,
+                "camera_list": null
+              }
+            }
+          ]
+        }
+      },
+      "expected": { "kind": "success", "itemCount": 1 }
+    },
+    {
+      "name": "device-directory-limit",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 200,
+      "generatedBody": {
+        "repeat": 1000,
+        "templateCase": "device-directory"
+      },
+      "expected": { "kind": "incomplete", "safeCode": "directory_limit_reached" }
+    },
+    {
+      "name": "http-401",
+      "endpoint": "/openapi/v2.0/project",
+      "httpStatus": 401,
+      "body": { "code": 200401, "message": "Unauthorized", "data": {} },
+      "expected": { "kind": "error", "safeCode": "credential_invalid", "retryable": false }
+    },
+    {
+      "name": "business-200401",
+      "endpoint": "/openapi/v2.0/project",
+      "httpStatus": 200,
+      "body": { "code": 200401, "message": "X-User-Token invalid", "data": {} },
+      "expected": { "kind": "error", "safeCode": "credential_invalid", "retryable": false }
+    },
+    {
+      "name": "http-403",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 403,
+      "body": { "code": 200403, "message": "Forbidden", "data": {} },
+      "expected": { "kind": "error", "safeCode": "scope_forbidden", "retryable": false }
+    },
+    {
+      "name": "http-404",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 404,
+      "body": { "code": 200404, "message": "Not Found", "data": {} },
+      "expected": { "kind": "error", "safeCode": "scope_not_found", "retryable": false }
+    },
+    {
+      "name": "http-429",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 429,
+      "headers": { "Retry-After": "3" },
+      "body": { "code": 210429, "message": "Too Many Requests", "data": {} },
+      "expected": { "kind": "error", "safeCode": "rate_limited", "retryable": true, "retryAfterSeconds": 3 }
+    },
+    {
+      "name": "http-503",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 503,
+      "body": { "code": 210500, "message": "Service Unavailable", "data": {} },
+      "expected": { "kind": "error", "safeCode": "upstream_unavailable", "retryable": true }
+    },
+    {
+      "name": "malformed-response",
+      "endpoint": "/openapi/v2.0/project/device",
+      "httpStatus": 200,
+      "body": { "code": 0, "message": "", "data": { "list": "not-an-array" } },
+      "expected": { "kind": "error", "safeCode": "schema_incompatible", "retryable": false }
+    }
+  ]
+}
