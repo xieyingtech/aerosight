@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EvidenceImage } from "@/components/evidence-image";
 import { IssueCollaborationPanel } from "@/components/issue-collaboration-panel";
+import { IssueFeedbackPanel } from "@/components/issue-feedback-panel";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +23,11 @@ const activityLabels: Record<string, string> = {
   "assignee.added": "添加负责人",
   "assignee.removed": "移除负责人",
   "status.changed": "变更状态",
-  "labels.changed": "更新标签"
+  "labels.changed": "更新标签",
+  "feedback.confirm": "确认检测",
+  "feedback.false_positive": "标记误报",
+  "feedback.category_correction": "修正类别",
+  "feedback.disposition": "记录处置结果"
 };
 
 export default async function IssueDetailPage({ params }: { params: Promise<{ id: string; issueId: string }> }) {
@@ -45,6 +50,12 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ id
         <p>{String(issue.description || "暂无补充说明")}</p>
         <p className="text-muted-foreground">任务：{issue.taskRunId ? <Link className="underline" href={`/projects/${projectId}/tasks/runs/${String(issue.taskRunId)}`}>{String(issue.taskName || "任务")} · Run #{String(issue.taskRunId)}</Link> : "手动案件"}</p>
         {issue.taskVersionId ? <p className="text-muted-foreground">任务版本：v{String(issue.taskVersion || "—")}（快照 #{String(issue.taskVersionId)}） · 条件范围 {String(issue.conditionScopeKey || "—")}</p> : null}
+      </CardContent></Card>
+
+      <Card><CardHeader><CardTitle>人工反馈与质量统计</CardTitle><CardDescription>反馈关联原检测、模型配置版本、任务版本和条件步骤；不会改写原算法结果。</CardDescription></CardHeader><CardContent className="space-y-4">
+        {model.canHandle && model.detections.length ? <IssueFeedbackPanel detections={model.detections} issueId={Number(issue.id)} projectId={projectId} stateVersion={Number(issue.stateVersion)} /> : <p className="text-sm text-muted-foreground">无可反馈检测，或当前账号没有案件处置权限。</p>}
+        {model.feedback.length ? <div className="space-y-2">{model.feedback.map((item) => <div className="rounded border p-2 text-sm" key={String(item.id)}><strong>{String(item.action)}</strong> · 检测 #{String(item.detectionId)} · 模型版本 #{String(item.algorithmDefinitionVersionId)} · 任务版本 #{String(item.taskVersionId ?? "—")}<p className="text-muted-foreground">{String(item.reason)}{item.correctedLabel ? ` · 修正为 ${String(item.correctedLabel)}` : ""}{item.disposition ? ` · ${String(item.disposition)}` : ""}</p></div>)}</div> : null}
+        {model.qualityStats.length ? <div className="grid gap-2 md:grid-cols-2">{model.qualityStats.map((item) => <div className="rounded bg-muted p-3 text-xs" key={`${String(item.algorithmDefinitionVersionId)}:${String(item.taskVersionId)}`}>模型版本 #{String(item.algorithmDefinitionVersionId)} · 任务版本 #{String(item.taskVersionId ?? "—")}<br/>样本 {String(item.total)} · 确认 {String(item.confirmed)} · 误报 {String(item.falsePositives)} · 类别修正 {String(item.corrections)} · 误报率 {String(item.falsePositiveRate ?? "—")}</div>)}</div> : null}
       </CardContent></Card>
 
       <Card><CardHeader><CardTitle>检测与模型证据</CardTitle><CardDescription>显示算法、模型配置快照、置信度、空间质量和原始资产版本。</CardDescription></CardHeader><CardContent className="space-y-5">
