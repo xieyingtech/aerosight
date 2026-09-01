@@ -12,6 +12,7 @@ import {
   suspectedConstructionTemplate
 } from "../lib/suspected-construction-template.ts";
 import { buildTimelineModel } from "../lib/timeline-model.ts";
+import { evaluateTaskCondition } from "../lib/task-condition-evaluator.ts";
 
 const { Client, Pool } = pg;
 const databaseImage = process.env.BENCHMARK_POSTGIS_IMAGE ?? "postgis/postgis:17-3.5";
@@ -90,9 +91,12 @@ async function seed(client) {
      values($1,$2,'benchmark-simulator','simulator','connected') returning id`, [project.id, team.id]
   )).rows[0];
   const devices = (await client.query(
-    `insert into devices(project_id,name,type,status,adapter_id,last_seen_at)
-     select $1,'benchmark-drone-' || value,'drone','online',$2,now()
-       from generate_series(1,$3::integer) value returning id`, [project.id, adapter.id, parameters.devices]
+    `insert into devices(project_id,device_type_id,name,type,status,adapter_id,last_seen_at)
+     select $1,device_type.id,'benchmark-drone-' || value,'drone','online',$2,now()
+       from device_types device_type
+       cross join generate_series(1,$3::integer) value
+      where device_type.type_key='legacy.device' and device_type.version=1
+     returning id`, [project.id, adapter.id, parameters.devices]
   )).rows;
   const asset = (await client.query(
     `insert into assets(project_id,team_id,kind,mime_type,storage_key,logical_key,status,captured_at)
@@ -119,21 +123,39 @@ async function seed(client) {
   )).rows[0];
   await client.query("update algorithm_definition_versions set status='published' where id=$1", [algorithmVersion.id]);
   await client.query("update algorithm_definitions set current_published_version_id=$2 where id=$1", [definition.id, algorithmVersion.id]);
-  const rule = (await client.query(
-    `insert into event_rules(project_id,team_id,name,status,created_by_user_id)
-     values($1,$2,'benchmark-rule','active',$3) returning id`, [project.id, team.id, user.id]
+  const task = (await client.query(
+    `insert into tasks(project_id,team_id,name,description,trigger_type,status,script,created_by_user_id)
+     values($1,$2,'benchmark-inspection','detection to issue benchmark','manual','active','typed-task-v1',$3) returning id`,
+    [project.id,team.id,user.id]
   )).rows[0];
-  const ruleVersion = (await client.query(
-    `insert into event_rule_versions(
-       project_id,team_id,event_rule_id,version,status,label,minimum_confidence,severity,published_by_user_id,published_at
-     ) values($1,$2,$3,1,'draft','suspected-construction',0.65,'high',$4,now()) returning id`,
-    [project.id, team.id, rule.id, user.id]
+  const taskVersion = (await client.query(
+    `insert into task_versions(project_id,team_id,task_id,version,status,definition_json,script,input_schema_json,trigger_json,concurrency_limit,created_by_user_id)
+     values($1,$2,$3,1,'draft',$4,'typed-task-v1',$5,'{"type":"manual"}'::jsonb,100,$6) returning id`,
+    [project.id,team.id,task.id,{ name: "benchmark-inspection",description: "",inputSchema: { type: "object",properties: {},required: [],additionalProperties: false },
+      trigger: { type: "manual" },concurrencyLimit: 100,steps: [] },
+      { type: "object",properties: {},required: [],additionalProperties: false },user.id]
   )).rows[0];
-  await client.query("update event_rule_versions set status='published' where id=$1", [ruleVersion.id]);
-  await client.query("update event_rules set current_published_version_id=$2 where id=$1", [rule.id, ruleVersion.id]);
+  const detectStep = (await client.query(
+    `insert into task_steps(project_id,team_id,task_version_id,position,step_key,name,capability_code,action,uses,
+      parameters_json,failure_policy_json,input_schema_json,output_schema_json,retry_policy_json)
+     values($1,$2,$3,1,'detect','detect','algorithm.run','algorithm.run','algorithm.run','{}','{"onFailure":"abort"}',
+      '{"type":"object","properties":{}}','{"type":"object","properties":{}}','{"maxAttempts":1,"backoffSeconds":0}') returning id`,
+    [project.id,team.id,taskVersion.id]
+  )).rows[0];
+  const issueStep = (await client.query(
+    `insert into task_steps(project_id,team_id,task_version_id,position,step_key,name,capability_code,action,uses,
+      parameters_json,failure_policy_json,input_schema_json,output_schema_json,condition_json,depends_on_json,retry_policy_json)
+     values($1,$2,$3,2,'create-issue','create issue','issue.create-or-update','issue.create-or-update','issue.create-or-update','{}',
+      '{"onFailure":"abort"}','{"type":"object","properties":{}}','{"type":"object","properties":{}}',$4,'["detect"]',
+      '{"maxAttempts":1,"backoffSeconds":0}') returning id`,
+    [project.id,team.id,taskVersion.id,{ op: "gte",left: { ref: "steps.detect.outputs.maxConfidence" },right: { value: 0.65 } }]
+  )).rows[0];
+  await client.query("update task_versions set status='published',published_by_user_id=$2,published_at=now() where id=$1",[taskVersion.id,user.id]);
+  await client.query("update tasks set current_published_version_id=$2 where id=$1",[task.id,taskVersion.id]);
   return { userId: user.id, teamId: team.id, projectId: project.id, adapterId: adapter.id,
     deviceIds: devices.map((row) => row.id), assetId: asset.id, providerId: provider.id,
-    algorithmVersionId: algorithmVersion.id, ruleVersionId: ruleVersion.id };
+    algorithmVersionId: algorithmVersion.id, taskId: task.id,taskVersionId: taskVersion.id,
+    detectStepId: detectStep.id,issueStepId: issueStep.id };
 }
 
 async function visibleSnapshot(pool, scope) {
@@ -217,13 +239,26 @@ async function benchmarkDetections(client, pool, scope) {
   const latencies = [];
   for (let index = 0; index < parameters.detections; index += 1) {
     const runId = randomUUID();
-    const eventId = randomUUID();
     const callbackId = `benchmark-callback-${index}`;
+    const taskRun = (await client.query(
+      `insert into task_runs(project_id,team_id,task_id,task_version_id,trigger_source,trigger_key,status,input_snapshot_json)
+       values($1,$2,$3,$4,'manual',$5,'running','{"inputs":{}}') returning id`,
+      [scope.projectId,scope.teamId,scope.taskId,scope.taskVersionId,`benchmark-trigger-${index}`]
+    )).rows[0];
+    const runSteps = (await client.query(
+      `insert into task_run_steps(project_id,team_id,task_run_id,task_step_id,position,status,execution_key)
+       select project_id,team_id,$3::bigint,id,position,case when position=1 then 'running' else 'pending' end,
+         'benchmark-run:'||($3::bigint)::text||':step:'||step_key
+       from task_steps where project_id=$1 and task_version_id=$2 order by position returning id,position`,
+      [scope.projectId,scope.taskVersionId,taskRun.id]
+    )).rows;
+    const detectRunStepId = runSteps.find((step) => step.position === 1).id;
+    const issueRunStepId = runSteps.find((step) => step.position === 2).id;
     await client.query(
       `insert into algorithm_runs(
-         id,project_id,team_id,algorithm_definition_version_id,input_asset_id,idempotency_key,status
-       ) values($1,$2,$3,$4,$5,$6,'succeeded')`,
-      [runId, scope.projectId, scope.teamId, scope.algorithmVersionId, scope.assetId, `benchmark-run-${index}`]
+         id,project_id,team_id,algorithm_definition_version_id,input_asset_id,task_run_id,task_run_step_id,idempotency_key,status
+       ) values($1,$2,$3,$4,$5,$6,$7,$8,'succeeded')`,
+      [runId,scope.projectId,scope.teamId,scope.algorithmVersionId,scope.assetId,taskRun.id,detectRunStepId,`benchmark-run-${index}`]
     );
     const started = performance.now();
     const canonical = mapSuspectedConstructionDetections({
@@ -249,35 +284,40 @@ async function benchmarkDetections(client, pool, scope) {
         const latitude = 30.2 + index * 0.0001;
         const detection = (await client.query(
           `insert into detections(
-             project_id,team_id,algorithm_run_id,input_asset_id,detection_key,label,confidence,pixel_geometry_json,
+             project_id,team_id,algorithm_run_id,input_asset_id,task_run_id,detection_key,label,confidence,pixel_geometry_json,
              geographic_geometry,location_quality,projection_method,horizontal_error_meters,transform_version,captured_at
-           ) values($1,$2,$3,$4,$5,$6,$7,$8,
-             ST_MakeEnvelope($9::double precision,$10::double precision,
-               $9::double precision+0.00005,$10::double precision+0.00005,4326),
-             'estimated','benchmark-projection',2,'benchmark/v1',$11)
+           ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,
+             ST_MakeEnvelope($10::double precision,$11::double precision,
+               $10::double precision+0.00005,$11::double precision+0.00005,4326),
+             'estimated','benchmark-projection',2,'benchmark/v1',$12)
            returning id`,
-          [scope.projectId, scope.teamId, runId, scope.assetId, canonical.detectionKey, canonical.label,
+          [scope.projectId,scope.teamId,runId,scope.assetId,taskRun.id,canonical.detectionKey,canonical.label,
             canonical.confidence, canonical.pixelGeometry, longitude, latitude, capturedAt]
         )).rows[0];
-        const group = (await client.query(
-          `insert into detection_groups(
-             project_id,team_id,label,geographic_geometry,location_quality,first_detected_at,last_detected_at
-           ) values($1,$2,$3,ST_MakeEnvelope($4::double precision,$5::double precision,
-             $4::double precision+0.00005,$5::double precision+0.00005,4326),'estimated',$6,$6) returning id`,
-          [scope.projectId, scope.teamId, canonical.label, longitude, latitude, capturedAt]
-        )).rows[0];
-        await client.query(
-          `insert into detection_group_members(project_id,team_id,detection_group_id,detection_id)
-           values($1,$2,$3,$4)`, [scope.projectId, scope.teamId, group.id, detection.id]
-        );
-        await client.query(
-          `insert into perception_events(
-             id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,severity,
-             first_detected_at,last_detected_at
-           ) values($1,$2,$3,$4,$5,$6,'high',$7,$7)`,
-          [eventId, scope.projectId, scope.teamId, scope.ruleVersionId, group.id,
-            `benchmark-rule:${scope.ruleVersionId}:group:${group.id}`, capturedAt]
-        );
+        const condition = evaluateTaskCondition({ op: "gte",left: { ref: "steps.detect.outputs.maxConfidence" },right: { value: 0.65 } },
+          { inputs: {},steps: { detect: { outputs: { maxConfidence: canonical.confidence,detectionId: detection.id } } } });
+        await client.query(`update task_run_steps set status='succeeded',output_snapshot_json=$3,result_json=$3,finished_at=now()
+          where project_id=$1 and id=$2`,[scope.projectId,detectRunStepId,{ maxConfidence: canonical.confidence,detectionId: detection.id }]);
+        if (condition.result) {
+          const issue = (await client.query(
+            `insert into issues(project_id,number,title,description,source_type,source_id,status,priority,task_run_id,task_version_id,
+              condition_scope_key,business_object_key,first_seen_at,last_seen_at)
+             values($1,$2,$3,'benchmark condition result','task',$4,'open','high',$4,$5,'create-issue',$6,$7,$7)
+             on conflict(project_id,task_version_id,condition_scope_key,business_object_key) where task_version_id is not null
+               and condition_scope_key is not null and business_object_key is not null
+             do update set occurrence_count=issues.occurrence_count+1,last_seen_at=excluded.last_seen_at returning id`,
+            [scope.projectId,index+1,`benchmark issue ${index}`,taskRun.id,scope.taskVersionId,`detection:${detection.id}`,capturedAt]
+          )).rows[0];
+          for (const [linkType,targetId] of [["task_run",taskRun.id],["task_version",scope.taskVersionId],["task_step",issueRunStepId],["condition",`create-issue:${condition.conditionHash}`],["algorithm_run",runId],["detection",detection.id]]) {
+            await client.query(`insert into issue_links(project_id,issue_id,link_type,target_id) values($1,$2,$3,$4)
+              on conflict(issue_id,link_type,target_id) do nothing`,[scope.projectId,issue.id,linkType,String(targetId)]);
+          }
+          await client.query(`update task_run_steps set status='succeeded',condition_result_json=$3,
+            output_snapshot_json=$4,result_json=$4,finished_at=now() where project_id=$1 and id=$2`,
+            [scope.projectId,issueRunStepId,condition,{ issueId: issue.id,created: true }]);
+          await client.query(`update task_runs set status='succeeded',output_snapshot_json=$3,finished_at=now()
+            where project_id=$1 and id=$2`,[scope.projectId,taskRun.id,{ detect: { detectionId: detection.id },issue: { issueId: issue.id } }]);
+        }
       }
       await client.query("commit");
     } catch (error) {
@@ -285,20 +325,20 @@ async function benchmarkDetections(client, pool, scope) {
       throw error;
     }
     const view = await visibleSnapshot(pool, scope);
-    if (!view.snapshot.openAlerts.some((alert) => alert.id === eventId)) {
-      throw new Error(`Canonical detection ${index} did not become a visible alert`);
+    if (!view.snapshot.openIssues.some((issue) => Number(issue.id) === index + 1)) {
+      throw new Error(`Canonical detection ${index} did not pass the task condition into a visible issue`);
     }
     latencies.push(performance.now() - started);
   }
   const counts = (await client.query(
     `select (select count(*)::integer from algorithm_callback_receipts) as callbacks,
             (select count(*)::integer from detections) as detections,
-            (select count(*)::integer from detection_groups) as groups,
-            (select count(*)::integer from perception_events) as alerts`
+            (select count(*)::integer from issues) as issues,
+            (select count(*)::integer from task_run_steps where status='succeeded') as steps`
   )).rows[0];
-  for (const value of Object.values(counts)) {
-    if (value !== parameters.detections) throw new Error(`Detection duplicate side effect: ${JSON.stringify(counts)}`);
-  }
+  if (counts.callbacks !== parameters.detections || counts.detections !== parameters.detections
+    || counts.issues !== parameters.detections || counts.steps !== parameters.detections * 2)
+    throw new Error(`Detection/task duplicate side effect: ${JSON.stringify(counts)}`);
   return { samples: latencies.length, p50Milliseconds: percentile(latencies, 0.5),
     p95Milliseconds: percentile(latencies, 0.95), maxMilliseconds: Math.max(...latencies),
     uniqueEvents: parameters.detections,
@@ -320,7 +360,7 @@ try {
       generatedAt: new Date().toISOString(),
       environment: { node: process.version, platform: process.platform, architecture: process.arch,
         logicalCpus: cpus().length, databaseImage },
-      scope: "PostGIS persistence, idempotency constraints, repeatable-read project snapshot, map and timeline projections",
+      scope: "PostGIS persistence, idempotency constraints, Task condition evaluation, issue creation, repeatable-read project snapshot, map and timeline projections",
       parameters,
       thresholds,
       results: { telemetry, detections },
