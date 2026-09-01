@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { withAuditedProjectWrite } from "@/lib/audit";
-import { shouldQueueCopilotMention } from "@/lib/copilot-mention-core";
+import { copilotJobIdempotencyKey, shouldQueueCopilotMention } from "@/lib/copilot-mention-core";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { assignmentChangeRequired, isCopilotAgent, planIssueMutation, type IssueMutation } from "@/lib/issue-collaboration-core";
 import { correlationId } from "@/lib/observability";
@@ -79,7 +79,7 @@ export async function mutateIssue(projectId: number, issueId: number, input: {
     async function queueCopilotJob(agentId: number, triggerType: "issue_mention" | "issue_assignment") {
       const session = (await client.query<{ id: number }>(`insert into agent_sessions(project_id,agent_id,issue_id,started_by_user_id,summary)
         values($1,$2,$3,$4,$5) returning id`, [projectId, agentId, issueId, user.id, `Copilot · 案件 #${issueId}`])).rows[0];
-      const idempotencyKey = `${triggerType}:${activity.id}:copilot`;
+      const idempotencyKey = copilotJobIdempotencyKey(triggerType, activity.id);
       const job = (await client.query<{ id: string }>(`insert into agent_tool_jobs(
         project_id,team_id,session_id,requested_by_user_id,issue_id,trigger_issue_event_id,trigger_type,idempotency_key,
         tool_name,required_permission,args_json,context_expires_at)

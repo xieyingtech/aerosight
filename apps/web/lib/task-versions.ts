@@ -7,6 +7,7 @@ import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
 import { correlationId } from "@/lib/observability";
 import { publishProjectEvent } from "@/lib/project-events";
+import { taskOrchestrationDefinitionSchema } from "@/lib/task-orchestration-schema";
 import { assertDraftPublishable, type TaskVersionStatus } from "@/lib/task-version-core";
 
 type TaskVersionRow = {
@@ -122,15 +123,27 @@ export async function publishTaskDraft(projectId: number, versionId: number, req
                 media_requirements_json as "mediaRequirements" from task_steps
           where project_id = $1 and task_version_id = $2 order by position`, [projectId, versionId]
       );
-      assertDraftPublishable({ ...row, steps: steps.rows });
+      const typed = taskOrchestrationDefinitionSchema.safeParse(row.definition);
+      if (typed.success) {
+        if (row.status !== "draft") throw new Error("TASK_VERSION_NOT_DRAFT");
+        if (typed.data.steps.length !== steps.rows.length
+          || typed.data.steps.some((step, index) => step.key !== steps.rows[index]?.stepKey)) {
+          throw new Error("TASK_VERSION_DEFINITION_STEPS_MISMATCH");
+        }
+      } else {
+        assertDraftPublishable({ ...row, steps: steps.rows });
+      }
       const published = await client.query<TaskVersionRow>(
         `update task_versions set status = 'published', published_by_user_id = $3, published_at = now()
           where project_id = $1 and id = $2 and status = 'draft' returning ${projection}`,
         [projectId, versionId, user.id]
       );
       await client.query(
-        "update tasks set current_published_version_id = $3, updated_at = now() where project_id = $1 and id = $2",
-        [projectId, row.taskId, versionId]
+        `update tasks set current_published_version_id=$3,name=coalesce(nullif($4,''),name),
+          description=coalesce($5,description),trigger_type=$6,updated_at=now() where project_id=$1 and id=$2`,
+        [projectId, row.taskId, versionId, typed.success ? typed.data.name : String(row.definition.name || ""),
+          typed.success ? typed.data.description : row.definition.description ?? null,
+          typed.success ? typed.data.trigger.type : String(row.trigger.type || "manual")]
       );
       await publishProjectEvent(client, {
         projectId, teamId: access.teamId, eventId: randomUUID(), eventType: "task_version.published",
@@ -139,6 +152,42 @@ export async function publishTaskDraft(projectId: number, versionId: number, req
       return published.rows[0];
     }
   );
+}
+
+export async function updateTaskDraft(projectId: number, taskId: number, versionId: number, rawDefinition: unknown, requestId?: string | null) {
+  const definition = taskOrchestrationDefinitionSchema.parse(rawDefinition);
+  const { user, access } = await requireCurrentProjectPermission(projectId, "mission:operate");
+  return withAuditedProjectWrite({
+    projectId, teamId: access.teamId, requestId: correlationId(requestId), actorUserId: user.id,
+    action: "task_version.update_draft", resourceType: "task_version", resourceId: String(versionId),
+    input: { taskId, name: definition.name, triggerType: definition.trigger.type, stepKeys: definition.steps.map((step) => step.key) },
+    policyResult: { permission: "mission:operate" }
+  }, async (client) => {
+    const draft = (await client.query<{ id: string }>(
+      `select id from task_versions where project_id=$1 and task_id=$2 and id=$3 and status='draft' for update`,
+      [projectId,taskId,versionId]
+    )).rows[0];
+    if (!draft) throw new Error("TASK_VERSION_DRAFT_NOT_FOUND");
+    await client.query(`update task_versions set definition_json=$4,script='typed-task-v1',input_schema_json=$5,
+      trigger_json=$6,concurrency_limit=$7 where project_id=$1 and task_id=$2 and id=$3`,
+      [projectId,taskId,versionId,definition,definition.inputSchema,definition.trigger,definition.concurrencyLimit]);
+    await client.query(`delete from task_steps where project_id=$1 and task_version_id=$2`, [projectId,versionId]);
+    for (const [index, step] of definition.steps.entries()) {
+      const action = typeof step.with.action === "string" && step.with.action.trim() ? step.with.action : step.uses;
+      const capability = step.requires[0] ?? step.uses;
+      await client.query(`insert into task_steps(
+        project_id,team_id,task_version_id,position,step_key,name,capability_code,action,parameters_json,
+        failure_policy_json,media_requirements_json,uses,input_schema_json,output_schema_json,condition_json,
+        depends_on_json,timeout_seconds,retry_policy_json)
+        values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+        [projectId,access.teamId,versionId,index+1,step.key,step.name,capability,action,step.with,
+          { onFailure: step.onFailure, maxRetries: step.retry.maxAttempts - 1, retryBackoffSeconds: step.retry.backoffSeconds,
+            idempotency: step.retry.maxAttempts > 1 ? "safe" : "unsafe" },
+          { required: step.uses === "device.collect" },step.uses,step.inputSchema,step.outputSchema,step.condition ?? null,
+          step.dependsOn,step.timeoutSeconds,step.retry]);
+    }
+    return { versionId, definition, stepCount: definition.steps.length };
+  });
 }
 
 export async function listTaskVersions(projectId: number, taskId: number) {

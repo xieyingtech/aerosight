@@ -33,3 +33,8 @@ export function hasActionableCopilotMention(markdown: string) {
 export function shouldQueueCopilotMention(markdown: string, permissions: ReadonlySet<string>) {
   return permissions.has("agent:use") && hasActionableCopilotMention(markdown);
 }
+
+export function copilotJobIdempotencyKey(triggerType: "issue_mention" | "issue_assignment", activityId: number) {
+  if (!Number.isSafeInteger(activityId) || activityId <= 0) throw new Error("COPILOT_TRIGGER_ACTIVITY_INVALID");
+  return `${triggerType}:${activityId}:copilot`;
+}

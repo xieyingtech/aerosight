@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"aerosight/worker/internal/credentials"
+	"aerosight/worker/internal/tasktrigger"
 )
 
 const issueCopilotPromptVersion = "issue-copilot-v1"
@@ -286,6 +287,22 @@ func (processor JobProcessor) succeed(ctx context.Context, job copilotJob, draft
 	if err := appendIssueActivity(ctx, tx, job, "copilot.completed", map[string]any{"jobId": job.ID, "draftId": draftID, "modelId": modelID,
 		"promptTemplateVersion": issueCopilotPromptVersion, "evidenceVersionHash": evidenceHash, "toolCalls": []any{}}); err != nil {
 		return err
+	}
+	if job.TriggerType == "issue_mention" || job.TriggerType == "issue_assignment" {
+		if _, err := tx.ExecContext(ctx, "savepoint copilot_task_delegation"); err != nil {
+			return err
+		}
+		inputs := map[string]any{"issueId": job.IssueID, "agentDraftId": draftID}
+		if err := tasktrigger.CreateCopilotRuns(ctx, tx, job.ProjectID, job.ID, job.TriggerType, inputs, processor.now()); err != nil {
+			if _, rollbackErr := tx.ExecContext(ctx, "rollback to savepoint copilot_task_delegation"); rollbackErr != nil {
+				return rollbackErr
+			}
+			if activityErr := appendIssueActivity(ctx, tx, job, "copilot.delegation_failed", map[string]any{"jobId": job.ID, "code": "TASK_DELEGATION_REJECTED"}); activityErr != nil {
+				return activityErr
+			}
+		} else if _, err := tx.ExecContext(ctx, "release savepoint copilot_task_delegation"); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }

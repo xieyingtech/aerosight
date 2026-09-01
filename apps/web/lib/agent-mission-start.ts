@@ -22,6 +22,7 @@ type AuthorizationRow = {
   deviceCommandsEnabled: boolean;
   selectedDeviceId: number | null;
   safetyPolicyVersionId: number | null;
+  concurrencyLimit: number;
   preflight: Record<string, unknown>;
 };
 
@@ -39,6 +40,7 @@ export async function executeAgentMissionStart(context: AgentExecutionContext, r
       coalesce(flags.device_commands_enabled,false) as "deviceCommandsEnabled",
       nullif(approval.context_json->>'selectedDeviceId','')::int as "selectedDeviceId",
       nullif(approval.context_json->>'safetyPolicyVersionId','')::bigint as "safetyPolicyVersionId",
+      version.concurrency_limit as "concurrencyLimit",
       coalesce(approval.context_json->'preflight','{}'::jsonb) as preflight
       from task_versions version
       left join approval_requests approval on approval.id=$3 and approval.project_id=version.project_id
@@ -57,6 +59,20 @@ export async function executeAgentMissionStart(context: AgentExecutionContext, r
     idempotencyKey: plan.idempotencyKey,
     request: { taskVersionId: plan.taskVersionId, approvalRequestId: plan.approvalRequestId }
   }, async (client) => {
+    const triggerKey = `copilot:${plan.idempotencyKey}`;
+    await client.query("select pg_advisory_xact_lock($1,$2)", [context.projectId,row.taskId]);
+    const existing = (await client.query<{ id: number; status: string }>(
+      `select id,status from task_runs where project_id=$1 and task_version_id=$2 and trigger_key=$3`,
+      [context.projectId,plan.taskVersionId,triggerKey]
+    )).rows[0];
+    if (existing) return { taskRunId: existing.id, status: existing.status, completion: plan.completion };
+    const activeRunCount = Number((await client.query<{ count: string }>(
+      `select count(*)::text as count from task_runs
+        where project_id=$1 and task_version_id=$2
+          and status in ('queued','blocked','ready','dispatching','running','paused','canceling')`,
+      [context.projectId,plan.taskVersionId]
+    )).rows[0]?.count ?? 0);
+    if (activeRunCount >= row.concurrencyLimit) throw new Error("TASK_TRIGGER_CONCURRENCY_LIMIT");
     const auditId = (await client.query<{ id: string }>(
       `insert into audit_events(project_id,team_id,request_id,idempotency_key,actor_user_id,action,resource_type,resource_id,input_hash,policy_result_json)
        values($1,$2,$3,$4,$5,'agent.request_mission_start','task_version',$6,$7,$8) returning id`,
@@ -65,15 +81,22 @@ export async function executeAgentMissionStart(context: AgentExecutionContext, r
     )).rows[0];
     const run = (await client.query<{ id: number }>(
       `insert into task_runs(project_id,team_id,task_id,task_version_id,selected_device_id,safety_policy_version_id,
-        approval_request_id,trigger_source,status,input_snapshot_json,preflight_snapshot_json,created_by_user_id,state_reason)
-       values($1,$2,$3,$4,$5,$6,$7,'agent','dispatching',$8,$9,$10,'agent-approved-start') returning id`,
+        approval_request_id,trigger_source,trigger_key,status,input_snapshot_json,preflight_snapshot_json,created_by_user_id,state_reason)
+       values($1,$2,$3,$4,$5,$6,$7,'copilot',$8,'dispatching',$9,$10,$11,'agent-approved-start') returning id`,
       [context.projectId,context.teamId,row.taskId,plan.taskVersionId,plan.selectedDeviceId,plan.safetyPolicyVersionId,
-        plan.approvalRequestId,{ agentSessionId: context.sessionId },row.preflight,context.userId]
+        plan.approvalRequestId,triggerKey,{
+          trigger: {
+            type: "copilot",delegation: "chat",agentJobId: context.sessionId,idempotencyKey: plan.idempotencyKey,
+            occurredAt: new Date().toISOString(),actor: { type: "agent",id: context.sessionId }
+          },
+          inputs: { agentSessionId: context.sessionId }
+        },row.preflight,context.userId]
     )).rows[0];
     await client.query(
-      `insert into task_run_steps(project_id,team_id,task_run_id,task_step_id,position,status)
-       select project_id,team_id,$3,id,position,'pending' from task_steps where project_id=$1 and task_version_id=$2 order by position`,
-      [context.projectId,plan.taskVersionId,run.id]
+      `insert into task_run_steps(project_id,team_id,task_run_id,task_step_id,position,status,execution_key)
+       select project_id,team_id,$3,id,position,'pending',$4||':step:'||step_key
+         from task_steps where project_id=$1 and task_version_id=$2 order by position`,
+      [context.projectId,plan.taskVersionId,run.id,triggerKey]
     );
     await publishProjectEvent(client, {
       projectId: context.projectId,teamId: context.teamId,eventId: randomUUID(),eventType: "task_run.transitioned",
