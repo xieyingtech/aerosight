@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"aerosight/worker/internal/adapter"
+	"aerosight/worker/internal/connector"
 	"aerosight/worker/internal/credentials"
 	"aerosight/worker/internal/outbox"
 )
@@ -46,6 +47,25 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 	if json.Unmarshal(event.Payload, &request) != nil || request.CommandID == "" {
 		return errors.New("DJI_COMMAND_EVENT_INVALID")
 	}
+	var targetDeviceID int
+	err := tx.QueryRowContext(ctx, `select device_id from device_commands
+		where project_id=$1 and id=$2::uuid and status='dispatchable'`, event.ProjectID, request.CommandID).Scan(&targetDeviceID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	route, err := connector.ResolvePrimaryBinding(ctx, tx, event.ProjectID, targetDeviceID)
+	if err != nil {
+		if errors.Is(err, connector.ErrRouteUnavailable) {
+			return errors.New("DJI_COMMAND_ROUTE_UNAVAILABLE")
+		}
+		if errors.Is(err, connector.ErrRouteConflict) {
+			return errors.New("DJI_COMMAND_ROUTE_CONFLICT")
+		}
+		return err
+	}
 	var command struct {
 		ID                 string
 		CapabilityCode     string
@@ -61,22 +81,22 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		MediaIngestBaseURL sql.NullString
 		IngestRef          sql.NullString
 	}
-	err := tx.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		select command.id::text,command.capability_code,command.command_key,command.parameters_json,
-		       command.deadline_at,command.priority,device.adapter_id,
+		       command.deadline_at,command.priority,adapter.id,
 		       coalesce(device_type.capability_profile_json->'dock.debug.control'->>'productFamily',
 		         case gateway.type_key when 'dji.dock2' then 'dock2' when 'dji.dock3' then 'dock3' else '' end),
 		       coalesce(gateway.external_device_id,target_identity.external_device_id),
 		       command.live_stream_id,adapter.credential_envelope_json,profile.media_ingest_base_url,stream.ingest_ref
 		from device_commands command
 		join devices device on device.id=command.device_id and device.project_id=command.project_id
-		join device_adapters adapter on adapter.id=device.adapter_id and adapter.project_id=device.project_id
+		join device_adapters adapter on adapter.id=$3 and adapter.project_id=device.project_id
 		left join device_network_profiles profile on profile.id=adapter.network_profile_id and profile.project_id=adapter.project_id
 		left join live_streams stream on stream.id=command.live_stream_id and stream.project_id=command.project_id
 		join device_types device_type on device_type.id=device.device_type_id
 		join driver_definitions driver on driver.id=device_type.driver_definition_id and driver.driver_key='dji.cloud'
 		join device_external_identities target_identity
-		  on target_identity.device_id=device.id and target_identity.adapter_id=device.adapter_id
+		  on target_identity.device_id=device.id and target_identity.adapter_id=adapter.id
 		left join lateral (
 		  with recursive ancestors(device_id,depth) as (
 		    select device.id,0
@@ -92,12 +112,12 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		  join devices candidate on candidate.id=ancestors.device_id and candidate.project_id=command.project_id
 		  join device_types candidate_type on candidate_type.id=candidate.device_type_id
 		  join device_external_identities identity
-		    on identity.device_id=candidate.id and identity.adapter_id=device.adapter_id
+		    on identity.device_id=candidate.id and identity.adapter_id=adapter.id
 		  where candidate_type.category='dock'
 		  order by ancestors.depth limit 1
 		) gateway on true
 		where command.project_id=$1 and command.id=$2::uuid and command.status='dispatchable'
-		for update of command`, event.ProjectID, request.CommandID).Scan(
+		for update of command`, event.ProjectID, request.CommandID, route.ConnectorInstanceID).Scan(
 		&command.ID, &command.CapabilityCode, &command.CommandKey, &command.Parameters,
 		&command.Deadline, &command.Priority, &command.AdapterID, &command.ProductFamily, &command.GatewaySN,
 		&command.LiveStreamID, &command.CredentialEnvelope, &command.MediaIngestBaseURL, &command.IngestRef,

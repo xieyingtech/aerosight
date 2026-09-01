@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"aerosight/worker/internal/connector"
 	"aerosight/worker/internal/outbox"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -119,15 +120,27 @@ func TestProjectorClaimsDJITopologyIntoUnifiedDeviceQuery(t *testing.T) {
 	if count != 12 || categories["dock"] != 2 || categories["aircraft"] != 2 || categories["camera"] != 6 || categories["sensor"] != 2 {
 		t.Fatalf("unified page query did not expose full topology: count=%d categories=%v", count, categories)
 	}
-	var relationships, channels int
+	var relationships, channels, bindings, gateways, inherited, managedIdentities int
 	if err := database.QueryRowContext(ctx, "select count(*) from device_relationships where project_id=$1", projectID).Scan(&relationships); err != nil {
 		t.Fatal(err)
 	}
 	if err := database.QueryRowContext(ctx, "select count(*) from device_stream_channels where project_id=$1", projectID).Scan(&channels); err != nil {
 		t.Fatal(err)
 	}
+	if err := database.QueryRowContext(ctx, `select count(*),count(*) filter(where route_role='gateway'),
+		count(*) filter(where route_role='inherited') from device_connector_bindings where project_id=$1`, projectID).Scan(&bindings, &gateways, &inherited); err != nil {
+		t.Fatal(err)
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from device_external_identities
+		where project_id=$1 and discovery_status='managed'`, projectID).Scan(&managedIdentities); err != nil {
+		t.Fatal(err)
+	}
 	if relationships != 10 || channels < 10 {
 		t.Fatalf("topology was not materialized with relationships/streams: relationships=%d channels=%d", relationships, channels)
+	}
+	if bindings != 12 || gateways != 2 || inherited != 10 || managedIdentities != 12 {
+		t.Fatalf("topology routes are incomplete: bindings=%d gateway=%d inherited=%d managed=%d",
+			bindings, gateways, inherited, managedIdentities)
 	}
 	var stableChannels, djiStableChannels, mixedUnitChannels, qualityChannels int
 	if err := database.QueryRowContext(ctx, `select count(distinct stable_channel_id),
@@ -248,6 +261,7 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 	if status != "acknowledged" || correlationStatus != "acknowledged" {
 		t.Fatalf("ACK did not update command and correlation: command=%s correlation=%s", status, correlationStatus)
 	}
+	testConnectorMigrationAndDoublePrimary(t, ctx, database, dispatcher, publisher, teamID, projectID, aircraftID, adapterID, clock)
 
 	var cameraID int
 	if err := database.QueryRowContext(ctx, `select device_id from device_external_identities
@@ -417,6 +431,84 @@ func testCommandDispatchAndReplies(t *testing.T, ctx context.Context, database *
 	}
 	if status != "dispatchable" || correlationCount != 0 {
 		t.Fatalf("disconnected publish left a false sent correlation: status=%s correlations=%d", status, correlationCount)
+	}
+}
+
+func testConnectorMigrationAndDoublePrimary(
+	t *testing.T, ctx context.Context, database *sql.DB, dispatcher *CommandDispatcher,
+	publisher *capturedCommandPublisher, teamID, projectID, aircraftID int, originalAdapterID int64, clock time.Time,
+) {
+	t.Helper()
+	var replacementAdapterID, replacementIdentityID int64
+	if err := database.QueryRowContext(ctx, `insert into device_adapters(
+		project_id,team_id,name,adapter_type,vendor,status
+	) values($1,$2,'DJI replacement route','dji-cloud','dji','connected') returning id`, projectID, teamID).Scan(&replacementAdapterID); err != nil {
+		t.Fatal(err)
+	}
+	defer database.ExecContext(context.Background(), `delete from device_adapters where id=$1`, replacementAdapterID)
+	if err := database.QueryRowContext(ctx, `insert into device_external_identities(
+		project_id,team_id,adapter_id,device_id,external_device_id,external_device_type,identity_json,discovery_status,bound_at
+	) values($1,$2,$3,$4,'M3TD-REPLACEMENT-001','dji.matrice3td','{}','managed',now()) returning id`,
+		projectID, teamID, replacementAdapterID, aircraftID).Scan(&replacementIdentityID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(ctx, `insert into device_connector_bindings(
+		project_id,team_id,device_id,connector_instance_id,external_identity_id,route_role,priority,status
+	) values($1,$2,$3,$4,$5,'inherited',90,'standby')`,
+		projectID, teamID, aircraftID, replacementAdapterID, replacementIdentityID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(ctx, `update device_connector_bindings set status='standby'
+		where project_id=$1 and device_id=$2 and connector_instance_id=$3`, projectID, aircraftID, originalAdapterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(ctx, `update device_connector_bindings set status='active',priority=110
+		where project_id=$1 and device_id=$2 and connector_instance_id=$3`, projectID, aircraftID, replacementAdapterID); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	route, err := connector.ResolvePrimaryBinding(ctx, tx, projectID, aircraftID)
+	_ = tx.Rollback()
+	if err != nil || route.ConnectorInstanceID != replacementAdapterID {
+		t.Fatalf("connector migration did not preserve device %d on replacement route: %#v err=%v", aircraftID, route, err)
+	}
+	if _, err := database.ExecContext(ctx, `update device_connector_bindings set status='active',priority=100
+		where project_id=$1 and device_id=$2 and connector_instance_id in($3,$4)`,
+		projectID, aircraftID, originalAdapterID, replacementAdapterID); err != nil {
+		t.Fatal(err)
+	}
+	conflictCommandID := "89f050f8-77f2-4a73-a8b7-8391e3797899"
+	if _, err := database.ExecContext(ctx, `insert into device_commands(
+		id,project_id,team_id,device_id,command_key,idempotency_key,capability_code,
+		parameters_json,safety_context_json,status,priority,deadline_at
+	) values($1,$2,$3,$4,'return_home','integration-route-conflict','flight.return_home','{}','{}','dispatchable',100,$5)`,
+		conflictCommandID, projectID, teamID, aircraftID, clock.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	defer database.ExecContext(context.Background(), `delete from device_commands where id=$1`, conflictCommandID)
+	publisher.topic = "not-published"
+	tx, err = database.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatchErr := dispatcher.DispatchHandler(ctx, tx, outbox.Event{
+		ProjectID: projectID, TeamID: teamID, EventID: "dispatch:" + conflictCommandID,
+		EventType: "device.command.dispatch", Payload: jsonObject(map[string]any{"commandId": conflictCommandID}),
+	})
+	_ = tx.Rollback()
+	if dispatchErr == nil || dispatchErr.Error() != "DJI_COMMAND_ROUTE_CONFLICT" || publisher.topic != "not-published" {
+		t.Fatalf("double primary did not fail closed: err=%v topic=%s", dispatchErr, publisher.topic)
+	}
+	if _, err := database.ExecContext(ctx, `update device_connector_bindings set status='active',priority=100
+		where project_id=$1 and device_id=$2 and connector_instance_id=$3`, projectID, aircraftID, originalAdapterID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.ExecContext(ctx, `update device_connector_bindings set status='standby',priority=90
+		where project_id=$1 and device_id=$2 and connector_instance_id=$3`, projectID, aircraftID, replacementAdapterID); err != nil {
+		t.Fatal(err)
 	}
 }
 

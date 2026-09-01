@@ -116,6 +116,7 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 		"protocolVersion": node.ProtocolVersion, "firmwareVersion": node.FirmwareVersion, "compatibilityReason": node.CompatibilityReason,
 	})
 	var deviceID sql.NullInt64
+	var identityID int64
 	var existingType sql.NullString
 	err := tx.QueryRowContext(ctx, `
 		insert into device_external_identities (
@@ -125,8 +126,8 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 		on conflict (adapter_id, external_device_id) do update
 		set last_seen_at=greatest(device_external_identities.last_seen_at, excluded.last_seen_at),
 		    identity_json=device_external_identities.identity_json || excluded.identity_json
-		returning device_id, external_device_type`, envelope.ProjectID, teamID, envelope.AdapterID,
-		node.ExternalID, node.TypeKey, identityJSON, envelope.CapturedAt).Scan(&deviceID, &existingType)
+		returning id,device_id,external_device_type`, envelope.ProjectID, teamID, envelope.AdapterID,
+		node.ExternalID, node.TypeKey, identityJSON, envelope.CapturedAt).Scan(&identityID, &deviceID, &existingType)
 	if err != nil {
 		return 0, fmt.Errorf("upsert DJI external identity: %w", err)
 	}
@@ -135,6 +136,9 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 			return 0, fmt.Errorf("DJI_IDENTITY_TYPE_IMMUTABLE: %s is %s, discovered as %s", node.ExternalID, existingType.String, node.TypeKey)
 		}
 		if err := projector.materializeCapabilities(ctx, tx, teamID, envelope, int(deviceID.Int64), node.ExternalID, node.TypeKey, node.ReadOnly, node.CompatibilityReason); err != nil {
+			return 0, err
+		}
+		if err := projector.ensureConnectorBinding(ctx, tx, teamID, envelope, node, identityID, deviceID.Int64); err != nil {
 			return 0, err
 		}
 		return int(deviceID.Int64), nil
@@ -164,15 +168,50 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 	}
 	if _, err := tx.ExecContext(ctx, `
 		update device_external_identities
-		set device_id=$1, bound_at=now(), last_seen_at=greatest(last_seen_at,$2)
+		set device_id=$1,bound_at=now(),last_seen_at=greatest(last_seen_at,$2),
+		    suggested_device_type_id=$5,match_confidence=1,discovery_status='managed'
 		where adapter_id=$3 and external_device_id=$4 and device_id is null`,
-		deviceID.Int64, envelope.CapturedAt, envelope.AdapterID, node.ExternalID); err != nil {
+		deviceID.Int64, envelope.CapturedAt, envelope.AdapterID, node.ExternalID, deviceTypeID); err != nil {
 		return 0, fmt.Errorf("bind DJI external identity: %w", err)
+	}
+	if err := projector.ensureConnectorBinding(ctx, tx, teamID, envelope, node, identityID, deviceID.Int64); err != nil {
+		return 0, err
 	}
 	if err := projector.materializeCapabilities(ctx, tx, teamID, envelope, int(deviceID.Int64), node.ExternalID, node.TypeKey, node.ReadOnly, node.CompatibilityReason); err != nil {
 		return 0, err
 	}
 	return int(deviceID.Int64), nil
+}
+
+func (projector *Projector) ensureConnectorBinding(
+	ctx context.Context, tx *sql.Tx, teamID int, envelope adapter.UpstreamEnvelope, node ProductNode,
+	identityID, deviceID int64,
+) error {
+	role := "direct"
+	if node.ParentExternalID != "" {
+		role = "inherited"
+	} else if node.Category == "dock" || node.Category == "gateway" {
+		role = "gateway"
+	}
+	if _, err := tx.ExecContext(ctx, `
+		update device_external_identities set discovery_status='managed',bound_at=coalesce(bound_at,now())
+		where id=$1 and project_id=$2 and adapter_id=$3 and device_id=$4`,
+		identityID, envelope.ProjectID, envelope.AdapterID, deviceID); err != nil {
+		return fmt.Errorf("mark DJI identity managed: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into device_connector_bindings(
+		  project_id,team_id,device_id,connector_instance_id,external_identity_id,
+		  route_role,priority,status,metadata_json
+		) values($1,$2,$3,$4,$5,$6,100,'active',$7)
+		on conflict(device_id,connector_instance_id) do update set
+		  external_identity_id=excluded.external_identity_id,route_role=excluded.route_role,
+		  status='active',unbound_at=null,metadata_json=excluded.metadata_json`,
+		envelope.ProjectID, teamID, deviceID, envelope.AdapterID, identityID, role,
+		jsonObject(map[string]any{"source": "dji-topology", "protocol": "dji-cloud-api"})); err != nil {
+		return fmt.Errorf("bind DJI connector route: %w", err)
+	}
+	return nil
 }
 
 func (projector *Projector) materializeCapabilities(ctx context.Context, tx *sql.Tx, teamID int, envelope adapter.UpstreamEnvelope, deviceID int, externalID, typeKey string, readOnly bool, reason string) error {

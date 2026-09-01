@@ -15,6 +15,7 @@ var ErrSyncCursorAdvanced = errors.New("connector sync cursor advanced concurren
 type SyncApplyResult struct {
 	RunID          int64
 	Discovered     int
+	Managed        int
 	Missing        int
 	ReplayedCursor bool
 }
@@ -117,13 +118,14 @@ func (store *SQLSyncStore) ApplyBatch(
 		}
 	}()
 	var teamID int
+	var onboardingPolicy string
 	var currentCursor, scope []byte
 	err = tx.QueryRowContext(ctx, `
-		select team_id, sync_cursor_json, discovery_scope_json
+		select team_id, sync_cursor_json, discovery_scope_json, onboarding_policy
 		  from device_adapters where id=$1 and project_id=$2
 		   and ($3='' or (lease_owner=$3 and connection_epoch=$4 and lease_expires_at>=now()))
 		 for update`,
-		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&teamID, &currentCursor, &scope)
+		instance.ID, instance.ProjectID, instance.LeaseOwner, instance.LeaseEpoch).Scan(&teamID, &currentCursor, &scope, &onboardingPolicy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return result, errors.New("connector instance is unavailable or out of scope")
 	}
@@ -154,13 +156,15 @@ func (store *SQLSyncStore) ApplyBatch(
 			_, err = tx.ExecContext(ctx, `
 				insert into device_external_identities (
 				  project_id,team_id,adapter_id,external_device_id,external_device_type,suggested_device_type_id,identity_json,
-				  discovery_status,source_version,last_sync_run_id,first_seen_at,last_seen_at
+				  match_confidence,discovery_status,source_version,last_sync_run_id,first_seen_at,last_seen_at
 				) values ($1,$2,$3,$4,$5,
-				  (select id from device_types where type_key=$5 and version=1 and status='active'),
-				  $6,'discovered',$7,$8,now(),now())
+				  (select id from device_types where type_key=$5 and status='active' order by version desc limit 1),
+				  $6,case when exists(select 1 from device_types where type_key=$5 and status='active') then 1 else null end,
+				  'discovered',$7,$8,now(),now())
 				on conflict (adapter_id,external_device_id) do update set
 				  external_device_type=excluded.external_device_type,
 				  suggested_device_type_id=excluded.suggested_device_type_id,
+				  match_confidence=excluded.match_confidence,
 				  identity_json=excluded.identity_json,
 				  discovery_status=case
 				    when device_external_identities.discovery_status in ('managed','ignored','conflicted')
@@ -205,6 +209,20 @@ func (store *SQLSyncStore) ApplyBatch(
 					}
 				}
 			}
+			managed, onboardErr := store.applyAutomaticOnboarding(
+				ctx, tx, instance, teamID, OnboardingPolicy(onboardingPolicy), device,
+			)
+			if onboardErr != nil {
+				return result, onboardErr
+			}
+			if managed {
+				result.Managed++
+			}
+		}
+		if onboardingPolicy == string(OnboardingAutomatic) {
+			if err = store.materializeAutomaticRelationships(ctx, tx, instance, teamID, batch.Devices); err != nil {
+				return result, err
+			}
 		}
 		result.Discovered = len(batch.Devices)
 		if batch.CompleteSnapshot {
@@ -237,8 +255,8 @@ func (store *SQLSyncStore) ApplyBatch(
 	}
 	_, err = tx.ExecContext(ctx, `
 		update connector_sync_runs set status='succeeded',cursor_after_json=$2,
-		  discovered_count=$3,missing_count=$4,finished_at=now() where id=$1`,
-		result.RunID, normalizedCursor(batch.Cursor), result.Discovered, result.Missing)
+		  discovered_count=$3,managed_count=$4,missing_count=$5,finished_at=now() where id=$1`,
+		result.RunID, normalizedCursor(batch.Cursor), result.Discovered, result.Managed, result.Missing)
 	if err != nil {
 		return result, err
 	}
@@ -246,6 +264,128 @@ func (store *SQLSyncStore) ApplyBatch(
 		return result, err
 	}
 	return result, nil
+}
+
+func (store *SQLSyncStore) applyAutomaticOnboarding(
+	ctx context.Context, tx *sql.Tx, instance Instance, teamID int, policy OnboardingPolicy, external ExternalDevice,
+) (bool, error) {
+	var identityID int64
+	var status string
+	var deviceID, suggestedTypeID sql.NullInt64
+	var confidence sql.NullFloat64
+	var category, typeKey sql.NullString
+	err := tx.QueryRowContext(ctx, `
+		select identity.id,identity.discovery_status,identity.device_id,identity.suggested_device_type_id,
+		       identity.match_confidence,device_type.category,device_type.type_key
+		  from device_external_identities identity
+		  left join device_types device_type on device_type.id=identity.suggested_device_type_id and device_type.status='active'
+		 where identity.project_id=$1 and identity.adapter_id=$2 and identity.external_device_id=$3
+		 for update of identity`, instance.ProjectID, instance.ID, external.ExternalID).Scan(
+		&identityID, &status, &deviceID, &suggestedTypeID, &confidence, &category, &typeKey,
+	)
+	if err != nil {
+		return false, err
+	}
+	if deviceID.Valid {
+		return false, nil
+	}
+	matches := []DeviceTypeMatch{}
+	if suggestedTypeID.Valid && confidence.Valid && typeKey.Valid {
+		matches = append(matches, DeviceTypeMatch{DeviceTypeID: suggestedTypeID.Int64, TypeKey: typeKey.String, Confidence: confidence.Float64})
+	}
+	decision, err := EvaluateOnboarding(OnboardingInput{
+		Policy: policy, ExternalID: external.ExternalID, CurrentStatus: status, Matches: matches,
+		IdentityConflict: status == "conflicted",
+	})
+	if err != nil {
+		return false, err
+	}
+	if decision.Status != status && !decision.CreateDevice {
+		_, err = tx.ExecContext(ctx, `update device_external_identities set discovery_status=$4
+			where project_id=$1 and adapter_id=$2 and id=$3`, instance.ProjectID, instance.ID, identityID, decision.Status)
+		return false, err
+	}
+	if !decision.CreateDevice || !category.Valid {
+		return false, nil
+	}
+	name := strings.TrimSpace(external.ExternalID)
+	for _, key := range []string{"callsign", "name", "serialNumber"} {
+		if value, ok := external.Attributes[key].(string); ok && strings.TrimSpace(value) != "" {
+			name = strings.TrimSpace(value)
+			break
+		}
+	}
+	metadata, err := json.Marshal(map[string]any{
+		"connectorInstanceId": instance.ID, "externalIdentityId": identityID,
+		"onboarding": "automatic", "matchConfidence": decision.Confidence,
+	})
+	if err != nil {
+		return false, err
+	}
+	var createdDeviceID int64
+	err = tx.QueryRowContext(ctx, `
+		insert into devices(project_id,adapter_id,device_type_id,name,type,status,metadata_json)
+		values($1,$2,$3,$4,$5,'unknown',$6) returning id`,
+		instance.ProjectID, instance.ID, decision.DeviceTypeID, name, category.String, metadata).Scan(&createdDeviceID)
+	if err != nil {
+		return false, err
+	}
+	updated, err := tx.ExecContext(ctx, `
+		update device_external_identities set device_id=$4,discovery_status='managed',bound_at=now()
+		 where project_id=$1 and adapter_id=$2 and id=$3 and device_id is null and discovery_status='discovered'`,
+		instance.ProjectID, instance.ID, identityID, createdDeviceID)
+	if err != nil {
+		return false, err
+	}
+	rows, err := updated.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows != 1 {
+		return false, errors.New("connector onboarding identity changed concurrently")
+	}
+	role := "direct"
+	if external.ParentExternalID != "" {
+		role = "inherited"
+	} else if category.String == "dock" || category.String == "gateway" {
+		role = "gateway"
+	}
+	_, err = tx.ExecContext(ctx, `
+		insert into device_connector_bindings(
+		  project_id,team_id,device_id,connector_instance_id,external_identity_id,route_role,priority,status,metadata_json
+		) values($1,$2,$3,$4,$5,$6,100,'active',$7)`, instance.ProjectID, teamID, createdDeviceID,
+		instance.ID, identityID, role, json.RawMessage(`{"source":"automatic-onboarding"}`))
+	return err == nil, err
+}
+
+func (store *SQLSyncStore) materializeAutomaticRelationships(
+	ctx context.Context, tx *sql.Tx, instance Instance, teamID int, devices []ExternalDevice,
+) error {
+	for _, device := range devices {
+		if device.ParentExternalID == "" {
+			continue
+		}
+		_, err := tx.ExecContext(ctx, `
+			insert into device_relationships(
+			  project_id,team_id,from_device_id,to_device_id,relation_type,source_type,metadata_json
+			)
+			select $1,$2,parent.device_id,child.device_id,'contains','discovery',$5
+			  from device_external_identities parent,device_external_identities child
+			 where parent.project_id=$1 and child.project_id=$1
+			   and parent.adapter_id=$3 and child.adapter_id=$3
+			   and parent.external_device_id=$4 and child.external_device_id=$6
+			   and parent.device_id is not null and child.device_id is not null
+			   and not exists (
+			     select 1 from device_relationships relation
+			      where relation.project_id=$1 and relation.from_device_id=parent.device_id
+			        and relation.to_device_id=child.device_id and relation.valid_until is null
+			   )`, instance.ProjectID, teamID, instance.ID, device.ParentExternalID,
+			json.RawMessage(`{"source":"automatic-onboarding"}`), device.ExternalID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func normalizedCursor(cursor json.RawMessage) json.RawMessage {
