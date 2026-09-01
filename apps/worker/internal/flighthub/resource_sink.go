@@ -38,6 +38,8 @@ type DeviceHealthProjector interface {
 type FlightCatalogProjector interface {
 	ApplyWaylines(context.Context, connector.Instance, []WaylineSummary) error
 	ApplyFlightTasks(context.Context, connector.Instance, []FlightTaskSummary) error
+	ListArtifactTargets(context.Context, connector.Instance, int) ([]FlightArtifactTarget, error)
+	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
 }
 
 type SQLResourceStreamSink struct {
@@ -277,6 +279,17 @@ func (sink *SQLResourceStreamSink) ApplyCatalog(ctx context.Context, instance co
 		return sink.flights.ApplyWaylines(ctx, instance, poll.Waylines)
 	}
 	return sink.flights.ApplyFlightTasks(ctx, instance, poll.FlightTasks)
+}
+
+func (sink *SQLResourceStreamSink) ListFlightArtifactTargets(ctx context.Context, instance connector.Instance, limit int) ([]FlightArtifactTarget, error) {
+	return sink.flights.ListArtifactTargets(ctx, instance, limit)
+}
+
+func (sink *SQLResourceStreamSink) ApplyFlightArtifacts(ctx context.Context, instance connector.Instance, poll FlightArtifactPoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
+	return sink.flights.ApplyFlightArtifacts(ctx, instance, poll)
 }
 
 func waylineRemoteResources(items []WaylineSummary) ([]connector.RemoteResource, error) {

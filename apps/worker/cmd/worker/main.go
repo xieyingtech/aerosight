@@ -108,9 +108,10 @@ func main() {
 			os.Exit(1)
 		}
 		resourceRepository := connector.NewSQLResourceRepository(database)
+		telemetryIngestor := telemetry.NewIngestor(database)
 		resourceSink, resourceErr := flighthub.NewSQLResourceStreamSink(
-			telemetry.NewIngestor(database), resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database),
-			flighthub.NewSQLFlightCatalogProjector(database, nil, 30*time.Minute),
+			telemetryIngestor, resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database),
+			flighthub.NewSQLFlightCatalogProjector(database, telemetryIngestor, nil, 30*time.Minute),
 		)
 		if resourceErr != nil {
 			logger.Error("FlightHub resource sink initialization failed", "error", resourceErr.Error())

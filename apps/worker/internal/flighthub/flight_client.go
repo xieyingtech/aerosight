@@ -233,6 +233,55 @@ type FlightTaskResumption struct {
 	Task ResumedFlightTask `json:"task"`
 }
 
+type FlightTrackPoint struct {
+	Timestamp int64   `json:"timestamp"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Height    float64 `json:"height"`
+}
+
+type FlightTrack struct {
+	ID             string             `json:"track_id"`
+	DroneSN        string             `json:"drone_sn"`
+	FlightDistance int64              `json:"flight_distance"`
+	FlightDuration int64              `json:"flight_duration"`
+	Points         []FlightTrackPoint `json:"points"`
+}
+
+type FlightTaskTrack struct {
+	Name        string      `json:"name"`
+	WaylineUUID string      `json:"wayline_uuid"`
+	Track       FlightTrack `json:"track"`
+}
+
+type FlightControlChange struct {
+	Time        int64  `json:"control_change_time"`
+	UserName    string `json:"user_name"`
+	UserID      string `json:"user_id"`
+	ControlType string `json:"control_type"`
+}
+
+type FlightOperationLog struct {
+	Method   string `json:"method"`
+	Time     int64  `json:"time"`
+	Bid      string `json:"bid"`
+	UserName string `json:"user_name"`
+	UserID   string `json:"user_id"`
+}
+
+type FlightOperationUser struct {
+	UserName string `json:"user_name"`
+	UserID   string `json:"user_id"`
+	OperType string `json:"oper_type"`
+}
+
+type FlightTaskOperationTimeline struct {
+	ControlChanges []FlightControlChange `json:"control_change"`
+	PayloadChanges []FlightControlChange `json:"payload_change"`
+	OperationLogs  []FlightOperationLog  `json:"oper_logs"`
+	RelatedUsers   []FlightOperationUser `json:"related_users"`
+}
+
 func validateIdentifierList(values []string, minimum, maximum int) ([]string, error) {
 	if len(values) < minimum || len(values) > maximum {
 		return nil, &APIError{SafeCode: "request_invalid"}
@@ -271,6 +320,28 @@ func validTimestamp(value string) bool {
 	}
 	_, err := time.Parse(time.RFC3339Nano, value)
 	return err == nil
+}
+
+func validFlightOperationCode(value string) bool {
+	if value != strings.TrimSpace(value) || len(value) == 0 || len(value) > 128 {
+		return false
+	}
+	for _, character := range value {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || character == '_' || character == '-' || character == '.' || character == ':' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func requireFlightTaskID(value string) (string, error) {
+	value, err := requireScope(value)
+	if err != nil || strings.ContainsAny(value, "/\\?#&=") {
+		return "", &APIError{SafeCode: "request_invalid"}
+	}
+	return value, nil
 }
 
 func validateWayline(item *WaylineSummary) bool {
@@ -482,7 +553,7 @@ func (client *Client) GetFlightTaskDetail(ctx context.Context, token, projectUUI
 	if err != nil {
 		return FlightTaskDetail{}, err
 	}
-	taskUUID, err = requireScope(taskUUID)
+	taskUUID, err = requireFlightTaskID(taskUUID)
 	if err != nil {
 		return FlightTaskDetail{}, &APIError{SafeCode: "request_invalid"}
 	}
@@ -508,7 +579,7 @@ func (client *Client) GetFlightTask(ctx context.Context, token, projectUUID, tas
 	if err != nil {
 		return FlightTask{}, err
 	}
-	taskUUID, err = requireScope(taskUUID)
+	taskUUID, err = requireFlightTaskID(taskUUID)
 	if err != nil {
 		return FlightTask{}, &APIError{SafeCode: "request_invalid"}
 	}
@@ -600,6 +671,67 @@ func (client *Client) CreateFlightTaskResumption(ctx context.Context, token, pro
 	var result FlightTaskResumption
 	if err := json.Unmarshal(payload.Data, &result); err != nil || strings.TrimSpace(result.Task.UUID) == "" || result.Task.BeginAt <= 0 || result.Task.EndAt < result.Task.BeginAt || (result.Task.ParentTask != nil && strings.TrimSpace(result.Task.ParentTask.UUID) == "") {
 		return FlightTaskResumption{}, schemaError()
+	}
+	return result, nil
+}
+
+func (client *Client) GetFlightTaskTrack(ctx context.Context, token, projectUUID, taskUUID string) (FlightTaskTrack, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return FlightTaskTrack{}, err
+	}
+	taskUUID, err = requireFlightTaskID(taskUUID)
+	if err != nil {
+		return FlightTaskTrack{}, &APIError{SafeCode: "request_invalid"}
+	}
+	path, err := resolvePathTemplate("/openapi/v2.0/flight-task/{task_uuid}/track", map[string]string{"task_uuid": taskUUID})
+	if err != nil {
+		return FlightTaskTrack{}, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: path})
+	if err != nil {
+		return FlightTaskTrack{}, err
+	}
+	var result FlightTaskTrack
+	if err := json.Unmarshal(payload.Data, &result); err != nil || strings.TrimSpace(result.Track.ID) == "" || strings.TrimSpace(result.Track.DroneSN) == "" || result.Track.FlightDistance < 0 || result.Track.FlightDuration < 0 || result.Track.Points == nil {
+		return FlightTaskTrack{}, schemaError()
+	}
+	for _, point := range result.Track.Points {
+		if point.Timestamp <= 0 {
+			return FlightTaskTrack{}, schemaError()
+		}
+	}
+	return result, nil
+}
+
+func (client *Client) GetFlightTaskOperationTimeline(ctx context.Context, token, projectUUID, taskUUID string) (FlightTaskOperationTimeline, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return FlightTaskOperationTimeline{}, err
+	}
+	taskUUID, err = requireFlightTaskID(taskUUID)
+	if err != nil {
+		return FlightTaskOperationTimeline{}, &APIError{SafeCode: "request_invalid"}
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodGet, Path: "/openapi/v2.0/flight-task/oper", Query: url.Values{"task_uuid": {taskUUID}},
+	})
+	if err != nil {
+		return FlightTaskOperationTimeline{}, err
+	}
+	var result FlightTaskOperationTimeline
+	if err := json.Unmarshal(payload.Data, &result); err != nil || result.ControlChanges == nil || result.PayloadChanges == nil || result.OperationLogs == nil || result.RelatedUsers == nil {
+		return FlightTaskOperationTimeline{}, schemaError()
+	}
+	for _, change := range append(append([]FlightControlChange(nil), result.ControlChanges...), result.PayloadChanges...) {
+		if change.Time <= 0 || !validFlightOperationCode(change.ControlType) {
+			return FlightTaskOperationTimeline{}, schemaError()
+		}
+	}
+	for _, item := range result.OperationLogs {
+		if item.Time <= 0 || !validFlightOperationCode(item.Method) {
+			return FlightTaskOperationTimeline{}, schemaError()
+		}
 	}
 	return result, nil
 }

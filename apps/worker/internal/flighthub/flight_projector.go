@@ -6,29 +6,33 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"aerosight/worker/internal/adapter"
 	"aerosight/worker/internal/connector"
+	"aerosight/worker/internal/telemetry"
 )
 
 const flightProjectorScript = "dji-flighthub-flight-v1"
 
 type SQLFlightCatalogProjector struct {
 	db           *sql.DB
+	telemetry    TelemetryBatchIngestor
 	now          func() time.Time
 	unknownAfter time.Duration
 }
 
-func NewSQLFlightCatalogProjector(database *sql.DB, now func() time.Time, unknownAfter time.Duration) *SQLFlightCatalogProjector {
+func NewSQLFlightCatalogProjector(database *sql.DB, telemetryIngestor TelemetryBatchIngestor, now func() time.Time, unknownAfter time.Duration) *SQLFlightCatalogProjector {
 	if now == nil {
 		now = time.Now
 	}
 	if unknownAfter <= 0 {
 		unknownAfter = 30 * time.Minute
 	}
-	return &SQLFlightCatalogProjector{db: database, now: now, unknownAfter: unknownAfter}
+	return &SQLFlightCatalogProjector{db: database, telemetry: telemetryIngestor, now: now, unknownAfter: unknownAfter}
 }
 
 func (projector *SQLFlightCatalogProjector) ApplyWaylines(ctx context.Context, instance connector.Instance, items []WaylineSummary) (returnedErr error) {
@@ -513,4 +517,266 @@ func (projector *SQLFlightCatalogProjector) reconcileFlightTask(ctx context.Cont
 	_, err = tx.ExecContext(ctx, `update connector_remote_resources set canonical_target_type='task_run',canonical_target_id=$4,updated_at=now()
 		where project_id=$1 and connector_instance_id=$2 and id=$3`, instance.ProjectID, instance.ID, resource.ID, strconv.Itoa(run.ID))
 	return err
+}
+
+func flightArtifactMarkerID(projectID, runID int, kind string) string {
+	return fmt.Sprintf("flighthub-task-run:%d:%d:%s-synced", projectID, runID, kind)
+}
+
+func (projector *SQLFlightCatalogProjector) ListArtifactTargets(ctx context.Context, instance connector.Instance, limit int) (targets []FlightArtifactTarget, returnedErr error) {
+	if projector == nil || projector.db == nil || limit < 1 || limit > 100 {
+		return nil, errors.New("FlightHub flight artifact target query is invalid")
+	}
+	tx, _, err := projector.beginWritable(ctx, instance)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if returnedErr != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	rows, err := tx.QueryContext(ctx, `select resource.remote_id,run.id,
+		(run.status='succeeded' and track_marker.event_id is null) as need_track,
+		(operation_marker.event_id is null) as need_operation
+		from connector_remote_resources resource
+		join task_runs run on resource.project_id=run.project_id
+		 and resource.canonical_target_type='task_run' and resource.canonical_target_id=run.id::text
+		left join project_events track_marker on track_marker.project_id=run.project_id
+		 and track_marker.event_id='flighthub-task-run:'||run.project_id::text||':'||run.id::text||':track-synced'
+		left join project_events operation_marker on operation_marker.project_id=run.project_id
+		 and operation_marker.event_id='flighthub-task-run:'||run.project_id::text||':'||run.id::text||':operations-synced'
+		where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.resource_kind='flight-task'
+		 and resource.status='active' and run.status in('succeeded','failed','canceled')
+		 and ((run.status='succeeded' and track_marker.event_id is null) or operation_marker.event_id is null)
+		order by run.finished_at nulls last,resource.id limit $3`, instance.ProjectID, instance.ID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var target FlightArtifactTarget
+		if err := rows.Scan(&target.RemoteTaskID, &target.TaskRunID, &target.NeedTrack, &target.NeedOperation); err != nil {
+			return nil, err
+		}
+		targets = append(targets, target)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return targets, nil
+}
+
+func validateFlightArtifactTarget(ctx context.Context, tx *sql.Tx, instance connector.Instance, target FlightArtifactTarget) error {
+	if strings.TrimSpace(target.RemoteTaskID) == "" || target.TaskRunID <= 0 {
+		return errors.New("FlightHub flight artifact target is invalid")
+	}
+	resource, err := loadProjectedRemoteResource(ctx, tx, instance, "flight-task", target.RemoteTaskID)
+	if err != nil {
+		return err
+	}
+	if !resource.CanonicalType.Valid || resource.CanonicalType.String != "task_run" || !resource.CanonicalID.Valid || resource.CanonicalID.String != strconv.Itoa(target.TaskRunID) {
+		return errors.New("FlightHub flight artifact canonical link is invalid")
+	}
+	var runID int
+	err = tx.QueryRowContext(ctx, `select id from task_runs where project_id=$1 and id=$2 and status in('succeeded','failed','canceled') for update`,
+		instance.ProjectID, target.TaskRunID).Scan(&runID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return connector.ErrRemoteResourceUnavailable
+	}
+	return err
+}
+
+func flightTrackTime(timestamp int64) (time.Time, bool) {
+	if timestamp <= 0 {
+		return time.Time{}, false
+	}
+	if timestamp >= 1_000_000_000_000 {
+		return time.UnixMilli(timestamp).UTC(), true
+	}
+	return time.Unix(timestamp, 0).UTC(), true
+}
+
+func validFlightTrackPoint(point FlightTrackPoint) bool {
+	return point.Timestamp > 0 && point.Longitude >= -180 && point.Longitude <= 180 && point.Latitude >= -90 && point.Latitude <= 90 &&
+		!math.IsNaN(point.Longitude) && !math.IsInf(point.Longitude, 0) && !math.IsNaN(point.Latitude) && !math.IsInf(point.Latitude, 0) &&
+		!math.IsNaN(point.Height) && !math.IsInf(point.Height, 0)
+}
+
+func (projector *SQLFlightCatalogProjector) ingestFlightTrack(ctx context.Context, instance connector.Instance, teamID, deviceID int, target FlightArtifactTarget, track FlightTaskTrack, receivedAt time.Time) (valid, invalid int, returnedErr error) {
+	if projector.telemetry == nil {
+		return 0, 0, errors.New("FlightHub flight track telemetry ingestor is unavailable")
+	}
+	batch := make([]telemetry.Telemetry, 0, len(track.Track.Points))
+	for _, point := range track.Track.Points {
+		capturedAt, timeOK := flightTrackTime(point.Timestamp)
+		if !timeOK || !validFlightTrackPoint(point) {
+			invalid++
+			continue
+		}
+		altitude := point.Height
+		payload, err := json.Marshal(adapter.Pose{
+			DeviceType: "drone", CRS: "dji-flighthub-track:unverified", TransformVersion: "dji-flighthub-track-v1",
+			Longitude: point.Longitude, Latitude: point.Latitude, AltitudeMeters: &altitude,
+			Quality: map[string]any{"source": "dji-flighthub-openapi", "coordinateReference": "unverified", "taskRunId": target.TaskRunID},
+		})
+		if err != nil {
+			return valid, invalid, err
+		}
+		quality, err := json.Marshal(map[string]any{
+			"source": "dji-flighthub-openapi", "coordinateReference": "unverified", "transformVersion": "dji-flighthub-track-v1", "taskRunId": target.TaskRunID,
+		})
+		if err != nil {
+			return valid, invalid, err
+		}
+		sequence := point.Timestamp
+		runID := target.TaskRunID
+		batch = append(batch, telemetry.Telemetry{
+			ProjectID: instance.ProjectID, TeamID: teamID, AdapterID: instance.ID, DeviceID: deviceID, TaskRunID: &runID,
+			EventID: fmt.Sprintf("flighthub-track:%d:%s", target.TaskRunID, secureRemoteKey(strconv.FormatInt(capturedAt.UnixNano(), 10))),
+			Type:    "telemetry.pose", Sequence: &sequence, CapturedAt: capturedAt, ReceivedAt: receivedAt, Payload: payload, Quality: quality,
+			RequireActiveAdapter: true, AdapterLeaseOwner: instance.LeaseOwner, AdapterLeaseEpoch: instance.LeaseEpoch,
+		})
+		valid++
+	}
+	if len(batch) == 0 {
+		return valid, invalid, nil
+	}
+	inserted, err := projector.telemetry.IngestBatch(ctx, batch)
+	return inserted, invalid, err
+}
+
+func insertFlightArtifactEvent(ctx context.Context, tx *sql.Tx, projectID, teamID int, eventID, eventType string, occurredAt time.Time, payload map[string]any) error {
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `insert into project_events(project_id,team_id,event_id,event_type,payload_json,occurred_at)
+		values($1,$2,$3,$4,$5,$6) on conflict(event_id) do nothing`, projectID, teamID, eventID, eventType, payloadJSON, occurredAt)
+	return err
+}
+
+func operationEventID(projectID, runID int, category string, timestamp int64, action, remoteKey string) string {
+	fingerprint := strings.Join([]string{category, strconv.FormatInt(timestamp, 10), action, remoteKey}, ":")
+	return fmt.Sprintf("flighthub-task-run:%d:%d:operation:%s", projectID, runID, secureRemoteKey(fingerprint))
+}
+
+func insertFlightOperationTimeline(ctx context.Context, tx *sql.Tx, projectID, teamID int, target FlightArtifactTarget, timeline FlightTaskOperationTimeline) error {
+	insertChange := func(category string, item FlightControlChange) error {
+		occurredAt, ok := flightTrackTime(item.Time)
+		if !ok || !validFlightOperationCode(item.ControlType) {
+			return errors.New("FlightHub control change is invalid")
+		}
+		return insertFlightArtifactEvent(ctx, tx, projectID, teamID,
+			operationEventID(projectID, target.TaskRunID, category, item.Time, item.ControlType, item.UserID),
+			"task_run.vendor_operation", occurredAt,
+			map[string]any{"taskRunId": target.TaskRunID, "category": category, "action": item.ControlType, "source": "dji-flighthub-openapi"})
+	}
+	for _, item := range timeline.ControlChanges {
+		if err := insertChange("control_change", item); err != nil {
+			return err
+		}
+	}
+	for _, item := range timeline.PayloadChanges {
+		if err := insertChange("payload_change", item); err != nil {
+			return err
+		}
+	}
+	for _, item := range timeline.OperationLogs {
+		occurredAt, ok := flightTrackTime(item.Time)
+		if !ok || !validFlightOperationCode(item.Method) {
+			return errors.New("FlightHub operation log is invalid")
+		}
+		if err := insertFlightArtifactEvent(ctx, tx, projectID, teamID,
+			operationEventID(projectID, target.TaskRunID, "operation", item.Time, item.Method, item.Bid+":"+item.UserID),
+			"task_run.vendor_operation", occurredAt,
+			map[string]any{"taskRunId": target.TaskRunID, "category": "operation", "action": item.Method, "source": "dji-flighthub-openapi"}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (projector *SQLFlightCatalogProjector) ApplyFlightArtifacts(ctx context.Context, instance connector.Instance, poll FlightArtifactPoll) (returnedErr error) {
+	if projector == nil || projector.db == nil || poll.ReceivedAt.IsZero() || (poll.Track == nil && poll.Operations == nil) {
+		return errors.New("FlightHub flight artifact projection is invalid")
+	}
+	tx, teamID, err := projector.beginWritable(ctx, instance)
+	if err != nil {
+		return err
+	}
+	if err := validateFlightArtifactTarget(ctx, tx, instance, poll.Target); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	var deviceID *int
+	if poll.Track != nil {
+		deviceID, err = selectedTaskDevice(ctx, tx, instance, poll.Track.Track.DroneSN)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if deviceID == nil {
+			_ = tx.Rollback()
+			return errors.New("FlightHub flight track device is outside managed scope")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	validPoints, invalidPoints := 0, 0
+	if poll.Track != nil {
+		validPoints, invalidPoints, err = projector.ingestFlightTrack(ctx, instance, teamID, *deviceID, poll.Target, *poll.Track, poll.ReceivedAt.UTC())
+		if err != nil {
+			return err
+		}
+	}
+
+	tx, teamID, err = projector.beginWritable(ctx, instance)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if returnedErr != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err := validateFlightArtifactTarget(ctx, tx, instance, poll.Target); err != nil {
+		return err
+	}
+	if poll.Track != nil {
+		if err := tx.QueryRowContext(ctx, `select count(*) from observations
+			where project_id=$1 and task_run_id=$2 and adapter_id=$3 and source_event_id like $4`,
+			instance.ProjectID, poll.Target.TaskRunID, instance.ID, fmt.Sprintf("flighthub-track:%d:%%", poll.Target.TaskRunID)).Scan(&validPoints); err != nil {
+			return err
+		}
+		if err := insertFlightArtifactEvent(ctx, tx, instance.ProjectID, teamID,
+			flightArtifactMarkerID(instance.ProjectID, poll.Target.TaskRunID, "track"), "task_run.vendor_track_synced", poll.ReceivedAt.UTC(),
+			map[string]any{
+				"taskRunId": poll.Target.TaskRunID, "source": "dji-flighthub-openapi", "coordinateReference": "unverified",
+				"validPointCount": validPoints, "invalidPointCount": invalidPoints,
+				"flightDistance": poll.Track.Track.FlightDistance, "flightDuration": poll.Track.Track.FlightDuration,
+			}); err != nil {
+			return err
+		}
+	}
+	if poll.Operations != nil {
+		if err := insertFlightOperationTimeline(ctx, tx, instance.ProjectID, teamID, poll.Target, *poll.Operations); err != nil {
+			return err
+		}
+		if err := insertFlightArtifactEvent(ctx, tx, instance.ProjectID, teamID,
+			flightArtifactMarkerID(instance.ProjectID, poll.Target.TaskRunID, "operations"), "task_run.vendor_operations_synced", poll.ReceivedAt.UTC(),
+			map[string]any{
+				"taskRunId": poll.Target.TaskRunID, "source": "dji-flighthub-openapi",
+				"controlChangeCount": len(poll.Operations.ControlChanges), "payloadChangeCount": len(poll.Operations.PayloadChanges),
+				"operationCount": len(poll.Operations.OperationLogs), "relatedUserCount": len(poll.Operations.RelatedUsers),
+			}); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

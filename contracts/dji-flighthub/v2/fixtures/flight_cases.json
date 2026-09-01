@@ -303,6 +303,54 @@
           }
         }
       }
+    },
+    {
+      "name": "flight-task-track",
+      "endpointId": "454273436e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/TASK_REDACTED_01/track",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "name": "脱敏巡检任务",
+          "wayline_uuid": "WAYLINE_REDACTED_01",
+          "track": {
+            "track_id": "TRACK_REDACTED_01",
+            "drone_sn": "AIRCRAFT_REDACTED_01",
+            "flight_distance": 152,
+            "flight_duration": 90,
+            "points": [
+              { "timestamp": 1770000000000, "latitude": 30.000001, "longitude": 120.000001, "height": 32.5 },
+              { "timestamp": 1770000001000, "latitude": 30.000002, "longitude": 120.000002, "height": 33.0 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "flight-task-operation-timeline",
+      "endpointId": "454273443e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/oper?task_uuid=TASK_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "control_change": [
+            { "control_change_time": 1770000000000, "user_name": "USER_REDACTED", "user_id": "USER_ID_REDACTED", "control_type": "wayline" }
+          ],
+          "payload_change": [],
+          "oper_logs": [
+            { "method": "pause_task", "time": 1770000001000, "bid": "BID_REDACTED", "user_name": "USER_REDACTED", "user_id": "USER_ID_REDACTED" }
+          ],
+          "related_users": [
+            { "user_name": "USER_REDACTED", "user_id": "USER_ID_REDACTED", "oper_type": "operator" }
+          ]
+        }
+      }
     }
   ]
 }

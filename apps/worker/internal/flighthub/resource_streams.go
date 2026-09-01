@@ -18,6 +18,8 @@ type ResourceStreamClient interface {
 	GetAutoRecordingConfig(context.Context, string, string) (AutoRecordingConfig, error)
 	ListWaylines(context.Context, string, string) ([]WaylineSummary, error)
 	ListFlightTasks(context.Context, string, string, FlightTaskListOptions) ([]FlightTaskSummary, error)
+	GetFlightTaskTrack(context.Context, string, string, string) (FlightTaskTrack, error)
+	GetFlightTaskOperationTimeline(context.Context, string, string, string) (FlightTaskOperationTimeline, error)
 }
 
 type ResourceStreamStore interface {
@@ -50,20 +52,37 @@ type CatalogPoll struct {
 	ReceivedAt       time.Time
 }
 
+type FlightArtifactTarget struct {
+	RemoteTaskID  string
+	TaskRunID     int
+	NeedTrack     bool
+	NeedOperation bool
+}
+
+type FlightArtifactPoll struct {
+	Target     FlightArtifactTarget
+	Track      *FlightTaskTrack
+	Operations *FlightTaskOperationTimeline
+	ReceivedAt time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
 	ApplyCatalog(context.Context, connector.Instance, CatalogPoll) error
+	ListFlightArtifactTargets(context.Context, connector.Instance, int) ([]FlightArtifactTarget, error)
+	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
 }
 
 type ResourceStreamConfig struct {
-	OnlineInterval  time.Duration
-	OfflineInterval time.Duration
-	HealthInterval  time.Duration
-	CatalogInterval time.Duration
-	MaxBackoff      time.Duration
-	Now             func() time.Time
-	OnError         func(string, error)
+	OnlineInterval    time.Duration
+	OfflineInterval   time.Duration
+	HealthInterval    time.Duration
+	CatalogInterval   time.Duration
+	ArtifactBatchSize int
+	MaxBackoff        time.Duration
+	Now               func() time.Time
+	OnError           func(string, error)
 }
 
 type ResourceStreamCoordinator struct {
@@ -80,7 +99,10 @@ func NewResourceStreamCoordinator(client ResourceStreamClient, resolver TokenRes
 	if config.CatalogInterval == 0 {
 		config.CatalogInterval = 15 * time.Minute
 	}
-	if client == nil || resolver == nil || store == nil || sink == nil || config.OnlineInterval <= 0 || config.OfflineInterval < config.OnlineInterval || config.HealthInterval <= 0 || config.CatalogInterval <= 0 || config.MaxBackoff <= 0 {
+	if config.ArtifactBatchSize == 0 {
+		config.ArtifactBatchSize = 25
+	}
+	if client == nil || resolver == nil || store == nil || sink == nil || config.OnlineInterval <= 0 || config.OfflineInterval < config.OnlineInterval || config.HealthInterval <= 0 || config.CatalogInterval <= 0 || config.ArtifactBatchSize < 1 || config.ArtifactBatchSize > 100 || config.MaxBackoff <= 0 {
 		return nil, errors.New("FlightHub resource stream configuration is invalid")
 	}
 	if config.Now == nil {
@@ -102,6 +124,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "health", run: coordinator.pollHealth},
 		{kind: "waylines", run: coordinator.pollWaylines},
 		{kind: "flight-tasks", run: coordinator.pollFlightTasks},
+		{kind: "flight-artifacts", run: coordinator.pollFlightArtifacts},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -113,6 +136,57 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollFlightArtifacts(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	targets, err := coordinator.sink.ListFlightArtifactTargets(ctx, instance, coordinator.config.ArtifactBatchSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	now := coordinator.config.Now().UTC()
+	tracks, operations := 0, 0
+	var pollErrors []error
+	for _, target := range targets {
+		poll := FlightArtifactPoll{Target: target, ReceivedAt: now}
+		if target.NeedTrack {
+			track, trackErr := coordinator.client.GetFlightTaskTrack(ctx, token, scope.ProjectUUID, target.RemoteTaskID)
+			if trackErr != nil {
+				pollErrors = append(pollErrors, trackErr)
+			} else {
+				poll.Track = &track
+			}
+		}
+		if target.NeedOperation {
+			timeline, operationErr := coordinator.client.GetFlightTaskOperationTimeline(ctx, token, scope.ProjectUUID, target.RemoteTaskID)
+			if operationErr != nil {
+				pollErrors = append(pollErrors, operationErr)
+			} else {
+				poll.Operations = &timeline
+			}
+		}
+		if poll.Track == nil && poll.Operations == nil {
+			continue
+		}
+		if applyErr := coordinator.sink.ApplyFlightArtifacts(ctx, instance, poll); applyErr != nil {
+			pollErrors = append(pollErrors, applyErr)
+			continue
+		}
+		if poll.Track != nil {
+			tracks++
+		}
+		if poll.Operations != nil {
+			operations++
+		}
+	}
+	cursor := map[string]any{
+		"targets": len(targets), "tracks": tracks, "operations": operations,
+		"complete": len(targets) < coordinator.config.ArtifactBatchSize && len(pollErrors) == 0,
+	}
+	return cursor, coordinator.config.CatalogInterval, errors.Join(pollErrors...)
 }
 
 func (coordinator *ResourceStreamCoordinator) pollWaylines(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {

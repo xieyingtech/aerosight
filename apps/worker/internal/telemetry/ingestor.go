@@ -19,6 +19,7 @@ type Telemetry struct {
 	TeamID               int
 	AdapterID            int64
 	DeviceID             int
+	TaskRunID            *int
 	EventID              string
 	Type                 string
 	Sequence             *int64
@@ -202,30 +203,30 @@ func (ingestor *Ingestor) insertPoseObservation(ctx context.Context, tx *sql.Tx,
 			insert into observations (
 			  project_id, team_id, adapter_id, device_id, observation_type, source_event_id,
 			  captured_at, received_at, time_quality, original_crs_id,
-			  original_geometry, standard_geometry, properties_json, quality_json, validity
+			  original_geometry, standard_geometry, properties_json, quality_json, validity, task_run_id
 			) values (
 			  $1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9,
 			  ST_SetSRID(ST_MakePoint($10, $11, $12), 4326),
-			  ST_SetSRID(ST_MakePoint($10, $11, $12), 4326), $13, $14, $15
+			  ST_SetSRID(ST_MakePoint($10, $11, $12), 4326), $13, $14, $15, $16
 			) returning id`
 		observationArgs = []any{
 			item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
 			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
-			pose.Longitude, pose.Latitude, altitude, properties, quality, validity,
+			pose.Longitude, pose.Latitude, altitude, properties, quality, validity, nullableInt(item.TaskRunID),
 		}
 	} else {
 		observationQuery = `
 			insert into observations (
 			  project_id, team_id, adapter_id, device_id, observation_type, source_event_id,
 			  captured_at, received_at, time_quality, original_crs_id,
-			  original_geometry, properties_json, quality_json, validity
+			  original_geometry, properties_json, quality_json, validity, task_run_id
 			) values ($1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9,
-			  ST_MakePoint($10, $11, $12), $13, $14, $15)
+			  ST_MakePoint($10, $11, $12), $13, $14, $15, $16)
 			returning id`
 		observationArgs = []any{
 			item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
 			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
-			pose.Longitude, pose.Latitude, altitude, properties, quality, validity,
+			pose.Longitude, pose.Latitude, altitude, properties, quality, validity, nullableInt(item.TaskRunID),
 		}
 	}
 	if err := tx.QueryRowContext(ctx, observationQuery, observationArgs...).Scan(&observationID); err != nil {
@@ -329,6 +330,13 @@ func nullableInt64(value sql.NullInt64) any {
 	return nil
 }
 
+func nullableInt(value *int) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
 func quaternionValue(value *adapter.Quaternion, axis string) any {
 	if value == nil {
 		return nil
@@ -389,6 +397,9 @@ func (item Telemetry) Validate() error {
 	}
 	if item.Sequence != nil && *item.Sequence < 0 {
 		return errors.New("telemetry sequence must be non-negative")
+	}
+	if item.TaskRunID != nil && *item.TaskRunID <= 0 {
+		return errors.New("telemetry task run must be positive")
 	}
 	if !json.Valid(item.Payload) || !json.Valid(item.Quality) {
 		return errors.New("telemetry payload and quality must be valid JSON")

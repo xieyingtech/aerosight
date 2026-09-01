@@ -44,7 +44,7 @@ func loadFlightFixture(t *testing.T) (map[string]flightContractCase, []byte) {
 	if err := json.Unmarshal(contents, &fixture); err != nil {
 		t.Fatal(err)
 	}
-	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 12 {
+	if fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 14 {
 		t.Fatalf("invalid flight fixture metadata: version=%q cases=%d", fixture.ContractVersion, len(fixture.Cases))
 	}
 	byName := make(map[string]flightContractCase, len(fixture.Cases))
@@ -159,6 +159,14 @@ func TestFlightOperationTypedClientsMatchEveryReleasedEndpointFixture(t *testing
 	if err != nil || resumption.Task.UUID != "TASK_REDACTED_02" || resumption.Task.ParentTask == nil || resumption.Task.ParentTask.UUID != "TASK_REDACTED_01" {
 		t.Fatalf("resumption=%#v err=%v", resumption, err)
 	}
+	track, err := flightFixtureClient(t, cases["flight-task-track"]).GetFlightTaskTrack(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "TASK_REDACTED_01")
+	if err != nil || track.Track.ID != "TRACK_REDACTED_01" || len(track.Track.Points) != 2 || track.Track.Points[1].Height != 33 {
+		t.Fatalf("track=%#v err=%v", track, err)
+	}
+	timeline, err := flightFixtureClient(t, cases["flight-task-operation-timeline"]).GetFlightTaskOperationTimeline(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "TASK_REDACTED_01")
+	if err != nil || len(timeline.ControlChanges) != 1 || len(timeline.OperationLogs) != 1 || timeline.OperationLogs[0].Method != "pause_task" {
+		t.Fatalf("timeline=%#v err=%v", timeline, err)
+	}
 }
 
 func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T) {
@@ -190,6 +198,14 @@ func TestFlightOperationClientsRejectInvalidParametersBeforeNetwork(t *testing.T
 		}},
 		{name: "unsafe object key", call: func() error {
 			_, err := client.NotifyWaylineUploadComplete(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", WaylineUploadCompleteRequest{Name: "test", ObjectKey: "../secret"})
+			return err
+		}},
+		{name: "missing track task", call: func() error {
+			_, err := client.GetFlightTaskTrack(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "")
+			return err
+		}},
+		{name: "unsafe operation task", call: func() error {
+			_, err := client.GetFlightTaskOperationTimeline(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "../task")
 			return err
 		}},
 	}

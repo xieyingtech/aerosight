@@ -46,15 +46,19 @@ func (store *resourceStoreFixture) state(kind string) connector.ResourceSyncUpda
 }
 
 type resourceClientFixture struct {
-	mu            sync.Mutex
-	stateCalls    []string
-	stateErr      error
-	hmsErr        error
-	autoRecordErr error
-	waylines      []WaylineSummary
-	waylineErr    error
-	taskPages     map[string][]FlightTaskSummary
-	taskErrors    map[string]error
+	mu              sync.Mutex
+	stateCalls      []string
+	stateErr        error
+	hmsErr          error
+	autoRecordErr   error
+	waylines        []WaylineSummary
+	waylineErr      error
+	taskPages       map[string][]FlightTaskSummary
+	taskErrors      map[string]error
+	tracks          map[string]FlightTaskTrack
+	trackErrors     map[string]error
+	operations      map[string]FlightTaskOperationTimeline
+	operationErrors map[string]error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -102,6 +106,14 @@ func (client *resourceClientFixture) ListFlightTasks(_ context.Context, _, _ str
 	return append([]FlightTaskSummary(nil), client.taskPages[serial]...), client.taskErrors[serial]
 }
 
+func (client *resourceClientFixture) GetFlightTaskTrack(_ context.Context, _, _, taskID string) (FlightTaskTrack, error) {
+	return client.tracks[taskID], client.trackErrors[taskID]
+}
+
+func (client *resourceClientFixture) GetFlightTaskOperationTimeline(_ context.Context, _, _, taskID string) (FlightTaskOperationTimeline, error) {
+	return client.operations[taskID], client.operationErrors[taskID]
+}
+
 func (client *resourceClientFixture) calls() []string {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -109,11 +121,13 @@ func (client *resourceClientFixture) calls() []string {
 }
 
 type resourceSinkFixture struct {
-	stateApplied chan DeviceStatePoll
-	mu           sync.Mutex
-	health       int
-	states       int
-	catalogs     []CatalogPoll
+	stateApplied    chan DeviceStatePoll
+	mu              sync.Mutex
+	health          int
+	states          int
+	catalogs        []CatalogPoll
+	artifactTargets []FlightArtifactTarget
+	artifacts       []FlightArtifactPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -148,6 +162,19 @@ func (sink *resourceSinkFixture) ApplyCatalog(_ context.Context, _ connector.Ins
 	return nil
 }
 
+func (sink *resourceSinkFixture) ListFlightArtifactTargets(context.Context, connector.Instance, int) ([]FlightArtifactTarget, error) {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	return append([]FlightArtifactTarget(nil), sink.artifactTargets...), nil
+}
+
+func (sink *resourceSinkFixture) ApplyFlightArtifacts(_ context.Context, _ connector.Instance, poll FlightArtifactPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	sink.artifacts = append(sink.artifacts, poll)
+	return nil
+}
+
 func (sink *resourceSinkFixture) catalog(kind string) CatalogPoll {
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
@@ -157,6 +184,12 @@ func (sink *resourceSinkFixture) catalog(kind string) CatalogPoll {
 		}
 	}
 	return CatalogPoll{}
+}
+
+func (sink *resourceSinkFixture) appliedArtifacts() []FlightArtifactPoll {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	return append([]FlightArtifactPoll(nil), sink.artifacts...)
 }
 
 type blockingInventoryRunner struct {
@@ -360,6 +393,47 @@ func TestFlightTaskCatalogAtVendorLimitFailsSnapshotClosed(t *testing.T) {
 	cursor, _, err := coordinator.pollFlightTasks(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
 	if !IsSafeCode(err, "snapshot_incomplete") || cursor["complete"] != false || sink.catalog("flight-task").CompleteSnapshot {
 		t.Fatalf("vendor limit cursor=%#v err=%v", cursor, err)
+	}
+}
+
+func TestFlightArtifactStreamAppliesIndependentTrackAndOperationResults(t *testing.T) {
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	target := FlightArtifactTarget{RemoteTaskID: "TASK_REDACTED_01", TaskRunID: 17, NeedTrack: true, NeedOperation: true}
+	track := FlightTaskTrack{Track: FlightTrack{
+		ID: "TRACK_REDACTED", DroneSN: "AIRCRAFT_REDACTED", Points: []FlightTrackPoint{{Timestamp: now.UnixMilli(), Latitude: 30, Longitude: 120, Height: 10}},
+	}}
+	timeline := FlightTaskOperationTimeline{
+		ControlChanges: []FlightControlChange{}, PayloadChanges: []FlightControlChange{},
+		OperationLogs: []FlightOperationLog{{Method: "pause_task", Time: now.UnixMilli()}}, RelatedUsers: []FlightOperationUser{},
+	}
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}}
+	client := &resourceClientFixture{
+		tracks: map[string]FlightTaskTrack{target.RemoteTaskID: track}, trackErrors: map[string]error{},
+		operations: map[string]FlightTaskOperationTimeline{target.RemoteTaskID: timeline}, operationErrors: map[string]error{},
+	}
+	sink := &resourceSinkFixture{artifactTargets: []FlightArtifactTarget{target}}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
+		ArtifactBatchSize: 25, MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor, _, err := coordinator.pollFlightArtifacts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	if err != nil || cursor["tracks"] != 1 || cursor["operations"] != 1 || cursor["complete"] != true {
+		t.Fatalf("artifact cursor=%#v err=%v", cursor, err)
+	}
+	applied := sink.appliedArtifacts()
+	if len(applied) != 1 || applied[0].Track == nil || applied[0].Operations == nil || applied[0].Target.TaskRunID != target.TaskRunID {
+		t.Fatalf("artifact projection=%#v", applied)
+	}
+
+	client.trackErrors[target.RemoteTaskID] = &APIError{SafeCode: "upstream_unavailable", Retryable: true}
+	sink.artifacts = nil
+	cursor, _, err = coordinator.pollFlightArtifacts(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	applied = sink.appliedArtifacts()
+	if !IsSafeCode(err, "upstream_unavailable") || cursor["tracks"] != 0 || cursor["operations"] != 1 || cursor["complete"] != false || len(applied) != 1 || applied[0].Track != nil || applied[0].Operations == nil {
+		t.Fatalf("partial artifact cursor=%#v projection=%#v err=%v", cursor, applied, err)
 	}
 }
 

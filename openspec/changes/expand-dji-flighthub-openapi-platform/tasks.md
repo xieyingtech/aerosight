@@ -41,7 +41,7 @@
 - [x] 5.1 实现 wayline 列表/详情/上传完成通知及 flight-task 列表、recent、batch、default-name、detail、单项、dispatch-check、status、resumption typed clients，并用每个 endpoint fixture 验证参数与 schema。
 - [x] 5.2 实现航线与任务目录资源流、分页/完整性和 `connector_remote_resources` 幂等投影，并用重复同步、部分分页失败及同远端 UUID 跨项目测试验证。
 - [x] 5.3 将可转换航线关联 `tasks/task_versions`，将远端飞行任务关联 `task_runs` 并实现状态机映射和时间线对账，用受理、运行、暂停、成功、失败、取消及未知超时集成测试验证。
-- [ ] 5.4 实现任务 track 与操作日志同步，将 timestamp/latitude/longitude/height 写入时空轨迹并关联 task run，用乱序/重复轨迹和无效坐标测试验证。
+- [x] 5.4 实现任务 track 与操作日志同步，将 timestamp/latitude/longitude/height 写入时空轨迹并关联 task run，用乱序/重复轨迹和无效坐标测试验证。
 - [ ] 5.5 实现任务 media、export history 和单个飞行记录下载引用同步，将产物幂等关联 `assets` 且按需刷新临时 URL，并用 URL 过期、跨项目和重复媒体测试验证。
 - [ ] 5.6 实现 flight-alerts 与 ai-alert-record 同步，归一化到 `issues`/`perception_events` 并关联任务、设备、空间和媒体，用告警更新/恢复/重复测试验证不重复触发。
 - [ ] 5.7 实现 STS 获取、受控对象上传、航线上传完成通知的持久上传工作流，并用响应丢失恢复测试证明先查远端再决定是否重试。
