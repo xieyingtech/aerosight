@@ -1,0 +1,308 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "wayline-list",
+      "endpointId": "456680824e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/wayline",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "list": [
+            {
+              "id": "WAYLINE_REDACTED_01",
+              "name": "脱敏巡检航线",
+              "payload_information": [{ "domain": "1", "type": "98", "lens_type": "wide" }],
+              "device_model_key": "0-91-1",
+              "template_types": ["waypoint"],
+              "update_time": 1770000000000,
+              "size": 4096
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "wayline-detail",
+      "endpointId": "456680825e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/wayline/WAYLINE_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "id": "WAYLINE_REDACTED_01",
+          "name": "脱敏巡检航线",
+          "download_url": "https://objects.vendor.example/waylines/WAYLINE_REDACTED_01.kmz",
+          "update_time": 1770000000000,
+          "template_types": ["waypoint"],
+          "payload_information": [{ "domain": "1", "type": "98", "lens_type": "wide" }],
+          "distance": 152.5,
+          "wayline_point_nums": 5,
+          "device_model_key": "0-91-1",
+          "size": 4096
+        }
+      }
+    },
+    {
+      "name": "wayline-finish-upload",
+      "endpointId": "456680823e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/wayline/finish-upload",
+      "projectHeader": true,
+      "requestBody": { "name": "inspection", "object_key": "projects/PROJECT_REDACTED/waylines/upload.kmz" },
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": { "name": "inspection", "uuid": "WAYLINE_REDACTED_02" }
+      }
+    },
+    {
+      "name": "flight-task-list",
+      "endpointId": "454273439e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/list?begin_at=1770000000&end_at=1770003600&flight_task_type=1&name=inspection&sn=DOCK_REDACTED_01%2CDOCK_REDACTED_02&status=executing%2Csuccess&task_type=immediate",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "list": [
+            {
+              "uuid": "TASK_REDACTED_01",
+              "name": "脱敏巡检任务",
+              "task_type": "immediate",
+              "status": "executing",
+              "sn": "DOCK_REDACTED_01",
+              "landing_dock_sn": "",
+              "wayline_uuid": "WAYLINE_REDACTED_01",
+              "begin_at": "2026-02-02T02:40:00Z",
+              "end_at": "2026-02-02T03:40:00Z",
+              "run_at": "2026-02-02T02:40:05Z",
+              "completed_at": "",
+              "media_upload_status": "uploading",
+              "resumable_status": "manual",
+              "is_break_point_resume": false,
+              "current_waypoint_index": 2,
+              "total_waypoints": 5,
+              "flight_type": "1",
+              "flight_status": "1",
+              "folder_id": 42,
+              "operations": [{ "operator_account": "ACCOUNT_REDACTED" }],
+              "exceptions": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-task-recent",
+      "endpointId": "454273433e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-tasks/recent?sn%5B%5D=DOCK_REDACTED_01&sn%5B%5D=DOCK_REDACTED_02",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "list": [
+            {
+              "belong_to_sn": "DOCK_REDACTED_01",
+              "uuid": "TASK_REDACTED_01",
+              "name": "脱敏巡检任务",
+              "task_type": "immediate",
+              "status": "success",
+              "sn": "DOCK_REDACTED_01",
+              "wayline_uuid": "WAYLINE_REDACTED_01",
+              "run_at": "2026-02-02T02:40:05Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-task-batch",
+      "endpointId": "454273435e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-tasks/batch?task_uuids=TASK_REDACTED_01&task_uuids=TASK_REDACTED_02",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "list": [
+            {
+              "uuid": "TASK_REDACTED_01",
+              "name": "脱敏巡检任务",
+              "task_type": "timed",
+              "status": "waiting",
+              "sn": "DOCK_REDACTED_01",
+              "landing_dock_sn": "",
+              "wayline_uuid": "WAYLINE_REDACTED_01",
+              "begin_at": "2026-02-02T02:40:00Z",
+              "end_at": "2026-02-02T03:40:00Z",
+              "run_at": "",
+              "completed_at": "",
+              "media_upload_status": "to_upload",
+              "resumable_status": "manual",
+              "is_break_point_resume": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-task-default-name",
+      "endpointId": "454273434e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-tasks/default-name?name=inspection",
+      "projectHeader": false,
+      "responseBody": { "code": 0, "message": "success", "data": { "index_name": "inspection-2" } }
+    },
+    {
+      "name": "flight-task-detail",
+      "endpointId": "454273437e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/detail?task_uuid=TASK_REDACTED_01&workspace_id=PROJECT_REDACTED",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "begin_at": "2026-02-02T02:40:00Z",
+          "end_at": "2026-02-02T03:40:00Z",
+          "create_at": "2026-02-02T02:30:00Z",
+          "run_at": "2026-02-02T02:40:05Z",
+          "completed_at": "2026-02-02T03:30:00Z",
+          "flight_task_id": "TASK_REDACTED_01",
+          "related_users": [{ "user_name": "USER_REDACTED", "user_id": "USER_ID_REDACTED", "oper_type": "create" }],
+          "task_type": 2,
+          "flight_task_type": 2,
+          "folder_id": 42,
+          "flight_pieces": [
+            {
+              "ID": 7,
+              "created_at": "2026-02-02T02:30:00Z",
+              "begin_at": "2026-02-02T02:40:00Z",
+              "end_at": "2026-02-02T03:40:00Z",
+              "run_at": "2026-02-02T02:40:05Z",
+              "completed_at": "2026-02-02T03:30:00Z",
+              "flight_task_id": "TASK_REDACTED_01",
+              "flight_piece_id": "PIECE_REDACTED_01",
+              "take_off_airport_sn": "DOCK_REDACTED_01",
+              "land_airport_sn": "",
+              "task_type": 2,
+              "type": "wayline",
+              "status": "success",
+              "flight_task_type": 2,
+              "task_flight_type": "automatic",
+              "task_flight_status": "completed",
+              "flight_task_status": 2,
+              "task_status": 5,
+              "task_name": "脱敏巡检任务",
+              "user_id": "USER_ID_REDACTED",
+              "prj_uuid": "PROJECT_REDACTED",
+              "wayline_uuid": "WAYLINE_REDACTED_01",
+              "cloud_to_cloud_id": "",
+              "source": 0,
+              "workflow_uuid": "",
+              "exception": null,
+              "flight_records": [],
+              "drone_sn": "AIRCRAFT_REDACTED_01",
+              "in_flight_uuids": null,
+              "wayline_uuids": null,
+              "in_flight_infos": null,
+              "track_information": {},
+              "ext": [],
+              "wayline_name": "脱敏巡检航线",
+              "drone_info": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "flight-task-single",
+      "endpointId": "454273438e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-task/TASK_REDACTED_01?workspace_id=PROJECT_REDACTED",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "",
+        "data": {
+          "uuid": "TASK_REDACTED_01",
+          "name": "脱敏巡检任务",
+          "task_type": "immediate",
+          "status": "success",
+          "sn": "DOCK_REDACTED_01",
+          "wayline_uuid": "WAYLINE_REDACTED_01",
+          "begin_at": "2026-02-02T02:40:00Z",
+          "end_at": "2026-02-02T03:40:00Z",
+          "out_of_control_action_in_flight": "return_home",
+          "rth_altitude": 120,
+          "rth_mode": "preset",
+          "resumable_status": "manual",
+          "repeat_type": "nonrepeating",
+          "interval": 0,
+          "days_of_week": null,
+          "days_of_month": null,
+          "week_of_month": 0,
+          "recurring_task_start_time_list": null,
+          "continuous_task_periods": null,
+          "min_battery_capacity": 30,
+          "folder_info": { "folder_id": 42, "expected_file_count": 6, "uploaded_file_count": 6 }
+        }
+      }
+    },
+    {
+      "name": "flight-task-dispatch-check",
+      "endpointId": "456425797e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-tasks/dispatch-checks?sn=DOCK_REDACTED_01&wayline_uuid=WAYLINE_REDACTED_01",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "errors": [{ "error_code": "model_mismatch", "error_type": "warning", "description": "脱敏预检提示" }],
+          "device_position": { "latitude": 30.000001, "longitude": 120.000001, "height": 12.5 }
+        }
+      }
+    },
+    {
+      "name": "flight-task-status",
+      "endpointId": "458069502e0",
+      "method": "PUT",
+      "path": "/openapi/v2.0/flight-task/TASK_REDACTED_01/status",
+      "projectHeader": true,
+      "requestBody": { "status": "suspended" },
+      "responseBody": { "code": 0, "message": "success", "data": null }
+    },
+    {
+      "name": "flight-task-resumption",
+      "endpointId": "456425796e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-tasks/resumptions",
+      "projectHeader": true,
+      "requestBody": { "task_uuid": "TASK_REDACTED_01" },
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "task": {
+            "uuid": "TASK_REDACTED_02",
+            "begin_at": 1770000000,
+            "end_at": 1770003600,
+            "wayline_validity_check_codes": null,
+            "parent_task": { "uuid": "TASK_REDACTED_01" }
+          }
+        }
+      }
+    }
+  ]
+}

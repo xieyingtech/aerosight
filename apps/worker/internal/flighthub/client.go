@@ -339,13 +339,21 @@ func (client *Client) retryDelay(attempt int) time.Duration {
 }
 
 func (client *Client) ValidateTemporaryLink(purpose LinkPurpose, raw string, expiresAt time.Time) (*url.URL, error) {
+	parsed, err := client.validateResponseLink(purpose, raw)
+	if err != nil {
+		return nil, err
+	}
+	if expiresAt.IsZero() || !expiresAt.After(client.now()) || expiresAt.After(client.now().Add(24*time.Hour)) {
+		return nil, &APIError{SafeCode: "temporary_link_expired"}
+	}
+	return parsed, nil
+}
+
+func (client *Client) validateResponseLink(purpose LinkPurpose, raw string) (*url.URL, error) {
 	switch purpose {
 	case LinkUpload, LinkDownload, LinkLive, LinkModel:
 	default:
 		return nil, &APIError{SafeCode: "temporary_link_invalid"}
-	}
-	if expiresAt.IsZero() || !expiresAt.After(client.now()) || expiresAt.After(client.now().Add(24*time.Hour)) {
-		return nil, &APIError{SafeCode: "temporary_link_expired"}
 	}
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {

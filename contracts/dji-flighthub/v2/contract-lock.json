@@ -20,6 +20,11 @@
       "path": "fixtures/device_cases.json",
       "sha256": "68d9e2fcee8a84410b2400bcc46904630cb1f8b8fad2ba5781cad72465f4d277",
       "domains": ["device"]
+    },
+    {
+      "path": "fixtures/flight_cases.json",
+      "sha256": "17d602d8047f72c03ddc37c77ec1e15b78d02e02a258d5c47ae698eac0e2608c",
+      "domains": ["flight"]
     }
   ]
 }

@@ -38,7 +38,7 @@
 
 ## 5. 航线与飞行任务全链路
 
-- [ ] 5.1 实现 wayline 列表/详情/上传完成通知及 flight-task 列表、recent、batch、default-name、detail、单项、dispatch-check、status、resumption typed clients，并用每个 endpoint fixture 验证参数与 schema。
+- [x] 5.1 实现 wayline 列表/详情/上传完成通知及 flight-task 列表、recent、batch、default-name、detail、单项、dispatch-check、status、resumption typed clients，并用每个 endpoint fixture 验证参数与 schema。
 - [ ] 5.2 实现航线与任务目录资源流、分页/完整性和 `connector_remote_resources` 幂等投影，并用重复同步、部分分页失败及同远端 UUID 跨项目测试验证。
 - [ ] 5.3 将可转换航线关联 `tasks/task_versions`，将远端飞行任务关联 `task_runs` 并实现状态机映射和时间线对账，用受理、运行、暂停、成功、失败、取消及未知超时集成测试验证。
 - [ ] 5.4 实现任务 track 与操作日志同步，将 timestamp/latitude/longitude/height 写入时空轨迹并关联 task run，用乱序/重复轨迹和无效坐标测试验证。
