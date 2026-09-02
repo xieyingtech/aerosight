@@ -41,7 +41,7 @@ func loadModelFixture(t *testing.T) (map[string]modelContractCase, []byte) {
 		t.Fatal(err)
 	}
 	var fixture modelContractFixture
-	if json.Unmarshal(contents, &fixture) != nil || fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 13 {
+	if json.Unmarshal(contents, &fixture) != nil || fixture.ContractVersion != ContractVersion || len(fixture.Cases) != 14 {
 		t.Fatalf("invalid model fixture metadata: version=%q cases=%d", fixture.ContractVersion, len(fixture.Cases))
 	}
 	byName := make(map[string]modelContractCase, len(fixture.Cases))
@@ -99,6 +99,14 @@ func TestModelTypedClientsMatchEveryReleasedEndpointFixture(t *testing.T) {
 	if err != nil || detail.ID != 9 || detail.PreviewURL == "" || detail.FileType != ModelFile2D {
 		t.Fatalf("detail=%#v err=%v", detail, err)
 	}
+	var reconstructionRequest ModelReconstructionRequest
+	if json.Unmarshal(cases["model-reconstruction-create"].RequestBody, &reconstructionRequest) != nil {
+		t.Fatal("invalid traditional reconstruction request fixture")
+	}
+	reconstruction, err := modelFixtureClient(t, cases["model-reconstruction-create"]).CreateModelReconstruction(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", reconstructionRequest)
+	if err != nil || reconstruction.ID != 11 {
+		t.Fatalf("reconstruction=%#v err=%v", reconstruction, err)
+	}
 	download, err := modelFixtureClient(t, cases["model-download-ready"]).GetModelDownloadURL(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", "FILE_REDACTED_01")
 	if err != nil || !download.Ready || download.ID != 901 || !download.ExpiresAt.Equal(time.Unix(1779443600, 0).UTC()) {
 		t.Fatalf("download=%#v err=%v", download, err)
@@ -155,7 +163,7 @@ func TestModelTypedClientsMatchEveryReleasedEndpointFixture(t *testing.T) {
 func TestModelFixtureCoversReleasedManifestAndContainsNoUsableSecrets(t *testing.T) {
 	cases, contents := loadModelFixture(t)
 	wantEndpointIDs := map[string]struct{}{
-		"458069507e0": {}, "458069510e0": {}, "458069511e0": {}, "458069512e0": {},
+		"458069507e0": {}, "458069508e0": {}, "458069510e0": {}, "458069511e0": {}, "458069512e0": {},
 		"458069513e0": {}, "458069514e0": {}, "458069515e0": {}, "458069516e0": {},
 		"458069517e0": {}, "458069518e0": {}, "458069519e0": {}, "463460267e0": {},
 	}
@@ -228,6 +236,14 @@ func TestModelClientsRejectInvalidInputBeforeNetwork(t *testing.T) {
 		}},
 		{name: "start without model type", call: func() error {
 			_, err := client.StartOpenModelReconstruction(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", OpenModelStartRequest{ResourceUUID: "RESOURCE_REDACTED"})
+			return err
+		}},
+		{name: "traditional create with unknown format", call: func() error {
+			_, err := client.CreateModelReconstruction(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", ModelReconstructionRequest{
+				Name: "invalid", ReconstructionTypes: []ModelFileType{ModelFile3D}, SimplifiedFactor: 0.2,
+				TaskFolderID: 1, WKT: "EPSG:4326", QualityLevel: "medium", ReconstructionMode: "normal",
+				GenerateModelFormats: []string{"future"},
+			})
 			return err
 		}},
 		{name: "start with malformed parameter", call: func() error {
@@ -310,6 +326,14 @@ func TestModelWriteAndCredentialRequestsNeverRetryAnUnknownOutcome(t *testing.T)
 		name string
 		call func(*Client) error
 	}{
+		{name: "traditional create", call: func(c *Client) error {
+			_, err := c.CreateModelReconstruction(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", ModelReconstructionRequest{
+				Name: "synthetic", ReconstructionTypes: []ModelFileType{ModelFile3D}, SimplifiedFactor: 0.2,
+				TaskFolderID: 1, WKT: "EPSG:4326", QualityLevel: "medium", ReconstructionMode: "normal",
+				GenerateModelFormats: []string{"b3dm"},
+			})
+			return err
+		}},
 		{name: "start", call: func(c *Client) error {
 			_, err := c.StartOpenModelReconstruction(ctx, "TOKEN_REDACTED", "PROJECT_REDACTED", start)
 			return err

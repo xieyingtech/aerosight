@@ -94,6 +94,7 @@ func main() {
 	consumer := outbox.NewConsumer(outbox.NewStore(database), runID, "aerosight-worker", logger)
 	var flightHubScheduler *connector.Scheduler
 	var flightHubClient *flighthub.Client
+	var flightHubModelProjector flighthub.ModelJobProjector
 	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
 	if workerConfig.FlightHubEnabled {
 		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
@@ -134,6 +135,7 @@ func main() {
 			logger.Error("FlightHub resource sink initialization failed", "error", resourceErr.Error())
 			os.Exit(1)
 		}
+		flightHubModelProjector = resourceSink
 		resourceStreams, resourceErr := flighthub.NewResourceStreamCoordinator(
 			flightHubClient, flightHubTokenResolver, resourceRepository, resourceSink,
 			flighthub.ResourceStreamConfig{
@@ -290,6 +292,15 @@ func main() {
 		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	}
 	if flightHubClient != nil {
+		modelJobHandler, modelJobErr := flighthub.NewModelJobHandler(
+			flighthub.NewSQLModelJobStore(database), flightHubClient, flightHubTokenResolver,
+			flightHubModelProjector, workerConfig.AuthSecret, nil,
+		)
+		if modelJobErr != nil {
+			logger.Error("FlightHub model job initialization failed", "error", modelJobErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.ModelJobEventType, modelJobHandler.Handler)
 		liveRegistry, liveErr := flighthub.NewDefaultLiveSupplierRegistry(flightHubClient)
 		if liveErr != nil {
 			logger.Error("FlightHub live supplier initialization failed", "error", liveErr.Error())

@@ -54,6 +54,31 @@ type ModelDownload struct {
 	Ready     bool
 }
 
+type ModelReconstructionPoint struct {
+	Longitude float64 `json:"longitude"`
+	Latitude  float64 `json:"latitude"`
+}
+
+type ModelReconstructionArea struct {
+	PolygonPoints []ModelReconstructionPoint `json:"polygon_points"`
+}
+
+type ModelReconstructionRequest struct {
+	Name                 string                   `json:"name"`
+	ReconstructionTypes  []ModelFileType          `json:"reconstruction_type"`
+	SimplifiedFactor     float64                  `json:"simplified_factor"`
+	TaskFolderID         int64                    `json:"task_folder_id"`
+	WKT                  string                   `json:"wkt"`
+	QualityLevel         string                   `json:"quality_level"`
+	ReconstructionMode   string                   `json:"reconstruction_mode"`
+	GenerateModelFormats []string                 `json:"generate_model_formats"`
+	PredefineArea        *ModelReconstructionArea `json:"predefine_area,omitempty"`
+}
+
+type ModelReconstructionResult struct {
+	ID int64 `json:"id"`
+}
+
 type OpenModelType int
 
 const (
@@ -174,6 +199,69 @@ func validModelFileType(value ModelFileType) bool {
 func validModelSummary(item *ModelSummary) bool {
 	return item != nil && item.ID > 0 && validModelString(item.Name, 1024, false) &&
 		validModelFileType(item.FileType) && item.Size >= 0 && item.CreatedAt > 0 && item.UpdatedAt >= item.CreatedAt
+}
+
+func validateModelReconstruction(input *ModelReconstructionRequest) error {
+	if input == nil || !validModelString(input.Name, 200, false) || len(input.ReconstructionTypes) < 1 || len(input.ReconstructionTypes) > 2 ||
+		input.SimplifiedFactor <= 0 || input.SimplifiedFactor > 1 || input.TaskFolderID <= 0 ||
+		!validModelString(input.WKT, maxModelParameterBytes, false) || !validEnum(input.QualityLevel, "high", "medium", "low") ||
+		!validEnum(input.ReconstructionMode, "normal", "surround") || len(input.GenerateModelFormats) < 1 || len(input.GenerateModelFormats) > 8 {
+		return &APIError{SafeCode: "request_invalid"}
+	}
+	seenTypes := map[ModelFileType]struct{}{}
+	for _, value := range input.ReconstructionTypes {
+		if !validModelFileType(value) {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		if _, duplicate := seenTypes[value]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		seenTypes[value] = struct{}{}
+	}
+	allowedFormats := map[string]struct{}{"b3dm": {}, "osgb": {}, "ply": {}, "obj": {}, "pnts": {}, "las": {}, "point_ply": {}, "normal_point_ply": {}}
+	seenFormats := map[string]struct{}{}
+	for _, value := range input.GenerateModelFormats {
+		if _, ok := allowedFormats[value]; !ok {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		if _, duplicate := seenFormats[value]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		seenFormats[value] = struct{}{}
+	}
+	if input.PredefineArea != nil {
+		points := input.PredefineArea.PolygonPoints
+		if len(points) < 3 || len(points) > 1000 {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		for _, point := range points {
+			if point.Longitude < -180 || point.Longitude > 180 || point.Latitude < -90 || point.Latitude > 90 {
+				return &APIError{SafeCode: "request_invalid"}
+			}
+		}
+	}
+	return nil
+}
+
+func (client *Client) CreateModelReconstruction(ctx context.Context, token, projectUUID string, input ModelReconstructionRequest) (ModelReconstructionResult, error) {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return ModelReconstructionResult{}, err
+	}
+	if err := validateModelReconstruction(&input); err != nil {
+		return ModelReconstructionResult{}, err
+	}
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodPost, Path: "/openapi/v2.0/model/create", Body: input, DisableRetry: true,
+	})
+	if err != nil {
+		return ModelReconstructionResult{}, err
+	}
+	var result ModelReconstructionResult
+	if json.Unmarshal(payload.Data, &result) != nil || result.ID <= 0 {
+		return ModelReconstructionResult{}, schemaError()
+	}
+	return result, nil
 }
 
 func validOpenModelType(value OpenModelType) bool {

@@ -27,6 +27,24 @@
       } }
     },
     {
+      "name": "model-reconstruction-create",
+      "endpointId": "458069508e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/model/create",
+      "projectHeader": true,
+      "requestBody": {
+        "name": "synthetic-reconstruction",
+        "reconstruction_type": ["model_3d"],
+        "simplified_factor": 0.2,
+        "task_folder_id": 7001,
+        "wkt": "EPSG:4326",
+        "quality_level": "medium",
+        "reconstruction_mode": "normal",
+        "generate_model_formats": ["b3dm"]
+      },
+      "responseBody": { "code": 0, "message": "", "data": { "id": 11 } }
+    },
+    {
       "name": "model-download-ready",
       "endpointId": "463460267e0",
       "method": "GET",
