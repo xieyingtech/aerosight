@@ -20,3 +20,11 @@ func TestReadSmokeRequiresExplicitOptInAndScopedConnector(t *testing.T) {
 		}
 	}
 }
+
+func TestReadSmokeGeneratesOpaqueRequestIDs(t *testing.T) {
+	t.Parallel()
+	first, second := smokeRequestID(), smokeRequestID()
+	if len(first) != 32 || len(second) != 32 || first == second {
+		t.Fatalf("invalid smoke request ids: %q %q", first, second)
+	}
+}

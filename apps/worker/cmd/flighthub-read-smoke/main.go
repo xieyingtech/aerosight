@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"os"
@@ -63,7 +65,7 @@ func main() {
 	if err != nil {
 		exitWithSafeResult("scope_unavailable")
 	}
-	client, err := flighthub.NewChinaClient(flighthub.Config{Timeout: 8 * time.Second, MaxRetries: 1, MaxConcurrent: 2, RequestsPerSecond: 2, RequestBurst: 2})
+	client, err := flighthub.NewChinaClient(flighthub.Config{Timeout: 8 * time.Second, MaxRetries: 1, MaxConcurrent: 2, RequestsPerSecond: 2, RequestBurst: 2, RequestID: smokeRequestID})
 	if err != nil {
 		exitWithSafeResult("configuration_unavailable")
 	}
@@ -74,6 +76,14 @@ func main() {
 			exitWithSafeResult("output_unavailable")
 		}
 	}
+}
+
+func smokeRequestID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "smoke-request-unavailable"
+	}
+	return hex.EncodeToString(value[:])
 }
 
 func validInvocation(confirmed bool, projectID int, connectorID int64, arguments []string) bool {
