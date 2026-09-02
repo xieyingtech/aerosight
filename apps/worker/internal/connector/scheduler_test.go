@@ -285,6 +285,21 @@ func TestReadOnlyCapabilityProbeTriggerUsesTheSharedConnectorLease(t *testing.T)
 	}
 }
 
+func TestReconnectTriggerUsesTheSharedConnectorLease(t *testing.T) {
+	leases := newSchedulerLease()
+	runner := &schedulerRunnerFixture{}
+	outcomes := &schedulerOutcomeFixture{leases: leases}
+	scheduler := schedulerFixture(t, "worker-a", leases, runner, outcomes)
+	event := syncEvent()
+	event.Payload = json.RawMessage(`{"connectorInstanceId":"7","connectorKey":"dji.flighthub2","discoveryMode":"poll","trigger":"reconnect"}`)
+	if err := scheduler.OutboxHandler(context.Background(), nil, event); err != nil {
+		t.Fatal(err)
+	}
+	if runner.runs != 1 || outcomes.succeeded != 1 {
+		t.Fatalf("reconnect escaped shared lease: runs=%d succeeded=%d", runner.runs, outcomes.succeeded)
+	}
+}
+
 func TestLeaseRenewalLossCancelsSyncAndRecordsFailure(t *testing.T) {
 	leases := newSchedulerLease()
 	leases.renew = false

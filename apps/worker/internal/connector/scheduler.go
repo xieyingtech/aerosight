@@ -292,7 +292,7 @@ func (scheduler *Scheduler) OutboxHandler(ctx context.Context, _ *sql.Tx, event 
 	var request syncRequest
 	if event.ProjectID <= 0 || event.TeamID <= 0 || json.Unmarshal(event.Payload, &request) != nil ||
 		request.ConnectorKey != scheduler.config.ConnectorKey || request.DiscoveryMode != string(DiscoveryPoll) ||
-		(request.Trigger != "initial" && request.Trigger != "manual" && request.Trigger != "credential-update" && request.Trigger != "capability-probe") {
+		(request.Trigger != "initial" && request.Trigger != "manual" && request.Trigger != "credential-update" && request.Trigger != "capability-probe" && request.Trigger != "reconnect") {
 		return errors.New("CONNECTOR_SYNC_REQUEST_INVALID")
 	}
 	instanceID, err := strconv.ParseInt(request.ConnectorInstanceID, 10, 64)
