@@ -125,7 +125,11 @@ func TestFlightHubLiveStartEncryptsCredentialAndNeverRepeatsWrite(t *testing.T) 
 	if decrypted["credential"] != "supplier-secret" || store.session.Status != "starting" || !store.session.StartAcceptedAt.Valid {
 		t.Fatalf("session=%#v credential=%v", store.session, decrypted)
 	}
-	if err := handler.Handler(context.Background(), nil, flightHubLiveEvent()); err != nil {
+	restartedHandler, err := NewFlightHubLiveStartHandler(store, client, flightHubLiveNormalizerFixture{value: playback}, flightHubLiveResolverFixture{}, flightHubLiveTestSecret, func() time.Time { return now })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restartedHandler.Handler(context.Background(), nil, flightHubLiveEvent()); err != nil {
 		t.Fatal(err)
 	}
 	if client.calls != 1 {
