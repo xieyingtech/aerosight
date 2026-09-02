@@ -17,6 +17,7 @@ import (
 	"aerosight/worker/internal/connector"
 	"aerosight/worker/internal/credentials"
 	"aerosight/worker/internal/outbox"
+	"github.com/google/uuid"
 )
 
 const flightActionTestSecret = "0123456789abcdef0123456789abcdef"
@@ -368,7 +369,8 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 	if err := database.QueryRowContext(ctx, `select id from connector_definitions where connector_key=$1 and version=$2`, ConnectorKey, ConnectorVersion).Scan(&definitionID); err != nil {
 		t.Fatal(err)
 	}
-	scope := `{"projectUuid":"11111111-1111-4111-8111-111111111111","projectName":"redacted"}`
+	accountFingerprint := strings.Repeat("a", 64)
+	scope := fmt.Sprintf(`{"projectUuid":"11111111-1111-4111-8111-111111111111","projectName":"redacted","accountFingerprint":%q}`, accountFingerprint)
 	if err := database.QueryRowContext(ctx, `insert into device_adapters(
 		project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status,discovery_scope_json,credential_envelope_json
 	) values($1,$2,$3,'dji-flighthub2',$4,'2','connected',$5,'{}'::jsonb) returning id`,
@@ -376,13 +378,14 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 		t.Fatal(err)
 	}
 	if err := database.QueryRowContext(ctx, `insert into connector_capability_snapshots(
-		project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,details_json,verified_at,expires_at
-	) values($1,$2,$3,'flight.execute','supported','field-write','cn','cn-public-cloud','{}'::jsonb,now(),now()+interval '1 hour') returning id`,
-		projectID, teamID, adapterID).Scan(new(int64)); err != nil {
+		project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,
+		account_fingerprint,device_model,firmware_version,details_json,verified_at,expires_at
+	) values($1,$2,$3,'flight.execute','supported','field-write','cn','cn-public-cloud',$4,'dock-model','01.00','{}'::jsonb,now(),now()+interval '1 hour') returning id`,
+		projectID, teamID, adapterID, accountFingerprint).Scan(new(int64)); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.QueryRowContext(ctx, `insert into devices(project_id,adapter_id,device_type_id,name,type,status)
-		select $1,$2,id,'flight action dock','dock','online' from device_types
+	if err := database.QueryRowContext(ctx, `insert into devices(project_id,adapter_id,device_type_id,name,type,status,device_model,firmware_version)
+		select $1,$2,id,'flight action dock','dock','online','dock-model','01.00' from device_types
 		 where type_key='dji.dock2' and status='active' order by version desc limit 1 returning id`, projectID, adapterID).Scan(&deviceID); err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +411,7 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 		projectID, teamID, taskID, deviceID, policyID, requesterID).Scan(&taskRunID); err != nil {
 		t.Fatal(err)
 	}
-	approvalID := "22222222-2222-4222-8222-222222222222"
+	approvalID := uuid.NewString()
 	if _, err := database.ExecContext(ctx, `insert into approval_requests(
 		id,project_id,team_id,resource_type,resource_id,action,requested_by_user_id,status,expires_at,context_json,decided_at
 	) values($1,$2,$3,'task_run',$4,'flighthub.flight-task.create',$5,'approved',now()+interval '1 hour','{"preflight":{"allowed":true}}'::jsonb,now())`,
@@ -424,7 +427,7 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 	) values($1,$2,$3,'wayline',$4,'active','{}'::jsonb) returning id`, projectID, teamID, adapterID, waylineRemoteID).Scan(&waylineID); err != nil {
 		t.Fatal(err)
 	}
-	jobID := "33333333-3333-4333-8333-333333333333"
+	jobID := uuid.NewString()
 	request := FlightActionRequest{Name: "encrypted flight intent", TimeZone: "Asia/Shanghai", TaskType: "immediate"}
 	envelope, err := credentials.EncryptJSON(request, flightActionTestSecret, credentials.AAD("flighthub-flight-action", jobID, projectID))
 	if err != nil {
@@ -442,9 +445,9 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 	duplicate, err := database.ExecContext(ctx, `insert into connector_action_jobs(
 		id,project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,approval_request_id,
 		requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json
-	) values('44444444-4444-4444-8444-444444444444',$1,$2,$3,$4,$5,$6,$7,$8,'flight-task-create',$9,$10,$11)
+	) values($1,$2,$3,$4,$5,$6,$7,$8,$9,'flight-task-create',$10,$11,$12)
 	 on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing`,
-		projectID, teamID, adapterID, taskRunID, deviceID, waylineID, approvalID, requesterID,
+		uuid.NewString(), projectID, teamID, adapterID, taskRunID, deviceID, waylineID, approvalID, requesterID,
 		fmt.Sprintf("flight-action-%d", suffix), requestDigest, envelope)
 	if err != nil {
 		t.Fatal(err)
