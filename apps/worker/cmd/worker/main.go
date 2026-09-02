@@ -301,6 +301,16 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.ModelJobEventType, modelJobHandler.Handler)
+		openModelUploadHandler, uploadErr := flighthub.NewOpenModelUploadHandler(
+			flighthub.NewSQLOpenModelUploadStore(database), flightHubClient, flightHubTokenResolver,
+			flightHubModelProjector, workerConfig.AuthSecret, nil,
+		)
+		if uploadErr != nil {
+			logger.Error("FlightHub open model upload initialization failed", "error", uploadErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.OpenModelUploadCredentialEventType, openModelUploadHandler.Handler)
+		consumer.Register(flighthub.OpenModelUploadCallbackEventType, openModelUploadHandler.Handler)
 		liveRegistry, liveErr := flighthub.NewDefaultLiveSupplierRegistry(flightHubClient)
 		if liveErr != nil {
 			logger.Error("FlightHub live supplier initialization failed", "error", liveErr.Error())
