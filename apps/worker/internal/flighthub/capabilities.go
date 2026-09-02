@@ -22,6 +22,7 @@ const (
 	FlightHubRelayPairFeatureFlag           = "flighthub.relay.pair"
 	FlightHubDeviceMigrationFeatureFlag     = "flighthub.device-migration"
 	FlightHubSNDecryptFeatureFlag           = "flighthub.sn-decrypt"
+	FlightHubProjectMemberFeatureFlag       = "flighthub.organization.project-member"
 )
 
 func Capabilities() []connector.CapabilityDefinition {
@@ -56,6 +57,7 @@ func Capabilities() []connector.CapabilityDefinition {
 		{Code: "device.relay.pair", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "relay.pair", FeatureFlag: FlightHubRelayPairFeatureFlag},
 		{Code: "device.active-project.update", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "device.active-project.update", FeatureFlag: FlightHubDeviceMigrationFeatureFlag},
 		{Code: "security.sn.decrypt", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"security"}, FeatureFlag: FlightHubSNDecryptFeatureFlag},
+		{Code: "organization.project-member.write", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"organization", "project"}, FeatureFlag: FlightHubProjectMemberFeatureFlag},
 		{Code: "organization.write", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"organization", "project"}, FeatureFlag: FlightHubActionFeatureFlag},
 	}
 }

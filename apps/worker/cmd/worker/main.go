@@ -388,6 +388,12 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.FlightHubDeviceAdminEventType, deviceAdminHandler.Handler)
+		managementWriteHandler, actionErr := flighthub.NewManagementWriteHandler(database, flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret)
+		if actionErr != nil {
+			logger.Error("FlightHub management write initialization failed", "error", actionErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubManagementWriteEventType, managementWriteHandler.Handler)
 		geospatialActionHandler, actionErr := flighthub.NewGeospatialActionHandler(
 			flighthub.NewSQLGeospatialActionStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
 		)

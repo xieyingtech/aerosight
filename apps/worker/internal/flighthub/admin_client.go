@@ -224,6 +224,16 @@ type ProjectMember struct {
 	ControlDeviceSN      *string          `json:"user_control_device_sn"`
 }
 
+type AddProjectMember struct {
+	UserID   string `json:"user_id"`
+	Role     string `json:"role"`
+	Nickname string `json:"nickname"`
+}
+
+type AddProjectMembersRequest struct {
+	AddUsers []AddProjectMember `json:"add_users"`
+}
+
 type JoinCodeQuery struct {
 	ProjectID          string
 	FastJoinCode       string
@@ -631,6 +641,36 @@ func (client *Client) ListProjectMembers(ctx context.Context, token, projectUUID
 	return decodeList(payload, true, func(item *ProjectMember) bool {
 		return strings.TrimSpace(item.UserID) != "" && strings.TrimSpace(item.ProjectRole) != ""
 	})
+}
+
+func (client *Client) AddProjectMembers(ctx context.Context, token, projectUUID string, input AddProjectMembersRequest) error {
+	projectUUID, err := requireScope(projectUUID)
+	if err != nil {
+		return err
+	}
+	if len(input.AddUsers) < 1 || len(input.AddUsers) > 100 {
+		return &APIError{SafeCode: "request_invalid"}
+	}
+	seen := make(map[string]struct{}, len(input.AddUsers))
+	for index := range input.AddUsers {
+		member := &input.AddUsers[index]
+		member.UserID = strings.TrimSpace(member.UserID)
+		member.Role = strings.TrimSpace(member.Role)
+		member.Nickname = strings.TrimSpace(member.Nickname)
+		if member.UserID == "" || len(member.UserID) > 256 || strings.ContainsAny(member.UserID, "\x00\r\n") ||
+			(member.Role != "project-member" && member.Role != "project-admin") || len(member.Nickname) > 128 || strings.ContainsAny(member.Nickname, "\x00\r\n") {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		if _, duplicate := seen[member.UserID]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		seen[member.UserID] = struct{}{}
+	}
+	_, err = client.request(ctx, token, projectUUID, requestSpec{
+		Method: http.MethodPut, Path: "/openapi/v2.0/project/member", Body: input,
+		DataOptional: true, DisableRetry: true,
+	})
+	return err
 }
 
 func (client *Client) GetJoinCodeInfo(ctx context.Context, token string, input JoinCodeQuery) (JoinCodeInfo, error) {
