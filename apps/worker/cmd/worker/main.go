@@ -97,6 +97,7 @@ func main() {
 	var flightHubModelProjector flighthub.ModelJobProjector
 	var flightHubControlReconciler *flighthub.SQLControlCommandReconciler
 	var flightHubCommandStatusReconciler *flighthub.ControlCommandStatusReconciler
+	var flightHubControlSessionHandler *flighthub.ControlSessionHandler
 	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
 	if workerConfig.FlightHubEnabled {
 		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
@@ -136,6 +137,14 @@ func main() {
 			logger.Error("FlightHub command status reconciliation initialization failed", "error", flightHubErr.Error())
 			os.Exit(1)
 		}
+		flightHubControlSessionHandler, flightHubErr = flighthub.NewControlSessionHandler(
+			flighthub.NewSQLControlSessionStore(database), flightHubClient, flightHubTokenResolver, nil,
+		)
+		if flightHubErr != nil {
+			logger.Error("FlightHub control session initialization failed", "error", flightHubErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubControlSessionEventType, flightHubControlSessionHandler.Handler)
 		liveReconciler, liveErr := flighthub.NewFlightHubLiveReconciler(database, nil)
 		if liveErr != nil {
 			logger.Error("FlightHub live reconciliation initialization failed", "error", liveErr.Error())
@@ -442,6 +451,13 @@ func main() {
 		go func() {
 			runErrors <- flightHubCommandStatusReconciler.Run(runContext, 2*time.Second, func(_ error) {
 				logger.Warn("FlightHub command status reconciliation degraded")
+			})
+		}()
+	}
+	if flightHubControlSessionHandler != nil {
+		go func() {
+			runErrors <- flightHubControlSessionHandler.Run(runContext, time.Second, func(_ error) {
+				logger.Warn("FlightHub control session reconciliation degraded")
 			})
 		}()
 	}
