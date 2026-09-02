@@ -179,3 +179,23 @@ test("known project identifiers are normalized", async () => {
     organizationUuid: ORG_UUID,
   }]);
 });
+
+test("join code lookup is a bounded global GET and returns a typed result", async () => {
+  const calls:Array<{url:URL;headers:Headers}>=[];
+  const projectClient=client(async(input,init)=>{
+    calls.push({url:new URL(input.toString()),headers:new Headers(init?.headers)});
+    return jsonResponse({code:0,message:"",data:{project_uuid:PROJECT_UUID,project_id:"PROJECT-1",project_name:"脱敏项目",
+      organization_uuid:ORG_UUID,organization_id:"ORG-1",organization_name:"脱敏组织",is_user_in_organization:true,
+      recommend_user_project_callsign:"测试用户",recommend_association_drone_project_callsign:"脱敏飞机"}});
+  });
+  const result=await projectClient.getJoinCodeInfo("token-only-in-header",{projectCode:"PROJECT-1",fastJoinCode:"JOIN-1",associationDroneSN:"AIRCRAFT-1"});
+  assert.equal(result.projectUuid,PROJECT_UUID);
+  assert.equal(result.organizationUuid,ORG_UUID);
+  assert.equal(calls[0].url.pathname,"/openapi/v2.0/projects/join-codes");
+  assert.equal(calls[0].url.searchParams.get("project_fast_join_code"),"JOIN-1");
+  assert.equal(calls[0].headers.get("X-User-Token"),"token-only-in-header");
+  assert.equal(calls[0].headers.get("X-Project-Uuid"),null);
+  assert(!calls[0].url.toString().includes("token-only-in-header"));
+  await assert.rejects(()=>projectClient.getJoinCodeInfo("redacted",{projectCode:"../bad",fastJoinCode:"JOIN-1"}),
+    (error)=>error instanceof FlightHubClientError&&error.safeCode==="scope_forbidden");
+});

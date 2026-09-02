@@ -2805,7 +2805,8 @@ create table connector_remote_resources (
       'wayline','flight-task','flight-media','flight-record','flight-alert','ai-alert',
       'map-element','flight-area','offline-map','air-sense-warning','model','model-resource',
       'live-share','stream-converter','recording','hms','topology','auto-record',
-      'organization-user','organization-role','organization-permission'
+      'organization','organization-user','organization-role','organization-permission',
+      'project-user','project-member'
     )),
   constraint connector_remote_resources_status_valid
     check (status in ('active','missing','deleted','failed')),

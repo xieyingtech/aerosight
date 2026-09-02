@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DjiFlightHubManagementPanel } from "@/components/dji-flighthub-management-panel";
 import type { FlightHubProject } from "@/lib/dji-flighthub-client-core";
 import {
   defaultFlightHubProjectSelection,
@@ -390,6 +391,7 @@ export function DjiFlightHubConnections({
           </Table></div>
         </>}
       </section>
+      <DjiFlightHubManagementPanel connectorId={selectedConnector.id} projectId={projectId} />
       <details><summary className="cursor-pointer text-sm">更新 Token</summary><div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <Input autoComplete="new-password" onChange={(event) => setUpdateTokens((current) => ({ ...current, [selectedConnector.id]: event.target.value }))} placeholder="新 Token；提交后立即清除" type="password" value={updateTokens[selectedConnector.id] ?? ""} />
         <Button disabled={busyAction !== null || !(updateTokens[selectedConnector.id]?.trim())} onClick={() => void updateToken(selectedConnector.id)} size="sm" type="button">验证并替换</Button>

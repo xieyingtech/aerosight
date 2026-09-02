@@ -4,6 +4,18 @@ export type FlightHubProject = {
   organizationUuid: string;
 };
 
+export type FlightHubJoinCodeInfo = {
+  projectUuid: string;
+  projectCode: string;
+  projectName: string;
+  organizationUuid: string;
+  organizationCode: string;
+  organizationName: string;
+  userInOrganization: boolean;
+  recommendedUserCallsign: string;
+  recommendedDroneCallsign: string | null;
+};
+
 export type FlightHubSafeErrorCode =
   | "credential_invalid"
   | "scope_forbidden"
@@ -155,6 +167,23 @@ function parseProjectPage(payload: UpstreamEnvelope): FlightHubProject[] {
   });
 }
 
+function parseJoinCodeInfo(payload: UpstreamEnvelope): FlightHubJoinCodeInfo {
+  const value=payload.data;
+  if (!isObject(value) || typeof value.project_uuid !== "string" || !UUID_PATTERN.test(value.project_uuid)
+      || typeof value.project_id !== "string" || !value.project_id.trim() || typeof value.project_name !== "string" || !value.project_name.trim()
+      || typeof value.organization_uuid !== "string" || !UUID_PATTERN.test(value.organization_uuid)
+      || typeof value.organization_id !== "string" || !value.organization_id.trim()
+      || typeof value.organization_name !== "string" || !value.organization_name.trim()
+      || typeof value.is_user_in_organization !== "boolean" || typeof value.recommend_user_project_callsign !== "string"
+      || !(value.recommend_association_drone_project_callsign===null||typeof value.recommend_association_drone_project_callsign==="string")) {
+    throw new FlightHubClientError("schema_incompatible",false,200);
+  }
+  return {projectUuid:value.project_uuid.toLowerCase(),projectCode:value.project_id.trim(),projectName:value.project_name.trim(),
+    organizationUuid:value.organization_uuid.toLowerCase(),organizationCode:value.organization_id.trim(),organizationName:value.organization_name.trim(),
+    userInOrganization:value.is_user_in_organization,recommendedUserCallsign:value.recommend_user_project_callsign.trim(),
+    recommendedDroneCallsign:value.recommend_association_drone_project_callsign?.trim()||null};
+}
+
 export class FlightHubProjectClient {
   private readonly options: FlightHubClientOptions;
   private readonly fetchImpl: FlightHubFetch;
@@ -245,5 +274,15 @@ export class FlightHubProjectClient {
       if (pageProjects.length < PROJECT_PAGE_SIZE) return projects;
     }
     throw new FlightHubClientError("project_page_limit", false, 200);
+  }
+
+  async getJoinCodeInfo(token:string,input:{projectCode:string;fastJoinCode:string;associationDroneSN?:string}):Promise<FlightHubJoinCodeInfo>{
+    const identifier=/^[A-Za-z0-9._:-]{1,256}$/;
+    if(!identifier.test(input.projectCode)||!identifier.test(input.fastJoinCode)||(input.associationDroneSN!==undefined&&!identifier.test(input.associationDroneSN))){
+      throw new FlightHubClientError("scope_forbidden",false);
+    }
+    const query=new URLSearchParams({project_id:input.projectCode,project_fast_join_code:input.fastJoinCode});
+    if(input.associationDroneSN)query.set("association_drone_device_sn",input.associationDroneSN);
+    return parseJoinCodeInfo(await this.get(token,`/openapi/v2.0/projects/join-codes?${query}`));
   }
 }

@@ -265,6 +265,38 @@ func (client *resourceClientFixture) GetOpenModelResource(_ context.Context, _, 
 	return client.openResources[resourceUUID], client.openResourceErrors[resourceUUID]
 }
 
+func (client *resourceClientFixture) GetOrganization(context.Context, string, string) (Organization, error) {
+	return Organization{UUID: "00000000-0000-4000-8000-000000000010", Name: "脱敏组织", OrganizationID: "ORG_CODE_REDACTED"}, nil
+}
+
+func (client *resourceClientFixture) ListOrganizationUsers(_ context.Context, _, _ string, options OrganizationUserListOptions) (PageResult[OrganizationUser], error) {
+	return PageResult[OrganizationUser]{Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0}, List: []OrganizationUser{}}, nil
+}
+
+func (client *resourceClientFixture) GetCurrentOrganizationRole(context.Context, string, string) (CurrentOrganizationRole, error) {
+	return CurrentOrganizationRole{UserID: "USER_REDACTED", OrganizationUUID: "00000000-0000-4000-8000-000000000010", Role: "organization-admin", OrganizationName: "脱敏组织"}, nil
+}
+
+func (client *resourceClientFixture) ListOrganizationRoles(_ context.Context, _, _, _ string, options PageOptions) (PageResult[OrganizationRole], error) {
+	return PageResult[OrganizationRole]{Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0}, List: []OrganizationRole{}}, nil
+}
+
+func (client *resourceClientFixture) ListOrganizationPermissions(context.Context, string, string, string) ([]OrganizationPermission, error) {
+	return []OrganizationPermission{}, nil
+}
+
+func (client *resourceClientFixture) ListRolePermissions(context.Context, string, string, string, []string) ([]OrganizationPermission, error) {
+	return []OrganizationPermission{}, nil
+}
+
+func (client *resourceClientFixture) ListProjectUsers(_ context.Context, _, _ string, options ProjectUserListOptions) (PageResult[ProjectUser], error) {
+	return PageResult[ProjectUser]{Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0}, List: []ProjectUser{}}, nil
+}
+
+func (client *resourceClientFixture) ListProjectMembers(context.Context, string, string) ([]ProjectMember, error) {
+	return []ProjectMember{}, nil
+}
+
 func (client *resourceClientFixture) liveCalls() (int, int, int, int) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -290,6 +322,7 @@ type resourceSinkFixture struct {
 	liveCatalogs    []LiveCatalogPoll
 	geospatialPolls []GeospatialCatalogPoll
 	modelPolls      []ModelCatalogPoll
+	managementPolls []ManagementCatalogPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -384,6 +417,13 @@ func (sink *resourceSinkFixture) ApplyModelCatalog(_ context.Context, _ connecto
 	return nil
 }
 
+func (sink *resourceSinkFixture) ApplyManagementCatalog(_ context.Context, _ connector.Instance, poll ManagementCatalogPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	sink.managementPolls = append(sink.managementPolls, poll)
+	return nil
+}
+
 func (sink *resourceSinkFixture) catalog(kind string) CatalogPoll {
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
@@ -432,6 +472,28 @@ func (runner blockingInventoryRunner) Run(context.Context, connector.Instance, c
 
 func resourceStreamInstance() connector.Instance {
 	return connector.Instance{ID: 7, ProjectID: 3, ConnectorKey: ConnectorKey, Version: ConnectorVersion, DiscoveryScope: json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目","organizationUuid":"00000000-0000-4000-8000-000000000010"}`)}
+}
+
+func TestManagementCatalogPollUsesOrganizationAndProjectReadDomains(t *testing.T) {
+	t.Parallel()
+	client := &resourceClientFixture{}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, &resourceStoreFixture{}, sink, ResourceStreamConfig{
+		OnlineInterval: time.Second, OfflineInterval: time.Minute, HealthInterval: time.Minute,
+		CatalogInterval: time.Minute, MaxBackoff: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor, _, err := coordinator.pollManagementCatalog(context.Background(), resourceStreamInstance(), "TOKEN_REDACTED")
+	if err != nil || cursor["complete"] != true || cursor["organizationUsers"] != 0 || cursor["projectMembers"] != 0 {
+		t.Fatalf("cursor=%#v err=%v", cursor, err)
+	}
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	if len(sink.managementPolls) != 1 || sink.managementPolls[0].Organization.Name != "脱敏组织" || sink.managementPolls[0].CurrentRole.Role != "organization-admin" {
+		t.Fatalf("management polls=%#v", sink.managementPolls)
+	}
 }
 
 func TestLiveCatalogEmptySnapshotsRemainHealthyAndComplete(t *testing.T) {

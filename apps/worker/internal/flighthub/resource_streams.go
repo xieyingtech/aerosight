@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,14 @@ type ResourceStreamClient interface {
 	ListRunningOpenModels(context.Context, string, string) ([]OpenModel, error)
 	GetOpenModel(context.Context, string, string, string) (OpenModel, error)
 	GetOpenModelResource(context.Context, string, string, string) (OpenModelResource, error)
+	GetOrganization(context.Context, string, string) (Organization, error)
+	ListOrganizationUsers(context.Context, string, string, OrganizationUserListOptions) (PageResult[OrganizationUser], error)
+	GetCurrentOrganizationRole(context.Context, string, string) (CurrentOrganizationRole, error)
+	ListOrganizationRoles(context.Context, string, string, string, PageOptions) (PageResult[OrganizationRole], error)
+	ListOrganizationPermissions(context.Context, string, string, string) ([]OrganizationPermission, error)
+	ListRolePermissions(context.Context, string, string, string, []string) ([]OrganizationPermission, error)
+	ListProjectUsers(context.Context, string, string, ProjectUserListOptions) (PageResult[ProjectUser], error)
+	ListProjectMembers(context.Context, string, string) ([]ProjectMember, error)
 }
 
 type ResourceStreamStore interface {
@@ -125,6 +134,18 @@ type ModelCatalogPoll struct {
 	ReceivedAt         time.Time
 }
 
+type ManagementCatalogPoll struct {
+	Organization            Organization
+	CurrentRole             CurrentOrganizationRole
+	OrganizationUsers       []OrganizationUser
+	OrganizationRoles       []OrganizationRole
+	OrganizationPermissions []OrganizationPermission
+	RolePermissions         []OrganizationPermission
+	ProjectUsers            []ProjectUser
+	ProjectMembers          []ProjectMember
+	ReceivedAt              time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
@@ -136,6 +157,7 @@ type ResourceStreamSink interface {
 	ApplyLiveCatalog(context.Context, connector.Instance, LiveCatalogPoll) error
 	ApplyGeospatialCatalog(context.Context, connector.Instance, GeospatialCatalogPoll) error
 	ApplyModelCatalog(context.Context, connector.Instance, ModelCatalogPoll) error
+	ApplyManagementCatalog(context.Context, connector.Instance, ManagementCatalogPoll) error
 }
 
 type ActiveLiveSessionReconciler interface {
@@ -198,6 +220,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "live", run: coordinator.pollLiveCatalog},
 		{kind: "geospatial", run: coordinator.pollGeospatial},
 		{kind: "models", run: coordinator.pollModels},
+		{kind: "organization", run: coordinator.pollManagementCatalog},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -209,6 +232,126 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollManagementCatalog(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	if scope.OrganizationUUID == "" {
+		return map[string]any{"complete": false, "reason": "organization_scope_missing"}, coordinator.config.CatalogInterval, nil
+	}
+	organization, err := coordinator.client.GetOrganization(ctx, token, scope.OrganizationUUID)
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	currentRole, err := coordinator.client.GetCurrentOrganizationRole(ctx, token, scope.OrganizationUUID)
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	organizationUsers, err := coordinator.listAllOrganizationUsers(ctx, token, scope.OrganizationUUID)
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	organizationRoles, err := coordinator.listAllOrganizationRoles(ctx, token, scope.OrganizationUUID, "organization")
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	organizationPermissions, err := coordinator.client.ListOrganizationPermissions(ctx, token, scope.OrganizationUUID, "organization")
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	roleIDs := make([]string, 0, len(organizationRoles))
+	for _, role := range organizationRoles {
+		roleIDs = append(roleIDs, role.RoleID)
+	}
+	rolePermissions := make([]OrganizationPermission, 0)
+	if len(roleIDs) > 0 {
+		rolePermissions, err = coordinator.client.ListRolePermissions(ctx, token, scope.OrganizationUUID, "organization", roleIDs)
+		if err != nil {
+			return map[string]any{"complete": false}, 0, err
+		}
+	}
+	projectUsers, err := coordinator.listAllProjectUsers(ctx, token, scope.ProjectUUID)
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	projectMembers, err := coordinator.client.ListProjectMembers(ctx, token, scope.ProjectUUID)
+	if err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	poll := ManagementCatalogPoll{
+		Organization: organization, CurrentRole: currentRole, OrganizationUsers: organizationUsers,
+		OrganizationRoles: organizationRoles, OrganizationPermissions: organizationPermissions,
+		RolePermissions: rolePermissions, ProjectUsers: projectUsers, ProjectMembers: projectMembers,
+		ReceivedAt: coordinator.config.Now().UTC(),
+	}
+	if err := coordinator.sink.ApplyManagementCatalog(ctx, instance, poll); err != nil {
+		return map[string]any{"complete": false}, 0, err
+	}
+	return map[string]any{
+		"organizationUsers": len(organizationUsers), "roles": len(organizationRoles),
+		"permissions": len(organizationPermissions), "rolePermissions": len(rolePermissions),
+		"projectUsers": len(projectUsers), "projectMembers": len(projectMembers), "complete": true,
+	}, coordinator.config.CatalogInterval, nil
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllOrganizationUsers(ctx context.Context, token, organizationUUID string) ([]OrganizationUser, error) {
+	return listAllAdminPages(func(page int) (PageResult[OrganizationUser], error) {
+		return coordinator.client.ListOrganizationUsers(ctx, token, organizationUUID, OrganizationUserListOptions{PageOptions: PageOptions{Page: page, PageSize: 100}})
+	}, func(item OrganizationUser) string { return item.UserID })
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllOrganizationRoles(ctx context.Context, token, organizationUUID, roleType string) ([]OrganizationRole, error) {
+	return listAllAdminPages(func(page int) (PageResult[OrganizationRole], error) {
+		return coordinator.client.ListOrganizationRoles(ctx, token, organizationUUID, roleType, PageOptions{Page: page, PageSize: 100})
+	}, func(item OrganizationRole) string { return item.RoleID })
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllProjectUsers(ctx context.Context, token, projectUUID string) ([]ProjectUser, error) {
+	return listAllAdminPages(func(page int) (PageResult[ProjectUser], error) {
+		return coordinator.client.ListProjectUsers(ctx, token, projectUUID, ProjectUserListOptions{PageOptions: PageOptions{Page: page, PageSize: 100}})
+	}, func(item ProjectUser) string { return item.UserID })
+}
+
+func listAllAdminPages[T any](fetch func(int) (PageResult[T], error), identity func(T) string) ([]T, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]T, 0)
+	seen := make(map[string]struct{})
+	total := -1
+	for page := 1; page <= maxPages; page++ {
+		result, err := fetch(page)
+		if err != nil {
+			return nil, err
+		}
+		if result.Pagination.Page != page || result.Pagination.PageSize != pageSize || result.Pagination.Total < 0 {
+			return nil, schemaError()
+		}
+		if total < 0 {
+			total = result.Pagination.Total
+		} else if total != result.Pagination.Total {
+			return nil, schemaError()
+		}
+		for _, item := range result.List {
+			key := strings.TrimSpace(identity(item))
+			if key == "" {
+				return nil, schemaError()
+			}
+			if _, duplicate := seen[key]; duplicate {
+				return nil, schemaError()
+			}
+			seen[key] = struct{}{}
+			items = append(items, item)
+		}
+		if len(items) == total {
+			return items, nil
+		}
+		if len(items) > total || len(result.List) == 0 || len(result.List) < pageSize {
+			return nil, schemaError()
+		}
+	}
+	return nil, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
 }
 
 func (coordinator *ResourceStreamCoordinator) pollModels(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
