@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { previewFlightHubProjectMemberWrite, readFlightHubManagementWriteJob,
   submitFlightHubProjectMemberWrite } from "@/lib/dji-flighthub-management-write";
 import { assertLiveControlRequest } from "@/lib/replay-policy";
+import { bindProjectMemberWriteRequest } from "@/lib/dji-flighthub-management-write-core";
 
 function scope(values: { id: string; connectorId: string }) {
   const projectId = Number(values.id), connectorInstanceId = Number(values.connectorId);
@@ -19,9 +20,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; connectorId: string }> }) {
   const resolved = scope(await params);
   if (!resolved) return NextResponse.json({ error: "INPUT_INVALID" }, { status: 400 });
-  try { assertLiveControlRequest(request); const body = await request.json() as Record<string, unknown>;
+  try { assertLiveControlRequest(request); const body = bindProjectMemberWriteRequest(resolved.connectorInstanceId, await request.json());
     return NextResponse.json(await submitFlightHubProjectMemberWrite(resolved.projectId,
-      { ...body, connectorInstanceId: resolved.connectorInstanceId }, request.headers.get("x-request-id")), { status: 202 }); }
+      body, request.headers.get("x-request-id")), { status: 202 }); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "FLIGHTHUB_MANAGEMENT_WRITE_FAILED" }, { status: 409 }); }
 }
 

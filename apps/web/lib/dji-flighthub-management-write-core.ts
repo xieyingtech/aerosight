@@ -35,6 +35,12 @@ export const flightHubProjectMemberWriteInputSchema = z.object({
 export type FlightHubProjectMemberPreviewInput = z.infer<typeof flightHubProjectMemberPreviewInputSchema>;
 export type FlightHubProjectMemberWriteInput = z.infer<typeof flightHubProjectMemberWriteInputSchema>;
 
+export function bindProjectMemberWriteRequest(connectorInstanceId: number, rawInput: unknown) {
+  const raw = rawInput && typeof rawInput === "object" && !Array.isArray(rawInput) ? rawInput as Record<string, unknown> : {};
+  const { connectorInstanceId: _ignored, ...untrusted } = raw;
+  return flightHubProjectMemberWriteInputSchema.parse({ ...untrusted, connectorInstanceId });
+}
+
 export const PROJECT_MEMBER_WRITE_POLICY = Object.freeze({
   capability: "organization.project-member.write",
   featureFlag: "flighthub.organization.project-member",
