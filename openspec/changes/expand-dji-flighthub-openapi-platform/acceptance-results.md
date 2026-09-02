@@ -42,3 +42,15 @@
 | Worker 重启 | `TestCommandStatusPollingResumesAfterWorkerRestartWithoutEarlySuccess`、`TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted` | 通过 |
 
 PostgreSQL 集成用例使用当前迁移后的本地测试数据库实际执行，没有以 skip 结果代替通过证据。
+
+## 10.9 最终本地验证
+
+- 日期：2026-09-02
+- Go 全量：在 `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off` 下运行 `go test ./...`，Worker 全部 package 通过。
+- 数据库迁移：`pnpm test:migrations` 通过 PostGIS、空库、现有库和重复执行验证。
+- 升级/回滚兼容：`pnpm drill:upgrade-rollback` 通过；72/72 migrations 完成，legacy baseline 正确 adopted，升级前、升级后和应用回滚后三阶段页面契约均可读；新证据保持 available/legal hold，未知 outbox 事件保持 pending、attempts=0、consumptions=0。
+- 项目检查：`pnpm check` 通过；TypeScript 无错误，Web 388 项测试中 383 通过、5 项按设计在未提供显式 PostgreSQL 测试 URL 时跳过，Worker 全量测试再次通过。
+- 生产构建：`pnpm build` 通过；Next.js 编译、类型检查、页面数据和静态页面生成完成，Go Worker 二进制构建完成。
+- 补充发布门禁：司空文档/manifest 检查、OpenSpec strict 和 `git diff --check` 在记录本节后重新执行。
+
+上述验证不替代 7.7 坐标基准或 10.6/10.7 现场写入验收；现场结果若导致代码变化，发布前必须重新运行本节全部命令并更新记录。
