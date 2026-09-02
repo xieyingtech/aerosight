@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"aerosight/worker/internal/connector"
@@ -27,9 +28,19 @@ type MapElementSnapshot struct {
 type GeospatialCatalogPoll struct {
 	MapElements         []MapElementSnapshot
 	FlightAreas         []FlightArea
+	Devices             []connector.ManagedConnectorDevice
+	AirSenseWarnings    []DeviceAirSenseWarnings
 	MapElementsComplete bool
 	FlightAreasComplete bool
+	AirSenseComplete    bool
 	ReceivedAt          time.Time
+}
+
+type AirSensePoll struct {
+	Devices          []connector.ManagedConnectorDevice
+	Warnings         []DeviceAirSenseWarnings
+	CompleteSnapshot bool
+	ReceivedAt       time.Time
 }
 
 func (coordinator *ResourceStreamCoordinator) pollGeospatial(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
@@ -41,20 +52,28 @@ func (coordinator *ResourceStreamCoordinator) pollGeospatial(ctx context.Context
 	if err != nil {
 		return map[string]any{"flightAreas": len(areas), "pages": pages, "flightAreasComplete": false, "mapElementsComplete": false, "complete": false}, 0, err
 	}
+	devices, err := coordinator.store.ListManagedDevices(ctx, instance)
+	if err != nil {
+		return map[string]any{"flightAreas": len(areas), "pages": pages, "flightAreasComplete": true, "airSenseComplete": false, "mapElementsComplete": false, "complete": false}, 0, err
+	}
+	warnings, warningErr := coordinator.client.ListWorkspaceAirSenseWarnings(ctx, token, scope.ProjectUUID)
 	poll := GeospatialCatalogPoll{
 		FlightAreas: areas, FlightAreasComplete: true,
+		Devices: devices, AirSenseWarnings: warnings, AirSenseComplete: warningErr == nil,
 		// There is no released GET/list contract for map elements. Keeping this
 		// false prevents a flight-area read from erasing write-through elements.
 		MapElementsComplete: false,
 		ReceivedAt:          coordinator.config.Now().UTC(),
 	}
 	if err := coordinator.sink.ApplyGeospatialCatalog(ctx, instance, poll); err != nil {
-		return map[string]any{"flightAreas": len(areas), "pages": pages, "flightAreasComplete": false, "mapElementsComplete": false, "complete": false}, 0, err
+		return map[string]any{"flightAreas": len(areas), "pages": pages, "airSenseWarnings": len(warnings), "flightAreasComplete": false, "airSenseComplete": false, "mapElementsComplete": false, "complete": false}, 0, errors.Join(warningErr, err)
 	}
-	return map[string]any{
+	cursor := map[string]any{
 		"flightAreas": len(areas), "pages": pages, "flightAreasComplete": true,
-		"mapElementsComplete": false, "complete": true,
-	}, coordinator.config.CatalogInterval, nil
+		"airSenseWarnings": len(warnings), "airSenseComplete": warningErr == nil,
+		"mapElementsComplete": false, "complete": warningErr == nil,
+	}
+	return cursor, coordinator.config.CatalogInterval, warningErr
 }
 
 func (coordinator *ResourceStreamCoordinator) listAllProjectFlightAreas(ctx context.Context, token, projectUUID string) ([]FlightArea, int, error) {
@@ -104,6 +123,9 @@ func (sink *SQLResourceStreamSink) ApplyGeospatialCatalog(ctx context.Context, i
 	if instance.ID <= 0 || instance.ProjectID <= 0 || poll.ReceivedAt.IsZero() {
 		return errors.New("FlightHub geospatial catalog projection scope is invalid")
 	}
+	if poll.AirSenseComplete && poll.AirSenseWarnings == nil {
+		poll.AirSenseWarnings = []DeviceAirSenseWarnings{}
+	}
 	elements, err := mapElementRemoteResources(poll.MapElements)
 	if err != nil {
 		return err
@@ -112,9 +134,14 @@ func (sink *SQLResourceStreamSink) ApplyGeospatialCatalog(ctx context.Context, i
 	if err != nil {
 		return err
 	}
+	airSense, err := airSenseRemoteResources(poll.Devices, poll.AirSenseWarnings)
+	if err != nil {
+		return err
+	}
 	batches := []connector.RemoteResourceBatch{
 		{Kind: "map-element", Resources: elements, CompleteSnapshot: poll.MapElementsComplete},
 		{Kind: "flight-area", Resources: areas, CompleteSnapshot: poll.FlightAreasComplete},
+		{Kind: "air-sense-warning", Resources: airSense, CompleteSnapshot: poll.AirSenseComplete},
 	}
 	var applyErrors []error
 	for _, batch := range batches {
@@ -122,7 +149,70 @@ func (sink *SQLResourceStreamSink) ApplyGeospatialCatalog(ctx context.Context, i
 			applyErrors = append(applyErrors, applyErr)
 		}
 	}
+	if len(applyErrors) == 0 && poll.AirSenseWarnings != nil {
+		if applyErr := sink.flights.ApplyAirSense(ctx, instance, AirSensePoll{
+			Devices: poll.Devices, Warnings: poll.AirSenseWarnings, CompleteSnapshot: poll.AirSenseComplete, ReceivedAt: poll.ReceivedAt,
+		}); applyErr != nil {
+			applyErrors = append(applyErrors, applyErr)
+		}
+	}
 	return errors.Join(applyErrors...)
+}
+
+func airSenseRemoteID(deviceSN, icao string) string {
+	return secureRemoteKey(strings.TrimSpace(deviceSN) + ":" + strings.TrimSpace(icao))
+}
+
+func airSenseRemoteResources(devices []connector.ManagedConnectorDevice, warnings []DeviceAirSenseWarnings) ([]connector.RemoteResource, error) {
+	bySerial := make(map[string]int, len(devices))
+	for _, device := range devices {
+		if device.DeviceID <= 0 || strings.TrimSpace(device.Serial) == "" {
+			return nil, schemaError()
+		}
+		if _, duplicate := bySerial[device.Serial]; duplicate {
+			return nil, schemaError()
+		}
+		bySerial[device.Serial] = device.DeviceID
+	}
+	resources := make([]connector.RemoteResource, 0)
+	seen := make(map[string]struct{})
+	for warningIndex := range warnings {
+		warning := warnings[warningIndex]
+		deviceID := bySerial[warning.DeviceSN]
+		if deviceID <= 0 || warning.CapturedAt.IsZero() || !warning.ExpiresAt.After(warning.CapturedAt) {
+			return nil, errors.New("FlightHub AirSense warning is outside managed scope")
+		}
+		for eventIndex := range warning.Events {
+			event := warning.Events[eventIndex]
+			if !validateAirSenseEvent(&event) {
+				return nil, schemaError()
+			}
+			remoteID := airSenseRemoteID(warning.DeviceSN, event.ICAO)
+			if _, duplicate := seen[remoteID]; duplicate {
+				return nil, schemaError()
+			}
+			seen[remoteID] = struct{}{}
+			version, err := alertDigest(map[string]any{
+				"capturedAt": warning.CapturedAt.UnixMilli(), "enabled": warning.Enabled, "event": event,
+			})
+			if err != nil {
+				return nil, err
+			}
+			capturedAt := warning.CapturedAt.UTC()
+			resources = append(resources, connector.RemoteResource{
+				RemoteID: remoteID, RemoteVersion: version, RemoteUpdatedAt: &capturedAt,
+				Summary: map[string]any{
+					"deviceId": deviceID, "warningLevel": event.WarningLevel,
+					"latitude": event.Latitude, "longitude": event.Longitude, "altitude": event.Altitude,
+					"heading": event.Heading, "relativeAltitude": event.RelativeAltitude,
+					"verticalTrend": event.VerticalTrend, "distance": event.Distance,
+					"capturedAt": warning.CapturedAt, "expiresAt": warning.ExpiresAt,
+					"expired": warning.Expired, "coordinateReference": "unverified",
+				},
+			})
+		}
+	}
+	return resources, nil
 }
 
 func mapElementRemoteResources(items []MapElementSnapshot) ([]connector.RemoteResource, error) {

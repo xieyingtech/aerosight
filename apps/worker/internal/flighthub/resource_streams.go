@@ -29,6 +29,7 @@ type ResourceStreamClient interface {
 	ListLiveShares(context.Context, string, string, LiveShareListOptions) ([]LiveShare, error)
 	ListStreamConverters(context.Context, string, string, StreamConverterListOptions) (PageResult[StreamConverter], error)
 	ListProjectFlightAreas(context.Context, string, string, FlightAreaListOptions) (FlightAreaPage, error)
+	ListWorkspaceAirSenseWarnings(context.Context, string, string) ([]DeviceAirSenseWarnings, error)
 }
 
 type ResourceStreamStore interface {

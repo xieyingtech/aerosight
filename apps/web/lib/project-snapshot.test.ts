@@ -11,11 +11,18 @@ class SnapshotClient {
   statements: string[] = [];
   released = false;
   private readonly authorized: boolean;
-  constructor(authorized: boolean) { this.authorized = authorized; }
+  private readonly airSense: boolean;
+  constructor(authorized: boolean, airSense = false) { this.authorized = authorized; this.airSense = airSense; }
   async query<T extends QueryResultRow>(text: string): Promise<QueryResult<T>> {
     this.statements.push(text);
     if (text.includes("snapshot:project-scope")) {
       return result(this.authorized ? [{ id: 7, name: "North", teamId: 3, role: "member", dependencyHealth: {} } as unknown as T] : []);
+    }
+    if (this.airSense && text.includes("snapshot:suspected-construction")) {
+      return result([{ id: 17, projectId: 7, label: "AirSense 空域目标", status: "active" } as unknown as T]);
+    }
+    if (this.airSense && text.includes("snapshot:alerts")) {
+      return result([{ id: "event-17", projectId: 7, title: "司空 AirSense 空域告警", status: "open", severity: "high" } as unknown as T]);
     }
     return result([]);
   }
@@ -41,6 +48,19 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   assert.match(regionStatement ?? "", /policy\.project_id=\$1/g);
   assert(!JSON.stringify(snapshot).includes("dependencyHealthJson"));
   assert(client.released);
+});
+
+test("snapshot preserves AirSense labels and titles for the realtime map", async () => {
+  const client = new SnapshotClient(true, true);
+  const snapshot = await readProjectSituationSnapshot(2, 7, async () => client as never);
+  assert.equal(snapshot?.suspectedConstruction[0]?.label, "AirSense 空域目标");
+  assert.equal(snapshot?.openAlerts[0]?.title, "司空 AirSense 空域告警");
+  const groupStatement = client.statements.find((statement) => statement.includes("snapshot:suspected-construction"));
+  const alertStatement = client.statements.find((statement) => statement.includes("snapshot:alerts"));
+  assert.match(groupStatement ?? "", /group_row\.label/);
+  assert.match(alertStatement ?? "", /event\.title/);
+  assert.doesNotMatch(groupStatement ?? "", /'疑似违建'\s+as\s+label/);
+  assert.doesNotMatch(alertStatement ?? "", /'疑似违建'\s+as\s+title/);
 });
 
 test("unauthorized project id reveals no scoped resources", async () => {

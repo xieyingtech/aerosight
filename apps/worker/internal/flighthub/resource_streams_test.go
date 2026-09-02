@@ -73,6 +73,8 @@ type resourceClientFixture struct {
 	streamConverterCalls       int
 	flightAreaPages            map[int]FlightAreaPage
 	flightAreaErrors           map[int]error
+	airSenseWarnings           []DeviceAirSenseWarnings
+	airSenseError              error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -224,6 +226,10 @@ func (client *resourceClientFixture) ListProjectFlightAreas(_ context.Context, _
 		Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0},
 		List:       []FlightArea{},
 	}, nil
+}
+
+func (client *resourceClientFixture) ListWorkspaceAirSenseWarnings(context.Context, string, string) ([]DeviceAirSenseWarnings, error) {
+	return append([]DeviceAirSenseWarnings(nil), client.airSenseWarnings...), client.airSenseError
 }
 
 func (client *resourceClientFixture) liveCalls() (int, int, int, int) {

@@ -313,7 +313,7 @@ export async function readProjectSituationSnapshot(
     )).rows;
     const suspectedConstruction = (await client.query<Record<string, unknown>>(
       `/* snapshot:suspected-construction */
-       select group_row.id, group_row.project_id as "projectId", '疑似违建' as label,
+       select group_row.id, group_row.project_id as "projectId", group_row.label,
               group_row.status, group_row.location_quality as "locationQuality",
               group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
        from detection_groups group_row where group_row.project_id=$1 and group_row.status='active'
@@ -321,7 +321,7 @@ export async function readProjectSituationSnapshot(
     )).rows;
     const openAlerts = (await client.query<Record<string, unknown>>(
       `/* snapshot:alerts */
-       select event.id,event.project_id as "projectId",'疑似违建' as title,event.status,event.severity,
+       select event.id,event.project_id as "projectId",event.title,event.status,event.severity,
               event.last_detected_at as "updatedAt",ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
        from perception_events event join detection_groups group_row on group_row.id=event.detection_group_id and group_row.project_id=event.project_id
        where event.project_id=$1 and event.status in('open','acknowledged','investigating')

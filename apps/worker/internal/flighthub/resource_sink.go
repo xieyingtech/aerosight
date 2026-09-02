@@ -43,6 +43,7 @@ type FlightCatalogProjector interface {
 	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
 	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
+	ApplyAirSense(context.Context, connector.Instance, AirSensePoll) error
 }
 
 type SQLResourceStreamSink struct {
