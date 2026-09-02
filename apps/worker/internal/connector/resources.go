@@ -86,16 +86,17 @@ type ManagedConnectorDevice struct {
 }
 
 type CapabilitySnapshot struct {
-	CapabilityCode  string
-	Status          string
-	EvidenceLevel   string
-	Region          string
-	Deployment      string
-	DeviceModel     string
-	FirmwareVersion string
-	Details         map[string]any
-	VerifiedAt      time.Time
-	ExpiresAt       *time.Time
+	CapabilityCode     string
+	Status             string
+	EvidenceLevel      string
+	Region             string
+	Deployment         string
+	AccountFingerprint string
+	DeviceModel        string
+	FirmwareVersion    string
+	Details            map[string]any
+	VerifiedAt         time.Time
+	ExpiresAt          *time.Time
 }
 
 type SQLResourceRepository struct{ db *sql.DB }
@@ -422,6 +423,8 @@ func (repository *SQLResourceRepository) SaveCapabilitySnapshot(
 	if strings.TrimSpace(snapshot.CapabilityCode) == "" || !validSetValue(capabilityStatuses, snapshot.Status) ||
 		!validSetValue(evidenceLevels, snapshot.EvidenceLevel) || strings.TrimSpace(snapshot.Region) == "" ||
 		strings.TrimSpace(snapshot.Deployment) == "" || snapshot.VerifiedAt.IsZero() ||
+		(snapshot.AccountFingerprint != "" && !validAccountFingerprint(snapshot.AccountFingerprint)) ||
+		(snapshot.EvidenceLevel == "field-write" && !validAccountFingerprint(snapshot.AccountFingerprint)) ||
 		(snapshot.ExpiresAt != nil && !snapshot.ExpiresAt.After(snapshot.VerifiedAt)) {
 		return errors.New("connector capability snapshot is invalid")
 	}
@@ -432,14 +435,14 @@ func (repository *SQLResourceRepository) SaveCapabilitySnapshot(
 	result, err := repository.db.ExecContext(ctx, `
 		insert into connector_capability_snapshots(
 		  project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,
-		  device_model,firmware_version,details_json,verified_at,expires_at,created_at,updated_at
-		) select $1,adapter.team_id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now()
+		  account_fingerprint,device_model,firmware_version,details_json,verified_at,expires_at,created_at,updated_at
+		) select $1,adapter.team_id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now(),now()
 		    from device_adapters adapter where adapter.id=$2 and adapter.project_id=$1
-		on conflict(project_id,connector_instance_id,capability_code,region,deployment,device_model,firmware_version) do update set
+		on conflict(project_id,connector_instance_id,capability_code,region,deployment,account_fingerprint,device_model,firmware_version) do update set
 		  status=excluded.status,evidence_level=excluded.evidence_level,details_json=excluded.details_json,
 		  verified_at=excluded.verified_at,expires_at=excluded.expires_at,updated_at=now()`,
 		instance.ProjectID, instance.ID, snapshot.CapabilityCode, snapshot.Status, snapshot.EvidenceLevel,
-		snapshot.Region, snapshot.Deployment, nullableText(snapshot.DeviceModel), nullableText(snapshot.FirmwareVersion),
+		snapshot.Region, snapshot.Deployment, nullableText(snapshot.AccountFingerprint), nullableText(snapshot.DeviceModel), nullableText(snapshot.FirmwareVersion),
 		details, snapshot.VerifiedAt, snapshot.ExpiresAt)
 	if err != nil {
 		return err
@@ -469,10 +472,10 @@ func (repository *SQLResourceRepository) ListCapabilitySnapshots(
 	}
 	rows, err := repository.db.QueryContext(ctx, `
 		select capability_code,status,evidence_level,region,deployment,
-		       device_model,firmware_version,details_json,verified_at,expires_at
+		       account_fingerprint,device_model,firmware_version,details_json,verified_at,expires_at
 		  from connector_capability_snapshots
 		 where project_id=$1 and connector_instance_id=$2 and region=$3 and deployment=$4
-		 order by capability_code,verified_at desc,device_model nulls first,firmware_version nulls first`,
+		 order by capability_code,verified_at desc,account_fingerprint nulls first,device_model nulls first,firmware_version nulls first`,
 		instance.ProjectID, instance.ID, region, deployment)
 	if err != nil {
 		return nil, err
@@ -481,18 +484,19 @@ func (repository *SQLResourceRepository) ListCapabilitySnapshots(
 	snapshots := make([]CapabilitySnapshot, 0)
 	for rows.Next() {
 		var snapshot CapabilitySnapshot
-		var deviceModel, firmwareVersion sql.NullString
+		var accountFingerprint, deviceModel, firmwareVersion sql.NullString
 		var details []byte
 		var expiresAt sql.NullTime
 		if err := rows.Scan(
 			&snapshot.CapabilityCode, &snapshot.Status, &snapshot.EvidenceLevel, &snapshot.Region, &snapshot.Deployment,
-			&deviceModel, &firmwareVersion, &details, &snapshot.VerifiedAt, &expiresAt,
+			&accountFingerprint, &deviceModel, &firmwareVersion, &details, &snapshot.VerifiedAt, &expiresAt,
 		); err != nil {
 			return nil, err
 		}
 		if json.Unmarshal(details, &snapshot.Details) != nil || snapshot.Details == nil {
 			return nil, errors.New("connector capability snapshot details are invalid")
 		}
+		snapshot.AccountFingerprint = accountFingerprint.String
 		snapshot.DeviceModel = deviceModel.String
 		snapshot.FirmwareVersion = firmwareVersion.String
 		if expiresAt.Valid {
@@ -501,6 +505,44 @@ func (repository *SQLResourceRepository) ListCapabilitySnapshots(
 		snapshots = append(snapshots, snapshot)
 	}
 	return snapshots, rows.Err()
+}
+
+func (repository *SQLResourceRepository) SaveCapabilityAccountFingerprint(ctx context.Context, instance Instance, fingerprint string) error {
+	if err := validateInstance(instance); err != nil {
+		return err
+	}
+	if !validAccountFingerprint(fingerprint) {
+		return errors.New("connector capability account fingerprint is invalid")
+	}
+	if err := repository.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
+	result, err := repository.db.ExecContext(ctx, `update device_adapters
+		set discovery_scope_json=jsonb_set(discovery_scope_json,'{accountFingerprint}',to_jsonb($3::text),true),updated_at=now()
+		where id=$1 and project_id=$2`, instance.ID, instance.ProjectID, fingerprint)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrRemoteResourceUnavailable
+	}
+	return nil
+}
+
+func validAccountFingerprint(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func firstNonNilMap(value map[string]any) map[string]any {

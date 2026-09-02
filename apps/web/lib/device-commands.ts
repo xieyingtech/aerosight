@@ -105,6 +105,8 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
       }>(`select coalesce(flags.flighthub_action_flags_json @> jsonb_build_object($5::text,true),false) as "featureEnabled",
           exists(select 1 from connector_capability_snapshots capability where capability.project_id=$1
             and capability.connector_instance_id=$3::bigint and capability.capability_code=$6
+			and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+			and capability.region='cn' and capability.deployment='cn-public-cloud'
             and capability.status='supported' and capability.evidence_level='field-write'
             and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
             and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
@@ -115,6 +117,7 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
           coalesce(approval.expires_at>now(),false) as "approvalUnexpired"
         from projects project
         join devices device on device.project_id=project.id and device.id=$2
+		join device_adapters adapter on adapter.id=$3::bigint and adapter.project_id=project.id
         left join project_feature_flags flags on flags.project_id=project.id
         left join device_latest_telemetry latest on latest.project_id=project.id and latest.device_id=$2 and latest.adapter_id=$3::bigint
         left join approval_requests approval on approval.id=$4::uuid and approval.project_id=project.id

@@ -307,7 +307,15 @@ export async function readFlightHubFlightOperationsCore(
              exists(select 1 from connector_capability_snapshots capability
                where capability.project_id=adapter.project_id and capability.connector_instance_id=adapter.id
                  and capability.capability_code='flight.execute' and capability.status='supported'
-                 and capability.evidence_level='field-write'
+				 and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+				 and capability.region='cn' and capability.deployment='cn-public-cloud'
+				 and capability.evidence_level='field-write'
+				 and exists(select 1 from device_external_identities accepted_identity
+				   join devices accepted_device on accepted_device.id=accepted_identity.device_id
+				     and accepted_device.project_id=accepted_identity.project_id
+				   where accepted_identity.project_id=adapter.project_id and accepted_identity.adapter_id=adapter.id
+				     and accepted_identity.discovery_status='managed' and accepted_device.device_model=capability.device_model
+				     and accepted_device.firmware_version=capability.firmware_version)
                  and (capability.expires_at is null or capability.expires_at>now())) as "actionVerified"
         from device_adapters adapter
         join connector_definitions definition on definition.id=adapter.connector_definition_id

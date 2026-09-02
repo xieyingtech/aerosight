@@ -105,6 +105,9 @@ func (store *SQLFlightActionStore) Load(ctx context.Context, projectID int, jobI
 		exists(select 1 from connector_capability_snapshots capability
 		  where capability.project_id=job.project_id and capability.connector_instance_id=job.connector_instance_id
 		    and capability.capability_code='flight.execute' and capability.status='supported'
+		    and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		    and capability.region='cn' and capability.deployment='cn-public-cloud'
+		    and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
 		    and capability.evidence_level='field-write' and (capability.expires_at is null or capability.expires_at>now())),
 		run.status,coalesce((run.preflight_snapshot_json->>'allowed')::boolean,false),
 		(approval.status='approved' and approval.expires_at>now()
@@ -116,6 +119,7 @@ func (store *SQLFlightActionStore) Load(ctx context.Context, projectID int, jobI
 	 join device_adapters adapter on adapter.id=job.connector_instance_id and adapter.project_id=job.project_id
 	 join connector_definitions definition on definition.id=adapter.connector_definition_id
 	 join task_runs run on run.id=job.task_run_id and run.project_id=job.project_id and run.team_id=job.team_id
+	 join devices device on device.id=job.device_id and device.project_id=job.project_id
 	 join device_external_identities identity on identity.project_id=job.project_id and identity.adapter_id=job.connector_instance_id
 	   and identity.device_id=job.device_id and run.selected_device_id=job.device_id
 	 join team_members member on member.team_id=job.team_id and member.user_id=job.requested_by_user_id

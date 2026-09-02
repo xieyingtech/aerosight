@@ -25,7 +25,9 @@ export async function lookupFlightHubJoinCode(projectId:number,connectorId:strin
       adapter.discovery_scope_json->>'organizationUuid' as "organizationUuid",
       exists(select 1 from connector_capability_snapshots capability where capability.project_id=adapter.project_id
         and capability.connector_instance_id=adapter.id and capability.capability_code='organization.read'
-        and capability.status='supported' and capability.evidence_level in('read-probe','field-read','field-write')
+		and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		and capability.region='cn' and capability.deployment='cn-public-cloud'
+		and capability.status='supported' and capability.evidence_level in('live-read','field-write')
         and (capability.expires_at is null or capability.expires_at>now())) as "managementCapabilityVerified"
     from projects project join team_members membership on membership.team_id=project.team_id and membership.user_id=$1
     join device_adapters adapter on adapter.project_id=project.id and adapter.team_id=project.team_id

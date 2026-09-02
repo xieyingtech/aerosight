@@ -6,7 +6,7 @@ import { buildFlightHubControlledOperations, type ControlledOperationJob } from 
 
 type AccessRow = { role: string; connectorStatus: string; connectorProjectId: number; connectorTeamId: number;
   manifest: { capabilities?: Array<{ code?: unknown; kind?: unknown }> }; featureFlags: Record<string, unknown>;
-  managementGranted: boolean };
+  managementGranted: boolean; accountFingerprint: string | null };
 
 function safeFeatureFlags(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -19,6 +19,7 @@ export async function readFlightHubControlledOperations(projectId: number, conne
   const { user, access } = await requireCurrentProjectPermission(projectId, "project:view");
   const row = (await query<AccessRow>(`select membership.role,adapter.status as "connectorStatus",
       adapter.project_id::int as "connectorProjectId",adapter.team_id::int as "connectorTeamId",
+	  adapter.discovery_scope_json->>'accountFingerprint' as "accountFingerprint",
       definition.manifest_json as manifest,coalesce(flags.flighthub_action_flags_json,'{}'::jsonb) as "featureFlags",
       (membership.role='owner' or exists(select 1 from project_permissions permission where permission.project_id=project.id
         and permission.team_id=project.team_id and permission.user_id=$1 and permission.permission='organization:manage')) as "managementGranted"
@@ -30,8 +31,17 @@ export async function readFlightHubControlledOperations(projectId: number, conne
     where project.id=$2 and adapter.id=$3`, [user.id,projectId,connectorId])).rows[0];
   if (!row || row.connectorProjectId !== projectId || row.connectorTeamId !== access.teamId) throw new Error("FLIGHTHUB_CONTROLLED_OPERATIONS_NOT_FOUND");
   const capabilities = await query<{ capabilityCode: string }>(`select distinct capability_code as "capabilityCode"
-    from connector_capability_snapshots where project_id=$1 and connector_instance_id=$2 and status='supported'
-      and evidence_level='field-write' and (expires_at is null or expires_at>now())`, [projectId,connectorId]);
+    from connector_capability_snapshots capability
+	where capability.project_id=$1 and capability.connector_instance_id=$2 and capability.status='supported'
+      and capability.account_fingerprint=$3 and capability.evidence_level='field-write'
+	  and capability.region='cn' and capability.deployment='cn-public-cloud'
+	  and (capability.expires_at is null or capability.expires_at>now())
+	  and ((capability.device_model is null and capability.firmware_version is null) or exists(
+	    select 1 from device_external_identities identity
+		join devices device on device.id=identity.device_id and device.project_id=identity.project_id
+		where identity.project_id=$1 and identity.adapter_id=$2 and identity.discovery_status='managed'
+		  and device.device_model=capability.device_model and device.firmware_version=capability.firmware_version
+	  ))`, [projectId,connectorId,row.accountFingerprint]);
   const jobs = await query<ControlledOperationJob>(`select * from (
       select id::text,action_kind as action,status,last_error_code as "lastErrorCode",completed_at as "completedAt",updated_at as "updatedAt"
         from connector_action_jobs where project_id=$1 and connector_instance_id=$2

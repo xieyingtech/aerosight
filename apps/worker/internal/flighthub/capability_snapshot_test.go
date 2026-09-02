@@ -5,16 +5,115 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"aerosight/worker/internal/connector"
+	"aerosight/worker/internal/driver"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type memoryCapabilitySnapshotRepository struct {
 	saved  []connector.CapabilitySnapshot
 	listed []connector.CapabilitySnapshot
+}
+
+func TestEveryHighRiskCapabilityHasAnExplicitFieldAcceptanceScope(t *testing.T) {
+	t.Parallel()
+	for _, capability := range Capabilities() {
+		if capability.Risk != driver.RiskHigh && capability.Risk != driver.RiskCritical {
+			continue
+		}
+		_, deviceBound := deviceBoundFieldAcceptanceCapabilities[capability.Code]
+		_, accountBound := accountBoundFieldAcceptanceCapabilities[capability.Code]
+		if deviceBound == accountBound {
+			t.Fatalf("high-risk capability %q must have exactly one field acceptance scope", capability.Code)
+		}
+	}
+}
+
+func TestFieldAcceptanceNeverCrossesAccountOrDeployment(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	evidence := connector.CapabilitySnapshot{CapabilityCode: "organization.write", Status: "supported", EvidenceLevel: "field-write",
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), VerifiedAt: now.Add(-time.Minute)}
+	baseline := []CapabilityProbeResult{{CapabilityCode: "organization.write", Status: ProbeUnverified,
+		Layers: CapabilityProbeLayers{Contract: ProbeSupported, Deployment: ProbeSupported, Account: ProbeSupported, Implementation: ProbeSupported, Acceptance: ProbeUnverified}}}
+	for name, scope := range map[string]CapabilityEvaluationScope{
+		"account":    {Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("b", 64), Now: now},
+		"region":     {Region: "eu", Deployment: "eu-public-cloud", AccountFingerprint: strings.Repeat("a", 64), Now: now},
+		"unresolved": {Region: "cn", Deployment: "cn-public-cloud", Now: now},
+	} {
+		result := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, scope)[0]
+		if result.Status == ProbeSupported {
+			t.Fatalf("%s scope inherited incompatible field acceptance: %#v", name, result)
+		}
+	}
+	matched := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), Now: now,
+	})[0]
+	if matched.Status != ProbeSupported {
+		t.Fatalf("exact non-device acceptance did not match: %#v", matched)
+	}
+}
+
+func TestCapabilityAccountFingerprintIsStableAndDoesNotContainVendorIdentity(t *testing.T) {
+	t.Parallel()
+	organizationUUID := "00000000-0000-4000-8000-000000000010"
+	userID := "CURRENT_VENDOR_USER_REDACTED"
+	first, err := CapabilityAccountFingerprint(organizationUUID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := CapabilityAccountFingerprint(strings.ToUpper(organizationUUID), " "+userID+" ")
+	if err != nil || first != second || !validAccountFingerprint(first) {
+		t.Fatalf("account fingerprint is not stable: first=%q second=%q err=%v", first, second, err)
+	}
+	if strings.Contains(first, organizationUUID) || strings.Contains(first, userID) {
+		t.Fatal("account fingerprint exposed a raw vendor identifier")
+	}
+}
+
+func TestFieldWriteEvidenceRequiresAnAccountFingerprintBeforePersistence(t *testing.T) {
+	t.Parallel()
+	repository := &memoryCapabilitySnapshotRepository{}
+	result := CapabilityProbeResult{CapabilityCode: "organization.write", Status: ProbeSupported,
+		Layers: CapabilityProbeLayers{Contract: ProbeSupported, Deployment: ProbeSupported, Account: ProbeSupported, Implementation: ProbeSupported, Acceptance: ProbeSupported}}
+	evidence := CapabilitySnapshotEvidence{Level: "field-write", Region: "cn", Deployment: "cn-public-cloud", VerifiedAt: time.Now().UTC()}
+	if err := PersistCapabilityProbeResults(context.Background(), repository, connector.Instance{ID: 7, ProjectID: 11}, []CapabilityProbeResult{result}, evidence); err == nil {
+		t.Fatal("field-write evidence without an account fingerprint was accepted")
+	}
+	evidence.AccountFingerprint = strings.Repeat("a", 64)
+	if err := PersistCapabilityProbeResults(context.Background(), repository, connector.Instance{ID: 7, ProjectID: 11}, []CapabilityProbeResult{result}, evidence); err != nil {
+		t.Fatal(err)
+	}
+	if len(repository.saved) != 1 || repository.saved[0].AccountFingerprint != evidence.AccountFingerprint {
+		t.Fatalf("account-scoped field acceptance was not persisted: %#v", repository.saved)
+	}
+}
+
+func TestEveryFlightHubWorkerWriteGateChecksTheCurrentAccount(t *testing.T) {
+	t.Parallel()
+	for _, filename := range []string{
+		"control_command.go", "control_session.go", "device_admin_action.go", "flight_action.go",
+		"geospatial_action.go", "live_action.go", "live_session.go", "management_write.go", "model_delete.go",
+	} {
+		source, err := os.ReadFile(filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(source), "capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'") {
+			t.Fatalf("%s does not bind field acceptance to the current connector account", filename)
+		}
+		if !strings.Contains(string(source), "capability.region='cn' and capability.deployment='cn-public-cloud'") {
+			t.Fatalf("%s does not bind field acceptance to the connector deployment", filename)
+		}
+	}
+}
+
+func (repository *memoryCapabilitySnapshotRepository) SaveCapabilityAccountFingerprint(context.Context, connector.Instance, string) error {
+	return nil
 }
 
 func (repository *memoryCapabilitySnapshotRepository) SaveCapabilitySnapshot(_ context.Context, _ connector.Instance, snapshot connector.CapabilitySnapshot) error {
@@ -70,11 +169,11 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	}}
 	snapshot := connector.CapabilitySnapshot{
 		CapabilityCode: "device.control", Status: "supported", EvidenceLevel: "field-write",
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.02.0300",
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300",
 		VerifiedAt: now.Add(-time.Hour), ExpiresAt: &expiresAt,
 	}
 	current := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
 	})[0]
 	if current.Status != ProbeSupported || current.Layers.Acceptance != ProbeSupported || current.Reason != "field_acceptance_current" {
 		t.Fatalf("current field acceptance was not applied: %#v", current)
@@ -82,19 +181,19 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	notImplementedBaseline := append([]CapabilityProbeResult(nil), baseline...)
 	notImplementedBaseline[0].Layers.Implementation = ProbeUnverified
 	notImplemented := ApplyCapabilitySnapshots(notImplementedBaseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
 	})[0]
 	if notImplemented.Status != ProbeUnverified || notImplemented.Reason != "implementation_unavailable" {
 		t.Fatalf("field acceptance bypassed implementation layer: %#v", notImplemented)
 	}
 	changed := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.03.0000", Now: now,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.03.0000", Now: now,
 	})[0]
 	if changed.Status != ProbeUnverified || changed.Layers.Acceptance != ProbeUnverified || changed.Reason != "firmware_acceptance_changed" {
 		t.Fatalf("old firmware acceptance widened new firmware: %#v", changed)
 	}
 	expired := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: expiresAt,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: expiresAt,
 	})[0]
 	if expired.Status != ProbeUnverified || expired.Layers.Acceptance != ProbeUnverified || expired.Reason != "field_acceptance_expired" {
 		t.Fatalf("expired field acceptance remained enabled: %#v", expired)
@@ -102,7 +201,7 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	generic := snapshot
 	generic.DeviceModel, generic.FirmwareVersion = "", ""
 	notInherited := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{generic}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
 	})[0]
 	if notInherited.Status != ProbeUnverified || notInherited.Layers.Acceptance != ProbeUnverified {
 		t.Fatalf("generic evidence widened firmware-bound action: %#v", notInherited)
@@ -118,11 +217,11 @@ func TestCameraCapabilityNeverInheritsAnotherModelOrFirmwareAcceptance(t *testin
 		Layers: CapabilityProbeLayers{Contract: ProbeSupported, Deployment: ProbeSupported, Account: ProbeSupported, Implementation: ProbeSupported, Acceptance: ProbeUnverified},
 	}}
 	evidence := connector.CapabilitySnapshot{CapabilityCode: "device.lens.change", Status: "supported", EvidenceLevel: "field-write",
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.01", VerifiedAt: now.Add(-time.Minute), ExpiresAt: &expiresAt}
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "matrice4td", FirmwareVersion: "10.01", VerifiedAt: now.Add(-time.Minute), ExpiresAt: &expiresAt}
 	for _, scope := range []CapabilityEvaluationScope{
-		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice3td", FirmwareVersion: "10.01", Now: now},
-		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.02", Now: now},
-		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "", FirmwareVersion: "", Now: now},
+		{Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "matrice3td", FirmwareVersion: "10.01", Now: now},
+		{Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "matrice4td", FirmwareVersion: "10.02", Now: now},
+		{Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "", FirmwareVersion: "", Now: now},
 	} {
 		result := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, scope)[0]
 		if result.Status == ProbeSupported {
@@ -130,7 +229,7 @@ func TestCameraCapabilityNeverInheritsAnotherModelOrFirmwareAcceptance(t *testin
 		}
 	}
 	matched := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
-		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.01", Now: now,
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "matrice4td", FirmwareVersion: "10.01", Now: now,
 	})[0]
 	if matched.Status != ProbeSupported {
 		t.Fatalf("exact evidence was not applied: %#v", matched)

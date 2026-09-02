@@ -112,6 +112,9 @@ export async function readFlightHubConnectorDiagnostics(
                (expires_at is not null and expires_at<=now()) as expired
           from connector_capability_snapshots
          where project_id=$1 and connector_instance_id=$2
+		   and ((account_fingerprint is null and evidence_level in('documented','fixture'))
+		     or account_fingerprint=(select discovery_scope_json->>'accountFingerprint' from device_adapters
+		       where id=$2 and project_id=$1))
          order by capability_code,verified_at desc
          limit 500`, [projectId, connectorId]);
     await client.query("commit");

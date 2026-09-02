@@ -2,6 +2,8 @@ package flighthub
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -12,28 +14,31 @@ import (
 
 type CapabilitySnapshotRepository interface {
 	SaveCapabilitySnapshot(context.Context, connector.Instance, connector.CapabilitySnapshot) error
+	SaveCapabilityAccountFingerprint(context.Context, connector.Instance, string) error
 	ListCapabilitySnapshots(context.Context, connector.Instance, string, string) ([]connector.CapabilitySnapshot, error)
 }
 
 type CapabilitySnapshotEvidence struct {
-	Level           string
-	Region          string
-	Deployment      string
-	DeviceModel     string
-	FirmwareVersion string
-	VerifiedAt      time.Time
-	ExpiresAt       *time.Time
+	Level              string
+	Region             string
+	Deployment         string
+	AccountFingerprint string
+	DeviceModel        string
+	FirmwareVersion    string
+	VerifiedAt         time.Time
+	ExpiresAt          *time.Time
 }
 
 type CapabilityEvaluationScope struct {
-	Region          string
-	Deployment      string
-	DeviceModel     string
-	FirmwareVersion string
-	Now             time.Time
+	Region             string
+	Deployment         string
+	AccountFingerprint string
+	DeviceModel        string
+	FirmwareVersion    string
+	Now                time.Time
 }
 
-var firmwareBoundCapabilities = map[string]struct{}{
+var deviceBoundFieldAcceptanceCapabilities = map[string]struct{}{
 	"device.control":               {},
 	"flight.execute":               {},
 	"live.control":                 {},
@@ -43,6 +48,32 @@ var firmwareBoundCapabilities = map[string]struct{}{
 	"device.rtk.calibrate":         {},
 	"device.relay.pair":            {},
 	"device.active-project.update": {},
+}
+
+var accountBoundFieldAcceptanceCapabilities = map[string]struct{}{
+	"live.recording.control":            {},
+	"live.share.manage":                 {},
+	"live.converter.create":             {},
+	"live.converter.toggle":             {},
+	"live.converter.delete":             {},
+	"geospatial.write":                  {},
+	"geospatial.element.delete":         {},
+	"model.write":                       {},
+	"model.delete":                      {},
+	"model.resource.delete":             {},
+	"security.sn.decrypt":               {},
+	"organization.project-member.write": {},
+	"organization.write":                {},
+}
+
+func CapabilityAccountFingerprint(organizationUUID, userID string) (string, error) {
+	organizationUUID = strings.ToLower(strings.TrimSpace(organizationUUID))
+	userID = strings.TrimSpace(userID)
+	if !uuidPattern.MatchString(organizationUUID) || userID == "" || len(userID) > 512 {
+		return "", &APIError{SafeCode: "request_invalid"}
+	}
+	digest := sha256.Sum256([]byte("aerosight:dji-flighthub2:account:v1\n" + organizationUUID + "\n" + userID))
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func PersistCapabilityProbeResults(
@@ -57,9 +88,12 @@ func PersistCapabilityProbeResults(
 	}
 	evidence.Region = strings.TrimSpace(evidence.Region)
 	evidence.Deployment = strings.TrimSpace(evidence.Deployment)
+	evidence.AccountFingerprint = strings.TrimSpace(evidence.AccountFingerprint)
 	evidence.DeviceModel = strings.TrimSpace(evidence.DeviceModel)
 	evidence.FirmwareVersion = strings.TrimSpace(evidence.FirmwareVersion)
 	if !validEvidenceLevel(evidence.Level) || evidence.Region == "" || evidence.Deployment == "" || evidence.VerifiedAt.IsZero() ||
+		(evidence.AccountFingerprint != "" && !validAccountFingerprint(evidence.AccountFingerprint)) ||
+		(evidence.Level == "field-write" && !validAccountFingerprint(evidence.AccountFingerprint)) ||
 		(evidence.ExpiresAt != nil && !evidence.ExpiresAt.After(evidence.VerifiedAt)) {
 		return &APIError{SafeCode: "request_invalid"}
 	}
@@ -94,7 +128,7 @@ func PersistCapabilityProbeResults(
 		}
 		if err := repository.SaveCapabilitySnapshot(ctx, instance, connector.CapabilitySnapshot{
 			CapabilityCode: result.CapabilityCode, Status: string(result.Status), EvidenceLevel: evidence.Level,
-			Region: evidence.Region, Deployment: evidence.Deployment, DeviceModel: evidence.DeviceModel,
+			Region: evidence.Region, Deployment: evidence.Deployment, AccountFingerprint: evidence.AccountFingerprint, DeviceModel: evidence.DeviceModel,
 			FirmwareVersion: evidence.FirmwareVersion, Details: details, VerifiedAt: evidence.VerifiedAt,
 			ExpiresAt: evidence.ExpiresAt,
 		}); err != nil {
@@ -131,6 +165,7 @@ func ApplyCapabilitySnapshots(
 	}
 	scope.Region = strings.TrimSpace(scope.Region)
 	scope.Deployment = strings.TrimSpace(scope.Deployment)
+	scope.AccountFingerprint = strings.TrimSpace(scope.AccountFingerprint)
 	scope.DeviceModel = strings.TrimSpace(scope.DeviceModel)
 	scope.FirmwareVersion = strings.TrimSpace(scope.FirmwareVersion)
 	risks := make(map[string]driver.RiskLevel, len(Capabilities()))
@@ -183,13 +218,23 @@ func selectFieldAcceptanceSnapshot(
 	snapshots []connector.CapabilitySnapshot,
 	scope CapabilityEvaluationScope,
 ) (*connector.CapabilitySnapshot, string) {
-	_, firmwareBound := firmwareBoundCapabilities[capabilityCode]
+	_, firmwareBound := deviceBoundFieldAcceptanceCapabilities[capabilityCode]
+	if _, accountBound := accountBoundFieldAcceptanceCapabilities[capabilityCode]; !firmwareBound && !accountBound {
+		return nil, "field_acceptance_scope_unclassified"
+	}
 	var selected *connector.CapabilitySnapshot
 	firmwareChanged := false
+	accountChanged := false
 	for index := range snapshots {
 		snapshot := &snapshots[index]
 		if snapshot.CapabilityCode != capabilityCode || snapshot.EvidenceLevel != "field-write" ||
 			snapshot.Region != scope.Region || snapshot.Deployment != scope.Deployment {
+			continue
+		}
+		if scope.AccountFingerprint == "" || snapshot.AccountFingerprint != scope.AccountFingerprint {
+			if validAccountFingerprint(snapshot.AccountFingerprint) {
+				accountChanged = true
+			}
 			continue
 		}
 		if firmwareBound {
@@ -210,6 +255,9 @@ func selectFieldAcceptanceSnapshot(
 		}
 	}
 	if selected == nil {
+		if accountChanged {
+			return nil, "account_acceptance_changed"
+		}
 		if firmwareChanged {
 			return nil, "firmware_acceptance_changed"
 		}
@@ -228,6 +276,18 @@ func validEvidenceLevel(value string) bool {
 	default:
 		return false
 	}
+}
+
+func validAccountFingerprint(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func validProbeStatus(value CapabilityProbeStatus) bool {

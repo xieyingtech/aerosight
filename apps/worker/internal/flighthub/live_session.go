@@ -70,8 +70,13 @@ func (store *SQLFlightHubLiveSessionStore) Load(ctx context.Context, projectID i
 		exists(select 1 from connector_capability_snapshots capability
 		 where capability.project_id=stream.project_id and capability.connector_instance_id=stream.adapter_id
 		   and capability.capability_code='live.control' and capability.status='supported'
+		   and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		   and capability.region='cn' and capability.deployment='cn-public-cloud'
+		   and capability.evidence_level='field-write'
+		   and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
 		   and (capability.expires_at is null or capability.expires_at>now()))
 	 from live_streams stream
+	 join devices device on device.id=stream.device_id and device.project_id=stream.project_id
 	 join device_adapters adapter on adapter.id=stream.adapter_id and adapter.project_id=stream.project_id
 	 join connector_definitions definition on definition.id=adapter.connector_definition_id
 	 join device_external_identities identity on identity.project_id=stream.project_id

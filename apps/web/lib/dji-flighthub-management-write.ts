@@ -41,6 +41,8 @@ async function loadTargets(client: QueryExecutor, projectId: number, teamId: num
       coalesce(flags.flighthub_action_flags_json @> jsonb_build_object($6::text,true),false) as "featureEnabled",
       exists(select 1 from connector_capability_snapshots capability where capability.project_id=adapter.project_id
         and capability.connector_instance_id=adapter.id and capability.capability_code=$7 and capability.status='supported'
+		and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		and capability.region='cn' and capability.deployment='cn-public-cloud'
         and capability.evidence_level='field-write' and capability.device_model is null and capability.firmware_version is null
         and (capability.expires_at is null or capability.expires_at>now())) as "capabilityVerified",
       approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",approval.resource_type as "approvalResourceType",

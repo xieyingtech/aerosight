@@ -113,6 +113,8 @@ export async function readFlightHubModelsCore(userId: number, projectId: number,
         coalesce(flags.flighthub_action_flags_json @> jsonb_build_object(policy.flag,true),false) as "flagEnabled",
         exists(select 1 from connector_capability_snapshots capability where capability.project_id=adapter.project_id
           and capability.connector_instance_id=adapter.id and capability.capability_code=policy.capability
+		  and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		  and capability.region='cn' and capability.deployment='cn-public-cloud'
           and capability.status='supported' and capability.evidence_level='field-write'
           and (capability.expires_at is null or capability.expires_at>now())
           and capability.device_model is null and capability.firmware_version is null) as "capabilityVerified"

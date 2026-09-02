@@ -2839,6 +2839,7 @@ create table connector_capability_snapshots (
   evidence_level text not null,
   region text not null,
   deployment text not null,
+  account_fingerprint text,
   device_model text,
   firmware_version text,
   details_json jsonb not null default '{}'::jsonb,
@@ -2854,6 +2855,8 @@ create table connector_capability_snapshots (
     check (status in ('supported','empty','forbidden','not_applicable','unverified','degraded','failed')),
   constraint connector_capability_snapshots_evidence_valid
     check (evidence_level in ('documented','fixture','live-read','field-write')),
+  constraint connector_capability_snapshots_account_fingerprint_valid
+    check (account_fingerprint is null or account_fingerprint ~ '^[a-f0-9]{64}$'),
   constraint connector_capability_snapshots_identity_valid
     check (
       length(btrim(capability_code)) between 1 and 256
@@ -2868,11 +2871,17 @@ create table connector_capability_snapshots (
 --> statement-breakpoint
 create unique index connector_capability_snapshots_identity_unique
   on connector_capability_snapshots(
-    project_id, connector_instance_id, capability_code, region, deployment, device_model, firmware_version
+    project_id, connector_instance_id, capability_code, region, deployment,
+    account_fingerprint, device_model, firmware_version
   ) nulls not distinct;
 --> statement-breakpoint
 create index connector_capability_snapshots_effective_idx
   on connector_capability_snapshots(connector_instance_id, status, expires_at);
+--> statement-breakpoint
+create index connector_capability_snapshots_acceptance_scope_idx
+  on connector_capability_snapshots(
+    connector_instance_id, account_fingerprint, capability_code, status, expires_at
+  ) where evidence_level='field-write';
 --> statement-breakpoint
 alter table project_feature_flags
   add column flighthub_action_flags_json jsonb not null default '{}'::jsonb,

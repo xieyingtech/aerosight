@@ -9,12 +9,18 @@ import (
 )
 
 type runtimeProbeStoreFixture struct {
-	snapshots []connector.CapabilitySnapshot
-	devices   []connector.ManagedConnectorDevice
+	snapshots          []connector.CapabilitySnapshot
+	devices            []connector.ManagedConnectorDevice
+	accountFingerprint string
 }
 
 func (store *runtimeProbeStoreFixture) SaveCapabilitySnapshot(_ context.Context, _ connector.Instance, snapshot connector.CapabilitySnapshot) error {
 	store.snapshots = append(store.snapshots, snapshot)
+	return nil
+}
+
+func (store *runtimeProbeStoreFixture) SaveCapabilityAccountFingerprint(_ context.Context, _ connector.Instance, fingerprint string) error {
+	store.accountFingerprint = fingerprint
 	return nil
 }
 
@@ -29,6 +35,10 @@ func (store *runtimeProbeStoreFixture) ListManagedDevices(context.Context, conne
 type runtimeProbeClientFixture struct {
 	calls int
 	input CapabilityProbeInput
+}
+
+func (client *runtimeProbeClientFixture) GetCurrentOrganizationRole(context.Context, string, string) (CurrentOrganizationRole, error) {
+	return CurrentOrganizationRole{UserID: "CURRENT_ACCOUNT_REDACTED", OrganizationUUID: "00000000-0000-4000-8000-000000000010", Role: "organization-admin"}, nil
 }
 
 func (client *runtimeProbeClientFixture) ProbeCapabilities(_ context.Context, input CapabilityProbeInput) ([]CapabilityProbeResult, error) {
@@ -56,11 +66,11 @@ func TestCapabilityProbeRunnerPersistsReadEvidenceAndHonorsTTL(t *testing.T) {
 	if _, err := runner.Run(context.Background(), resourceStreamInstance(), connector.DiscoveryPoll); err != nil {
 		t.Fatal(err)
 	}
-	if client.calls != 1 || client.input.DeviceSerial != "DEVICE_REDACTED" || len(store.snapshots) != len(Capabilities()) {
+	if client.calls != 1 || client.input.DeviceSerial != "DEVICE_REDACTED" || len(store.snapshots) != len(Capabilities()) || !validAccountFingerprint(store.accountFingerprint) {
 		t.Fatalf("probe did not persist a complete safe snapshot: calls=%d input=%#v snapshots=%d", client.calls, client.input, len(store.snapshots))
 	}
 	for _, snapshot := range store.snapshots {
-		if snapshot.EvidenceLevel != "live-read" || snapshot.ExpiresAt == nil || !snapshot.ExpiresAt.Equal(now.Add(15*time.Minute)) {
+		if snapshot.EvidenceLevel != "live-read" || snapshot.AccountFingerprint != store.accountFingerprint || snapshot.ExpiresAt == nil || !snapshot.ExpiresAt.Equal(now.Add(15*time.Minute)) {
 			t.Fatalf("invalid probe evidence TTL: %#v", snapshot)
 		}
 	}

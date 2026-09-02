@@ -275,7 +275,8 @@ export async function updateFlightHubToken(
       await client.query(
         `update device_adapters
             set credential_envelope_json=$3::jsonb, status='connecting',
-                last_health_json='{}'::jsonb, last_checked_at=now(), updated_at=now()
+                discovery_scope_json=discovery_scope_json-'accountFingerprint',
+				last_health_json='{}'::jsonb, last_checked_at=now(), updated_at=now()
           where id=$1 and project_id=$2`,
         [connectorId, projectId, envelope]
       );

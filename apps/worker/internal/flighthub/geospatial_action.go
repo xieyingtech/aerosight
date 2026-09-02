@@ -75,6 +75,8 @@ func (store *SQLGeospatialActionStore) Load(ctx context.Context, projectID int, 
 		exists(select 1 from connector_capability_snapshots capability
 		  where capability.project_id=job.project_id and capability.connector_instance_id=job.connector_instance_id
 		    and capability.capability_code=job.capability_code and capability.status='supported'
+		    and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+		    and capability.region='cn' and capability.deployment='cn-public-cloud'
 		    and capability.evidence_level='field-write' and (capability.expires_at is null or capability.expires_at>now())
 		    and capability.device_model is null and capability.firmware_version is null),
 		definition.connector_key,definition.version,adapter.credential_envelope_json,adapter.discovery_scope_json

@@ -3,6 +3,7 @@ package flighthub
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"aerosight/worker/internal/connector"
@@ -10,6 +11,7 @@ import (
 
 type RuntimeCapabilityProbeClient interface {
 	ProbeCapabilities(context.Context, CapabilityProbeInput) ([]CapabilityProbeResult, error)
+	GetCurrentOrganizationRole(context.Context, string, string) (CurrentOrganizationRole, error)
 }
 
 type RuntimeCapabilityProbeStore interface {
@@ -42,28 +44,48 @@ func (runner *CapabilityProbeRunner) Run(ctx context.Context, instance connector
 		return result, err
 	}
 	now := runner.now().UTC()
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return result, err
+	}
 	snapshots, err := runner.store.ListCapabilitySnapshots(ctx, instance, "cn", "cn-public-cloud")
 	if err != nil {
 		return result, err
 	}
-	if capabilityEvidenceCurrent(snapshots, now) {
+	if validAccountFingerprint(scope.AccountFingerprint) && capabilityEvidenceCurrent(snapshots, scope.AccountFingerprint, now) {
 		return result, nil
-	}
-	scope, err := parseScope(instance.DiscoveryScope)
-	if err != nil {
-		return result, err
 	}
 	token, err := runner.resolver.ResolveToken(ctx, instance)
 	if err != nil {
 		return result, err
 	}
 	defer func() { token = "" }()
+	accountFingerprint := scope.AccountFingerprint
+	if scope.OrganizationUUID != "" {
+		currentRole, roleErr := runner.client.GetCurrentOrganizationRole(ctx, token, scope.OrganizationUUID)
+		if roleErr != nil {
+			return result, roleErr
+		}
+		if !strings.EqualFold(strings.TrimSpace(currentRole.OrganizationUUID), scope.OrganizationUUID) {
+			return result, &APIError{SafeCode: "scope_forbidden"}
+		}
+		accountFingerprint, err = CapabilityAccountFingerprint(scope.OrganizationUUID, currentRole.UserID)
+		if err != nil {
+			return result, err
+		}
+		if err := runner.store.SaveCapabilityAccountFingerprint(ctx, instance, accountFingerprint); err != nil {
+			return result, err
+		}
+	}
+	if capabilityEvidenceCurrent(snapshots, accountFingerprint, now) {
+		return result, nil
+	}
 	devices, err := runner.store.ListManagedDevices(ctx, instance)
 	if err != nil {
 		return result, err
 	}
 	input := CapabilityProbeInput{Token: token, Region: "cn", Deployment: "cn-public-cloud", ProjectUUID: scope.ProjectUUID}
-	evidence := CapabilitySnapshotEvidence{Level: "live-read", Region: input.Region, Deployment: input.Deployment, VerifiedAt: now}
+	evidence := CapabilitySnapshotEvidence{Level: "live-read", Region: input.Region, Deployment: input.Deployment, AccountFingerprint: accountFingerprint, VerifiedAt: now}
 	if len(devices) > 0 {
 		input.DeviceSerial = devices[0].Serial
 		evidence.DeviceModel = devices[0].ModelKey
@@ -77,10 +99,10 @@ func (runner *CapabilityProbeRunner) Run(ctx context.Context, instance connector
 	return result, PersistCapabilityProbeResults(ctx, runner.store, instance, results, evidence)
 }
 
-func capabilityEvidenceCurrent(snapshots []connector.CapabilitySnapshot, now time.Time) bool {
+func capabilityEvidenceCurrent(snapshots []connector.CapabilitySnapshot, accountFingerprint string, now time.Time) bool {
 	current := make(map[string]bool, len(Capabilities()))
 	for _, snapshot := range snapshots {
-		if snapshot.EvidenceLevel != "live-read" || snapshot.VerifiedAt.After(now) || snapshot.ExpiresAt == nil || !snapshot.ExpiresAt.After(now) {
+		if snapshot.EvidenceLevel != "live-read" || snapshot.AccountFingerprint != accountFingerprint || snapshot.VerifiedAt.After(now) || snapshot.ExpiresAt == nil || !snapshot.ExpiresAt.After(now) {
 			continue
 		}
 		current[snapshot.CapabilityCode] = true

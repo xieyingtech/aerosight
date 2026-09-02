@@ -22,12 +22,16 @@ export async function readProjectDeviceTree(projectId: number) {
                 'cameraFieldVerified',exists(select 1 from connector_capability_snapshots capability
                   where capability.project_id=device.project_id and capability.connector_instance_id=flighthub_route.id
                     and capability.capability_code='device.camera.change' and capability.status='supported'
+					and capability.account_fingerprint=flighthub_route.discovery_scope_json->>'accountFingerprint'
+					and capability.region='cn' and capability.deployment='cn-public-cloud'
                     and capability.evidence_level='field-write' and capability.device_model=device.device_model
                     and capability.firmware_version=device.firmware_version and (capability.expires_at is null or capability.expires_at>now())),
                 'lensFeatureEnabled',coalesce(flags.flighthub_action_flags_json @> '{"flighthub.lens.change":true}'::jsonb,false),
                 'lensFieldVerified',exists(select 1 from connector_capability_snapshots capability
                   where capability.project_id=device.project_id and capability.connector_instance_id=flighthub_route.id
                     and capability.capability_code='device.lens.change' and capability.status='supported'
+					and capability.account_fingerprint=flighthub_route.discovery_scope_json->>'accountFingerprint'
+					and capability.region='cn' and capability.deployment='cn-public-cloud'
                     and capability.evidence_level='field-write' and capability.device_model=device.device_model
                     and capability.firmware_version=device.firmware_version and (capability.expires_at is null or capability.expires_at>now())),
                 'tcaState',coalesce(tca.state,'missing'),'tcaCheckedAt',tca.verified_at,'tcaItemCount',tca.item_count
