@@ -30,6 +30,7 @@ type ResourceStreamClient interface {
 	ListStreamConverters(context.Context, string, string, StreamConverterListOptions) (PageResult[StreamConverter], error)
 	ListProjectFlightAreas(context.Context, string, string, FlightAreaListOptions) (FlightAreaPage, error)
 	ListWorkspaceAirSenseWarnings(context.Context, string, string) ([]DeviceAirSenseWarnings, error)
+	GetWorkspaceOfflineMap(context.Context, string, string) (OfflineMapDetails, error)
 }
 
 type ResourceStreamStore interface {

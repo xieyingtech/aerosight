@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,9 +31,11 @@ type GeospatialCatalogPoll struct {
 	FlightAreas         []FlightArea
 	Devices             []connector.ManagedConnectorDevice
 	AirSenseWarnings    []DeviceAirSenseWarnings
+	OfflineMaps         []OfflineMap
 	MapElementsComplete bool
 	FlightAreasComplete bool
 	AirSenseComplete    bool
+	OfflineMapsComplete bool
 	ReceivedAt          time.Time
 }
 
@@ -57,23 +60,30 @@ func (coordinator *ResourceStreamCoordinator) pollGeospatial(ctx context.Context
 		return map[string]any{"flightAreas": len(areas), "pages": pages, "flightAreasComplete": true, "airSenseComplete": false, "mapElementsComplete": false, "complete": false}, 0, err
 	}
 	warnings, warningErr := coordinator.client.ListWorkspaceAirSenseWarnings(ctx, token, scope.ProjectUUID)
+	offlineMapDetails, offlineMapErr := coordinator.client.GetWorkspaceOfflineMap(ctx, token, scope.ProjectUUID)
+	offlineMaps := []OfflineMap{}
+	if offlineMapErr == nil && offlineMapDetails.OfflineMap != nil {
+		offlineMaps = append(offlineMaps, *offlineMapDetails.OfflineMap)
+	}
 	poll := GeospatialCatalogPoll{
 		FlightAreas: areas, FlightAreasComplete: true,
 		Devices: devices, AirSenseWarnings: warnings, AirSenseComplete: warningErr == nil,
+		OfflineMaps: offlineMaps, OfflineMapsComplete: offlineMapErr == nil,
 		// There is no released GET/list contract for map elements. Keeping this
 		// false prevents a flight-area read from erasing write-through elements.
 		MapElementsComplete: false,
 		ReceivedAt:          coordinator.config.Now().UTC(),
 	}
 	if err := coordinator.sink.ApplyGeospatialCatalog(ctx, instance, poll); err != nil {
-		return map[string]any{"flightAreas": len(areas), "pages": pages, "airSenseWarnings": len(warnings), "flightAreasComplete": false, "airSenseComplete": false, "mapElementsComplete": false, "complete": false}, 0, errors.Join(warningErr, err)
+		return map[string]any{"flightAreas": len(areas), "pages": pages, "airSenseWarnings": len(warnings), "offlineMaps": len(offlineMaps), "flightAreasComplete": false, "airSenseComplete": false, "offlineMapsComplete": false, "mapElementsComplete": false, "complete": false}, 0, errors.Join(warningErr, offlineMapErr, err)
 	}
 	cursor := map[string]any{
 		"flightAreas": len(areas), "pages": pages, "flightAreasComplete": true,
 		"airSenseWarnings": len(warnings), "airSenseComplete": warningErr == nil,
-		"mapElementsComplete": false, "complete": warningErr == nil,
+		"offlineMaps": len(offlineMaps), "offlineMapsComplete": offlineMapErr == nil,
+		"mapElementsComplete": false, "complete": warningErr == nil && offlineMapErr == nil,
 	}
-	return cursor, coordinator.config.CatalogInterval, warningErr
+	return cursor, coordinator.config.CatalogInterval, errors.Join(warningErr, offlineMapErr)
 }
 
 func (coordinator *ResourceStreamCoordinator) listAllProjectFlightAreas(ctx context.Context, token, projectUUID string) ([]FlightArea, int, error) {
@@ -138,10 +148,15 @@ func (sink *SQLResourceStreamSink) ApplyGeospatialCatalog(ctx context.Context, i
 	if err != nil {
 		return err
 	}
+	offlineMaps, err := offlineMapRemoteResources(poll.OfflineMaps)
+	if err != nil {
+		return err
+	}
 	batches := []connector.RemoteResourceBatch{
 		{Kind: "map-element", Resources: elements, CompleteSnapshot: poll.MapElementsComplete},
 		{Kind: "flight-area", Resources: areas, CompleteSnapshot: poll.FlightAreasComplete},
 		{Kind: "air-sense-warning", Resources: airSense, CompleteSnapshot: poll.AirSenseComplete},
+		{Kind: "offline-map", Resources: offlineMaps, CompleteSnapshot: poll.OfflineMapsComplete},
 	}
 	var applyErrors []error
 	for _, batch := range batches {
@@ -157,6 +172,39 @@ func (sink *SQLResourceStreamSink) ApplyGeospatialCatalog(ctx context.Context, i
 		}
 	}
 	return errors.Join(applyErrors...)
+}
+
+func offlineMapRemoteResources(items []OfflineMap) ([]connector.RemoteResource, error) {
+	resources := make([]connector.RemoteResource, 0, len(items))
+	seen := make(map[int64]struct{}, len(items))
+	for index := range items {
+		item := items[index]
+		if !validateOfflineMap(&item) {
+			return nil, schemaError()
+		}
+		if _, duplicate := seen[item.ID]; duplicate {
+			return nil, schemaError()
+		}
+		seen[item.ID] = struct{}{}
+		version, err := alertDigest(map[string]any{
+			"updatedTime": item.UpdatedTime, "percent": item.Percent, "status": item.Status,
+			"result": item.Result, "models": item.Models,
+		})
+		if err != nil {
+			return nil, err
+		}
+		updatedAt := time.UnixMilli(item.UpdatedTime).UTC()
+		modelNames := make([]string, 0, len(item.Models))
+		for _, model := range item.Models {
+			modelNames = append(modelNames, model.Name)
+		}
+		resources = append(resources, connector.RemoteResource{
+			RemoteID: strconv.FormatInt(item.ID, 10), RemoteVersion: version, RemoteUpdatedAt: &updatedAt,
+			Summary: map[string]any{"status": item.Status, "result": item.Result, "percent": item.Percent,
+				"modelCount": len(item.Models), "modelNames": modelNames, "source": "dji-flighthub-openapi"},
+		})
+	}
+	return resources, nil
 }
 
 func airSenseRemoteID(deviceSN, icao string) string {

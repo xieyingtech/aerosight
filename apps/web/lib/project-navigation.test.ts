@@ -5,14 +5,14 @@ import { legacyProjectEventListHref, projectNavigationHref, visibleProjectNaviga
 test("project manager sees the complete project workspace navigation", () => {
   assert.deepEqual(
     visibleProjectNavigation("admin").map((item) => item.key),
-    ["overview", "realtime", "tasks", "flight-operations", "devices", "connectors", "issues", "algorithms", "agents", "assets", "settings"]
+    ["overview", "realtime", "tasks", "flight-operations", "geospatial", "devices", "connectors", "issues", "algorithms", "agents", "assets", "settings"]
   );
 });
 
 test("member navigation hides management and ungranted agent capabilities", () => {
   assert.deepEqual(
     visibleProjectNavigation("member").map((item) => item.key),
-    ["overview", "realtime", "tasks", "flight-operations", "devices", "issues", "assets"]
+    ["overview", "realtime", "tasks", "flight-operations", "geospatial", "devices", "issues", "assets"]
   );
   assert(visibleProjectNavigation("member", ["agent:use"]).some((item) => item.key === "agents"));
   assert(!visibleProjectNavigation("member").some((item) => item.key === "connectors"));

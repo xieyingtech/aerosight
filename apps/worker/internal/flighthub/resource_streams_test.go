@@ -75,6 +75,8 @@ type resourceClientFixture struct {
 	flightAreaErrors           map[int]error
 	airSenseWarnings           []DeviceAirSenseWarnings
 	airSenseError              error
+	offlineMapDetails          *OfflineMapDetails
+	offlineMapError            error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -230,6 +232,13 @@ func (client *resourceClientFixture) ListProjectFlightAreas(_ context.Context, _
 
 func (client *resourceClientFixture) ListWorkspaceAirSenseWarnings(context.Context, string, string) ([]DeviceAirSenseWarnings, error) {
 	return append([]DeviceAirSenseWarnings(nil), client.airSenseWarnings...), client.airSenseError
+}
+
+func (client *resourceClientFixture) GetWorkspaceOfflineMap(context.Context, string, string) (OfflineMapDetails, error) {
+	if client.offlineMapDetails == nil {
+		return OfflineMapDetails{Disabled: true}, client.offlineMapError
+	}
+	return *client.offlineMapDetails, client.offlineMapError
 }
 
 func (client *resourceClientFixture) liveCalls() (int, int, int, int) {

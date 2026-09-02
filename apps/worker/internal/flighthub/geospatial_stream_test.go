@@ -254,12 +254,12 @@ func TestGeospatialSinkProjectsVersionsAndNeverCompletesUnreadMapElements(t *tes
 			t.Fatal(err)
 		}
 	}
-	if len(resources.batches) != 6 || resources.batches[0].CompleteSnapshot || !resources.batches[1].CompleteSnapshot ||
-		resources.batches[2].CompleteSnapshot || resources.batches[5].CompleteSnapshot {
+	if len(resources.batches) != 8 || resources.batches[0].CompleteSnapshot || !resources.batches[1].CompleteSnapshot ||
+		resources.batches[2].CompleteSnapshot || resources.batches[3].CompleteSnapshot || resources.batches[7].CompleteSnapshot {
 		t.Fatalf("geospatial snapshot flags=%#v", resources.batches)
 	}
-	firstElement, secondElement := resources.batches[0].Resources[0], resources.batches[3].Resources[0]
-	firstArea, secondArea := resources.batches[1].Resources[0], resources.batches[4].Resources[0]
+	firstElement, secondElement := resources.batches[0].Resources[0], resources.batches[4].Resources[0]
+	firstArea, secondArea := resources.batches[1].Resources[0], resources.batches[5].Resources[0]
 	if firstElement.RemoteVersion != "version-redacted-1" || firstArea.RemoteVersion != area.AreaHash ||
 		firstElement.RemoteVersion != secondElement.RemoteVersion || firstArea.RemoteVersion != secondArea.RemoteVersion ||
 		firstArea.RemoteUpdatedAt == nil || !firstArea.RemoteUpdatedAt.Equal(now) {
@@ -295,8 +295,30 @@ func TestGeospatialSinkNormalizesSuccessfulEmptyAirSenseSnapshot(t *testing.T) {
 	if err := sink.ApplyGeospatialCatalog(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, poll); err != nil {
 		t.Fatal(err)
 	}
-	if len(resources.batches) != 3 || !resources.batches[2].CompleteSnapshot || len(projector.airSensePolls) != 1 ||
+	if len(resources.batches) != 4 || !resources.batches[2].CompleteSnapshot || resources.batches[3].CompleteSnapshot || len(projector.airSensePolls) != 1 ||
 		projector.airSensePolls[0].Warnings == nil || !projector.airSensePolls[0].CompleteSnapshot {
 		t.Fatalf("successful empty AirSense snapshot was not projected safely: batches=%#v polls=%#v", resources.batches, projector.airSensePolls)
+	}
+}
+
+func TestOfflineMapResourcesKeepVersionAndSafeCatalogMetadata(t *testing.T) {
+	now := time.Date(2026, 9, 2, 9, 45, 0, 0, time.UTC)
+	items := []OfflineMap{{
+		ID: 17, UpdatedTime: now.UnixMilli(), Percent: 100, Status: "success", Result: 0,
+		Models: []OfflineMapModel{{ID: 91, Name: "synthetic terrain"}},
+	}}
+	first, err := offlineMapRemoteResources(items)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("offline map resources=%#v err=%v", first, err)
+	}
+	second, err := offlineMapRemoteResources(items)
+	if err != nil || first[0].RemoteVersion != second[0].RemoteVersion || first[0].RemoteID != "17" ||
+		first[0].RemoteUpdatedAt == nil || !first[0].RemoteUpdatedAt.Equal(now) || first[0].Summary["modelCount"] != 1 {
+		t.Fatalf("offline map version/summary is unstable: first=%#v second=%#v err=%v", first, second, err)
+	}
+	duplicate := append([]OfflineMap(nil), items...)
+	duplicate = append(duplicate, items[0])
+	if _, err := offlineMapRemoteResources(duplicate); err == nil {
+		t.Fatal("duplicate offline map identity was accepted")
 	}
 }
