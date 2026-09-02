@@ -37,6 +37,7 @@ var firmwareBoundCapabilities = map[string]struct{}{
 	"device.control": {},
 	"flight.execute": {},
 	"live.control":   {},
+	"live.quality.set": {},
 }
 
 func PersistCapabilityProbeResults(

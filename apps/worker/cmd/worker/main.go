@@ -312,6 +312,14 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.FlightActionEventType, flightActionHandler.Handler)
+		liveActionHandler, actionErr := flighthub.NewLiveActionHandler(
+			flighthub.NewSQLLiveActionStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
+		)
+		if actionErr != nil {
+			logger.Error("FlightHub live action initialization failed", "error", actionErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubLiveActionEventType, liveActionHandler.Handler)
 	}
 	assetSigner := algorithm.NewAssetURLSigner(workerConfig.AssetURLSigningSecret, workerConfig.CallbackPublicBaseURL)
 	detectionSink := perception.NewSQLDetectionSink()
