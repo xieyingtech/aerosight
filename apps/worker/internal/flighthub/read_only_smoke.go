@@ -489,7 +489,14 @@ func smokeShape(value any) (int, []string) {
 		return len(typed), fields
 	case map[string]any:
 		for _, collectionKey := range []string{"list", "items", "records", "rows"} {
-			if collection, ok := typed[collectionKey].([]any); ok {
+			collectionValue, exists := typed[collectionKey]
+			if !exists {
+				continue
+			}
+			if collectionValue == nil {
+				return 0, sortedSmokeFields(typed)
+			}
+			if collection, ok := collectionValue.([]any); ok {
 				if len(collection) == 0 {
 					return 0, sortedSmokeFields(typed)
 				}

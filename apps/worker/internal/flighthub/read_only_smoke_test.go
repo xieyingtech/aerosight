@@ -146,6 +146,14 @@ func TestReadOnlySmokeAcceptsMissingDataAndPreservesConfigurationRequired(t *tes
 	}
 }
 
+func TestReadOnlySmokeTreatsNullListAsEmpty(t *testing.T) {
+	t.Parallel()
+	category, count, fields := summarizeSmokePayload(envelope{Data: json.RawMessage(`{"list":null}`)})
+	if category != "empty" || count != 0 || strings.Join(fields, ",") != "list" {
+		t.Fatalf("null list was not summarized as an empty collection: category=%s count=%d fields=%v", category, count, fields)
+	}
+}
+
 func TestReadOnlySmokeHydratesAccountScopeWithoutExposingVendorIDs(t *testing.T) {
 	t.Parallel()
 	projectUUID := "00000000-0000-4000-8000-000000000001"
