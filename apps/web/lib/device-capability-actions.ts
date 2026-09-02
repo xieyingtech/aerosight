@@ -23,6 +23,18 @@ const catalog: Record<string, Omit<DeviceCapabilityAction, "capabilityCode" | "r
   "flight.return_home": [
     { key: "return_home", label: "返航", kind: "command", fixedParameters: {}, fields: [] }
   ],
+  "camera.change": [
+    { key: "camera.change", label: "切换相机", kind: "command", fixedParameters: {}, fields: [
+      { key: "cameraIndex", label: "相机索引", type: "text", required: true },
+      { key: "cameraPosition", label: "相机位置", type: "text", required: false }
+    ] }
+  ],
+  "camera.lens.change": [
+    { key: "camera.change_lens", label: "切换镜头", kind: "command", fixedParameters: {}, fields: [
+      { key: "cameraIndex", label: "相机索引", type: "text", required: true },
+      { key: "lensType", label: "镜头类型", type: "text", required: true }
+    ] }
+  ],
   "dock.debug.control": [
     { key: "cover.open", label: "打开舱盖", kind: "command", fixedParameters: {}, fields: [] },
     { key: "cover.close", label: "关闭舱盖", kind: "command", fixedParameters: {}, fields: [] },

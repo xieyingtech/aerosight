@@ -36,6 +36,10 @@ function availabilityLabel(availability: string) {
   return availability === "available" ? "可用" : availability === "degraded" ? "降级" : "不可用";
 }
 
+const TCA_LABELS: Record<string, string> = {
+  available: "可用", empty: "已检查·当前无记录", stale: "状态过期", unavailable: "不可用", missing: "尚未检查"
+};
+
 function DeviceBranch({ node, depth, selectedId, onSelect, searching }: {
   node: DeviceTreeNode; depth: number; selectedId: number; onSelect: (id: number) => void; searching: boolean;
 }) {
@@ -120,8 +124,22 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
           <div className="rounded-lg border p-3" key={capability.code}>
             <div className="flex items-center justify-between gap-2"><code className="text-xs font-medium">{capability.code}</code><Badge variant={capability.availability === "available" ? "secondary" : "outline"}>{availabilityLabel(capability.availability)}</Badge></div>
             <p className="mt-2 text-xs text-muted-foreground">{capability.authorized ? "已授权" : "未授权"} · 风险 {capability.risk}{capability.reason ? ` · ${capability.reason}` : ""}</p>
+            {capability.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{capability.actions.map((action) =>
+              <Badge key={action.key} title={action.unavailableReason ?? undefined} variant={action.enabled ? "secondary" : "outline"}>
+                {action.label} · {action.enabled ? "前置条件满足" : "已阻止"}
+              </Badge>)}</div>}
           </div>)}</div> : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">该设备类型尚未声明能力</p>}
       </section>
+      {device.flightHubControl && <section>
+        <div className="mb-3 flex items-center gap-2"><CameraIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">司空相机 / TCA 前置状态</h3></div>
+        <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <DetailItem label="连接器" value={device.flightHubControl.connectorStatus === "connected" ? "已连接" : "未连接"} />
+          <DetailItem label="设备状态" value={device.flightHubControl.stateFresh ? "30 秒内有效" : "已过期，禁止上游调用"} />
+          <DetailItem label="TCA" value={`${TCA_LABELS[device.flightHubControl.tcaState] ?? device.flightHubControl.tcaState}${device.flightHubControl.tcaItemCount === null ? "" : ` · ${device.flightHubControl.tcaItemCount} 项`}`} />
+          <DetailItem label="TCA 检查时间" value={device.flightHubControl.tcaCheckedAt ? new Date(device.flightHubControl.tcaCheckedAt).toLocaleString("zh-CN") : "暂无"} />
+        </dl>
+        <p className="mt-2 text-xs text-muted-foreground">相机/镜头按钮只在精确型号与固件现场验收、功能开关、在线状态和 30 秒新鲜度同时满足时启用；TCA 仅展示官方开放返回的存在性和新鲜度。</p>
+      </section>}
       <section>
         <div className="mb-3 flex items-center gap-2"><RadioIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">实时通道</h3><Badge variant="secondary">{device.channels.length}</Badge></div>
         {device.channels.length ? <div className="grid gap-2 md:grid-cols-2">{device.channels.map((channel) =>

@@ -42,6 +42,7 @@ type CapabilityProbeResult struct {
 	Status         CapabilityProbeStatus `json:"status"`
 	Reason         string                `json:"reason"`
 	EndpointID     string                `json:"endpointId,omitempty"`
+	ItemCount      *int                  `json:"itemCount,omitempty"`
 	Layers         CapabilityProbeLayers `json:"layers"`
 }
 
@@ -64,15 +65,16 @@ type capabilityReadiness struct {
 }
 
 type capabilityProbeObservation struct {
-	Status CapabilityProbeStatus
-	Reason string
+	Status    CapabilityProbeStatus
+	Reason    string
+	ItemCount *int
 }
 
 var defaultCapabilityProbeEndpoints = []capabilityProbeEndpoint{
 	{ID: "456242199e0", Method: http.MethodGet, Path: "/openapi/v2.0/health", Scope: "global", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"health.read", "security.temporary-credential"}},
 	{ID: "456447011e0", Method: http.MethodGet, Path: "/openapi/v2.0/organizations", Scope: "global", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"organization.read", "organization.write"}},
 	{ID: "456680822e0", Method: http.MethodGet, Path: "/openapi/v2.0/project/device", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"inventory.read"}},
-	{ID: "458069501e0", Method: http.MethodGet, Path: "/openapi/v2.0/device/{device_sn}/state", Scope: "device", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"state.read", "live.quality.set"}, TemplateParameter: "device_sn"},
+	{ID: "458069501e0", Method: http.MethodGet, Path: "/openapi/v2.0/device/{device_sn}/state", Scope: "device", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"state.read", "live.quality.set", "device.camera.change", "device.lens.change"}, TemplateParameter: "device_sn"},
 	{ID: "456680824e0", Method: http.MethodGet, Path: "/openapi/v2.0/wayline", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"flight.read", "flight.execute"}},
 	{ID: "457494965e0", Method: http.MethodGet, Path: "/openapi/v2.0/live-shares", Scope: "project", Profile: "live-share-list", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.read", "live.control", "live.share.manage"}},
 	{ID: "457494960e0", Method: http.MethodGet, Path: "/openapi/v2.0/auto-record-configs", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.recording.control"}},
@@ -80,6 +82,7 @@ var defaultCapabilityProbeEndpoints = []capabilityProbeEndpoint{
 	{ID: "457494969e0", Method: http.MethodGet, Path: "/openapi/v2.0/flight-areas", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"geospatial.read", "geospatial.write", "geospatial.element.delete"}},
 	{ID: "458069507e0", Method: http.MethodGet, Path: "/openapi/v2.0/model", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"model.read", "model.write", "model.delete", "model.resource.delete"}},
 	{ID: "457494961e0", Method: http.MethodGet, Path: "/openapi/v2.0/topologies/cmds/control/status", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"device.control"}},
+	{ID: "454273421e0", Method: http.MethodGet, Path: "/openapi/v2.0/workspaces/{workspace_id}/groups/tcas", Scope: "workspace", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"tca.status.read"}, TemplateParameter: "workspace_id"},
 }
 
 var defaultCapabilityReadiness = map[string]capabilityReadiness{
@@ -106,6 +109,9 @@ var defaultCapabilityReadiness = map[string]capabilityReadiness{
 	"model.delete":                  {Implemented: true},
 	"model.resource.delete":         {Implemented: true},
 	"device.control":                {},
+	"device.camera.change":          {Implemented: true},
+	"device.lens.change":            {Implemented: true},
+	"tca.status.read":               {Implemented: true, Accepted: true},
 	"organization.write":            {},
 }
 
@@ -168,6 +174,7 @@ func (client *Client) probeCapabilities(ctx context.Context, input CapabilityPro
 			observation := observations[endpoint.ID]
 			result.Layers.Account = observation.Status
 			result.Reason = observation.Reason
+			result.ItemCount = observation.ItemCount
 		}
 		result.Status, result.Reason = effectiveProbeStatus(result.Layers, result.Reason)
 		results = append(results, result)
@@ -187,17 +194,24 @@ func (client *Client) probeEndpoint(ctx context.Context, input CapabilityProbeIn
 	}
 	path := endpoint.Path
 	if endpoint.TemplateParameter != "" {
-		if endpoint.TemplateParameter != "device_sn" || strings.TrimSpace(input.DeviceSerial) == "" {
+		parameterValue := ""
+		switch endpoint.TemplateParameter {
+		case "device_sn":
+			parameterValue = strings.TrimSpace(input.DeviceSerial)
+		case "workspace_id":
+			parameterValue = strings.TrimSpace(input.ProjectUUID)
+		}
+		if parameterValue == "" {
 			return capabilityProbeObservation{Status: ProbeUnverified, Reason: "probe_context_required"}
 		}
 		var err error
-		path, err = resolvePathTemplate(path, map[string]string{endpoint.TemplateParameter: input.DeviceSerial})
+		path, err = resolvePathTemplate(path, map[string]string{endpoint.TemplateParameter: parameterValue})
 		if err != nil {
 			return capabilityProbeObservation{Status: ProbeFailed, Reason: "probe_context_invalid"}
 		}
 	}
 	projectUUID := ""
-	if endpoint.Scope == "project" || endpoint.Scope == "device" {
+	if endpoint.Scope == "project" || endpoint.Scope == "device" || endpoint.Scope == "workspace" {
 		projectUUID = strings.TrimSpace(input.ProjectUUID)
 		if projectUUID == "" {
 			return capabilityProbeObservation{Status: ProbeUnverified, Reason: "probe_context_required"}
@@ -208,6 +222,25 @@ func (client *Client) probeEndpoint(ctx context.Context, input CapabilityProbeIn
 	})
 	if err != nil {
 		return classifyCapabilityProbeError(err)
+	}
+	if endpoint.ID == "454273421e0" {
+		data := payload.Data
+		if len(bytes.TrimSpace(data)) == 0 {
+			data = json.RawMessage(`null`)
+		}
+		decoded, decodeErr := DecodeControlActionOutput("tca.status", data)
+		if decodeErr != nil {
+			return capabilityProbeObservation{Status: ProbeFailed, Reason: "upstream_schema_invalid"}
+		}
+		summary, ok := decoded.(OpenControlOutputSummary)
+		if !ok {
+			return capabilityProbeObservation{Status: ProbeFailed, Reason: "upstream_schema_invalid"}
+		}
+		count := summary.ItemCount
+		if count == 0 {
+			return capabilityProbeObservation{Status: ProbeEmpty, Reason: "upstream_empty", ItemCount: &count}
+		}
+		return capabilityProbeObservation{Status: ProbeSupported, Reason: "read_probe_succeeded", ItemCount: &count}
 	}
 	if payload.Empty || emptyProbeData(payload.Data) {
 		return capabilityProbeObservation{Status: ProbeEmpty, Reason: "upstream_empty"}

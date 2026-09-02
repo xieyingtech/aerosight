@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { withAuditedProjectWrite } from "@/lib/audit";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { actionPatternMatches, assertDeviceCommandSafety, authorizeCapabilityAction } from "@/lib/device-command-core";
-import { authorizeFlightHubDiscreteCommand } from "@/lib/dji-flighthub-device-command-core";
+import { authorizeFlightHubDiscreteCommand, flightHubDiscretePolicy, validateFlightHubCommandParameters } from "@/lib/dji-flighthub-device-command-core";
 import { correlationId } from "@/lib/observability";
 import { publishProjectEvent } from "@/lib/project-events";
 
@@ -36,11 +36,12 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
     policyResult: { boundary: "capability-rbac+safety-interlock+second-confirmation+connector-worker-recheck" }
   }, async (client) => {
     const target = await client.query<{
-      projectId: number; deviceTypeId: string; status: "online" | "degraded" | "offline" | "unknown" | "unavailable";
+      projectId: number; deviceTypeId: string; deviceTypeKey: string; status: "online" | "degraded" | "offline" | "unknown" | "unavailable";
       availability: "available" | "degraded" | "unavailable"; riskLevel: "low" | "medium" | "high" | "critical";
-    }>(`select device.project_id as "projectId",device.device_type_id as "deviceTypeId",device.status,
+    }>(`select device.project_id as "projectId",device.device_type_id as "deviceTypeId",device_type.type_key as "deviceTypeKey",device.status,
               capability.availability,capability.risk_level as "riskLevel"
          from devices device
+         join device_types device_type on device_type.id=device.device_type_id
          join device_capabilities capability on capability.device_id=device.id and capability.project_id=device.project_id
         where device.project_id=$1 and device.id=$2 and capability.capability_code=$3
         for update of device`, [input.projectId, input.deviceId, input.capabilityCode]);
@@ -94,15 +95,18 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
 
     let flightHubSafety: Record<string, unknown> = {};
     if (routes.rows[0].connectorKey === "dji.flighthub2") {
+      const policy = flightHubDiscretePolicy(input.commandKey);
+      if (!policy || policy.capabilityCode !== input.capabilityCode) throw new Error("FLIGHTHUB_COMMAND_POLICY_MISMATCH");
       const governance = (await client.query<{
         featureEnabled: boolean; capabilityFieldVerified: boolean; stateCapturedAt: Date | null;
         currentSafetyPolicyVersionId: string | null; approvalProjectId: number | null; approvalTeamId: number | null;
         approvalResourceType: string | null; approvalResourceId: string | null; approvalAction: string | null;
         approvalStatus: string | null; approvalUnexpired: boolean;
-      }>(`select coalesce(flags.flighthub_action_flags_json @> '{"device.control":true}'::jsonb,false) as "featureEnabled",
+      }>(`select coalesce(flags.flighthub_action_flags_json @> jsonb_build_object($5::text,true),false) as "featureEnabled",
           exists(select 1 from connector_capability_snapshots capability where capability.project_id=$1
-            and capability.connector_instance_id=$3::bigint and capability.capability_code='device.control'
+            and capability.connector_instance_id=$3::bigint and capability.capability_code=$6
             and capability.status='supported' and capability.evidence_level='field-write'
+            and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
             and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
           latest.captured_at as "stateCapturedAt",project.current_safety_policy_version_id::text as "currentSafetyPolicyVersionId",
           approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",
@@ -110,15 +114,18 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
           approval.action as "approvalAction",approval.status as "approvalStatus",
           coalesce(approval.expires_at>now(),false) as "approvalUnexpired"
         from projects project
+        join devices device on device.project_id=project.id and device.id=$2
         left join project_feature_flags flags on flags.project_id=project.id
         left join device_latest_telemetry latest on latest.project_id=project.id and latest.device_id=$2 and latest.adapter_id=$3::bigint
         left join approval_requests approval on approval.id=$4::uuid and approval.project_id=project.id
-        where project.id=$1`, [input.projectId, input.deviceId, routes.rows[0].connectorInstanceId, input.approvalRequestId ?? null])).rows[0];
+        where project.id=$1`, [input.projectId, input.deviceId, routes.rows[0].connectorInstanceId, input.approvalRequestId ?? null,
+          policy.featureFlag, policy.connectorCapabilityCode])).rows[0];
       if (!governance) throw new Error("FLIGHTHUB_COMMAND_SCOPE_DENIED");
       const authorized = authorizeFlightHubDiscreteCommand({
         projectId: input.projectId, teamId: access.teamId, deviceId: input.deviceId,
         capabilityCode: input.capabilityCode, commandKey: input.commandKey,
-        parametersEmpty: Object.keys(input.parameters).length === 0,
+        parametersValid: validateFlightHubCommandParameters(input.commandKey, input.parameters),
+        deviceTypeKey: device.deviceTypeKey, deviceOnline: device.status === "online",
         connectorStatus: routes.rows[0].connectorStatus, featureEnabled: governance.featureEnabled,
         capabilityFieldVerified: governance.capabilityFieldVerified, stateCapturedAt: governance.stateCapturedAt, now: new Date(),
         safetyPolicyVersionId: input.safetyPolicyVersionId ?? null,
@@ -129,6 +136,7 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
         approvalUnexpired: governance.approvalUnexpired
       });
       flightHubSafety = { connectorKey: routes.rows[0].connectorKey, connectorInstanceId: routes.rows[0].connectorInstanceId,
+        connectorCapabilityCode: policy.connectorCapabilityCode, featureFlag: policy.featureFlag,
         approvalRequestId: input.approvalRequestId, safetyPolicyVersionId: input.safetyPolicyVersionId,
         stateFresh: authorized.stateFresh, capabilityFieldVerified: governance.capabilityFieldVerified };
     }

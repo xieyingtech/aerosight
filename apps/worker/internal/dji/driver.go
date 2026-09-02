@@ -19,6 +19,8 @@ var commandCapabilities = []driver.CapabilityDefinition{
 	{Code: "flight.return_home", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "stream.video.control", Kind: driver.CapabilityCommand, Risk: driver.RiskMedium, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "dock.debug.control", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
+	{Code: "camera.change", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["cameraIndex"],"properties":{"cameraIndex":{"type":"string"},"cameraPosition":{"type":"string"}}}`)},
+	{Code: "camera.lens.change", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["cameraIndex","lensType"],"properties":{"cameraIndex":{"type":"string"},"lensType":{"type":"string"}}}`)},
 }
 
 var streamCapabilities = []driver.CapabilityDefinition{

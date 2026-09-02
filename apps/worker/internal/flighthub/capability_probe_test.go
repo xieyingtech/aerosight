@@ -146,3 +146,30 @@ func TestCapabilityProbeIntersectsDeploymentAccountImplementationAndAcceptance(t
 		}
 	}
 }
+
+func TestTCAProbePersistsOnlyBoundedCountAndEmptyState(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct {
+		name, data string
+		status     CapabilityProbeStatus
+		count      int
+	}{
+		{"items", `[{"vendor_field":"discarded"},{"another":true}]`, ProbeSupported, 2},
+		{"null", `null`, ProbeEmpty, 0},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testClient(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				if request.URL.Path != "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/groups/tcas" {
+					t.Fatalf("unexpected path %s", request.URL.Path)
+				}
+				return response(http.StatusOK, []byte(`{"code":0,"message":"","data":`+testCase.data+`}`), nil), nil
+			}), nil)
+			observation := client.probeEndpoint(context.Background(), CapabilityProbeInput{Token: "TOKEN_REDACTED", Region: "cn", Deployment: "cn-public-cloud", ProjectUUID: "WORKSPACE_REDACTED"},
+				capabilityProbeEndpoint{ID: "454273421e0", Method: http.MethodGet, Path: "/openapi/v2.0/workspaces/{workspace_id}/groups/tcas", Scope: "workspace", Released: true,
+					Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, TemplateParameter: "workspace_id"})
+			if observation.Status != testCase.status || observation.ItemCount == nil || *observation.ItemCount != testCase.count {
+				t.Fatalf("observation=%#v", observation)
+			}
+		})
+	}
+}

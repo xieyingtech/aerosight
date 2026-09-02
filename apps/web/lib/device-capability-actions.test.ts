@@ -8,6 +8,8 @@ test("server capability catalog drives workflows, control, live, and generic sen
   assert.equal(actionsForCapability("flight.return_home", "critical")[0]?.key, "return_home");
   assert.ok(actionsForCapability("dock.debug.control", "critical").some((action) => action.key === "cover.open"));
   assert.equal(actionsForCapability("stream.video.control", "medium")[0]?.kind, "live");
+  assert.deepEqual(actionsForCapability("camera.change", "high")[0]?.fields.map((field) => field.key), ["cameraIndex", "cameraPosition"]);
+  assert.equal(actionsForCapability("camera.lens.change", "high")[0]?.key, "camera.change_lens");
   assert.deepEqual(actionsForCapability("sensor.configure", "medium")[0]?.fields.map((field) => field.key),
     ["sample_interval_seconds", "report_threshold"]);
   assert.deepEqual(actionsForCapability("vendor.unknown", "low"), []);

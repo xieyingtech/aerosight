@@ -16,6 +16,8 @@ const (
 	FlightHubGeospatialDeleteFeatureFlag    = "flighthub.geospatial.delete"
 	FlightHubModelDeleteFeatureFlag         = "flighthub.model.delete"
 	FlightHubModelResourceDeleteFeatureFlag = "flighthub.model-resource.delete"
+	FlightHubCameraChangeFeatureFlag        = "flighthub.camera.change"
+	FlightHubLensChangeFeatureFlag          = "flighthub.lens.change"
 )
 
 func Capabilities() []connector.CapabilityDefinition {
@@ -43,6 +45,9 @@ func Capabilities() []connector.CapabilityDefinition {
 		{Code: "model.delete", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"model"}, FeatureFlag: FlightHubModelDeleteFeatureFlag},
 		{Code: "model.resource.delete", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"model"}, FeatureFlag: FlightHubModelResourceDeleteFeatureFlag},
 		{Code: "device.control", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "flight.return_home", FeatureFlag: FlightHubActionFeatureFlag},
+		{Code: "device.camera.change", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"control"}, DriverCapability: "camera.change", FeatureFlag: FlightHubCameraChangeFeatureFlag},
+		{Code: "device.lens.change", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"control"}, DriverCapability: "camera.lens.change", FeatureFlag: FlightHubLensChangeFeatureFlag},
+		{Code: "tca.status.read", Kind: connector.CapabilityRead, Risk: driver.RiskLow, EndpointDomains: []string{"control"}},
 		{Code: "organization.write", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"organization", "project"}, FeatureFlag: FlightHubActionFeatureFlag},
 	}
 }

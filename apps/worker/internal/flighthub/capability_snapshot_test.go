@@ -109,6 +109,34 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	}
 }
 
+func TestCameraCapabilityNeverInheritsAnotherModelOrFirmwareAcceptance(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	expiresAt := now.Add(time.Hour)
+	baseline := []CapabilityProbeResult{{
+		CapabilityCode: "device.lens.change", Status: ProbeUnverified, Reason: "acceptance_required",
+		Layers: CapabilityProbeLayers{Contract: ProbeSupported, Deployment: ProbeSupported, Account: ProbeSupported, Implementation: ProbeSupported, Acceptance: ProbeUnverified},
+	}}
+	evidence := connector.CapabilitySnapshot{CapabilityCode: "device.lens.change", Status: "supported", EvidenceLevel: "field-write",
+		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.01", VerifiedAt: now.Add(-time.Minute), ExpiresAt: &expiresAt}
+	for _, scope := range []CapabilityEvaluationScope{
+		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice3td", FirmwareVersion: "10.01", Now: now},
+		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.02", Now: now},
+		{Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "", FirmwareVersion: "", Now: now},
+	} {
+		result := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, scope)[0]
+		if result.Status == ProbeSupported {
+			t.Fatalf("scope %#v inherited incompatible evidence", scope)
+		}
+	}
+	matched := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
+		Region: "cn", Deployment: "cn-public-cloud", DeviceModel: "matrice4td", FirmwareVersion: "10.01", Now: now,
+	})[0]
+	if matched.Status != ProbeSupported {
+		t.Fatalf("exact evidence was not applied: %#v", matched)
+	}
+}
+
 func TestCapabilityProbeSnapshotsPersistAndLoadFromPostgres(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
 	if databaseURL == "" {

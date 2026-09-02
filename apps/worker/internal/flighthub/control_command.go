@@ -16,7 +16,7 @@ import (
 const controlStateFreshness = 30 * time.Second
 
 type DiscreteControlClient interface {
-	ExecuteDiscreteControl(context.Context, string, string, string, string) (ControlActionDefinition, error)
+	ExecuteDeviceControl(context.Context, string, string, string, string, json.RawMessage) (ControlActionDefinition, error)
 }
 
 type ControlCommandDispatcher struct {
@@ -26,30 +26,35 @@ type ControlCommandDispatcher struct {
 }
 
 type controlCommandPolicy struct {
-	actionCode     string
-	capabilityCode string
-	approvalAction string
+	actionCode, capabilityCode, connectorCapabilityCode, featureFlag, approvalAction string
+	deviceTypes                                                                      map[string]bool
 }
 
 var discreteControlPolicies = map[string]controlCommandPolicy{
-	"return_home":         {"return_home", "flight.return_home", "flighthub.device.return_home"},
-	"return_home_cancel":  {"return_home_cancel", "flight.return_home", "flighthub.device.return_home_cancel"},
-	"flighttask_pause":    {"flighttask_pause", "mission.execute", "flighthub.device.flighttask_pause"},
-	"flighttask_recovery": {"flighttask_recovery", "mission.execute", "flighthub.device.flighttask_recovery"},
+	"return_home":         {actionCode: "return_home", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home"},
+	"return_home_cancel":  {actionCode: "return_home_cancel", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home_cancel"},
+	"flighttask_pause":    {actionCode: "flighttask_pause", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_pause"},
+	"flighttask_recovery": {actionCode: "flighttask_recovery", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_recovery"},
+	"camera.change": {actionCode: "camera.change", capabilityCode: "camera.change", connectorCapabilityCode: "device.camera.change", featureFlag: FlightHubCameraChangeFeatureFlag,
+		approvalAction: "flighthub.device.camera.change", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
+	"camera.change_lens": {actionCode: "camera.change_lens", capabilityCode: "camera.lens.change", connectorCapabilityCode: "device.lens.change", featureFlag: FlightHubLensChangeFeatureFlag,
+		approvalAction: "flighthub.device.camera.change_lens", deviceTypes: map[string]bool{"dji.matrice3d": true, "dji.matrice3td": true, "dji.matrice4d": true, "dji.matrice4td": true}},
 }
 
 type loadedControlCommand struct {
-	ID, CommandKey, CapabilityCode, DeviceSN string
-	ProjectID, TeamID, DeviceID, Priority    int
-	AdapterID                                int64
-	Deadline                                 time.Time
-	Instance                                 connector.Instance
-	ProjectUUID                              string
-	ConnectorStatus                          string
-	FeatureEnabled, CapabilityVerified       bool
-	ParametersValid                          bool
-	DeviceOnline, StateFresh, ApprovalValid  bool
-	SafetyPolicyCurrent                      bool
+	ID, CommandKey, CapabilityCode, DeviceSN             string
+	RecordedConnectorCapabilityCode, RecordedFeatureFlag string
+	DeviceTypeKey, DeviceModel, FirmwareVersion          string
+	ProjectID, TeamID, DeviceID, Priority                int
+	AdapterID                                            int64
+	Deadline                                             time.Time
+	Instance                                             connector.Instance
+	ProjectUUID                                          string
+	ConnectorStatus                                      string
+	FeatureEnabled, CapabilityVerified                   bool
+	Parameters                                           json.RawMessage
+	DeviceOnline, StateFresh, ApprovalValid              bool
+	SafetyPolicyCurrent                                  bool
 }
 
 func NewControlCommandDispatcher(client DiscreteControlClient, resolver TokenResolver, now func() time.Time) (*ControlCommandDispatcher, error) {
@@ -63,11 +68,27 @@ func NewControlCommandDispatcher(client DiscreteControlClient, resolver TokenRes
 }
 
 func (client *Client) ExecuteDiscreteControl(ctx context.Context, token, projectUUID, actionCode, deviceSN string) (ControlActionDefinition, error) {
+	return client.ExecuteDeviceControl(ctx, token, projectUUID, actionCode, deviceSN, json.RawMessage(`{}`))
+}
+
+func (client *Client) ExecuteDeviceControl(ctx context.Context, token, projectUUID, actionCode, deviceSN string, parameters json.RawMessage) (ControlActionDefinition, error) {
 	projectUUID, err := requireScope(projectUUID)
 	if err != nil {
 		return ControlActionDefinition{}, err
 	}
-	request, err := BuildControlActionRequest(actionCode, json.RawMessage(fmt.Sprintf(`{"deviceSn":%q}`, deviceSN)))
+	input := json.RawMessage(fmt.Sprintf(`{"deviceSn":%q}`, deviceSN))
+	if actionCode == "camera.change" || actionCode == "camera.change_lens" {
+		var fields map[string]any
+		if json.Unmarshal(parameters, &fields) != nil || fields == nil {
+			return ControlActionDefinition{}, &APIError{SafeCode: "request_invalid"}
+		}
+		fields["sn"] = deviceSN
+		input, err = json.Marshal(fields)
+		if err != nil {
+			return ControlActionDefinition{}, err
+		}
+	}
+	request, err := BuildControlActionRequest(actionCode, input)
 	if err != nil {
 		return ControlActionDefinition{}, err
 	}
@@ -107,18 +128,12 @@ func (dispatcher *ControlCommandDispatcher) DispatchHandler(ctx context.Context,
 		return err
 	}
 	policy, known := discreteControlPolicies[command.CommandKey]
-	if !known || policy.capabilityCode != command.CapabilityCode {
-		return blockControlCommand(ctx, tx, command, "policy_mismatch")
-	}
-	if command.ConnectorStatus != "connected" || !command.FeatureEnabled || !command.CapabilityVerified || !command.ParametersValid ||
-		!command.DeviceOnline || !command.StateFresh || !command.ApprovalValid || !command.SafetyPolicyCurrent {
-		return blockControlCommand(ctx, tx, command, "safety_gate_failed")
-	}
-	if command.CapabilityCode == "flight.return_home" && command.Priority < 90 {
-		return blockControlCommand(ctx, tx, command, "priority_too_low")
-	}
-	if !dispatcher.now().UTC().Before(command.Deadline) {
+	gateCode := controlCommandGate(command, policy, known, dispatcher.now().UTC())
+	if gateCode == "deadline_expired" {
 		return timeoutControlCommand(ctx, tx, command)
+	}
+	if gateCode != "" {
+		return blockControlCommand(ctx, tx, command, gateCode)
 	}
 	if err := beginControlAttempt(ctx, tx, command); err != nil {
 		return err
@@ -128,7 +143,7 @@ func (dispatcher *ControlCommandDispatcher) DispatchHandler(ctx context.Context,
 		return finishControlAttempt(ctx, tx, command, "transport_error", "unknown", "credential_unavailable")
 	}
 	defer func() { token = "" }()
-	definition, callErr := dispatcher.client.ExecuteDiscreteControl(ctx, token, command.ProjectUUID, policy.actionCode, command.DeviceSN)
+	definition, callErr := invokeGovernedDeviceControl(ctx, dispatcher.client, token, command, policy, dispatcher.now().UTC())
 	if callErr != nil {
 		var apiError *APIError
 		if errors.As(callErr, &apiError) && definitiveControlNack(apiError) {
@@ -147,16 +162,86 @@ func (dispatcher *ControlCommandDispatcher) DispatchHandler(ctx context.Context,
 	return err
 }
 
+func controlCommandGate(command loadedControlCommand, policy controlCommandPolicy, known bool, now time.Time) string {
+	if !known || policy.capabilityCode != command.CapabilityCode || policy.connectorCapabilityCode != command.RecordedConnectorCapabilityCode ||
+		policy.featureFlag != command.RecordedFeatureFlag {
+		return "policy_mismatch"
+	}
+	if command.ConnectorStatus != "connected" || !command.FeatureEnabled || !command.CapabilityVerified ||
+		!validControlCommandParameters(command.CommandKey, command.Parameters) || !command.DeviceOnline || !command.StateFresh ||
+		!command.ApprovalValid || !command.SafetyPolicyCurrent {
+		return "safety_gate_failed"
+	}
+	if len(policy.deviceTypes) > 0 && !policy.deviceTypes[command.DeviceTypeKey] {
+		return "model_unsupported"
+	}
+	if command.CapabilityCode == "flight.return_home" && command.Priority < 90 {
+		return "priority_too_low"
+	}
+	if !now.Before(command.Deadline) {
+		return "deadline_expired"
+	}
+	return ""
+}
+
+func invokeGovernedDeviceControl(ctx context.Context, client DiscreteControlClient, token string, command loadedControlCommand, policy controlCommandPolicy, now time.Time) (ControlActionDefinition, error) {
+	if code := controlCommandGate(command, policy, true, now); code != "" {
+		return ControlActionDefinition{}, &APIError{SafeCode: "request_invalid"}
+	}
+	return client.ExecuteDeviceControl(ctx, token, command.ProjectUUID, policy.actionCode, command.DeviceSN, command.Parameters)
+}
+
+func validControlCommandParameters(commandKey string, raw json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return false
+	}
+	identifierField := func(name string, required bool) bool {
+		value, exists := fields[name]
+		if !exists {
+			return !required
+		}
+		var decoded string
+		if json.Unmarshal(value, &decoded) != nil {
+			return false
+		}
+		_, err := controlIdentifier(decoded, false)
+		return err == nil
+	}
+	switch commandKey {
+	case "camera.change":
+		if len(fields) < 1 || len(fields) > 2 {
+			return false
+		}
+		for key := range fields {
+			if key != "cameraIndex" && key != "cameraPosition" {
+				return false
+			}
+		}
+		return identifierField("cameraIndex", true) && identifierField("cameraPosition", false)
+	case "camera.change_lens":
+		if len(fields) != 2 {
+			return false
+		}
+		return identifierField("cameraIndex", true) && identifierField("lensType", true)
+	default:
+		return len(fields) == 0
+	}
+}
+
 func loadControlCommand(ctx context.Context, tx *sql.Tx, projectID int, commandID string, now time.Time) (command loadedControlCommand, err error) {
 	var credential, scope []byte
 	err = tx.QueryRowContext(ctx, `select command.id::text,command.project_id,command.team_id,command.device_id,
 		command.command_key,command.capability_code,command.priority,command.deadline_at,identity.identity_json#>>'{attributes,serialNumber}',
+		command.safety_context_json->>'connectorCapabilityCode',command.safety_context_json->>'featureFlag',
+		device_type.type_key,coalesce(device.device_model,''),coalesce(device.firmware_version,''),command.parameters_json,
 		adapter.id,adapter.status,adapter.credential_envelope_json,adapter.discovery_scope_json,
-		coalesce(flags.flighthub_action_flags_json @> '{"device.control":true}'::jsonb,false),
-		(command.parameters_json='{}'::jsonb),
+		coalesce(flags.flighthub_action_flags_json @> jsonb_build_object(coalesce(command.safety_context_json->>'featureFlag',''),true),false),
 		exists(select 1 from connector_capability_snapshots capability where capability.project_id=command.project_id
-		  and capability.connector_instance_id=adapter.id and capability.capability_code='device.control'
+		  and capability.connector_instance_id=adapter.id
+		  and capability.capability_code=command.safety_context_json->>'connectorCapabilityCode'
 		  and capability.status='supported' and capability.evidence_level='field-write'
+		  and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
 		  and (capability.expires_at is null or capability.expires_at>$3)),
 		(device.status='online'),coalesce(latest.captured_at>$3-interval '30 seconds' and latest.captured_at<=$3+interval '1 second',false),
 		exists(select 1 from approval_requests approval where approval.id::text=command.safety_context_json->>'approvalRequestId'
@@ -166,6 +251,7 @@ func loadControlCommand(ctx context.Context, tx *sql.Tx, projectID int, commandI
 		(project.current_safety_policy_version_id is not null and project.current_safety_policy_version_id::text=command.safety_context_json->>'safetyPolicyVersionId')
 	 from device_commands command
 	 join devices device on device.id=command.device_id and device.project_id=command.project_id
+	 join device_types device_type on device_type.id=device.device_type_id
 	 join projects project on project.id=command.project_id and project.team_id=command.team_id
 	 join device_connector_bindings binding on binding.device_id=device.id and binding.project_id=device.project_id and binding.status='active'
 	 join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
@@ -178,8 +264,10 @@ func loadControlCommand(ctx context.Context, tx *sql.Tx, projectID int, commandI
 	   and adapter.id::text=command.safety_context_json->>'connectorInstanceId'
 	 order by binding.priority desc limit 1 for update of command`, projectID, commandID, now).Scan(
 		&command.ID, &command.ProjectID, &command.TeamID, &command.DeviceID, &command.CommandKey, &command.CapabilityCode,
-		&command.Priority, &command.Deadline, &command.DeviceSN, &command.AdapterID, &command.ConnectorStatus, &credential, &scope,
-		&command.FeatureEnabled, &command.ParametersValid, &command.CapabilityVerified, &command.DeviceOnline, &command.StateFresh,
+		&command.Priority, &command.Deadline, &command.DeviceSN, &command.RecordedConnectorCapabilityCode, &command.RecordedFeatureFlag,
+		&command.DeviceTypeKey, &command.DeviceModel, &command.FirmwareVersion,
+		&command.Parameters, &command.AdapterID, &command.ConnectorStatus, &credential, &scope,
+		&command.FeatureEnabled, &command.CapabilityVerified, &command.DeviceOnline, &command.StateFresh,
 		&command.ApprovalValid, &command.SafetyPolicyCurrent)
 	if err != nil {
 		return command, err

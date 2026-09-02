@@ -40,3 +40,17 @@ test("authorized actions are disabled when device or capability is unavailable",
   assert.equal(offline?.actions[0]?.enabled, false);
   assert.match(offline?.actions[0]?.unavailableReason ?? "", /不在线/);
 });
+
+test("camera prerequisites surface an explicit disabled reason", async () => {
+  const { applyFlightHubDevicePrerequisites } = await import("./device-tree-core.ts");
+  const device = applyFlightHubDevicePrerequisites({
+    id: 3, deviceTypeId: "9", name: "dock", category: "dock", status: "online", dataFreshness: "fresh",
+    statusReason: null, positionStatus: "missing", positionReason: null, positionSource: "dji", pose: null,
+    typeName: "Dock", typeKey: "dji.dock3", driverKey: "dji.cloud", driverVersion: "1.0.0", vendor: "DJI", model: "Dock 3",
+    capabilities: [{ code: "camera.change", availability: "available", reason: null, risk: "high", authorized: false, actions: [] }], channels: [],
+    flightHubControl: { connectorStatus: "connected", stateFresh: false, cameraFeatureEnabled: true, cameraFieldVerified: true,
+      lensFeatureEnabled: true, lensFieldVerified: true, tcaState: "stale", tcaCheckedAt: null, tcaItemCount: null }
+  });
+  assert.equal(device.capabilities[0]?.availability, "unavailable");
+  assert.match(device.capabilities[0]?.reason ?? "", /状态已过期/);
+});

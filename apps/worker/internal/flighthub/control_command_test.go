@@ -2,6 +2,7 @@ package flighthub
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -9,6 +10,13 @@ import (
 	"testing"
 	"time"
 )
+
+type governedControlClientFixture struct{ calls int }
+
+func (client *governedControlClientFixture) ExecuteDeviceControl(_ context.Context, _, _, actionCode, _ string, _ json.RawMessage) (ControlActionDefinition, error) {
+	client.calls++
+	return ControlActionDefinition{Code: actionCode, ResultSemantics: ControlResultAcceptanceOnly}, nil
+}
 
 func TestExecuteDiscreteControlTreatsHTTPAsAcceptanceOnly(t *testing.T) {
 	t.Parallel()
@@ -57,6 +65,69 @@ func TestExecuteDiscreteControlNackAndTimeoutNeverRetry(t *testing.T) {
 			_, err := client.ExecuteDiscreteControl(context.Background(), "TOKEN_REDACTED", "PROJECT_REDACTED", "flighttask_pause", "AIRCRAFT_REDACTED")
 			if calls != 1 || !IsSafeCode(err, testCase.safeCode) {
 				t.Fatalf("calls=%d err=%v, want one call and %s", calls, err, testCase.safeCode)
+			}
+		})
+	}
+}
+
+func TestCameraControlPreflightBlocksUnsupportedOfflineAndStaleDevicesBeforeUpstream(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	policy := discreteControlPolicies["camera.change_lens"]
+	valid := loadedControlCommand{
+		CommandKey: "camera.change_lens", CapabilityCode: "camera.lens.change",
+		RecordedConnectorCapabilityCode: "device.lens.change", RecordedFeatureFlag: FlightHubLensChangeFeatureFlag,
+		DeviceSN: "AIRCRAFT_REDACTED", DeviceTypeKey: "dji.matrice4td", ProjectUUID: "PROJECT_REDACTED",
+		ConnectorStatus: "connected", FeatureEnabled: true, CapabilityVerified: true, DeviceOnline: true, StateFresh: true,
+		ApprovalValid: true, SafetyPolicyCurrent: true, Deadline: now.Add(time.Minute),
+		Parameters: json.RawMessage(`{"cameraIndex":"CAMERA_REDACTED","lensType":"wide"}`),
+	}
+	for _, testCase := range []struct {
+		name string
+		edit func(*loadedControlCommand)
+	}{
+		{"unsupported model", func(command *loadedControlCommand) { command.DeviceTypeKey = "dji.unknown" }},
+		{"offline", func(command *loadedControlCommand) { command.DeviceOnline = false }},
+		{"stale", func(command *loadedControlCommand) { command.StateFresh = false }},
+		{"firmware evidence mismatch", func(command *loadedControlCommand) { command.CapabilityVerified = false }},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := valid
+			testCase.edit(&command)
+			client := &governedControlClientFixture{}
+			if _, err := invokeGovernedDeviceControl(context.Background(), client, "TOKEN_REDACTED", command, policy, now); err == nil {
+				t.Fatal("unsafe camera command was accepted")
+			}
+			if client.calls != 0 {
+				t.Fatalf("upstream calls=%d, want 0", client.calls)
+			}
+		})
+	}
+	client := &governedControlClientFixture{}
+	if _, err := invokeGovernedDeviceControl(context.Background(), client, "TOKEN_REDACTED", valid, policy, now); err != nil || client.calls != 1 {
+		t.Fatalf("valid camera command calls=%d err=%v", client.calls, err)
+	}
+}
+
+func TestExecuteCameraAndLensControlUsesBoundSerialAndNeverRetries(t *testing.T) {
+	t.Parallel()
+	for _, testCase := range []struct{ action, path, parameters, body string }{
+		{"camera.change", "/openapi/v2.0/device/change-camera", `{"cameraIndex":"CAMERA_REDACTED","cameraPosition":"outdoor"}`, `{"sn":"DOCK_REDACTED","camera_index":"CAMERA_REDACTED","camera_position":"outdoor"}`},
+		{"camera.change_lens", "/openapi/v2.0/device/change-lens", `{"cameraIndex":"CAMERA_REDACTED","lensType":"wide"}`, `{"sn":"DOCK_REDACTED","camera_index":"CAMERA_REDACTED","lens_type":"wide"}`},
+	} {
+		t.Run(testCase.action, func(t *testing.T) {
+			calls := 0
+			client := testClient(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				calls++
+				body, _ := io.ReadAll(request.Body)
+				if request.URL.Path != testCase.path || string(body) != testCase.body {
+					t.Fatalf("unexpected request %s %s", request.URL.Path, body)
+				}
+				return response(http.StatusOK, []byte(`{"code":0,"message":"","data":null}`), nil), nil
+			}), func(config *Config) { config.MaxRetries = 3 })
+			definition, err := client.ExecuteDeviceControl(context.Background(), "TOKEN_REDACTED", "PROJECT_REDACTED", testCase.action, "DOCK_REDACTED", json.RawMessage(testCase.parameters))
+			if err != nil || calls != 1 || definition.FinalOnHTTPSuccess || definition.ResultSemantics != ControlResultAcceptanceOnly {
+				t.Fatalf("definition=%#v calls=%d err=%v", definition, calls, err)
 			}
 		})
 	}

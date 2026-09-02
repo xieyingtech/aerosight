@@ -34,10 +34,12 @@ type CapabilityEvaluationScope struct {
 }
 
 var firmwareBoundCapabilities = map[string]struct{}{
-	"device.control": {},
-	"flight.execute": {},
-	"live.control":   {},
-	"live.quality.set": {},
+	"device.control":       {},
+	"flight.execute":       {},
+	"live.control":         {},
+	"live.quality.set":     {},
+	"device.camera.change": {},
+	"device.lens.change":   {},
 }
 
 func PersistCapabilityProbeResults(
@@ -83,6 +85,9 @@ func PersistCapabilityProbeResults(
 				"implementation": result.Layers.Implementation,
 				"acceptance":     result.Layers.Acceptance,
 			},
+		}
+		if result.ItemCount != nil {
+			details["itemCount"] = *result.ItemCount
 		}
 		if err := repository.SaveCapabilitySnapshot(ctx, instance, connector.CapabilitySnapshot{
 			CapabilityCode: result.CapabilityCode, Status: string(result.Status), EvidenceLevel: evidence.Level,

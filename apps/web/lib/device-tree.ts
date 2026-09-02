@@ -2,7 +2,7 @@ import "server-only";
 
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { query } from "@/lib/db";
-import { buildDeviceTree, type DeviceTreeItem, type DeviceTreeRelation } from "@/lib/device-tree-core";
+import { applyFlightHubDevicePrerequisites, buildDeviceTree, type DeviceTreeItem, type DeviceTreeRelation } from "@/lib/device-tree-core";
 import { projectDeviceCapabilities, type DeviceCapabilityGrant } from "@/lib/device-action-projection";
 
 export async function readProjectDeviceTree(projectId: number) {
@@ -13,6 +13,25 @@ export async function readProjectDeviceTree(projectId: number) {
               device.status_reason as "statusReason",device_type.display_name as "typeName",
               device_type.type_key as "typeKey",driver.driver_key as "driverKey",driver.version as "driverVersion",
               device_type.vendor,device_type.model,
+              case when flighthub_route.id is null then null else json_build_object(
+                'connectorStatus',case when flighthub_route.priority_count>1 then 'route_conflict'
+                  when flighthub_route.connector_key<>'dji.flighthub2' or flighthub_route.version<>'1.0.0' then 'not_primary'
+                  else flighthub_route.status end,
+                'stateFresh',coalesce(telemetry.captured_at>now()-interval '30 seconds' and telemetry.captured_at<=now()+interval '1 second',false),
+                'cameraFeatureEnabled',coalesce(flags.flighthub_action_flags_json @> '{"flighthub.camera.change":true}'::jsonb,false),
+                'cameraFieldVerified',exists(select 1 from connector_capability_snapshots capability
+                  where capability.project_id=device.project_id and capability.connector_instance_id=flighthub_route.id
+                    and capability.capability_code='device.camera.change' and capability.status='supported'
+                    and capability.evidence_level='field-write' and capability.device_model=device.device_model
+                    and capability.firmware_version=device.firmware_version and (capability.expires_at is null or capability.expires_at>now())),
+                'lensFeatureEnabled',coalesce(flags.flighthub_action_flags_json @> '{"flighthub.lens.change":true}'::jsonb,false),
+                'lensFieldVerified',exists(select 1 from connector_capability_snapshots capability
+                  where capability.project_id=device.project_id and capability.connector_instance_id=flighthub_route.id
+                    and capability.capability_code='device.lens.change' and capability.status='supported'
+                    and capability.evidence_level='field-write' and capability.device_model=device.device_model
+                    and capability.firmware_version=device.firmware_version and (capability.expires_at is null or capability.expires_at>now())),
+                'tcaState',coalesce(tca.state,'missing'),'tcaCheckedAt',tca.verified_at,'tcaItemCount',tca.item_count
+              ) end as "flightHubControl",
               case
                 when telemetry.payload_json#>>'{position,validity}'='invalid'
                   and (pose.observation_id is null or telemetry.captured_at>=pose.captured_at) then 'invalid'
@@ -57,6 +76,29 @@ export async function readProjectDeviceTree(projectId: number) {
          left join device_latest_telemetry telemetry
            on telemetry.project_id=device.project_id and telemetry.device_id=device.id
           and telemetry.telemetry_type='dji.flighthub.state'
+        left join lateral(
+          select adapter.id,adapter.status,definition.connector_key,definition.version,
+            (select count(*)::int from device_connector_bindings peer
+              where peer.project_id=binding.project_id and peer.device_id=binding.device_id
+                and peer.status='active' and peer.priority=binding.priority) as priority_count
+            from device_connector_bindings binding
+            join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
+            join connector_definitions definition on definition.id=adapter.connector_definition_id
+           where binding.project_id=device.project_id and binding.device_id=device.id and binding.status='active'
+           order by binding.priority desc,binding.connector_instance_id limit 1
+        ) flighthub_route on true
+        left join project_feature_flags flags on flags.project_id=device.project_id
+        left join lateral(
+          select capability.verified_at,case when jsonb_typeof(capability.details_json->'itemCount')='number'
+            then greatest(0,least(1000,(capability.details_json->>'itemCount')::int)) else null end as item_count,
+            case when capability.expires_at is not null and capability.expires_at<=now() then 'stale'
+              when capability.status='supported' then 'available'
+              when capability.status='empty' then 'empty' else 'unavailable' end as state
+            from connector_capability_snapshots capability
+           where capability.project_id=device.project_id and capability.connector_instance_id=flighthub_route.id
+             and capability.capability_code='tca.status.read' and capability.evidence_level='live-read'
+           order by capability.verified_at desc limit 1
+        ) tca on true
         where device.project_id=$1 order by device.id`, [projectId]
     ),
     query<DeviceTreeRelation>(
@@ -71,9 +113,12 @@ export async function readProjectDeviceTree(projectId: number) {
       [projectId, access.teamId, user.id]
     )
   ]);
-  const authorizedDevices = devices.rows.map((device) => ({ ...device, capabilities: projectDeviceCapabilities({
-    deviceId: device.id, deviceTypeId: device.deviceTypeId, deviceStatus: device.status,
-    role: access.role, capabilities: device.capabilities, grants: grants.rows
-  }) }));
+  const authorizedDevices = devices.rows.map((rawDevice) => {
+    const device = applyFlightHubDevicePrerequisites(rawDevice);
+    return { ...device, capabilities: projectDeviceCapabilities({
+      deviceId: device.id, deviceTypeId: device.deviceTypeId, deviceStatus: device.status,
+      role: access.role, capabilities: device.capabilities, grants: grants.rows
+    }) };
+  });
   return buildDeviceTree(authorizedDevices, relations.rows);
 }
