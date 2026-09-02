@@ -42,6 +42,20 @@ func runtimeInstance() connector.Instance {
 	}
 }
 
+func TestDiscoveryScopeAcceptsLegacyProjectAndValidatesOptionalOrganization(t *testing.T) {
+	legacy, err := parseScope(json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目"}`))
+	if err != nil || legacy.OrganizationUUID != "" {
+		t.Fatalf("legacy scope=%#v err=%v", legacy, err)
+	}
+	current, err := parseScope(json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目","organizationUuid":"00000000-0000-4000-8000-000000000010"}`))
+	if err != nil || current.OrganizationUUID != "00000000-0000-4000-8000-000000000010" {
+		t.Fatalf("current scope=%#v err=%v", current, err)
+	}
+	if _, err := parseScope(json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目","organizationUuid":"not-a-uuid"}`)); err == nil {
+		t.Fatal("invalid organization scope was accepted")
+	}
+}
+
 func directoryTopology() Topology {
 	return Topology{
 		Gateway: &Device{

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -281,6 +282,146 @@ func (sink *SQLResourceStreamSink) ApplyCatalog(ctx context.Context, instance co
 		return sink.flights.ApplyWaylines(ctx, instance, poll.Waylines)
 	}
 	return sink.flights.ApplyFlightTasks(ctx, instance, poll.FlightTasks)
+}
+
+func (sink *SQLResourceStreamSink) ApplyLiveCatalog(ctx context.Context, instance connector.Instance, poll LiveCatalogPoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
+	if instance.ID <= 0 || instance.ProjectID <= 0 || poll.ReceivedAt.IsZero() {
+		return errors.New("FlightHub live catalog projection scope is invalid")
+	}
+	recordings, err := recordingRemoteResources(poll.Recordings)
+	if err != nil {
+		return err
+	}
+	shares, err := liveShareRemoteResources(poll.Shares)
+	if err != nil {
+		return err
+	}
+	converters, err := streamConverterRemoteResources(poll.Devices, poll.Converters)
+	if err != nil {
+		return err
+	}
+	batches := []connector.RemoteResourceBatch{
+		{Kind: "recording", Resources: recordings, CompleteSnapshot: poll.RecordingComplete},
+		{Kind: "live-share", Resources: shares, CompleteSnapshot: poll.ShareComplete},
+		{Kind: "stream-converter", Resources: converters, CompleteSnapshot: poll.ConverterComplete},
+	}
+	var applyErrors []error
+	for _, batch := range batches {
+		if _, applyErr := sink.resources.ApplyRemoteResources(ctx, instance, batch); applyErr != nil {
+			applyErrors = append(applyErrors, applyErr)
+		}
+	}
+	return errors.Join(applyErrors...)
+}
+
+var opaqueResourceIdentityFields = []string{
+	"id", "uuid", "task_id", "task_uuid", "stream_id", "stream_uuid", "share_id", "share_uuid", "sn",
+}
+
+func opaqueResourceIdentity[T ~map[string]json.RawMessage](item T) (string, error) {
+	for _, field := range opaqueResourceIdentityFields {
+		raw := item[field]
+		if len(raw) == 0 || string(raw) == "null" {
+			continue
+		}
+		digest := sha256.Sum256(append([]byte(field+":"), raw...))
+		return hex.EncodeToString(digest[:]), nil
+	}
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func opaqueRemoteResource[T ~map[string]json.RawMessage](scope string, deviceID int, item T) (connector.RemoteResource, error) {
+	identity, err := opaqueResourceIdentity(item)
+	if err != nil {
+		return connector.RemoteResource{}, err
+	}
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return connector.RemoteResource{}, err
+	}
+	version := sha256.Sum256(raw)
+	fields := make([]string, 0, len(item))
+	for field := range item {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	summary := map[string]any{"scope": scope, "fieldNames": fields}
+	if deviceID > 0 {
+		summary["deviceId"] = deviceID
+	}
+	return connector.RemoteResource{
+		RemoteID:      fmt.Sprintf("%s:%d:%s", scope, deviceID, identity),
+		RemoteVersion: hex.EncodeToString(version[:]), Summary: summary,
+	}, nil
+}
+
+func recordingRemoteResources(items []ScopedRecordingTask) ([]connector.RemoteResource, error) {
+	resources := make([]connector.RemoteResource, 0, len(items))
+	for _, item := range items {
+		if !validEnum(item.Scope, "project", "organization") || item.Device.DeviceID <= 0 {
+			return nil, errors.New("FlightHub recording projection scope is invalid")
+		}
+		resource, err := opaqueRemoteResource(item.Scope, item.Device.DeviceID, item.Task)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
+	}
+	return resources, nil
+}
+
+func liveShareRemoteResources(items []LiveShare) ([]connector.RemoteResource, error) {
+	resources := make([]connector.RemoteResource, 0, len(items))
+	for _, item := range items {
+		resource, err := opaqueRemoteResource("project", 0, item)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
+	}
+	return resources, nil
+}
+
+func streamConverterRemoteResources(devices []connector.ManagedConnectorDevice, items []StreamConverter) ([]connector.RemoteResource, error) {
+	bySerial := make(map[string]int, len(devices))
+	for _, device := range devices {
+		bySerial[device.Serial] = device.DeviceID
+	}
+	resources := make([]connector.RemoteResource, 0, len(items))
+	for _, item := range items {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			return nil, err
+		}
+		version := sha256.Sum256(raw)
+		summary := map[string]any{
+			"name": item.Name, "state": item.State, "code": item.Code, "schema": item.Schema,
+			"cameraIndex": item.CameraIndex, "videoType": item.VideoType,
+			"autoPushStream": item.AutoPushStream, "deviceOnline": item.DeviceOnline,
+		}
+		if deviceID := bySerial[item.SN]; deviceID > 0 {
+			summary["deviceId"] = deviceID
+		} else {
+			summary["managedDevice"] = false
+		}
+		resource := connector.RemoteResource{
+			RemoteID: item.ID, RemoteVersion: hex.EncodeToString(version[:]), Summary: summary,
+		}
+		if updatedAt, parseErr := time.Parse(time.RFC3339, item.UpdatedAt); parseErr == nil {
+			updatedAt = updatedAt.UTC()
+			resource.RemoteUpdatedAt = &updatedAt
+		}
+		resources = append(resources, resource)
+	}
+	return resources, nil
 }
 
 func (sink *SQLResourceStreamSink) ListFlightArtifactTargets(ctx context.Context, instance connector.Instance, limit int) ([]FlightArtifactTarget, error) {

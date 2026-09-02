@@ -63,8 +63,9 @@ func (resolver EncryptedTokenResolver) ResolveToken(_ context.Context, instance 
 }
 
 type discoveryScope struct {
-	ProjectUUID string `json:"projectUuid"`
-	ProjectName string `json:"projectName"`
+	ProjectUUID      string `json:"projectUuid"`
+	ProjectName      string `json:"projectName"`
+	OrganizationUUID string `json:"organizationUuid,omitempty"`
 }
 
 func parseScope(raw json.RawMessage) (discoveryScope, error) {
@@ -74,7 +75,11 @@ func parseScope(raw json.RawMessage) (discoveryScope, error) {
 	}
 	scope.ProjectUUID = strings.ToLower(strings.TrimSpace(scope.ProjectUUID))
 	scope.ProjectName = strings.TrimSpace(scope.ProjectName)
+	scope.OrganizationUUID = strings.ToLower(strings.TrimSpace(scope.OrganizationUUID))
 	if !uuidPattern.MatchString(scope.ProjectUUID) || scope.ProjectName == "" {
+		return discoveryScope{}, errors.New("DJI_FLIGHTHUB_SCOPE_INVALID")
+	}
+	if scope.OrganizationUUID != "" && !uuidPattern.MatchString(scope.OrganizationUUID) {
 		return discoveryScope{}, errors.New("DJI_FLIGHTHUB_SCOPE_INVALID")
 	}
 	return scope, nil

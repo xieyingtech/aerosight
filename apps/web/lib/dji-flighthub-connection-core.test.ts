@@ -62,6 +62,7 @@ test("connection plan and audit fingerprint contain no credential", () => {
   assert.equal(plan.connectorKey, "dji.flighthub2");
   assert.equal(plan.adapterType, "dji-flighthub2");
   assert.equal(plan.externalScopeKey, PROJECT_UUID);
+  assert.equal(plan.discoveryScope.organizationUuid, projects[0].organizationUuid);
   assert.equal(plan.config.readOnly, true);
   assert.equal(plan.capabilities.inventoryRead, true);
   assert(!JSON.stringify(plan).includes(TOKEN));

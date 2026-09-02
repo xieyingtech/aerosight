@@ -24,6 +24,10 @@ type ResourceStreamClient interface {
 	ListFlightTaskExports(context.Context, string, string, FlightExportOptions) (FlightExportPage, error)
 	ListFlightAlerts(context.Context, string, string, FlightAlertOptions) (FlightAlertPage, error)
 	ListAIAlertRecords(context.Context, string, string, AIAlertOptions) (AIAlertPage, error)
+	ListOrganizationRecordingTasks(context.Context, string, string, string) ([]RecordingTask, error)
+	ListProjectRecordingTasks(context.Context, string, string, string) ([]RecordingTask, error)
+	ListLiveShares(context.Context, string, string, LiveShareListOptions) ([]LiveShare, error)
+	ListStreamConverters(context.Context, string, string, StreamConverterListOptions) (PageResult[StreamConverter], error)
 }
 
 type ResourceStreamStore interface {
@@ -87,6 +91,23 @@ type FlightAlertPoll struct {
 	ReceivedAt       time.Time
 }
 
+type ScopedRecordingTask struct {
+	Scope  string
+	Device connector.ManagedConnectorDevice
+	Task   RecordingTask
+}
+
+type LiveCatalogPoll struct {
+	Devices           []connector.ManagedConnectorDevice
+	Recordings        []ScopedRecordingTask
+	Shares            []LiveShare
+	Converters        []StreamConverter
+	RecordingComplete bool
+	ShareComplete     bool
+	ConverterComplete bool
+	ReceivedAt        time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
@@ -95,6 +116,7 @@ type ResourceStreamSink interface {
 	ApplyFlightArtifacts(context.Context, connector.Instance, FlightArtifactPoll) error
 	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
+	ApplyLiveCatalog(context.Context, connector.Instance, LiveCatalogPoll) error
 }
 
 type ActiveLiveSessionReconciler interface {
@@ -154,6 +176,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "flight-tasks", run: coordinator.pollFlightTasks},
 		{kind: "flight-artifacts", run: coordinator.pollFlightArtifacts},
 		{kind: "active-operations", run: coordinator.pollFlightAlerts},
+		{kind: "live", run: coordinator.pollLiveCatalog},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -165,6 +188,132 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollLiveCatalog(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	devices, err := coordinator.store.ListManagedDevices(ctx, instance)
+	if err != nil {
+		return nil, 0, err
+	}
+	recordings := make([]ScopedRecordingTask, 0)
+	recordingComplete := true
+	var pollErrors []error
+	for _, device := range devices {
+		items, listErr := coordinator.client.ListProjectRecordingTasks(ctx, token, scope.ProjectUUID, device.Serial)
+		if listErr != nil {
+			recordingComplete = false
+			pollErrors = append(pollErrors, listErr)
+		} else {
+			for _, item := range items {
+				recordings = append(recordings, ScopedRecordingTask{Scope: "project", Device: device, Task: item})
+			}
+		}
+		if scope.OrganizationUUID == "" {
+			continue
+		}
+		items, listErr = coordinator.client.ListOrganizationRecordingTasks(ctx, token, scope.OrganizationUUID, device.Serial)
+		if listErr != nil {
+			recordingComplete = false
+			pollErrors = append(pollErrors, listErr)
+		} else {
+			for _, item := range items {
+				recordings = append(recordings, ScopedRecordingTask{Scope: "organization", Device: device, Task: item})
+			}
+		}
+	}
+	shares, shareComplete, shareErr := coordinator.listAllLiveShares(ctx, token, scope.ProjectUUID)
+	if shareErr != nil {
+		pollErrors = append(pollErrors, shareErr)
+	}
+	converters, converterComplete, converterErr := coordinator.listAllStreamConverters(ctx, token, scope.ProjectUUID)
+	if converterErr != nil {
+		pollErrors = append(pollErrors, converterErr)
+	}
+	poll := LiveCatalogPoll{
+		Devices: devices, Recordings: recordings, Shares: shares, Converters: converters,
+		RecordingComplete: recordingComplete, ShareComplete: shareComplete, ConverterComplete: converterComplete,
+		ReceivedAt: coordinator.config.Now().UTC(),
+	}
+	if applyErr := coordinator.sink.ApplyLiveCatalog(ctx, instance, poll); applyErr != nil {
+		pollErrors = append(pollErrors, applyErr)
+	}
+	cursor := map[string]any{
+		"recordings": len(recordings), "recordingComplete": recordingComplete,
+		"shares": len(shares), "shareComplete": shareComplete,
+		"converters": len(converters), "converterComplete": converterComplete,
+		"complete": recordingComplete && shareComplete && converterComplete,
+	}
+	return cursor, coordinator.config.CatalogInterval, errors.Join(pollErrors...)
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllLiveShares(ctx context.Context, token, projectUUID string) ([]LiveShare, bool, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]LiveShare, 0)
+	seen := make(map[string]struct{})
+	for page := 1; page <= maxPages; page++ {
+		result, err := coordinator.client.ListLiveShares(ctx, token, projectUUID, LiveShareListOptions{
+			PageOptions: PageOptions{Page: page, PageSize: pageSize}, Status: 0,
+		})
+		if err != nil {
+			return items, false, err
+		}
+		for _, item := range result {
+			identity, identityErr := opaqueResourceIdentity(item)
+			if identityErr != nil {
+				return items, false, identityErr
+			}
+			if _, duplicate := seen[identity]; duplicate {
+				return items, false, schemaError()
+			}
+			seen[identity] = struct{}{}
+			items = append(items, item)
+		}
+		if len(result) < pageSize {
+			return items, true, nil
+		}
+	}
+	return items, false, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
+}
+
+func (coordinator *ResourceStreamCoordinator) listAllStreamConverters(ctx context.Context, token, projectUUID string) ([]StreamConverter, bool, error) {
+	const pageSize, maxPages = 100, 100
+	items := make([]StreamConverter, 0)
+	seen := make(map[string]struct{})
+	total := -1
+	for page := 1; page <= maxPages; page++ {
+		result, err := coordinator.client.ListStreamConverters(ctx, token, projectUUID, StreamConverterListOptions{
+			PageOptions: PageOptions{Page: page, PageSize: pageSize},
+		})
+		if err != nil {
+			return items, false, err
+		}
+		if result.Pagination.Page != page || result.Pagination.PageSize != pageSize {
+			return items, false, schemaError()
+		}
+		if total < 0 {
+			total = result.Pagination.Total
+		} else if total != result.Pagination.Total {
+			return items, false, schemaError()
+		}
+		for _, item := range result.List {
+			if _, duplicate := seen[item.ID]; duplicate {
+				return items, false, schemaError()
+			}
+			seen[item.ID] = struct{}{}
+			items = append(items, item)
+		}
+		if len(items) == total {
+			return items, true, nil
+		}
+		if len(items) > total || len(result.List) == 0 || len(result.List) < pageSize {
+			return items, false, schemaError()
+		}
+	}
+	return items, false, &APIError{SafeCode: "snapshot_incomplete", Retryable: true}
 }
 
 func (coordinator *ResourceStreamCoordinator) pollFlightAlerts(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {

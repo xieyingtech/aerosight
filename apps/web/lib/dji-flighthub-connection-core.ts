@@ -43,7 +43,7 @@ export type FlightHubConnectionPlan = {
   protocolVersion: "flighthub-openapi-v2";
   name: string;
   externalScopeKey: string;
-  discoveryScope: { projectUuid: string; projectName: string };
+  discoveryScope: { projectUuid: string; projectName: string; organizationUuid: string };
   config: { region: "cn"; readOnly: true };
   capabilities: { inventoryRead: true; stateRead: true };
 };
@@ -78,7 +78,11 @@ export function buildFlightHubConnectionPlan(project: FlightHubProject): FlightH
     protocolVersion: "flighthub-openapi-v2",
     name: displayName.length <= 100 ? displayName : `${displayName.slice(0, 97)}...`,
     externalScopeKey: project.uuid,
-    discoveryScope: { projectUuid: project.uuid, projectName: project.name },
+    discoveryScope: {
+      projectUuid: project.uuid,
+      projectName: project.name,
+      organizationUuid: project.organizationUuid,
+    },
     config: { region: "cn", readOnly: true },
     capabilities: { inventoryRead: true, stateRead: true },
   };

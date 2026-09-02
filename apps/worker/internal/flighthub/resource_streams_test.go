@@ -46,27 +46,31 @@ func (store *resourceStoreFixture) state(kind string) connector.ResourceSyncUpda
 }
 
 type resourceClientFixture struct {
-	mu              sync.Mutex
-	stateCalls      []string
-	stateErr        error
-	hmsErr          error
-	autoRecordErr   error
-	waylines        []WaylineSummary
-	waylineErr      error
-	taskPages       map[string][]FlightTaskSummary
-	taskErrors      map[string]error
-	tracks          map[string]FlightTaskTrack
-	trackErrors     map[string]error
-	operations      map[string]FlightTaskOperationTimeline
-	operationErrors map[string]error
-	media           map[string][]FlightTaskMedia
-	mediaErrors     map[string]error
-	exports         []FlightExportRecord
-	exportError     error
-	flightAlerts    map[string][]FlightAlertSummary
-	flightAlertErrs map[string]error
-	aiAlerts        []AIAlertRecord
-	aiAlertError    error
+	mu                         sync.Mutex
+	stateCalls                 []string
+	stateErr                   error
+	hmsErr                     error
+	autoRecordErr              error
+	waylines                   []WaylineSummary
+	waylineErr                 error
+	taskPages                  map[string][]FlightTaskSummary
+	taskErrors                 map[string]error
+	tracks                     map[string]FlightTaskTrack
+	trackErrors                map[string]error
+	operations                 map[string]FlightTaskOperationTimeline
+	operationErrors            map[string]error
+	media                      map[string][]FlightTaskMedia
+	mediaErrors                map[string]error
+	exports                    []FlightExportRecord
+	exportError                error
+	flightAlerts               map[string][]FlightAlertSummary
+	flightAlertErrs            map[string]error
+	aiAlerts                   []AIAlertRecord
+	aiAlertError               error
+	projectRecordingCalls      int
+	organizationRecordingCalls int
+	liveShareCalls             int
+	streamConverterCalls       int
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -175,6 +179,43 @@ func (client *resourceClientFixture) ListAIAlertRecords(_ context.Context, _, _ 
 	return AIAlertPage{Data: data, Total: total, Page: options.Page, PageSize: options.PageSize, PageCount: boolPageCount(total)}, nil
 }
 
+func (client *resourceClientFixture) ListOrganizationRecordingTasks(context.Context, string, string, string) ([]RecordingTask, error) {
+	client.mu.Lock()
+	client.organizationRecordingCalls++
+	client.mu.Unlock()
+	return []RecordingTask{}, nil
+}
+
+func (client *resourceClientFixture) ListProjectRecordingTasks(context.Context, string, string, string) ([]RecordingTask, error) {
+	client.mu.Lock()
+	client.projectRecordingCalls++
+	client.mu.Unlock()
+	return []RecordingTask{}, nil
+}
+
+func (client *resourceClientFixture) ListLiveShares(context.Context, string, string, LiveShareListOptions) ([]LiveShare, error) {
+	client.mu.Lock()
+	client.liveShareCalls++
+	client.mu.Unlock()
+	return []LiveShare{}, nil
+}
+
+func (client *resourceClientFixture) ListStreamConverters(_ context.Context, _, _ string, options StreamConverterListOptions) (PageResult[StreamConverter], error) {
+	client.mu.Lock()
+	client.streamConverterCalls++
+	client.mu.Unlock()
+	return PageResult[StreamConverter]{
+		Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0},
+		List:       []StreamConverter{},
+	}, nil
+}
+
+func (client *resourceClientFixture) liveCalls() (int, int, int, int) {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return client.projectRecordingCalls, client.organizationRecordingCalls, client.liveShareCalls, client.streamConverterCalls
+}
+
 func (client *resourceClientFixture) calls() []string {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -191,6 +232,7 @@ type resourceSinkFixture struct {
 	artifacts       []FlightArtifactPoll
 	exportPolls     []FlightExportPoll
 	alertPolls      []FlightAlertPoll
+	liveCatalogs    []LiveCatalogPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -255,6 +297,17 @@ func (sink *resourceSinkFixture) ApplyFlightAlerts(_ context.Context, _ connecto
 	return nil
 }
 
+func (sink *resourceSinkFixture) ApplyLiveCatalog(_ context.Context, _ connector.Instance, poll LiveCatalogPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.Devices = append([]connector.ManagedConnectorDevice(nil), poll.Devices...)
+	poll.Recordings = append([]ScopedRecordingTask(nil), poll.Recordings...)
+	poll.Shares = append([]LiveShare(nil), poll.Shares...)
+	poll.Converters = append([]StreamConverter(nil), poll.Converters...)
+	sink.liveCatalogs = append(sink.liveCatalogs, poll)
+	return nil
+}
+
 func (sink *resourceSinkFixture) catalog(kind string) CatalogPoll {
 	sink.mu.Lock()
 	defer sink.mu.Unlock()
@@ -302,7 +355,65 @@ func (runner blockingInventoryRunner) Run(context.Context, connector.Instance, c
 }
 
 func resourceStreamInstance() connector.Instance {
-	return connector.Instance{ID: 7, ProjectID: 3, ConnectorKey: ConnectorKey, Version: ConnectorVersion, DiscoveryScope: json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目"}`)}
+	return connector.Instance{ID: 7, ProjectID: 3, ConnectorKey: ConnectorKey, Version: ConnectorVersion, DiscoveryScope: json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目","organizationUuid":"00000000-0000-4000-8000-000000000010"}`)}
+}
+
+func TestLiveCatalogEmptySnapshotsRemainHealthyAndComplete(t *testing.T) {
+	now := time.Date(2026, 9, 2, 5, 0, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{
+		{DeviceID: 1, TeamID: 2, Serial: "DOCK_REDACTED", Class: "airport"},
+		{DeviceID: 2, TeamID: 2, Serial: "AIRCRAFT_REDACTED", Class: "drone"},
+	}}
+	client := &resourceClientFixture{}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+		CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := coordinator.runStream(context.Background(), resourceStreamInstance(), "live", coordinator.pollLiveCatalog); err != nil {
+		t.Fatal(err)
+	}
+	state := store.state("live")
+	if state.Status != "idle" || state.LastErrorCode != "" || state.Cursor["complete"] != true ||
+		state.Cursor["recordings"] != 0 || state.Cursor["shares"] != 0 || state.Cursor["converters"] != 0 {
+		t.Fatalf("empty live stream state=%#v", state)
+	}
+	projectCalls, organizationCalls, shareCalls, converterCalls := client.liveCalls()
+	if projectCalls != 2 || organizationCalls != 2 || shareCalls != 1 || converterCalls != 1 {
+		t.Fatalf("live calls project=%d organization=%d shares=%d converters=%d", projectCalls, organizationCalls, shareCalls, converterCalls)
+	}
+	if len(sink.liveCatalogs) != 1 || !sink.liveCatalogs[0].RecordingComplete ||
+		!sink.liveCatalogs[0].ShareComplete || !sink.liveCatalogs[0].ConverterComplete {
+		t.Fatalf("empty live catalog=%#v", sink.liveCatalogs)
+	}
+}
+
+func TestLiveCatalogLegacyScopeKeepsProjectRecordingSnapshotComplete(t *testing.T) {
+	now := time.Date(2026, 9, 2, 5, 30, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{
+		{DeviceID: 2, TeamID: 2, Serial: "AIRCRAFT_REDACTED", Class: "drone"},
+	}}
+	client := &resourceClientFixture{}
+	sink := &resourceSinkFixture{}
+	coordinator, err := NewResourceStreamCoordinator(client, tokenResolverFixture{token: "TOKEN_REDACTED"}, store, sink, ResourceStreamConfig{
+		OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+		CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance := resourceStreamInstance()
+	instance.DiscoveryScope = json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目"}`)
+	if err := coordinator.runStream(context.Background(), instance, "live", coordinator.pollLiveCatalog); err != nil {
+		t.Fatal(err)
+	}
+	projectCalls, organizationCalls, _, _ := client.liveCalls()
+	if projectCalls != 1 || organizationCalls != 0 || store.state("live").Cursor["complete"] != true {
+		t.Fatalf("legacy live state=%#v project calls=%d organization calls=%d", store.state("live"), projectCalls, organizationCalls)
+	}
 }
 
 func TestActiveOperationsReconcilesLiveBeforeTokenResolutionAndPreservesCursor(t *testing.T) {

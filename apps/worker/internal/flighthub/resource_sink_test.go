@@ -265,6 +265,77 @@ func TestResourceSinkProjectsCatalogsWithStableIdentityAndSanitizedSummaries(t *
 	}
 }
 
+func TestResourceSinkProjectsLiveCatalogsIdempotentlyWithoutSecrets(t *testing.T) {
+	resources := &remoteResourceWriterFixture{}
+	sink, _ := NewSQLResourceStreamSink(&telemetryIngestorFixture{}, resources, &freshnessProjectorFixture{}, &healthProjectorFixture{}, &flightCatalogProjectorFixture{})
+	recording := RecordingTask{
+		"task_id":  json.RawMessage(`"RECORDING_REDACTED"`),
+		"status":   json.RawMessage(`"running"`),
+		"password": json.RawMessage(`"RECORDING_PASSWORD_MUST_NOT_PERSIST"`),
+	}
+	share := LiveShare{
+		"share_id": json.RawMessage(`"SHARE_REDACTED"`),
+		"status":   json.RawMessage(`1`),
+		"token":    json.RawMessage(`"SHARE_TOKEN_MUST_NOT_PERSIST"`),
+	}
+	converter := StreamConverter{
+		ID: "CONVERTER_REDACTED", Name: "脱敏转发", State: "running", UpdatedAt: "2026-09-02T05:00:00Z",
+		SN: "AIRCRAFT_REDACTED", CameraIndex: "165-0-7", Video: "normal-0", VideoType: "wide",
+		Schema: "rtsp", AutoPushStream: true, DeviceOnline: true,
+		BypassOption: &StreamConverterBypassOption{
+			RTSPURL: "rtsp://media.vendor.example/SECRET_PATH", Username: "SECRET_USERNAME", Password: "SECRET_PASSWORD",
+		},
+	}
+	poll := LiveCatalogPoll{
+		Devices: []connector.ManagedConnectorDevice{{DeviceID: 11, TeamID: 2, Serial: "AIRCRAFT_REDACTED"}},
+		Recordings: []ScopedRecordingTask{{Scope: "project", Device: connector.ManagedConnectorDevice{
+			DeviceID: 11, TeamID: 2, Serial: "AIRCRAFT_REDACTED",
+		}, Task: recording}},
+		Shares: []LiveShare{share}, Converters: []StreamConverter{converter},
+		RecordingComplete: true, ShareComplete: true, ConverterComplete: true,
+		ReceivedAt: time.Date(2026, 9, 2, 5, 0, 0, 0, time.UTC),
+	}
+	for iteration := 0; iteration < 2; iteration++ {
+		if err := sink.ApplyLiveCatalog(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, poll); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(resources.batches) != 6 {
+		t.Fatalf("live batches=%#v", resources.batches)
+	}
+	for index, repeated := range []int{3, 4, 5} {
+		first := resources.batches[index].Resources[0]
+		second := resources.batches[repeated].Resources[0]
+		if first.RemoteID != second.RemoteID || first.RemoteVersion != second.RemoteVersion {
+			t.Fatalf("live projection was not idempotent: %#v / %#v", first, second)
+		}
+	}
+	serialized, _ := json.Marshal(resources.batches)
+	for _, secret := range []string{
+		"RECORDING_REDACTED", "RECORDING_PASSWORD_MUST_NOT_PERSIST", "SHARE_REDACTED",
+		"SHARE_TOKEN_MUST_NOT_PERSIST", "AIRCRAFT_REDACTED", "SECRET_PATH", "SECRET_USERNAME", "SECRET_PASSWORD",
+	} {
+		if strings.Contains(string(serialized), secret) {
+			t.Fatalf("live projection persisted secret %q: %s", secret, serialized)
+		}
+	}
+	empty := LiveCatalogPoll{
+		RecordingComplete: true, ShareComplete: true, ConverterComplete: true,
+		ReceivedAt: poll.ReceivedAt.Add(time.Minute),
+	}
+	if err := sink.ApplyLiveCatalog(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, empty); err != nil {
+		t.Fatal(err)
+	}
+	if len(resources.batches) != 9 {
+		t.Fatalf("empty live batches=%#v", resources.batches)
+	}
+	for _, batch := range resources.batches[6:] {
+		if !batch.CompleteSnapshot || len(batch.Resources) != 0 {
+			t.Fatalf("empty live catalog was not a complete healthy snapshot: %#v", batch)
+		}
+	}
+}
+
 func TestSQLResourceSinkIdempotencyOrderingAndInvalidCoordinates(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
 	if databaseURL == "" {
