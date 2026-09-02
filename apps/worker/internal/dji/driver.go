@@ -21,6 +21,9 @@ var commandCapabilities = []driver.CapabilityDefinition{
 	{Code: "dock.debug.control", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "camera.change", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["cameraIndex"],"properties":{"cameraIndex":{"type":"string"},"cameraPosition":{"type":"string"}}}`)},
 	{Code: "camera.lens.change", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["cameraIndex","lensType"],"properties":{"cameraIndex":{"type":"string"},"lensType":{"type":"string"}}}`)},
+	{Code: "rtk.calibrate", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
+	{Code: "relay.pair", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
+	{Code: "device.active-project.update", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},
 }
 
 var streamCapabilities = []driver.CapabilityDefinition{

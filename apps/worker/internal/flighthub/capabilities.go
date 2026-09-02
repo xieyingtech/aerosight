@@ -18,6 +18,10 @@ const (
 	FlightHubModelResourceDeleteFeatureFlag = "flighthub.model-resource.delete"
 	FlightHubCameraChangeFeatureFlag        = "flighthub.camera.change"
 	FlightHubLensChangeFeatureFlag          = "flighthub.lens.change"
+	FlightHubRTKCalibrateFeatureFlag        = "flighthub.rtk.calibrate"
+	FlightHubRelayPairFeatureFlag           = "flighthub.relay.pair"
+	FlightHubDeviceMigrationFeatureFlag     = "flighthub.device-migration"
+	FlightHubSNDecryptFeatureFlag           = "flighthub.sn-decrypt"
 )
 
 func Capabilities() []connector.CapabilityDefinition {
@@ -48,6 +52,10 @@ func Capabilities() []connector.CapabilityDefinition {
 		{Code: "device.camera.change", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"control"}, DriverCapability: "camera.change", FeatureFlag: FlightHubCameraChangeFeatureFlag},
 		{Code: "device.lens.change", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"control"}, DriverCapability: "camera.lens.change", FeatureFlag: FlightHubLensChangeFeatureFlag},
 		{Code: "tca.status.read", Kind: connector.CapabilityRead, Risk: driver.RiskLow, EndpointDomains: []string{"control"}},
+		{Code: "device.rtk.calibrate", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "rtk.calibrate", FeatureFlag: FlightHubRTKCalibrateFeatureFlag},
+		{Code: "device.relay.pair", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "relay.pair", FeatureFlag: FlightHubRelayPairFeatureFlag},
+		{Code: "device.active-project.update", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "device.active-project.update", FeatureFlag: FlightHubDeviceMigrationFeatureFlag},
+		{Code: "security.sn.decrypt", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"security"}, FeatureFlag: FlightHubSNDecryptFeatureFlag},
 		{Code: "organization.write", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"organization", "project"}, FeatureFlag: FlightHubActionFeatureFlag},
 	}
 }

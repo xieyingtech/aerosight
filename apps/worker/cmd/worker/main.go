@@ -382,6 +382,12 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.FlightHubLiveActionEventType, liveActionHandler.Handler)
+		deviceAdminHandler, actionErr := flighthub.NewDeviceAdminActionHandler(database, flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret)
+		if actionErr != nil {
+			logger.Error("FlightHub device admin action initialization failed", "error", actionErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubDeviceAdminEventType, deviceAdminHandler.Handler)
 		geospatialActionHandler, actionErr := flighthub.NewGeospatialActionHandler(
 			flighthub.NewSQLGeospatialActionStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
 		)

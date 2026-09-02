@@ -403,7 +403,7 @@ func (client *Client) DecryptSNs(ctx context.Context, token, projectUUID string,
 			return SNDecryptResult{}, &APIError{SafeCode: "request_invalid"}
 		}
 	}
-	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPost, Path: "/openapi/v2.0/flight-task/sn-decrypt", Body: input})
+	payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodPost, Path: "/openapi/v2.0/flight-task/sn-decrypt", Body: input, DisableRetry: true})
 	if err != nil {
 		return SNDecryptResult{}, err
 	}

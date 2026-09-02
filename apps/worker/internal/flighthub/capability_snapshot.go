@@ -34,12 +34,15 @@ type CapabilityEvaluationScope struct {
 }
 
 var firmwareBoundCapabilities = map[string]struct{}{
-	"device.control":       {},
-	"flight.execute":       {},
-	"live.control":         {},
-	"live.quality.set":     {},
-	"device.camera.change": {},
-	"device.lens.change":   {},
+	"device.control":               {},
+	"flight.execute":               {},
+	"live.control":                 {},
+	"live.quality.set":             {},
+	"device.camera.change":         {},
+	"device.lens.change":           {},
+	"device.rtk.calibrate":         {},
+	"device.relay.pair":            {},
+	"device.active-project.update": {},
 }
 
 func PersistCapabilityProbeResults(

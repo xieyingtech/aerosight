@@ -71,10 +71,10 @@ type capabilityProbeObservation struct {
 }
 
 var defaultCapabilityProbeEndpoints = []capabilityProbeEndpoint{
-	{ID: "456242199e0", Method: http.MethodGet, Path: "/openapi/v2.0/health", Scope: "global", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"health.read", "security.temporary-credential"}},
+	{ID: "456242199e0", Method: http.MethodGet, Path: "/openapi/v2.0/health", Scope: "global", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"health.read", "security.temporary-credential", "security.sn.decrypt"}},
 	{ID: "456447011e0", Method: http.MethodGet, Path: "/openapi/v2.0/organizations", Scope: "global", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"organization.read", "organization.write"}},
 	{ID: "456680822e0", Method: http.MethodGet, Path: "/openapi/v2.0/project/device", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"inventory.read"}},
-	{ID: "458069501e0", Method: http.MethodGet, Path: "/openapi/v2.0/device/{device_sn}/state", Scope: "device", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"state.read", "live.quality.set", "device.camera.change", "device.lens.change"}, TemplateParameter: "device_sn"},
+	{ID: "458069501e0", Method: http.MethodGet, Path: "/openapi/v2.0/device/{device_sn}/state", Scope: "device", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"state.read", "live.quality.set", "device.camera.change", "device.lens.change", "device.rtk.calibrate", "device.relay.pair", "device.active-project.update"}, TemplateParameter: "device_sn"},
 	{ID: "456680824e0", Method: http.MethodGet, Path: "/openapi/v2.0/wayline", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"flight.read", "flight.execute"}},
 	{ID: "457494965e0", Method: http.MethodGet, Path: "/openapi/v2.0/live-shares", Scope: "project", Profile: "live-share-list", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.read", "live.control", "live.share.manage"}},
 	{ID: "457494960e0", Method: http.MethodGet, Path: "/openapi/v2.0/auto-record-configs", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.recording.control"}},
@@ -112,6 +112,10 @@ var defaultCapabilityReadiness = map[string]capabilityReadiness{
 	"device.camera.change":          {Implemented: true},
 	"device.lens.change":            {Implemented: true},
 	"tca.status.read":               {Implemented: true, Accepted: true},
+	"device.rtk.calibrate":          {Implemented: true},
+	"device.relay.pair":             {Implemented: true},
+	"device.active-project.update":  {Implemented: true},
+	"security.sn.decrypt":           {Implemented: true},
 	"organization.write":            {},
 }
 
