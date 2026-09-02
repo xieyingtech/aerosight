@@ -108,9 +108,11 @@
 
 ### 8. 直播由统一会话包装动态供应商，临时秘密不进入普通列
 
-`live_streams` 继续作为 canonical 会话。司空返回的供应商、远端 stream ref 和过期时间写入非秘密字段；播放 URL/Token 仅使用现有加密/短期 session 机制，普通 `playback_ref` 不保存可直接使用的长期凭据。供应商 adapter 将火山、声网、SRS 等响应规范化为浏览器支持的播放描述。对账器处理五分钟无观众自动停止、设备离线、Worker 重启和本地/远端状态偏差。
+`live_streams` 继续作为 canonical 会话。司空返回的供应商、凭据摘要和过期时间写入非秘密字段；播放 URL/Token 使用与会话绑定的加密短期凭据，普通 `playback_ref` 不保存可直接使用的供应商凭据。供应商 adapter 将火山、声网、SRS 等响应规范化为浏览器支持的播放描述。
 
-录制、分享、画质和码流转换使用独立 capability/action；缺少分享资源是空状态。未知供应商失败关闭，并尽力停止已启动远端会话。
+当前官方 released 目录只有 `POST /openapi/v2.0/live-stream/start`，没有停止直播或查询直播会话状态的 endpoint，通用设备 command 契约也没有直播停止 action。因此启动调用官方 start；用户停止、权限撤销或未知供应商时立即撤销本地播放授权、销毁短期凭据并进入 `stopping`/`failed`，但不得调用未进入 endpoint manifest 的虚构 stop API，也不得仅因本地租约过期就宣称远端已停止。
+
+`active-operations` 对账器使用新鲜物模型 `live_status`、设备在线状态、凭据到期和官方“五分钟无观众自动停止”规则作为证据，处理设备离线、Worker 重启和启动响应未知。只有证据足以证明推流终止时才进入 `stopped` 并释放占用；证据互相矛盾或不可用时保持 `stopping`、`failed` 或显式 unknown 原因。恢复时先核对最新证据，绝不盲目重发 start。录制、分享、画质和码流转换使用独立 capability/action；缺少分享资源是空状态。
 
 ### 9. Web 只通过项目 API 读取投影和提交意图
 

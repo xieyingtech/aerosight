@@ -17,12 +17,19 @@
 #### Scenario: 返回未知供应商
 - **GIVEN** 司空返回当前部署未适配的供应商
 - **WHEN** 系统解析启动响应
-- **THEN** 会话失败关闭并显示兼容性原因
-- **AND** 系统尝试幂等停止可能已启动的远端流
+- **THEN** 系统撤销本地播放授权、销毁短期凭据并显示兼容性原因
+- **AND** 会话记录远端状态未确认且不得调用未发布的停止接口或宣称远端已停止
 
 ### Requirement: 直播会话必须与远端状态对账
 
-启动、停止和恢复直播 SHALL 使用统一会话状态机并周期核对司空状态；五分钟无观众等上游自动停止、设备离线、Worker 重启或响应未知时 MUST 收敛到真实的 `live`、`stopped` 或 `failed` 状态。
+启动、停止意图和恢复直播 SHALL 使用统一会话状态机。启动 SHALL 调用 released `POST /openapi/v2.0/live-stream/start`；由于 released 契约没有停止直播或查询会话状态的 endpoint，停止意图 SHALL 立即撤销本地播放授权、销毁短期凭据并进入 `stopping`，MUST NOT 调用未进入 endpoint manifest 的停止接口。系统 SHALL 使用新鲜物模型 `live_status`、设备在线状态、凭据到期和官方五分钟无观众规则周期对账；只有证据足以证明推流终止时才可进入 `stopped`，证据缺失或矛盾时 MUST 保持可解释的 `stopping`/`failed` 未确认状态而不得误报成功。
+
+#### Scenario: 用户请求停止直播
+- **GIVEN** 本地会话处于 `starting`、`live` 或 `degraded`
+- **WHEN** 授权用户请求停止
+- **THEN** 系统立即撤销播放授权并销毁供应商短期凭据
+- **AND** 会话进入 `stopping`，且不会向司空调用未发布的停止接口
+- **AND** 仅在后续证据证明推流终止后进入 `stopped`
 
 #### Scenario: 上游因无观众自动停止
 - **GIVEN** 司空直播已开始且在规定时间内无观众
@@ -31,9 +38,16 @@
 - **AND** UI 不继续展示虚假在线画面
 
 #### Scenario: Worker 在直播中重启
-- **GIVEN** 本地会话处于 `starting` 或 `live`
+- **GIVEN** 本地会话处于 `starting`、`live` 或 `stopping`
 - **WHEN** 新 Worker 取得连接器租约
-- **THEN** 系统核对远端直播状态后恢复或关闭会话
+- **THEN** 系统使用持久非秘密状态和最新远端证据恢复对账
+- **AND** 不因租约过期、响应未知或重启本身将会话标记为 `stopped`
+
+#### Scenario: 远端证据不可用或互相矛盾
+- **GIVEN** 会话启动响应未知，或物模型、设备状态与凭据生命周期不能证明同一终态
+- **WHEN** 对账器达到本次核对截止时间
+- **THEN** 会话保持 `stopping` 或进入带稳定原因码的 `failed`
+- **AND** 系统不得盲目重发启动请求或宣称远端已停止
 
 ### Requirement: 媒体秘密不得持久泄露
 
@@ -58,4 +72,3 @@
 - **GIVEN** 用户只有直播查看权限
 - **WHEN** 用户提交码流转发配置
 - **THEN** 系统拒绝请求且不调用司空写接口
-
