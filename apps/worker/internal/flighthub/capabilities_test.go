@@ -106,6 +106,15 @@ func TestCapabilitiesIntersectEndpointAndDriverManifests(t *testing.T) {
 	if len(seenFlags) != len(wantedLiveFlags) {
 		t.Fatalf("got %d governed live feature flags, want %d", len(seenFlags), len(wantedLiveFlags))
 	}
+	foundDelete := false
+	for _, capability := range Capabilities() {
+		if capability.Code == "geospatial.element.delete" {
+			foundDelete = capability.FeatureFlag == FlightHubGeospatialDeleteFeatureFlag && capability.Risk == "critical"
+		}
+	}
+	if !foundDelete {
+		t.Fatal("geospatial element delete lacks its dedicated critical-risk feature flag")
+	}
 	for _, domain := range []string{"system", "security", "organization", "project", "device", "control", "flight", "live", "geospatial", "model"} {
 		if !coveredDomains[domain] {
 			t.Fatalf("endpoint domain %s has no connector capability", domain)

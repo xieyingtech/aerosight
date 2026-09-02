@@ -77,7 +77,7 @@ var defaultCapabilityProbeEndpoints = []capabilityProbeEndpoint{
 	{ID: "457494965e0", Method: http.MethodGet, Path: "/openapi/v2.0/live-shares", Scope: "project", Profile: "live-share-list", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.read", "live.control", "live.share.manage"}},
 	{ID: "457494960e0", Method: http.MethodGet, Path: "/openapi/v2.0/auto-record-configs", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.recording.control"}},
 	{ID: "456444816e0", Method: http.MethodGet, Path: "/openapi/v2.0/stream-converters", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.converter.create", "live.converter.toggle", "live.converter.delete"}},
-	{ID: "457494969e0", Method: http.MethodGet, Path: "/openapi/v2.0/flight-areas", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"geospatial.read", "geospatial.write"}},
+	{ID: "457494969e0", Method: http.MethodGet, Path: "/openapi/v2.0/flight-areas", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"geospatial.read", "geospatial.write", "geospatial.element.delete"}},
 	{ID: "458069507e0", Method: http.MethodGet, Path: "/openapi/v2.0/model", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"model.read", "model.write"}},
 	{ID: "457494961e0", Method: http.MethodGet, Path: "/openapi/v2.0/topologies/cmds/control/status", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"device.control"}},
 }
@@ -100,7 +100,8 @@ var defaultCapabilityReadiness = map[string]capabilityReadiness{
 	"live.converter.create":         {Implemented: true},
 	"live.converter.toggle":         {Implemented: true},
 	"live.converter.delete":         {Implemented: true},
-	"geospatial.write":              {},
+	"geospatial.write":              {Implemented: true},
+	"geospatial.element.delete":     {Implemented: true},
 	"model.write":                   {},
 	"device.control":                {},
 	"organization.write":            {},
