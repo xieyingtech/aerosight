@@ -726,6 +726,9 @@ func decodeCommandStatus(raw json.RawMessage) (any, error) {
 			if _, err := controlIdentifier(method, false); err != nil || progress.Progress.Percent < 0 || progress.Progress.Percent > 100 || len(progress.Extension) > maxControlActionInputBytes {
 				return nil, schemaError()
 			}
+			if _, err := controlIdentifier(progress.BusinessID, false); err != nil || progress.CreateTime <= 0 || progress.UpdateTime < progress.CreateTime {
+				return nil, schemaError()
+			}
 		}
 	}
 	return output, nil

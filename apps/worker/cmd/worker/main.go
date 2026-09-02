@@ -96,6 +96,7 @@ func main() {
 	var flightHubClient *flighthub.Client
 	var flightHubModelProjector flighthub.ModelJobProjector
 	var flightHubControlReconciler *flighthub.SQLControlCommandReconciler
+	var flightHubCommandStatusReconciler *flighthub.ControlCommandStatusReconciler
 	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
 	if workerConfig.FlightHubEnabled {
 		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
@@ -126,6 +127,13 @@ func main() {
 		flightHubControlReconciler, flightHubErr = flighthub.NewSQLControlCommandReconciler(database, nil)
 		if flightHubErr != nil {
 			logger.Error("FlightHub control reconciliation initialization failed", "error", flightHubErr.Error())
+			os.Exit(1)
+		}
+		flightHubCommandStatusReconciler, flightHubErr = flighthub.NewControlCommandStatusReconciler(
+			database, flightHubClient, flightHubTokenResolver, nil,
+		)
+		if flightHubErr != nil {
+			logger.Error("FlightHub command status reconciliation initialization failed", "error", flightHubErr.Error())
 			os.Exit(1)
 		}
 		liveReconciler, liveErr := flighthub.NewFlightHubLiveReconciler(database, nil)
@@ -429,6 +437,13 @@ func main() {
 	go func() { runErrors <- djiCommandDispatcher.RunTimeoutReconciler(runContext, database, time.Second) }()
 	if flightHubControlReconciler != nil {
 		go func() { runErrors <- flightHubControlReconciler.Run(runContext, time.Second) }()
+	}
+	if flightHubCommandStatusReconciler != nil {
+		go func() {
+			runErrors <- flightHubCommandStatusReconciler.Run(runContext, 2*time.Second, func(_ error) {
+				logger.Warn("FlightHub command status reconciliation degraded")
+			})
+		}()
 	}
 	if liveStreamHealth != nil {
 		go func() { runErrors <- liveStreamHealth.Run(runContext, database, 2*time.Second) }()
