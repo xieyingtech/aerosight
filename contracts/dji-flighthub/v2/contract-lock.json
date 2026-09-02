@@ -35,6 +35,11 @@
       "path": "fixtures/geospatial_cases.json",
       "sha256": "1f57a30ac3224577690a8e555a83362fc02af8857e6791d8396654185176a961",
       "domains": ["geospatial"]
+    },
+    {
+      "path": "fixtures/model_cases.json",
+      "sha256": "e9276b510246b9df9384024099688da3c04c2f9b650cef02ea7f8f0734c91c06",
+      "domains": ["model"]
     }
   ]
 }

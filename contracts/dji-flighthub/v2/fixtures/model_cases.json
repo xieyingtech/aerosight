@@ -1,0 +1,158 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "model-list-completed",
+      "endpointId": "458069507e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/model",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": { "list": [
+        { "id": 9, "name": "synthetic-2d", "file_type": "model_2d", "show_on_map": true, "size": 2048, "update_at": 1779439000000, "create_at": 1779438000000 },
+        { "id": 10, "name": "synthetic-3d", "file_type": "model_3d", "show_on_map": false, "size": 4096, "update_at": 1779439200000, "create_at": 1779438100000 }
+      ] } }
+    },
+    {
+      "name": "model-detail-completed",
+      "endpointId": "458069510e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/model/9",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {
+        "id": 9, "name": "synthetic-2d", "user_name": "synthetic-user",
+        "url": "https://objects.vendor.example/models/MODEL_REDACTED_01.zip?Signature=MODEL_REDACTED",
+        "preview_url": "https://objects.vendor.example/models/MODEL_REDACTED_01/preview?Signature=MODEL_REDACTED",
+        "show_on_map": true, "size": 2048, "update_at": 1779439000000,
+        "create_at": 1779438000000, "file_type": "model_2d"
+      } }
+    },
+    {
+      "name": "model-download-ready",
+      "endpointId": "463460267e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/model/download-url/FILE_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {
+        "id": 901, "url": "https://objects.vendor.example/models/FILE_REDACTED_01.zip?Expires=1779443600&Signature=MODEL_REDACTED"
+      } }
+    },
+    {
+      "name": "open-model-running",
+      "endpointId": "458069512e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/open_model/models/running",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": { "list": [{
+        "resource_uuid": "RESOURCE_REDACTED_01", "model_uuid": "OPEN_MODEL_REDACTED_01",
+        "model_type": 2, "model_status": 14, "model_size": 1024,
+        "reconstruction_progress": 42, "error_code": 0, "zip_status": 1,
+        "zip_progress": 12, "zip_file_key": ""
+      }] } }
+    },
+    {
+      "name": "open-model-running-empty",
+      "endpointId": "458069512e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/open_model/models/running",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": { "list": [] } }
+    },
+    {
+      "name": "open-model-detail-failed",
+      "endpointId": "458069513e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/open_model/models/OPEN_MODEL_REDACTED_02",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {
+        "resource_uuid": "RESOURCE_REDACTED_02", "model_uuid": "OPEN_MODEL_REDACTED_02",
+        "model_type": 3, "model_status": 8, "model_size": 0,
+        "reconstruction_progress": 67, "error_code": 310001, "zip_status": 0,
+        "zip_progress": 0, "zip_file_key": ""
+      } }
+    },
+    {
+      "name": "open-model-resource-imported",
+      "endpointId": "458069516e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/open_model/resource/RESOURCE_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {
+        "resource_uuid": "RESOURCE_REDACTED_01", "status": 1, "resource_size": 8192,
+        "file_names": ["DJI_SYNTHETIC_0001.JPG", "DJI_SYNTHETIC_0002.JPG"]
+      } }
+    },
+    {
+      "name": "open-model-start",
+      "endpointId": "458069511e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/open_model/models/reconstruction/start",
+      "projectHeader": true,
+      "requestBody": {
+        "resource_uuid": "RESOURCE_REDACTED_01",
+        "parameter_3d": "{\"quality\":\"standard\"}",
+        "delete_resource_if_finish": false
+      },
+      "responseBody": { "code": 0, "message": "", "data": {
+        "model_3d": { "uuid": "OPEN_MODEL_REDACTED_03", "status": 12, "sub_error_code": 0 }
+      } }
+    },
+    {
+      "name": "open-model-stop",
+      "endpointId": "458069515e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/open_model/models/OPEN_MODEL_REDACTED_03/reconstruction/stop",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {} }
+    },
+    {
+      "name": "open-model-delete",
+      "endpointId": "458069514e0",
+      "method": "DELETE",
+      "path": "/openapi/v2.0/open_model/models/OPEN_MODEL_REDACTED_03",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {} }
+    },
+    {
+      "name": "open-model-resource-delete",
+      "endpointId": "458069517e0",
+      "method": "DELETE",
+      "path": "/openapi/v2.0/open_model/resource/RESOURCE_REDACTED_03",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {} }
+    },
+    {
+      "name": "open-model-upload-token",
+      "endpointId": "458069518e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/open_model/stores/obtain_token",
+      "projectHeader": true,
+      "responseBody": { "code": 0, "message": "", "data": {
+        "cloud_name": "ali", "access_key_id": "ACCESS_KEY_REDACTED",
+        "secret_access_key": "SECRET_KEY_REDACTED", "session_token": "SESSION_TOKEN_REDACTED",
+        "region": "cn-synthetic-1", "cloud_bucket_name": "BUCKET_REDACTED",
+        "callback_param": "CALLBACK_PARAM_REDACTED",
+        "store_path": "open-model/PROJECT_REDACTED/{fileName}",
+        "expire_time": 1779443600, "end_point": "https://objects.vendor.example"
+      } }
+    },
+    {
+      "name": "open-model-upload-callback",
+      "endpointId": "458069519e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/open_model/stores/upload_callback",
+      "projectHeader": true,
+      "requestBody": {
+        "resource_uuid": "RESOURCE_REDACTED_04", "resource_name": "synthetic-resource",
+        "callback_param": "CALLBACK_PARAM_REDACTED",
+        "files": [
+          { "name": "DJI_SYNTHETIC_0001.JPG", "etag": "ETAG_REDACTED_01" },
+          { "name": "DJI_SYNTHETIC_0002.JPG", "etag": "ETAG_REDACTED_02" }
+        ]
+      },
+      "responseBody": { "code": 0, "message": "", "data": {
+        "resource_uuid": "RESOURCE_REDACTED_04", "upload_count": 2,
+        "file_name_list": ["DJI_SYNTHETIC_0001.JPG", "DJI_SYNTHETIC_0002.JPG"]
+      } }
+    }
+  ]
+}
