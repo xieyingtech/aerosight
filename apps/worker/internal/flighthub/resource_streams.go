@@ -31,6 +31,10 @@ type ResourceStreamClient interface {
 	ListProjectFlightAreas(context.Context, string, string, FlightAreaListOptions) (FlightAreaPage, error)
 	ListWorkspaceAirSenseWarnings(context.Context, string, string) ([]DeviceAirSenseWarnings, error)
 	GetWorkspaceOfflineMap(context.Context, string, string) (OfflineMapDetails, error)
+	ListModels(context.Context, string, string) ([]ModelSummary, error)
+	ListRunningOpenModels(context.Context, string, string) ([]OpenModel, error)
+	GetOpenModel(context.Context, string, string, string) (OpenModel, error)
+	GetOpenModelResource(context.Context, string, string, string) (OpenModelResource, error)
 }
 
 type ResourceStreamStore interface {
@@ -111,6 +115,16 @@ type LiveCatalogPoll struct {
 	ReceivedAt        time.Time
 }
 
+type ModelCatalogPoll struct {
+	Models             []ModelSummary
+	OpenModels         []OpenModel
+	Resources          []OpenModelResource
+	ModelComplete      bool
+	OpenModelsComplete bool
+	ResourcesComplete  bool
+	ReceivedAt         time.Time
+}
+
 type ResourceStreamSink interface {
 	ApplyDeviceState(context.Context, connector.Instance, DeviceStatePoll) error
 	ApplyHealth(context.Context, connector.Instance, HealthPoll) error
@@ -121,6 +135,7 @@ type ResourceStreamSink interface {
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
 	ApplyLiveCatalog(context.Context, connector.Instance, LiveCatalogPoll) error
 	ApplyGeospatialCatalog(context.Context, connector.Instance, GeospatialCatalogPoll) error
+	ApplyModelCatalog(context.Context, connector.Instance, ModelCatalogPoll) error
 }
 
 type ActiveLiveSessionReconciler interface {
@@ -182,6 +197,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "active-operations", run: coordinator.pollFlightAlerts},
 		{kind: "live", run: coordinator.pollLiveCatalog},
 		{kind: "geospatial", run: coordinator.pollGeospatial},
+		{kind: "models", run: coordinator.pollModels},
 	} {
 		stream := stream
 		wait.Add(1)
@@ -193,6 +209,67 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		}()
 	}
 	wait.Wait()
+}
+
+func (coordinator *ResourceStreamCoordinator) pollModels(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {
+	scope, err := parseScope(instance.DiscoveryScope)
+	if err != nil {
+		return nil, 0, err
+	}
+	models, err := coordinator.client.ListModels(ctx, token, scope.ProjectUUID)
+	if err != nil {
+		return map[string]any{"models": 0, "modelsComplete": false, "openModelsComplete": false, "resourcesComplete": false, "complete": false}, 0, err
+	}
+	running, runningErr := coordinator.client.ListRunningOpenModels(ctx, token, scope.ProjectUUID)
+	openModels := make([]OpenModel, 0, len(running))
+	resources := make([]OpenModelResource, 0, len(running))
+	seenModels := make(map[string]struct{}, len(running))
+	seenResources := make(map[string]struct{}, len(running))
+	var pollErrors []error
+	if runningErr != nil {
+		pollErrors = append(pollErrors, runningErr)
+	} else {
+		for _, item := range running {
+			if _, duplicate := seenModels[item.ModelUUID]; duplicate {
+				pollErrors = append(pollErrors, schemaError())
+				continue
+			}
+			seenModels[item.ModelUUID] = struct{}{}
+			detail, detailErr := coordinator.client.GetOpenModel(ctx, token, scope.ProjectUUID, item.ModelUUID)
+			if detailErr != nil {
+				pollErrors = append(pollErrors, detailErr)
+				continue
+			}
+			openModels = append(openModels, detail)
+			if _, duplicate := seenResources[detail.ResourceUUID]; duplicate {
+				continue
+			}
+			resource, resourceErr := coordinator.client.GetOpenModelResource(ctx, token, scope.ProjectUUID, detail.ResourceUUID)
+			if resourceErr != nil {
+				pollErrors = append(pollErrors, resourceErr)
+				continue
+			}
+			seenResources[detail.ResourceUUID] = struct{}{}
+			resources = append(resources, resource)
+		}
+	}
+	poll := ModelCatalogPoll{
+		Models: models, OpenModels: openModels, Resources: resources,
+		ModelComplete: true, OpenModelsComplete: runningErr == nil && len(openModels) == len(running),
+		// The released API only lists running open models, so it cannot prove a
+		// complete historical resource snapshot.
+		ResourcesComplete: false, ReceivedAt: coordinator.config.Now().UTC(),
+	}
+	if applyErr := coordinator.sink.ApplyModelCatalog(ctx, instance, poll); applyErr != nil {
+		pollErrors = append(pollErrors, applyErr)
+	}
+	complete := len(pollErrors) == 0
+	cursor := map[string]any{
+		"models": len(models), "modelsComplete": true, "openModels": len(openModels),
+		"openModelsComplete": poll.OpenModelsComplete, "resources": len(resources),
+		"resourcesComplete": false, "complete": complete,
+	}
+	return cursor, coordinator.config.CatalogInterval, errors.Join(pollErrors...)
 }
 
 func (coordinator *ResourceStreamCoordinator) pollLiveCatalog(ctx context.Context, instance connector.Instance, token string) (map[string]any, time.Duration, error) {

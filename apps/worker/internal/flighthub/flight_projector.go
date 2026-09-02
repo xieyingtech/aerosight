@@ -866,12 +866,21 @@ type externalAssetInput struct {
 	Summary         map[string]any
 	Metadata        map[string]any
 	Locator         map[string]string
+	FailureCode     string
 }
 
 func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Context, tx *sql.Tx, instance connector.Instance, teamID int, input externalAssetInput) (int, error) {
 	if projector.authSecret == "" || strings.TrimSpace(input.RemoteID) == "" || strings.TrimSpace(input.RemoteVersion) == "" ||
-		!validEnum(input.ResourceKind, "flight-media", "flight-record") || !validEnum(input.Status, "pending", "available", "failed") {
+		!validEnum(input.ResourceKind, "flight-media", "flight-record", "model", "model-resource") || !validEnum(input.Status, "pending", "available", "failed") {
 		return 0, errors.New("FlightHub external asset projection is invalid")
+	}
+	failureCode := input.FailureCode
+	if input.Status == "failed" && failureCode == "" {
+		failureCode = "DJI_FLIGHTHUB_EXPORT_FAILED"
+	}
+	var persistedFailureCode any
+	if failureCode != "" {
+		persistedFailureCode = failureCode
 	}
 	summaryJSON, err := json.Marshal(input.Summary)
 	if err != nil {
@@ -898,8 +907,7 @@ func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Cont
 	err = tx.QueryRowContext(ctx, `insert into assets(
 		project_id,team_id,device_id,task_run_id,kind,mime_type,storage_key,logical_key,version,status,object_version,size_bytes,captured_at,metadata_json,available_at,failed_at,failure_code
 	) values($1,$2,$3,$4,$5,$6,$7,$8,1,$9,$10,$11,$12,$13,
-		case when $9='available' then now() else null end,case when $9='failed' then now() else null end,
-		case when $9='failed' then 'DJI_FLIGHTHUB_EXPORT_FAILED' else null end)
+		case when $9='available' then now() else null end,case when $9='failed' then now() else null end,$14)
 	 on conflict(project_id,logical_key,version) do update set
 		team_id=excluded.team_id,device_id=coalesce(excluded.device_id,assets.device_id),task_run_id=coalesce(excluded.task_run_id,assets.task_run_id),kind=excluded.kind,
 		mime_type=excluded.mime_type,storage_key=excluded.storage_key,status=excluded.status,object_version=excluded.object_version,
@@ -908,7 +916,7 @@ func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Cont
 		failed_at=case when excluded.status='failed' then coalesce(assets.failed_at,now()) else null end,
 		failure_code=excluded.failure_code,deleted_at=null
 	 returning id`, instance.ProjectID, teamID, input.DeviceID, input.TaskRunID, input.AssetKind, input.MIMEType, storageKey, logicalKey,
-		input.Status, input.RemoteVersion, input.SizeBytes, input.CapturedAt, metadataJSON).Scan(&assetID)
+		input.Status, input.RemoteVersion, input.SizeBytes, input.CapturedAt, metadataJSON, persistedFailureCode).Scan(&assetID)
 	if err != nil {
 		return 0, err
 	}

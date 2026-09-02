@@ -71,7 +71,7 @@
 ## 8. 模型目录与重建作业
 
 - [x] 8.1 实现 model 列表/详情/下载 URL 与 open_model running/detail/resource/start/stop/delete/token/callback 全部 typed clients，并用完成、运行、失败、空列表和短期凭据 fixture 验证。
-- [ ] 8.2 实现模型目录与资源投影，将模型/文件关联 `assets` 且按需刷新下载信息，并用幂等、版本更新和跨项目访问测试验证。
+- [x] 8.2 实现模型目录与资源投影，将模型/文件关联 `assets` 且按需刷新下载信息，并用幂等、版本更新和跨项目访问测试验证。
 - [ ] 8.3 将传统模型重建与开放模型 start/stop 作为可恢复长作业接入 outbox、幂等键、进度轮询和最终资产关联，并用创建响应未知、Worker 重启和失败恢复测试验证。
 - [ ] 8.4 实现开放建模上传 token 与 callback 的短期凭据流程，并用过期、重复 callback、错误资源归属和秘密扫描测试验证。
 - [ ] 8.5 将模型/资源 DELETE 接入专用 capability、owner/admin、差异预览、审批和默认关闭 feature flag，并用未确认及跨租户测试证明上游零调用。

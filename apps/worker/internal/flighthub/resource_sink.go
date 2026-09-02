@@ -44,6 +44,7 @@ type FlightCatalogProjector interface {
 	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
 	ApplyAirSense(context.Context, connector.Instance, AirSensePoll) error
+	ApplyModels(context.Context, connector.Instance, ModelCatalogPoll) error
 }
 
 type SQLResourceStreamSink struct {
@@ -312,6 +313,46 @@ func (sink *SQLResourceStreamSink) ApplyLiveCatalog(ctx context.Context, instanc
 	var applyErrors []error
 	for _, batch := range batches {
 		if _, applyErr := sink.resources.ApplyRemoteResources(ctx, instance, batch); applyErr != nil {
+			applyErrors = append(applyErrors, applyErr)
+		}
+	}
+	return errors.Join(applyErrors...)
+}
+
+func (sink *SQLResourceStreamSink) ApplyModelCatalog(ctx context.Context, instance connector.Instance, poll ModelCatalogPoll) error {
+	if err := sink.resources.AssertWritable(ctx, instance); err != nil {
+		return err
+	}
+	if instance.ID <= 0 || instance.ProjectID <= 0 || poll.ReceivedAt.IsZero() {
+		return errors.New("FlightHub model catalog projection scope is invalid")
+	}
+	if poll.ModelComplete && poll.Models == nil {
+		poll.Models = []ModelSummary{}
+	}
+	if poll.OpenModelsComplete && poll.OpenModels == nil {
+		poll.OpenModels = []OpenModel{}
+	}
+	models, err := modelRemoteResources(poll.Models)
+	if err != nil {
+		return err
+	}
+	openResources, err := openModelRemoteResources(poll.OpenModels, poll.Resources)
+	if err != nil {
+		return err
+	}
+	var applyErrors []error
+	for _, batch := range []connector.RemoteResourceBatch{
+		{Kind: "model", Resources: models, CompleteSnapshot: poll.ModelComplete},
+		// Running open models are not a complete historical model/resource
+		// directory. Never mark unseen resources missing from this view.
+		{Kind: "model-resource", Resources: openResources, CompleteSnapshot: false},
+	} {
+		if _, applyErr := sink.resources.ApplyRemoteResources(ctx, instance, batch); applyErr != nil {
+			applyErrors = append(applyErrors, applyErr)
+		}
+	}
+	if len(applyErrors) == 0 {
+		if applyErr := sink.flights.ApplyModels(ctx, instance, poll); applyErr != nil {
 			applyErrors = append(applyErrors, applyErr)
 		}
 	}

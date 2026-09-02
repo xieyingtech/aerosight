@@ -3014,7 +3014,7 @@ create table connector_asset_access_refs (
   constraint connector_asset_access_refs_asset_project_fk
     foreign key(id,project_id) references assets(id,project_id) on delete cascade,
   constraint connector_asset_access_refs_kind_valid
-    check(access_kind in('flight-media','flight-record')),
+    check(access_kind in('flight-media','flight-record','model','model-resource')),
   constraint connector_asset_access_refs_digest_valid
     check(reference_digest ~ '^[a-f0-9]{64}$'),
   constraint connector_asset_access_refs_envelope_object

@@ -77,6 +77,14 @@ type resourceClientFixture struct {
 	airSenseError              error
 	offlineMapDetails          *OfflineMapDetails
 	offlineMapError            error
+	models                     []ModelSummary
+	modelError                 error
+	openModels                 []OpenModel
+	openModelError             error
+	openModelDetails           map[string]OpenModel
+	openModelDetailErrors      map[string]error
+	openResources              map[string]OpenModelResource
+	openResourceErrors         map[string]error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -241,6 +249,22 @@ func (client *resourceClientFixture) GetWorkspaceOfflineMap(context.Context, str
 	return *client.offlineMapDetails, client.offlineMapError
 }
 
+func (client *resourceClientFixture) ListModels(context.Context, string, string) ([]ModelSummary, error) {
+	return append([]ModelSummary(nil), client.models...), client.modelError
+}
+
+func (client *resourceClientFixture) ListRunningOpenModels(context.Context, string, string) ([]OpenModel, error) {
+	return append([]OpenModel(nil), client.openModels...), client.openModelError
+}
+
+func (client *resourceClientFixture) GetOpenModel(_ context.Context, _, _, modelUUID string) (OpenModel, error) {
+	return client.openModelDetails[modelUUID], client.openModelDetailErrors[modelUUID]
+}
+
+func (client *resourceClientFixture) GetOpenModelResource(_ context.Context, _, _, resourceUUID string) (OpenModelResource, error) {
+	return client.openResources[resourceUUID], client.openResourceErrors[resourceUUID]
+}
+
 func (client *resourceClientFixture) liveCalls() (int, int, int, int) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -265,6 +289,7 @@ type resourceSinkFixture struct {
 	alertPolls      []FlightAlertPoll
 	liveCatalogs    []LiveCatalogPoll
 	geospatialPolls []GeospatialCatalogPoll
+	modelPolls      []ModelCatalogPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -346,6 +371,16 @@ func (sink *resourceSinkFixture) ApplyGeospatialCatalog(_ context.Context, _ con
 	poll.MapElements = append([]MapElementSnapshot(nil), poll.MapElements...)
 	poll.FlightAreas = append([]FlightArea(nil), poll.FlightAreas...)
 	sink.geospatialPolls = append(sink.geospatialPolls, poll)
+	return nil
+}
+
+func (sink *resourceSinkFixture) ApplyModelCatalog(_ context.Context, _ connector.Instance, poll ModelCatalogPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.Models = append([]ModelSummary(nil), poll.Models...)
+	poll.OpenModels = append([]OpenModel(nil), poll.OpenModels...)
+	poll.Resources = append([]OpenModelResource(nil), poll.Resources...)
+	sink.modelPolls = append(sink.modelPolls, poll)
 	return nil
 }
 

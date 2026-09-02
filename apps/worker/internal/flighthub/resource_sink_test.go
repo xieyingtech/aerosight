@@ -64,6 +64,7 @@ type flightCatalogProjectorFixture struct {
 	tasks         int
 	alerts        int
 	airSensePolls []AirSensePoll
+	modelPolls    []ModelCatalogPoll
 }
 
 func (fixture *flightCatalogProjectorFixture) ApplyWaylines(_ context.Context, _ connector.Instance, items []WaylineSummary) error {
@@ -95,6 +96,11 @@ func (fixture *flightCatalogProjectorFixture) ApplyFlightAlerts(_ context.Contex
 
 func (fixture *flightCatalogProjectorFixture) ApplyAirSense(_ context.Context, _ connector.Instance, poll AirSensePoll) error {
 	fixture.airSensePolls = append(fixture.airSensePolls, poll)
+	return nil
+}
+
+func (fixture *flightCatalogProjectorFixture) ApplyModels(_ context.Context, _ connector.Instance, poll ModelCatalogPoll) error {
+	fixture.modelPolls = append(fixture.modelPolls, poll)
 	return nil
 }
 
