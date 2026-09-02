@@ -71,6 +71,8 @@ type resourceClientFixture struct {
 	organizationRecordingCalls int
 	liveShareCalls             int
 	streamConverterCalls       int
+	flightAreaPages            map[int]FlightAreaPage
+	flightAreaErrors           map[int]error
 }
 
 func (client *resourceClientFixture) GetDeviceState(_ context.Context, _, _, serial string) (DeviceStateSnapshot, error) {
@@ -210,6 +212,20 @@ func (client *resourceClientFixture) ListStreamConverters(_ context.Context, _, 
 	}, nil
 }
 
+func (client *resourceClientFixture) ListProjectFlightAreas(_ context.Context, _, _ string, options FlightAreaListOptions) (FlightAreaPage, error) {
+	if err := client.flightAreaErrors[options.Page]; err != nil {
+		return FlightAreaPage{}, err
+	}
+	if page, ok := client.flightAreaPages[options.Page]; ok {
+		page.List = append([]FlightArea(nil), page.List...)
+		return page, nil
+	}
+	return FlightAreaPage{
+		Pagination: Pagination{Page: options.Page, PageSize: options.PageSize, Total: 0},
+		List:       []FlightArea{},
+	}, nil
+}
+
 func (client *resourceClientFixture) liveCalls() (int, int, int, int) {
 	client.mu.Lock()
 	defer client.mu.Unlock()
@@ -233,6 +249,7 @@ type resourceSinkFixture struct {
 	exportPolls     []FlightExportPoll
 	alertPolls      []FlightAlertPoll
 	liveCatalogs    []LiveCatalogPoll
+	geospatialPolls []GeospatialCatalogPoll
 }
 
 func (sink *resourceSinkFixture) ApplyDeviceState(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
@@ -305,6 +322,15 @@ func (sink *resourceSinkFixture) ApplyLiveCatalog(_ context.Context, _ connector
 	poll.Shares = append([]LiveShare(nil), poll.Shares...)
 	poll.Converters = append([]StreamConverter(nil), poll.Converters...)
 	sink.liveCatalogs = append(sink.liveCatalogs, poll)
+	return nil
+}
+
+func (sink *resourceSinkFixture) ApplyGeospatialCatalog(_ context.Context, _ connector.Instance, poll GeospatialCatalogPoll) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	poll.MapElements = append([]MapElementSnapshot(nil), poll.MapElements...)
+	poll.FlightAreas = append([]FlightArea(nil), poll.FlightAreas...)
+	sink.geospatialPolls = append(sink.geospatialPolls, poll)
 	return nil
 }
 

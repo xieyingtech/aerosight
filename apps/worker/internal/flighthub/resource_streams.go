@@ -28,6 +28,7 @@ type ResourceStreamClient interface {
 	ListProjectRecordingTasks(context.Context, string, string, string) ([]RecordingTask, error)
 	ListLiveShares(context.Context, string, string, LiveShareListOptions) ([]LiveShare, error)
 	ListStreamConverters(context.Context, string, string, StreamConverterListOptions) (PageResult[StreamConverter], error)
+	ListProjectFlightAreas(context.Context, string, string, FlightAreaListOptions) (FlightAreaPage, error)
 }
 
 type ResourceStreamStore interface {
@@ -117,6 +118,7 @@ type ResourceStreamSink interface {
 	ApplyFlightExports(context.Context, connector.Instance, FlightExportPoll) error
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
 	ApplyLiveCatalog(context.Context, connector.Instance, LiveCatalogPoll) error
+	ApplyGeospatialCatalog(context.Context, connector.Instance, GeospatialCatalogPoll) error
 }
 
 type ActiveLiveSessionReconciler interface {
@@ -177,6 +179,7 @@ func (coordinator *ResourceStreamCoordinator) Run(ctx context.Context, instance 
 		{kind: "flight-artifacts", run: coordinator.pollFlightArtifacts},
 		{kind: "active-operations", run: coordinator.pollFlightAlerts},
 		{kind: "live", run: coordinator.pollLiveCatalog},
+		{kind: "geospatial", run: coordinator.pollGeospatial},
 	} {
 		stream := stream
 		wait.Add(1)

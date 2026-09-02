@@ -194,6 +194,119 @@ func validGeoJSONCoordinateTree(raw json.RawMessage) bool {
 	return validate(value, 0) && count >= 2
 }
 
+func geoJSONPosition(value any) ([]float64, bool) {
+	values, ok := value.([]any)
+	if !ok || len(values) < 2 || len(values) > 3 {
+		return nil, false
+	}
+	position := make([]float64, len(values))
+	for index, value := range values {
+		number, ok := value.(float64)
+		if !ok || !validFinite(number) {
+			return nil, false
+		}
+		position[index] = number
+	}
+	if position[0] < -180 || position[0] > 180 || position[1] < -90 || position[1] > 90 {
+		return nil, false
+	}
+	return position, true
+}
+
+func sameGeoJSONPosition(left, right []float64) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func geoJSONLine(value any, minimum int) bool {
+	positions, ok := value.([]any)
+	if !ok || len(positions) < minimum || len(positions) > 10000 {
+		return false
+	}
+	for _, value := range positions {
+		if _, valid := geoJSONPosition(value); !valid {
+			return false
+		}
+	}
+	return true
+}
+
+func geoJSONPolygon(value any) bool {
+	rings, ok := value.([]any)
+	if !ok || len(rings) == 0 || len(rings) > 1024 {
+		return false
+	}
+	positionCount := 0
+	for _, value := range rings {
+		ring, ok := value.([]any)
+		if !ok || len(ring) < 4 {
+			return false
+		}
+		positionCount += len(ring)
+		if positionCount > 10000 {
+			return false
+		}
+		first, valid := geoJSONPosition(ring[0])
+		if !valid {
+			return false
+		}
+		for _, point := range ring[1:] {
+			if _, valid = geoJSONPosition(point); !valid {
+				return false
+			}
+		}
+		last, _ := geoJSONPosition(ring[len(ring)-1])
+		if !sameGeoJSONPosition(first, last) {
+			return false
+		}
+	}
+	return true
+}
+
+func positiveGeoJSONProperty(properties map[string]json.RawMessage, names ...string) bool {
+	for _, name := range names {
+		var value float64
+		if raw := properties[name]; len(raw) > 0 && json.Unmarshal(raw, &value) == nil && validFinite(value) && value > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func geoJSONCircle(value any, properties map[string]json.RawMessage) bool {
+	coordinates, ok := value.([]any)
+	if !ok {
+		return false
+	}
+	// FlightHub deployments have returned both a GeoJSON-like center with a
+	// radius property and the legacy [center, radius] tuple. Validate both
+	// documented response shapes without accepting an unbounded coordinate tree.
+	if len(coordinates) == 2 {
+		if _, valid := geoJSONPosition(coordinates[0]); valid {
+			radius, ok := coordinates[1].(float64)
+			return ok && validFinite(radius) && radius > 0
+		}
+		if _, valid := geoJSONPosition(coordinates); valid {
+			return positiveGeoJSONProperty(properties, "radius", "radius_m", "radiusMeters")
+		}
+	}
+	if len(coordinates) == 3 {
+		longitude, lonOK := coordinates[0].(float64)
+		latitude, latOK := coordinates[1].(float64)
+		radius, radiusOK := coordinates[2].(float64)
+		return lonOK && latOK && radiusOK && validFinite(radius) && radius > 0 &&
+			longitude >= -180 && longitude <= 180 && latitude >= -90 && latitude <= 90
+	}
+	return false
+}
+
 func validateGeoJSONFeature(feature *GeoJSONFeature) bool {
 	if feature == nil || feature.Type != "Feature" ||
 		!validEnum(feature.Geometry.Type, "Point", "LineString", "Polygon", "Circle", "Polyline") ||
@@ -215,7 +328,33 @@ func validateGeoJSONFeature(feature *GeoJSONFeature) bool {
 			return false
 		}
 	}
-	return true
+	var coordinates any
+	if json.Unmarshal(feature.Geometry.Coordinates, &coordinates) != nil {
+		return false
+	}
+	switch feature.Geometry.Type {
+	case "Point":
+		_, valid := geoJSONPosition(coordinates)
+		return valid
+	case "LineString", "Polyline":
+		return geoJSONLine(coordinates, 2)
+	case "Polygon":
+		return geoJSONPolygon(coordinates)
+	case "Circle":
+		return geoJSONCircle(coordinates, properties)
+	default:
+		return false
+	}
+}
+
+func validateMapElementGeoJSONFeature(feature *GeoJSONFeature) bool {
+	return feature != nil && validEnum(feature.Geometry.Type, "Point", "LineString", "Polygon") &&
+		feature.Geometry.Type != "" && validateGeoJSONFeature(feature)
+}
+
+func validateFlightAreaGeoJSONFeature(feature *GeoJSONFeature) bool {
+	return feature != nil && validEnum(feature.Geometry.Type, "Point", "Polyline", "Polygon", "Circle") &&
+		feature.Geometry.Type != "" && validateGeoJSONFeature(feature)
 }
 
 func validateMapElementCreate(input *MapElementCreateRequest) error {
@@ -223,7 +362,7 @@ func validateMapElementCreate(input *MapElementCreateRequest) error {
 		!validGeospatialString(input.Name, 256, false) ||
 		!validGeospatialString(input.Description, maxGeospatialStringBytes, true) ||
 		!validGeospatialString(input.Resource.Remark, maxGeospatialStringBytes, true) ||
-		input.Resource.Type < 0 || input.Resource.Type > 2 || !validateGeoJSONFeature(&input.Resource.Content) {
+		input.Resource.Type < 0 || input.Resource.Type > 2 || !validateMapElementGeoJSONFeature(&input.Resource.Content) {
 		return &APIError{SafeCode: "request_invalid"}
 	}
 	if input.Source != nil && (*input.Source < 0 || *input.Source > 1) {
@@ -248,7 +387,7 @@ func validateMapElementUpdate(input *MapElementUpdateRequest) error {
 	}
 	if input.Status != nil && *input.Status < 0 || input.Display != nil && (*input.Display < 0 || *input.Display > 1) ||
 		input.ElevationLoadStatus != nil && *input.ElevationLoadStatus < 0 ||
-		input.Content != nil && !validateGeoJSONFeature(input.Content) {
+		input.Content != nil && !validateMapElementGeoJSONFeature(input.Content) {
 		return &APIError{SafeCode: "request_invalid"}
 	}
 	return nil
@@ -358,7 +497,7 @@ func validateFlightArea(item *FlightArea) bool {
 		!validGeospatialString(item.UpdatedBy, 256, true) || !validGeospatialString(item.UpdatedNickname, 256, true) {
 		return false
 	}
-	return validateGeoJSONFeature(&item.Content)
+	return validateFlightAreaGeoJSONFeature(&item.Content)
 }
 
 func decodeFlightAreaPage(payload envelope, expected PageOptions) (FlightAreaPage, error) {

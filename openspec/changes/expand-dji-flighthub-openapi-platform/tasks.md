@@ -61,7 +61,7 @@
 ## 7. 地图标注、飞行区、离线地图与 AirSense
 
 - [x] 7.1 实现项目/workspace 地图 element、flight-area、offline-map 和 air-sense typed clients，并用 GeoJSON、文件 URL、分页和活动/过期告警 fixture 验证。
-- [ ] 7.2 实现地图标注与飞行区资源流、几何/schema 校验、完整快照和远端版本投影，并用非法 GeoJSON、部分响应与 missing 处理测试证明不会清除上次成功数据。
+- [x] 7.2 实现地图标注与飞行区资源流、几何/schema 校验、完整快照和远端版本投影，并用非法 GeoJSON、部分响应与 missing 处理测试证明不会清除上次成功数据。
 - [ ] 7.3 实现飞行区文件和离线地图短期 URL 的项目授权访问与过期刷新，并用 host allowlist、跨项目和签名参数日志扫描测试验证。
 - [ ] 7.4 将 AirSense 告警映射到统一安全事件和地图实时图层，并用发生、更新、过期、重复和关联任务测试验证生命周期。
 - [ ] 7.5 将地图标注创建/更新/删除接入远端版本冲突、RBAC、审计与删除 feature flag，并用并发修改测试证明旧版本不会覆盖新数据。
