@@ -30,6 +30,11 @@
       "path": "fixtures/live_cases.json",
       "sha256": "ef3590696576d1c0b8c57715a152f458f06b140478e304caf8c1e38a62237f6a",
       "domains": ["live"]
+    },
+    {
+      "path": "fixtures/geospatial_cases.json",
+      "sha256": "1f57a30ac3224577690a8e555a83362fc02af8857e6791d8396654185176a961",
+      "domains": ["geospatial"]
     }
   ]
 }

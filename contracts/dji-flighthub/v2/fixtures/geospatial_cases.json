@@ -1,0 +1,241 @@
+{
+  "contractVersion": "dji-flighthub-openapi-v2-cn-2026-08-30",
+  "cases": [
+    {
+      "name": "map-element-create-point",
+      "endpointId": "454273488e0",
+      "method": "POST",
+      "path": "/openapi/v2.0/map/element",
+      "projectHeader": true,
+      "requestBody": {
+        "name": "synthetic point",
+        "desc": "synthetic fixture",
+        "resource": {
+          "type": 0,
+          "content": {
+            "type": "Feature",
+            "properties": { "color": "#2D8CF0", "clampToGround": true },
+            "geometry": { "type": "Point", "coordinates": [0.25, 0.125, 15] }
+          }
+        }
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": { "id": "ELEMENT_REDACTED_01" }
+      }
+    },
+    {
+      "name": "workspace-air-sense-active",
+      "endpointId": "456403938e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/air-sense-warnings",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": [
+          {
+            "sn": "DEVICE_REDACTED_01",
+            "timestamp": 1779439990000,
+            "enable_waring": true,
+            "waring_events": [
+              {
+                "icao": "ICAO_REDACTED_01",
+                "warning_level": 1,
+                "latitude": 0.125,
+                "longitude": 0.25,
+                "altitude": 120,
+                "altitude_type": 1,
+                "heading": 90,
+                "relative_altitude": 20,
+                "vert_trend": 0,
+                "distance": 240
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "workspace-air-sense-expired",
+      "endpointId": "456403938e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/air-sense-warnings",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": [
+          {
+            "sn": "DEVICE_REDACTED_02",
+            "timestamp": 1779439600000,
+            "enable_waring": true,
+            "waring_events": [
+              {
+                "icao": "ICAO_REDACTED_02",
+                "warning_level": 3,
+                "latitude": 0.125,
+                "longitude": 0.25,
+                "altitude": 80,
+                "altitude_type": 0,
+                "heading": 180,
+                "relative_altitude": -10,
+                "vert_trend": 2,
+                "distance": 800
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "workspace-flight-areas-empty",
+      "endpointId": "456403940e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/flight-areas?page=1&page_size=20&status=enable&type=nfz",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "list": null,
+          "pagination": { "page": 1, "page_size": 20, "total": 0 }
+        }
+      }
+    },
+    {
+      "name": "workspace-offline-map-url",
+      "endpointId": "456403943e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/offline-maps/url",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "offline_map_enable": true,
+          "file": {
+            "name": "offline-map-redacted.zip",
+            "url": "https://objects.vendor.example/offline-map-redacted.zip?Expires=1779443600&Signature=SIGNATURE_REDACTED",
+            "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "size": 12720
+          }
+        }
+      }
+    },
+    {
+      "name": "workspace-offline-map-detail",
+      "endpointId": "456403944e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/offline-maps",
+      "projectHeader": false,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "disable": false,
+          "offline_map": {
+            "id": 3876,
+            "updated_time": 1779439990000,
+            "models": [{ "id": 738133, "name": "synthetic model" }],
+            "percent": 100,
+            "status": "finish",
+            "result": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "project-flight-area-url",
+      "endpointId": "457494968e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-areas/url",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "name": "flight-areas-redacted.json",
+          "url": "https://objects.vendor.example/flight-areas-redacted.json?Expires=1779443600&Signature=SIGNATURE_REDACTED",
+          "checksum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "size": 289
+        }
+      }
+    },
+    {
+      "name": "project-flight-areas-page",
+      "endpointId": "457494969e0",
+      "method": "GET",
+      "path": "/openapi/v2.0/flight-areas?name=synthetic&page=2&page_size=10&status=disable&type=dfence",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "list": [
+            {
+              "id": "AREA_REDACTED_01",
+              "name": "synthetic area",
+              "status": "disable",
+              "type": "dfence",
+              "content": {
+                "type": "Feature",
+                "properties": { "color": "#FF0000", "clampToGround": true },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [[[0.25, 0.125], [0.25, 0.25], [0.125, 0.25], [0.25, 0.125]]]
+                }
+              },
+              "area_hash": "HASH_REDACTED_01",
+              "created_time": 1779430000000,
+              "created_by": "USER_REDACTED_01",
+              "created_nickname": "synthetic creator",
+              "updated_time": 1779439990000,
+              "updated_by": "USER_REDACTED_02",
+              "updated_nickname": "synthetic editor"
+            }
+          ],
+          "pagination": { "page": 2, "page_size": 10, "total": 11 }
+        }
+      }
+    },
+    {
+      "name": "workspace-map-element-update",
+      "endpointId": "458354139e0",
+      "method": "PUT",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/elements/ELEMENT_REDACTED_01",
+      "projectHeader": false,
+      "requestBody": {
+        "name": "synthetic point updated",
+        "display": 1,
+        "content": {
+          "type": "Feature",
+          "properties": { "color": "#00FF00", "clampToGround": true },
+          "geometry": { "type": "Point", "coordinates": [0.25, 0.125, 15] }
+        }
+      },
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": { "id": "ELEMENT_REDACTED_01" }
+      }
+    },
+    {
+      "name": "workspace-map-element-delete",
+      "endpointId": "458354140e0",
+      "method": "DELETE",
+      "path": "/openapi/v2.0/workspaces/WORKSPACE_REDACTED/elements/ELEMENT_REDACTED_01",
+      "projectHeader": true,
+      "responseBody": {
+        "code": 0,
+        "message": "success",
+        "data": {
+          "affected_tri_states": [
+            { "group_id": "GROUP_REDACTED_01", "tri_state": "half" }
+          ]
+        }
+      }
+    }
+  ]
+}

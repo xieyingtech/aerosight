@@ -36,7 +36,7 @@ func TestFlightHubManifestAndFixturesMatchReviewedContractLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lock contractLock
-	if json.Unmarshal(contents, &lock) != nil || lock.ContractVersion != ContractVersion || len(lock.Files) != 6 {
+	if json.Unmarshal(contents, &lock) != nil || lock.ContractVersion != ContractVersion || len(lock.Files) != 7 {
 		t.Fatalf("invalid FlightHub contract lock: %#v", lock)
 	}
 	for _, file := range lock.Files {
