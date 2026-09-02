@@ -301,6 +301,14 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.ModelJobEventType, modelJobHandler.Handler)
+		modelDeleteHandler, deleteErr := flighthub.NewModelDeleteHandler(
+			flighthub.NewSQLModelDeleteStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
+		)
+		if deleteErr != nil {
+			logger.Error("FlightHub model delete initialization failed", "error", deleteErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubModelDeleteEventType, modelDeleteHandler.Handler)
 		openModelUploadHandler, uploadErr := flighthub.NewOpenModelUploadHandler(
 			flighthub.NewSQLOpenModelUploadStore(database), flightHubClient, flightHubTokenResolver,
 			flightHubModelProjector, workerConfig.AuthSecret, nil,

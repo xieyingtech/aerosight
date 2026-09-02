@@ -14,6 +14,8 @@ const (
 	FlightHubLiveConverterToggleFeatureFlag = "flighthub.live.converter.toggle"
 	FlightHubLiveConverterDeleteFeatureFlag = "flighthub.live.converter.delete"
 	FlightHubGeospatialDeleteFeatureFlag    = "flighthub.geospatial.delete"
+	FlightHubModelDeleteFeatureFlag         = "flighthub.model.delete"
+	FlightHubModelResourceDeleteFeatureFlag = "flighthub.model-resource.delete"
 )
 
 func Capabilities() []connector.CapabilityDefinition {
@@ -38,6 +40,8 @@ func Capabilities() []connector.CapabilityDefinition {
 		{Code: "geospatial.write", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"geospatial"}, FeatureFlag: FlightHubActionFeatureFlag},
 		{Code: "geospatial.element.delete", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"geospatial"}, FeatureFlag: FlightHubGeospatialDeleteFeatureFlag},
 		{Code: "model.write", Kind: connector.CapabilityAction, Risk: driver.RiskHigh, EndpointDomains: []string{"model"}, FeatureFlag: FlightHubActionFeatureFlag},
+		{Code: "model.delete", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"model"}, FeatureFlag: FlightHubModelDeleteFeatureFlag},
+		{Code: "model.resource.delete", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"model"}, FeatureFlag: FlightHubModelResourceDeleteFeatureFlag},
 		{Code: "device.control", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"control"}, DriverCapability: "flight.return_home", FeatureFlag: FlightHubActionFeatureFlag},
 		{Code: "organization.write", Kind: connector.CapabilityAction, Risk: driver.RiskCritical, EndpointDomains: []string{"organization", "project"}, FeatureFlag: FlightHubActionFeatureFlag},
 	}

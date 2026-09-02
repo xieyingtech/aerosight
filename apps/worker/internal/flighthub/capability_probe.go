@@ -78,7 +78,7 @@ var defaultCapabilityProbeEndpoints = []capabilityProbeEndpoint{
 	{ID: "457494960e0", Method: http.MethodGet, Path: "/openapi/v2.0/auto-record-configs", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.recording.control"}},
 	{ID: "456444816e0", Method: http.MethodGet, Path: "/openapi/v2.0/stream-converters", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"live.converter.create", "live.converter.toggle", "live.converter.delete"}},
 	{ID: "457494969e0", Method: http.MethodGet, Path: "/openapi/v2.0/flight-areas", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"geospatial.read", "geospatial.write", "geospatial.element.delete"}},
-	{ID: "458069507e0", Method: http.MethodGet, Path: "/openapi/v2.0/model", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"model.read", "model.write"}},
+	{ID: "458069507e0", Method: http.MethodGet, Path: "/openapi/v2.0/model", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"model.read", "model.write", "model.delete", "model.resource.delete"}},
 	{ID: "457494961e0", Method: http.MethodGet, Path: "/openapi/v2.0/topologies/cmds/control/status", Scope: "project", Released: true, Regions: []string{"cn"}, Deployments: []string{"cn-public-cloud"}, CapabilityCodes: []string{"device.control"}},
 }
 
@@ -103,6 +103,8 @@ var defaultCapabilityReadiness = map[string]capabilityReadiness{
 	"geospatial.write":              {Implemented: true},
 	"geospatial.element.delete":     {Implemented: true},
 	"model.write":                   {},
+	"model.delete":                  {Implemented: true},
+	"model.resource.delete":         {Implemented: true},
 	"device.control":                {},
 	"organization.write":            {},
 }
