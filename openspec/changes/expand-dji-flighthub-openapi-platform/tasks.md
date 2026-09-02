@@ -79,7 +79,7 @@
 
 ## 9. 设备控制、维护与管理域
 
-- [ ] 9.1 为 return_home/cancel、flighttask pause/recovery、控制权、云控、相机/镜头、TCA、RTK、relay 和 active-project 建立 action adapter 与输入/输出 schema，并用 endpoint manifest 覆盖测试证明无遗漏。
+- [x] 9.1 为 return_home/cancel、flighttask pause/recovery、控制权、云控、相机/镜头、TCA、RTK、relay 和 active-project 建立 action adapter 与输入/输出 schema，并用 endpoint manifest 覆盖测试证明无遗漏。
 - [ ] 9.2 将离散设备指令接入 `device_commands`/`command_attempts`、状态新鲜度、安全策略、审批、截止时间和幂等规则，并用 HTTP 受理、NACK、超时和物模型对账测试验证。
 - [ ] 9.3 实现组织/项目 command status 轮询与命令结果关联，处理无法关联、重复和乱序结果，并用 Worker 重启恢复测试证明不提前标记成功。
 - [ ] 9.4 实现控制权/云控短期独占会话、心跳、频率限制、自动停止和释放，并用双操作者竞争、权限撤销和心跳中断测试验证。
