@@ -106,7 +106,7 @@ async function lockFlightHubConnector(client: PoolClient, projectId: number, con
 
 async function queueSync(
   client: PoolClient,
-  input: { projectId: number; teamId: number; connectorId: string; trigger: "manual" | "credential-update" | "capability-probe" }
+  input: { projectId: number; teamId: number; connectorId: string; trigger: "manual" | "credential-update" | "capability-probe" | "reconnect" }
 ) {
   await client.query("select pg_advisory_xact_lock(hashtext($1))", [`flightHub-sync:${input.connectorId}`]);
   const queued = await client.query<{ eventId: string }>(
@@ -418,6 +418,66 @@ export async function disconnectFlightHubConnection(
         [projectId, connectorId]
       );
       return { id: connectorId, status: "disabled", disconnected: true, historyPreserved: true };
+    }
+  );
+}
+
+export async function reconnectFlightHubConnection(
+  projectId: number,
+  connectorId: string,
+  requestId?: string | null
+) {
+  const { user, access } = await requireFlightHubManager(projectId);
+  return withAuditedProjectWrite(
+    {
+      projectId,
+      teamId: access.teamId,
+      requestId: correlationId(requestId),
+      actorUserId: user.id,
+      action: "connector.flighthub.reconnect",
+      resourceType: "connector",
+      resourceId: connectorId,
+      input: { operation: "enable" },
+      policyResult: {
+        permission: "device:configure",
+        role: access.role,
+        credentialsUnchanged: true,
+        readOnlySync: true,
+      },
+    },
+    async (client) => {
+      const connector = await lockFlightHubConnector(client, projectId, connectorId);
+      if (connector.status !== "disabled") {
+        throw new FlightHubConnectionError("connector_not_disabled");
+      }
+      await client.query(
+        `update device_adapters
+            set status='connecting', lease_owner=null, lease_expires_at=null,
+                last_health_json='{}'::jsonb, last_checked_at=null, updated_at=now()
+          where id=$1 and project_id=$2 and status='disabled'`,
+        [connectorId, projectId]
+      );
+      const bindings = await client.query(
+        `update device_connector_bindings
+            set status='active', unbound_at=null
+          where project_id=$1 and connector_instance_id=$2 and status='disabled'
+          returning id`,
+        [projectId, connectorId]
+      );
+      const sync = await queueSync(client, {
+        projectId,
+        teamId: access.teamId,
+        connectorId,
+        trigger: "reconnect",
+      });
+      return {
+        id: connectorId,
+        status: "connecting",
+        reconnected: true,
+        restoredBindingCount: bindings.rowCount ?? 0,
+        syncQueued: true,
+        ...sync,
+      };
     }
   );
 }

@@ -14,6 +14,7 @@ export function flightHubErrorMessage(code: string | undefined) {
     case "rate_limited": return "司空接口请求过于频繁，请稍后重试。";
     case "request_timeout": return "司空接口响应超时，请检查公网出口后重试。";
     case "connector_disabled": return "连接器已断开，不能继续同步。";
+    case "connector_not_disabled": return "连接器当前并非已断开状态，无需重新连接。";
     case "schema_incompatible": return "司空返回格式发生变化，已停止同步以保护现有设备数据。";
     case "configuration_unavailable": return "司空连接器尚未在当前部署中启用。";
     case "invalid_request": return "请求内容不完整，请检查输入。";

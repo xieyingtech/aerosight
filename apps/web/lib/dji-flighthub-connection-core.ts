@@ -21,6 +21,7 @@ export type FlightHubConnectionErrorCode =
   | "duplicate_connection"
   | "connector_not_found"
   | "connector_disabled"
+  | "connector_not_disabled"
   | "configuration_unavailable";
 
 export class FlightHubConnectionError extends Error {

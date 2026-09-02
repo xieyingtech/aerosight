@@ -251,16 +251,20 @@ export function DjiFlightHubConnections({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectorId]);
 
-  const runConnectorAction = async (connectorId: string, action: "sync" | "disconnect") => {
+  const runConnectorAction = async (connectorId: string, action: "sync" | "disconnect" | "reconnect") => {
     if (action === "disconnect" && !window.confirm("断开后会停止新同步，但保留设备、身份和审计历史。确认断开？")) return;
     setBusyAction(`${action}:${connectorId}`); setError(null); setNotice(null);
     try {
       const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}${action === "sync" ? "/sync" : ""}`, {
-        method: action === "sync" ? "POST" : "DELETE", cache: "no-store",
+        method: action === "sync" ? "POST" : action === "reconnect" ? "PUT" : "DELETE", cache: "no-store",
       });
       const data = await response.json() as SafeErrorResponse & { deduplicated?: boolean };
       if (!response.ok) throw new Error(data.error?.code ?? "upstream_error");
-      setNotice(action === "sync" ? (data.deduplicated ? "已有同步请求正在等待或执行，本次已自动合并。" : "同步请求已进入队列。") : "连接器已断开；历史设备与审计记录仍然保留。");
+      setNotice(action === "sync"
+        ? (data.deduplicated ? "已有同步请求正在等待或执行，本次已自动合并。" : "同步请求已进入队列。")
+        : action === "reconnect"
+          ? "连接器正在重新连接，历史设备绑定已恢复，只读同步已进入队列。"
+          : "连接器已断开；历史设备与审计记录仍然保留。");
       await refresh();
     } catch (cause) {
       setError(flightHubErrorMessage(cause instanceof Error ? cause.message : undefined));
@@ -346,6 +350,7 @@ export function DjiFlightHubConnections({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><div className="flex items-center gap-2"><h2 className="font-medium">{selectedConnector.projectName}</h2><Badge variant={statusVariant(selectedConnector.status)}>{flightHubStatusLabel(selectedConnector.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground">DJI 司空 2 · 项目 UUID {selectedConnector.projectUuid} · 最近验证 {formatDate(selectedConnector.lastValidatedAt)}</p></div>
         <div className="flex flex-wrap gap-2">
+          {selectedConnector.status === "disabled" && <Button disabled={busyAction !== null} onClick={() => void runConnectorAction(selectedConnector.id, "reconnect")} size="sm" type="button" variant="default"><RefreshCwIcon />重新连接</Button>}
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void runConnectorAction(selectedConnector.id, "sync")} size="sm" type="button" variant="outline"><RefreshCwIcon />立即同步</Button>
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void reprobeCapabilities(selectedConnector.id)} size="sm" type="button" variant="outline"><ShieldCheckIcon />只读重新探测</Button>
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void runConnectorAction(selectedConnector.id, "disconnect")} size="sm" type="button" variant="destructive"><UnplugIcon />断开</Button>

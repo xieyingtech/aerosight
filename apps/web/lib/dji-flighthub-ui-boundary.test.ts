@@ -23,6 +23,7 @@ test("FlightHub wizard serializes repeated actions and exposes no control action
   assert.match(source, /立即同步/);
   assert.match(source, /更新 Token/);
   assert.match(source, /断开/);
+  assert.match(source, /重新连接/);
   assert.doesNotMatch(source, />\s*(任务下发|返航|机场调试|直播控制)\s*</);
 });
 
