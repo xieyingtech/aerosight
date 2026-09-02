@@ -1,7 +1,7 @@
 import type { ProjectPermission } from "@/lib/project-permission-policy";
 
 export type ProjectNavigationItem = {
-  key: "overview" | "realtime" | "tasks" | "flight-operations" | "geospatial" | "devices" | "connectors" | "issues" | "algorithms" | "agents" | "assets" | "settings";
+  key: "overview" | "realtime" | "tasks" | "flight-operations" | "geospatial" | "models" | "devices" | "connectors" | "issues" | "algorithms" | "agents" | "assets" | "settings";
   title: string;
   segment: string;
   exact?: boolean;
@@ -15,6 +15,7 @@ const projectNavigation: ProjectNavigationItem[] = [
   { key: "tasks", title: "任务", segment: "tasks" },
   { key: "flight-operations", title: "飞行运营", segment: "flight-operations" },
   { key: "geospatial", title: "地图空域", segment: "geospatial" },
+  { key: "models", title: "模型重建", segment: "models" },
   { key: "devices", title: "设备", segment: "devices" },
   { key: "connectors", title: "连接器", segment: "connectors", managementOnly: true },
   { key: "issues", title: "案件", segment: "issues" },
