@@ -27,6 +27,7 @@ import {
 import { actionPatternMatches, authorizeCapabilityAction } from "@/lib/device-command-core";
 import { publishProjectEvent } from "@/lib/project-events";
 import { getWebRuntimeConfig } from "@/lib/runtime-config";
+import { flightHubPlaybackGate } from "@/lib/dji-flighthub-live-media-core";
 
 type LiveStreamRow = {
   id: string;
@@ -392,6 +393,10 @@ export async function getLiveStreamPlayback(projectId: number, streamId: number)
   const availability = playbackAvailability(session, new Date(), row.playbackLocatorExpiresAt);
   if (!availability.available) return { session, available: false, reason: availability.reason };
   if (session.sourceType === "dji_flighthub") {
+    const gate = flightHubPlaybackGate({ canView: true, status: session.status,
+      localAuthorizationRevokedAt: row.localAuthorizationRevokedAt,
+      credentialExpiresAt: row.supplierCredentialExpiresAt, now: new Date() });
+    if (!gate.available) return { session, available: false, reason: gate.reason };
     const authorization = await query<{
       supplier: string; supplierProtocol: string; supplierAdapterVersion: string;
       supplierCredentialExpiresAt: Date; supplierCredentialEnvelope: CredentialEnvelope;

@@ -102,10 +102,13 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       const result = await response.json() as {
         available: boolean;
         locator?: { url: string; expiresAt: string };
-        playback?: { candidates: { protocol: "webrtc" | "hls"; url: string }[]; expiresAt: string };
+        playback?: { candidates?: { protocol: "webrtc" | "hls"; url: string }[]; expiresAt: string;
+          protocol?: string; credential?: string };
       };
-      const candidates = result.playback?.candidates
-        ?? (result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : []);
+      const direct = result.playback?.credential && new Set(["webrtc", "hls"]).has(result.playback.protocol ?? "")
+        ? [{ protocol: result.playback.protocol as "webrtc" | "hls", url: result.playback.credential }] : [];
+      const candidates = [...(result.playback?.candidates ?? []), ...direct,
+        ...(result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : [])];
       if (!result.available || candidates.length === 0) throw new Error("playback unavailable");
       setPlayback({ status: "ready", candidates, index: 0 });
     }).catch((error) => { if (error?.name !== "AbortError") setPlayback({ status: "error" }); });
