@@ -45,6 +45,12 @@ test("stream start requires online capable device and implemented adapter", () =
   assert.doesNotThrow(() => assertStreamCanStart({
     deviceStatus: "online", capabilities: ["camera.live"], adapterType: "simulator"
   }));
+  assert.doesNotThrow(() => assertStreamCanStart({
+    deviceStatus: "online", capabilities: [], adapterType: "dji-flighthub2", connectorLiveControl: true
+  }));
+  assert.throws(() => assertStreamCanStart({
+    deviceStatus: "online", capabilities: [], adapterType: "dji-flighthub2", connectorLiveControl: false
+  }), /NOT_SUPPORTED/);
   assert.throws(() => assertStreamCanStart({
     deviceStatus: "offline", capabilities: ["camera.live"], adapterType: "simulator"
   }), /DEVICE_OFFLINE/);
@@ -84,6 +90,8 @@ test("DJI RTMP destination and video id are derived from server-owned topology",
 
 test("DJI stop enters stopping and repeated stop is idempotent", () => {
   assert.deepEqual(planLiveStreamStop("live", "dji"), { status: "stopping", replayed: false });
+  assert.deepEqual(planLiveStreamStop("live", "dji_flighthub"), { status: "stopping", replayed: false });
+  assert.deepEqual(planLiveStreamStop("failed", "dji_flighthub"), { status: "failed", replayed: true });
   assert.deepEqual(planLiveStreamStop("stopping", "dji"), { status: "stopping", replayed: true });
   assert.deepEqual(planLiveStreamStop("live", "simulator"), { status: "stopped", replayed: false });
   assert.deepEqual(planLiveStreamStop("stopped", "simulator"), { status: "stopped", replayed: true });
@@ -95,6 +103,10 @@ test("expired session leases recover every non-terminal state deterministically"
   assert.deepEqual(recoverExpiredLiveStream("stopping"), { status: "stopped", reason: "session-stop-lease-expired" });
   assert.deepEqual(recoverExpiredLiveStream("live"), { status: "failed", reason: "session-owner-lease-expired" });
   assert.deepEqual(recoverExpiredLiveStream("stopped"), { status: "stopped", reason: null });
+  assert.deepEqual(recoverExpiredLiveStream("stopping", "dji_flighthub"), {
+    status: "stopping", reason: "flighthub-remote-evidence-required"
+  });
+  assert.deepEqual(recoverExpiredLiveStream("stopped", "dji_flighthub"), { status: "stopped", reason: null });
 });
 
 test("simulator locator is short lived and tamper evident", () => {

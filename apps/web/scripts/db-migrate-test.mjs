@@ -1177,6 +1177,34 @@ async function assertLiveStreamSchema(connectionString) {
       () => assert(false, "partial live stream lease should fail"),
       (error) => assert(error.code === "23514", "partial live stream lease failed unexpectedly")
     );
+    await client.query(
+      `insert into live_streams (
+         project_id,team_id,device_id,adapter_id,stream_key,source_type,status,
+         supplier_credential_envelope_json
+       ) values($1,$2,$3,$4,'165-0-7','dji_flighthub','starting','{"version":1}'::jsonb)`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    ).then(
+      () => assert(false, "FlightHub supplier credential metadata must be complete"),
+      (error) => assert(error.code === "23514", "incomplete FlightHub credential failed unexpectedly")
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id,team_id,device_id,adapter_id,stream_key,source_type,status,
+         supplier,supplier_protocol,supplier_adapter_version,supplier_reference_digest,
+         supplier_credential_expires_at,supplier_credential_envelope_json,start_attempted_at,start_accepted_at
+       ) values($1,$2,$3,$4,'165-0-7','dji_flighthub','starting',
+         'volc','volc-rtc','v1',repeat('a',64),now()+interval '1 hour','{"version":1}'::jsonb,now(),now())`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    );
+    await client.query(
+      `insert into live_streams (
+         project_id,team_id,device_id,adapter_id,stream_key,source_type,status,supplier_reference_digest
+       ) values($1,$2,$3,$4,'165-0-8','dji_flighthub','failed','not-a-digest')`,
+      [north.id, north.team_id, north.device_id, north.adapter_id]
+    ).then(
+      () => assert(false, "FlightHub supplier digest must be SHA-256"),
+      (error) => assert(error.code === "23514", "invalid FlightHub digest failed unexpectedly")
+    );
   } finally {
     await client.end();
   }

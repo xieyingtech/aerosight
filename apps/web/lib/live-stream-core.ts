@@ -44,12 +44,14 @@ export function assertStreamCanStart(input: {
   deviceStatus: string;
   capabilities: readonly string[];
   adapterType: string | null;
+  connectorLiveControl?: boolean;
 }) {
   if (input.deviceStatus !== "online") throw new Error("LIVE_STREAM_DEVICE_OFFLINE");
-  if (!input.capabilities.includes("stream.video.control") && !input.capabilities.includes("camera.live")) {
+  if (!input.capabilities.includes("stream.video.control") && !input.capabilities.includes("camera.live")
+      && !input.connectorLiveControl) {
     throw new Error("LIVE_STREAM_NOT_SUPPORTED");
   }
-  if (input.adapterType !== "simulator" && input.adapterType !== "dji") {
+  if (input.adapterType !== "simulator" && input.adapterType !== "dji" && input.adapterType !== "dji-flighthub2") {
     throw new Error("LIVE_STREAM_ADAPTER_UNAVAILABLE");
   }
 }
@@ -106,13 +108,17 @@ export function buildDJIVideoID(input: {
 
 export function planLiveStreamStop(status: LiveStreamStatus, sourceType: string) {
   if (status === "stopped" || status === "stopping") return { status, replayed: true };
-  if (sourceType === "dji" && ["requested", "starting", "live", "degraded"].includes(status)) {
+  if (sourceType === "dji_flighthub" && status === "failed") return { status, replayed: true };
+  if (["dji", "dji_flighthub"].includes(sourceType) && ["requested", "starting", "live", "degraded"].includes(status)) {
     return { status: "stopping" as const, replayed: false };
   }
   return { status: "stopped" as const, replayed: false };
 }
 
-export function recoverExpiredLiveStream(status: LiveStreamStatus) {
+export function recoverExpiredLiveStream(status: LiveStreamStatus, sourceType = "legacy") {
+  if (sourceType === "dji_flighthub" && ["requested", "starting", "live", "degraded", "stopping"].includes(status)) {
+    return { status, reason: "flighthub-remote-evidence-required" };
+  }
   switch (status) {
     case "requested":
     case "starting":

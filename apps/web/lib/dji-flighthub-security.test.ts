@@ -95,3 +95,20 @@ test("schema enforces one external FlightHub scope per AeroSight project without
   );
   assert(!/create\s+table\s+\w*flighthub/i.test(migration));
 });
+
+test("FlightHub playback authorization is atomically claimed before credential decryption", async () => {
+  const source = await readFile(new URL("./live-streams.ts", import.meta.url), "utf8");
+  const branchStart = source.indexOf('if (session.sourceType === "dji_flighthub")');
+  assert(branchStart >= 0, "FlightHub playback branch is missing");
+  const branch = source.slice(branchStart, source.indexOf('if (session.sourceType !== "simulator"', branchStart));
+  const authorizationUpdate = branch.indexOf("update live_streams set");
+  const decrypt = branch.indexOf("decryptCredentialObject");
+  assert(authorizationUpdate >= 0 && decrypt > authorizationUpdate,
+    "supplier credential must only be decrypted after the conditional authorization update");
+  assert.match(branch, /status in\('live','degraded'\)/);
+  assert.match(branch, /local_authorization_revoked_at is null/);
+  assert.match(branch, /supplier_credential_expires_at>now\(\)/);
+  assert.match(branch, /supplier_credential_envelope_json is not null[\s\S]*returning[\s\S]*supplier_credential_envelope_json/);
+  assert.match(source, /FLIGHTHUB_LIVE_STOPPED_BEFORE_DISPATCH/);
+  assert.match(source, /not\(source_type='dji_flighthub' and status='failed'\)/);
+});

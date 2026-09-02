@@ -97,6 +97,10 @@ type ResourceStreamSink interface {
 	ApplyFlightAlerts(context.Context, connector.Instance, FlightAlertPoll) error
 }
 
+type ActiveLiveSessionReconciler interface {
+	ReconcileLiveSessions(context.Context, connector.Instance) (FlightHubLiveReconcileSummary, error)
+}
+
 type ResourceStreamConfig struct {
 	OnlineInterval    time.Duration
 	OfflineInterval   time.Duration
@@ -104,6 +108,7 @@ type ResourceStreamConfig struct {
 	CatalogInterval   time.Duration
 	ArtifactBatchSize int
 	MaxBackoff        time.Duration
+	LiveReconciler    ActiveLiveSessionReconciler
 	Now               func() time.Time
 	OnError           func(string, error)
 }
@@ -493,22 +498,46 @@ func (coordinator *ResourceStreamCoordinator) runStream(
 	}); err != nil {
 		return err
 	}
+	preflightCursor := mergeResourceCursor(map[string]any{}, previous.Cursor)
+	liveCandidates := 0
+	if kind == "active-operations" && coordinator.config.LiveReconciler != nil {
+		liveSummary, liveErr := coordinator.config.LiveReconciler.ReconcileLiveSessions(ctx, instance)
+		preflightCursor = mergeResourceCursor(preflightCursor, liveSummary.Cursor())
+		liveCandidates = liveSummary.Candidates
+		if liveErr != nil {
+			return coordinator.failStream(ctx, instance, kind, preflightCursor, attempt, now, liveErr)
+		}
+	}
 	token, err := coordinator.resolver.ResolveToken(ctx, instance)
 	if err != nil {
-		return coordinator.failStream(ctx, instance, kind, previous.Cursor, attempt, now, err)
+		return coordinator.failStream(ctx, instance, kind, preflightCursor, attempt, now, err)
 	}
 	defer func() { token = "" }()
 	cursor, nextInterval, pollErr := poll(ctx, instance, token)
+	cursor = mergeResourceCursor(preflightCursor, cursor)
 	if pollErr != nil {
 		return coordinator.failStream(ctx, instance, kind, cursor, attempt, now, pollErr)
 	}
 	if nextInterval <= 0 {
 		nextInterval = coordinator.config.OfflineInterval
 	}
+	if liveCandidates > 0 && nextInterval > coordinator.config.OnlineInterval {
+		nextInterval = coordinator.config.OnlineInterval
+	}
 	next := now.Add(nextInterval)
 	return coordinator.store.SaveResourceSyncState(ctx, instance, connector.ResourceSyncUpdate{
 		Kind: kind, Status: "idle", Cursor: cursor, AttemptCount: 0, SucceededAt: &now, NextAttemptAt: &next,
 	})
+}
+
+func mergeResourceCursor(target, source map[string]any) map[string]any {
+	if target == nil {
+		target = map[string]any{}
+	}
+	for key, value := range source {
+		target[key] = value
+	}
+	return target
 }
 
 func (coordinator *ResourceStreamCoordinator) failStream(ctx context.Context, instance connector.Instance, kind string, cursor map[string]any, attempt int, now time.Time, cause error) error {

@@ -121,6 +121,11 @@ func main() {
 		}
 		resourceRepository := connector.NewSQLResourceRepository(database)
 		telemetryIngestor := telemetry.NewIngestor(database)
+		liveReconciler, liveErr := flighthub.NewFlightHubLiveReconciler(database, nil)
+		if liveErr != nil {
+			logger.Error("FlightHub live reconciliation initialization failed", "error", liveErr.Error())
+			os.Exit(1)
+		}
 		resourceSink, resourceErr := flighthub.NewSQLResourceStreamSink(
 			telemetryIngestor, resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database),
 			flighthub.NewSQLFlightCatalogProjector(database, telemetryIngestor, nil, 30*time.Minute, workerConfig.AuthSecret),
@@ -133,7 +138,7 @@ func main() {
 			flightHubClient, flightHubTokenResolver, resourceRepository, resourceSink,
 			flighthub.ResourceStreamConfig{
 				OnlineInterval: 15 * time.Second, OfflineInterval: 60 * time.Second, HealthInterval: 5 * time.Minute, CatalogInterval: 15 * time.Minute,
-				MaxBackoff: 5 * time.Minute,
+				MaxBackoff: 5 * time.Minute, LiveReconciler: liveReconciler,
 				OnError: func(kind string, _ error) {
 					logger.Warn("FlightHub resource stream degraded", "stream", kind)
 				},
@@ -285,6 +290,20 @@ func main() {
 		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	}
 	if flightHubClient != nil {
+		liveRegistry, liveErr := flighthub.NewDefaultLiveSupplierRegistry(flightHubClient)
+		if liveErr != nil {
+			logger.Error("FlightHub live supplier initialization failed", "error", liveErr.Error())
+			os.Exit(1)
+		}
+		liveHandler, liveErr := flighthub.NewFlightHubLiveStartHandler(
+			flighthub.NewSQLFlightHubLiveSessionStore(database), flightHubClient, liveRegistry,
+			flightHubTokenResolver, workerConfig.AuthSecret, nil,
+		)
+		if liveErr != nil {
+			logger.Error("FlightHub live start initialization failed", "error", liveErr.Error())
+			os.Exit(1)
+		}
+		consumer.Register(flighthub.FlightHubLiveStartEventType, liveHandler.Handler)
 		flightActionHandler, actionErr := flighthub.NewFlightActionHandler(
 			flighthub.NewSQLFlightActionStore(database), flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret,
 		)

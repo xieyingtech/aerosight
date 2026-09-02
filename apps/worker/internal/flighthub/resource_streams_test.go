@@ -279,6 +279,17 @@ type blockingInventoryRunner struct {
 
 type countingInventoryRunner struct{ calls int }
 
+type liveReconcilerFixture struct {
+	calls   int
+	summary FlightHubLiveReconcileSummary
+	err     error
+}
+
+func (fixture *liveReconcilerFixture) ReconcileLiveSessions(context.Context, connector.Instance) (FlightHubLiveReconcileSummary, error) {
+	fixture.calls++
+	return fixture.summary, fixture.err
+}
+
 func (runner *countingInventoryRunner) Run(context.Context, connector.Instance, connector.DiscoveryMode) (connector.SyncApplyResult, error) {
 	runner.calls++
 	return connector.SyncApplyResult{RunID: int64(runner.calls), Discovered: 2}, nil
@@ -292,6 +303,71 @@ func (runner blockingInventoryRunner) Run(context.Context, connector.Instance, c
 
 func resourceStreamInstance() connector.Instance {
 	return connector.Instance{ID: 7, ProjectID: 3, ConnectorKey: ConnectorKey, Version: ConnectorVersion, DiscoveryScope: json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"测试项目"}`)}
+}
+
+func TestActiveOperationsReconcilesLiveBeforeTokenResolutionAndPreservesCursor(t *testing.T) {
+	now := time.Date(2026, 9, 2, 4, 0, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{
+		"active-operations": {Kind: "active-operations", Cursor: map[string]any{"previousAlerts": 3}},
+	}}
+	live := &liveReconcilerFixture{summary: FlightHubLiveReconcileSummary{Candidates: 2, Updated: 1}}
+	coordinator, err := NewResourceStreamCoordinator(
+		&resourceClientFixture{}, tokenResolverFixture{err: &APIError{SafeCode: "credential_invalid"}}, store,
+		&resourceSinkFixture{}, ResourceStreamConfig{
+			OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+			CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, LiveReconciler: live,
+			Now: func() time.Time { return now },
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollCalled := false
+	err = coordinator.runStream(context.Background(), resourceStreamInstance(), "active-operations",
+		func(context.Context, connector.Instance, string) (map[string]any, time.Duration, error) {
+			pollCalled = true
+			return nil, 0, nil
+		})
+	if !IsSafeCode(err, "credential_invalid") || live.calls != 1 || pollCalled {
+		t.Fatalf("err=%v live calls=%d poll called=%v", err, live.calls, pollCalled)
+	}
+	state := store.state("active-operations")
+	if state.Status != "backoff" || state.Cursor["previousAlerts"] != 3 ||
+		state.Cursor["liveCandidates"] != 2 || state.Cursor["liveUpdated"] != 1 {
+		t.Fatalf("active operations state=%#v", state)
+	}
+}
+
+func TestActiveLiveCandidatesTightenIntervalAndPollCursorWins(t *testing.T) {
+	now := time.Date(2026, 9, 2, 4, 30, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{
+		"active-operations": {Kind: "active-operations", Cursor: map[string]any{"complete": false, "previousAlerts": 3}},
+	}}
+	live := &liveReconcilerFixture{summary: FlightHubLiveReconcileSummary{Candidates: 1}}
+	coordinator, err := NewResourceStreamCoordinator(
+		&resourceClientFixture{}, tokenResolverFixture{token: "TOKEN_REDACTED"}, store,
+		&resourceSinkFixture{}, ResourceStreamConfig{
+			OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+			CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, LiveReconciler: live,
+			Now: func() time.Time { return now },
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = coordinator.runStream(context.Background(), resourceStreamInstance(), "active-operations",
+		func(context.Context, connector.Instance, string) (map[string]any, time.Duration, error) {
+			return map[string]any{"complete": true, "alerts": 4}, 15 * time.Minute, nil
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := store.state("active-operations")
+	if state.Status != "idle" || state.Cursor["complete"] != true || state.Cursor["previousAlerts"] != 3 ||
+		state.Cursor["alerts"] != 4 || state.Cursor["liveCandidates"] != 1 || state.NextAttemptAt == nil ||
+		!state.NextAttemptAt.Equal(now.Add(15*time.Second)) {
+		t.Fatalf("active operations state=%#v", state)
+	}
 }
 
 func TestResourceStreamsRunInsideLeaseWithoutSlowInventoryOrHMSBlockingPosition(t *testing.T) {
