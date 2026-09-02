@@ -41,6 +41,16 @@ type freshnessProjectorFixture struct {
 	signals []heartbeat.Signal
 }
 
+type controlEvidenceProjectorFixture struct {
+	polls []DeviceStatePoll
+	err   error
+}
+
+func (fixture *controlEvidenceProjectorFixture) ApplyControlEvidence(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
+	fixture.polls = append(fixture.polls, poll)
+	return fixture.err
+}
+
 func TestResourceSinkRejectsDisabledConnectorBeforeTelemetryWrite(t *testing.T) {
 	ingestor := &telemetryIngestorFixture{}
 	resources := &remoteResourceWriterFixture{writableErr: connector.ErrConnectorDisabled}
@@ -52,6 +62,31 @@ func TestResourceSinkRejectsDisabledConnectorBeforeTelemetryWrite(t *testing.T) 
 	})
 	if !errors.Is(err, connector.ErrConnectorDisabled) || len(ingestor.batches) != 0 {
 		t.Fatalf("disabled connector wrote telemetry: batches=%d err=%v", len(ingestor.batches), err)
+	}
+}
+
+func TestResourceSinkProjectsControlEvidenceAfterTelemetryAcceptance(t *testing.T) {
+	ingestor := &telemetryIngestorFixture{}
+	controls := &controlEvidenceProjectorFixture{}
+	sink, err := NewSQLResourceStreamSink(
+		ingestor, &remoteResourceWriterFixture{}, &freshnessProjectorFixture{}, &healthProjectorFixture{},
+		&flightCatalogProjectorFixture{}, controls,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := DeviceStateSnapshot{SN: "AIRCRAFT_REDACTED", Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{
+		"mode_code": json.RawMessage(`"auto_returning_to_home"`),
+	}}
+	poll := DeviceStatePoll{
+		Device:   connector.ManagedConnectorDevice{DeviceID: 11, TeamID: 2, Serial: snapshot.SN},
+		Snapshot: snapshot, Mapped: MapDeviceState(snapshot), ReceivedAt: time.Now().UTC(),
+	}
+	if err := sink.ApplyDeviceState(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, poll); err != nil {
+		t.Fatal(err)
+	}
+	if len(ingestor.batches) != 1 || len(controls.polls) != 1 || controls.polls[0].Mapped.Mode != "auto_returning_to_home" {
+		t.Fatalf("state did not reach control reconciliation after ingestion: batches=%d polls=%#v", len(ingestor.batches), controls.polls)
 	}
 }
 

@@ -53,13 +53,21 @@ type SQLResourceStreamSink struct {
 	freshness DeviceFreshnessProjector
 	health    DeviceHealthProjector
 	flights   FlightCatalogProjector
+	controls  ControlEvidenceProjector
 }
 
-func NewSQLResourceStreamSink(telemetryIngestor TelemetryBatchIngestor, resources RemoteResourceWriter, freshness DeviceFreshnessProjector, health DeviceHealthProjector, flights FlightCatalogProjector) (*SQLResourceStreamSink, error) {
+func NewSQLResourceStreamSink(telemetryIngestor TelemetryBatchIngestor, resources RemoteResourceWriter, freshness DeviceFreshnessProjector, health DeviceHealthProjector, flights FlightCatalogProjector, controls ...ControlEvidenceProjector) (*SQLResourceStreamSink, error) {
 	if telemetryIngestor == nil || resources == nil || freshness == nil || health == nil || flights == nil {
 		return nil, errors.New("FlightHub resource stream sink dependencies are required")
 	}
-	return &SQLResourceStreamSink{telemetry: telemetryIngestor, resources: resources, freshness: freshness, health: health, flights: flights}, nil
+	if len(controls) > 1 || (len(controls) == 1 && controls[0] == nil) {
+		return nil, errors.New("FlightHub control evidence projector is invalid")
+	}
+	var controlProjector ControlEvidenceProjector
+	if len(controls) == 1 {
+		controlProjector = controls[0]
+	}
+	return &SQLResourceStreamSink{telemetry: telemetryIngestor, resources: resources, freshness: freshness, health: health, flights: flights, controls: controlProjector}, nil
 }
 
 func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instance connector.Instance, poll DeviceStatePoll) error {
@@ -107,6 +115,11 @@ func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instanc
 	})
 	if _, err = sink.telemetry.IngestBatch(ctx, batch); err != nil {
 		return err
+	}
+	if sink.controls != nil {
+		if err := sink.controls.ApplyControlEvidence(ctx, instance, poll); err != nil {
+			return err
+		}
 	}
 	heartbeatInterval := poll.FreshnessInterval
 	if heartbeatInterval < 5*time.Second {

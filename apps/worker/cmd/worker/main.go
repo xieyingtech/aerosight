@@ -95,6 +95,7 @@ func main() {
 	var flightHubScheduler *connector.Scheduler
 	var flightHubClient *flighthub.Client
 	var flightHubModelProjector flighthub.ModelJobProjector
+	var flightHubControlReconciler *flighthub.SQLControlCommandReconciler
 	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
 	if workerConfig.FlightHubEnabled {
 		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
@@ -122,6 +123,11 @@ func main() {
 		}
 		resourceRepository := connector.NewSQLResourceRepository(database)
 		telemetryIngestor := telemetry.NewIngestor(database)
+		flightHubControlReconciler, flightHubErr = flighthub.NewSQLControlCommandReconciler(database, nil)
+		if flightHubErr != nil {
+			logger.Error("FlightHub control reconciliation initialization failed", "error", flightHubErr.Error())
+			os.Exit(1)
+		}
 		liveReconciler, liveErr := flighthub.NewFlightHubLiveReconciler(database, nil)
 		if liveErr != nil {
 			logger.Error("FlightHub live reconciliation initialization failed", "error", liveErr.Error())
@@ -130,6 +136,7 @@ func main() {
 		resourceSink, resourceErr := flighthub.NewSQLResourceStreamSink(
 			telemetryIngestor, resourceRepository, heartbeat.NewProjector(database, nil), flighthub.NewSQLDeviceHealthProjector(database),
 			flighthub.NewSQLFlightCatalogProjector(database, telemetryIngestor, nil, 30*time.Minute, workerConfig.AuthSecret),
+			flightHubControlReconciler,
 		)
 		if resourceErr != nil {
 			logger.Error("FlightHub resource sink initialization failed", "error", resourceErr.Error())
@@ -226,7 +233,16 @@ func main() {
 		logger.Error("DJI command dispatcher initialization failed", "error", err.Error())
 		os.Exit(1)
 	}
-	consumer.Register("device.command.dispatch", djiCommandDispatcher.DispatchHandler)
+	deviceCommandHandler := outbox.Handler(djiCommandDispatcher.DispatchHandler)
+	if flightHubClient != nil {
+		flightHubCommandDispatcher, commandErr := flighthub.NewControlCommandDispatcher(flightHubClient, flightHubTokenResolver, nil)
+		if commandErr != nil {
+			logger.Error("FlightHub command dispatcher initialization failed", "error", commandErr.Error())
+			os.Exit(1)
+		}
+		deviceCommandHandler = flighthub.RouteDeviceCommand(flightHubCommandDispatcher.DispatchHandler, deviceCommandHandler)
+	}
+	consumer.Register("device.command.dispatch", deviceCommandHandler)
 	consumer.Register("command.reply", djiCommandDispatcher.ReplyHandler)
 	consumer.Register("device.event", djiCommandDispatcher.EventHandler)
 	var liveStreamHealth *dji.LiveStreamHealthCoordinator
@@ -411,6 +427,9 @@ func main() {
 	}()
 	go func() { runErrors <- djiManager.Run(runContext) }()
 	go func() { runErrors <- djiCommandDispatcher.RunTimeoutReconciler(runContext, database, time.Second) }()
+	if flightHubControlReconciler != nil {
+		go func() { runErrors <- flightHubControlReconciler.Run(runContext, time.Second) }()
+	}
 	if liveStreamHealth != nil {
 		go func() { runErrors <- liveStreamHealth.Run(runContext, database, 2*time.Second) }()
 	}

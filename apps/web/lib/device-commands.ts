@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { withAuditedProjectWrite } from "@/lib/audit";
 import { requireCurrentProjectPermission } from "@/lib/data";
 import { actionPatternMatches, assertDeviceCommandSafety, authorizeCapabilityAction } from "@/lib/device-command-core";
+import { authorizeFlightHubDiscreteCommand } from "@/lib/dji-flighthub-device-command-core";
 import { correlationId } from "@/lib/observability";
 import { publishProjectEvent } from "@/lib/project-events";
 
@@ -17,6 +18,8 @@ type SubmitDeviceCommandInput = {
   idempotencyKey: string;
   confirmation: string | null;
   reason: string;
+  approvalRequestId?: string | null;
+  safetyPolicyVersionId?: number | null;
   deadlineSeconds?: number;
   requestId?: string | null;
 };
@@ -28,8 +31,9 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
     idempotencyKey: input.idempotencyKey, actorUserId: user.id,
     action: "device_command.submit", resourceType: "device", resourceId: String(input.deviceId),
     input: { deviceId: input.deviceId, capabilityCode: input.capabilityCode, commandKey: input.commandKey,
-      parameters: input.parameters, reason: input.reason, confirmationPresent: Boolean(input.confirmation) },
-    policyResult: { boundary: "capability-rbac+safety-interlock+second-confirmation" }
+      parameters: input.parameters, reason: input.reason, confirmationPresent: Boolean(input.confirmation),
+      approvalRequestId: input.approvalRequestId, safetyPolicyVersionId: input.safetyPolicyVersionId },
+    policyResult: { boundary: "capability-rbac+safety-interlock+second-confirmation+connector-worker-recheck" }
   }, async (client) => {
     const target = await client.query<{
       projectId: number; deviceTypeId: string; status: "online" | "degraded" | "offline" | "unknown" | "unavailable";
@@ -42,6 +46,19 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
         for update of device`, [input.projectId, input.deviceId, input.capabilityCode]);
     const device = target.rows[0];
     if (!device) throw new Error("DEVICE_CAPABILITY_NOT_FOUND");
+
+    const routes = await client.query<{ connectorInstanceId: string; connectorKey: string; connectorStatus: string; priority: number }>(
+      `select binding.connector_instance_id::text as "connectorInstanceId",definition.connector_key as "connectorKey",
+              adapter.status as "connectorStatus",binding.priority
+         from device_connector_bindings binding
+         join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
+         join connector_definitions definition on definition.id=adapter.connector_definition_id
+        where binding.project_id=$1 and binding.device_id=$2 and binding.status='active'
+        order by binding.priority desc,binding.connector_instance_id limit 2`, [input.projectId, input.deviceId]
+    );
+    if (!routes.rows[0] || (routes.rows[1] && routes.rows[1].priority === routes.rows[0].priority)) {
+      throw new Error("DEVICE_COMMAND_ROUTE_UNAVAILABLE");
+    }
 
     const grantRows = await client.query<{ actionPattern: string; effect: "allow" | "deny" }>(
       `select action_pattern as "actionPattern",effect from device_capability_grants
@@ -75,6 +92,47 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
       activeTaskCount: conflicts.rows[0]?.count ?? 0, confirmation: input.confirmation
     });
 
+    let flightHubSafety: Record<string, unknown> = {};
+    if (routes.rows[0].connectorKey === "dji.flighthub2") {
+      const governance = (await client.query<{
+        featureEnabled: boolean; capabilityFieldVerified: boolean; stateCapturedAt: Date | null;
+        currentSafetyPolicyVersionId: string | null; approvalProjectId: number | null; approvalTeamId: number | null;
+        approvalResourceType: string | null; approvalResourceId: string | null; approvalAction: string | null;
+        approvalStatus: string | null; approvalUnexpired: boolean;
+      }>(`select coalesce(flags.flighthub_action_flags_json @> '{"device.control":true}'::jsonb,false) as "featureEnabled",
+          exists(select 1 from connector_capability_snapshots capability where capability.project_id=$1
+            and capability.connector_instance_id=$3::bigint and capability.capability_code='device.control'
+            and capability.status='supported' and capability.evidence_level='field-write'
+            and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
+          latest.captured_at as "stateCapturedAt",project.current_safety_policy_version_id::text as "currentSafetyPolicyVersionId",
+          approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",
+          approval.resource_type as "approvalResourceType",approval.resource_id as "approvalResourceId",
+          approval.action as "approvalAction",approval.status as "approvalStatus",
+          coalesce(approval.expires_at>now(),false) as "approvalUnexpired"
+        from projects project
+        left join project_feature_flags flags on flags.project_id=project.id
+        left join device_latest_telemetry latest on latest.project_id=project.id and latest.device_id=$2 and latest.adapter_id=$3::bigint
+        left join approval_requests approval on approval.id=$4::uuid and approval.project_id=project.id
+        where project.id=$1`, [input.projectId, input.deviceId, routes.rows[0].connectorInstanceId, input.approvalRequestId ?? null])).rows[0];
+      if (!governance) throw new Error("FLIGHTHUB_COMMAND_SCOPE_DENIED");
+      const authorized = authorizeFlightHubDiscreteCommand({
+        projectId: input.projectId, teamId: access.teamId, deviceId: input.deviceId,
+        capabilityCode: input.capabilityCode, commandKey: input.commandKey,
+        parametersEmpty: Object.keys(input.parameters).length === 0,
+        connectorStatus: routes.rows[0].connectorStatus, featureEnabled: governance.featureEnabled,
+        capabilityFieldVerified: governance.capabilityFieldVerified, stateCapturedAt: governance.stateCapturedAt, now: new Date(),
+        safetyPolicyVersionId: input.safetyPolicyVersionId ?? null,
+        currentSafetyPolicyVersionId: governance.currentSafetyPolicyVersionId ? Number(governance.currentSafetyPolicyVersionId) : null,
+        approvalProjectId: governance.approvalProjectId, approvalTeamId: governance.approvalTeamId,
+        approvalResourceType: governance.approvalResourceType, approvalResourceId: governance.approvalResourceId,
+        approvalAction: governance.approvalAction, approvalStatus: governance.approvalStatus,
+        approvalUnexpired: governance.approvalUnexpired
+      });
+      flightHubSafety = { connectorKey: routes.rows[0].connectorKey, connectorInstanceId: routes.rows[0].connectorInstanceId,
+        approvalRequestId: input.approvalRequestId, safetyPolicyVersionId: input.safetyPolicyVersionId,
+        stateFresh: authorized.stateFresh, capabilityFieldVerified: governance.capabilityFieldVerified };
+    }
+
     const commandId = randomUUID();
     const priority = input.capabilityCode === "flight.return_home" ? 100
       : device.riskLevel === "critical" ? 90 : device.riskLevel === "high" ? 80 : 10;
@@ -88,7 +146,7 @@ export async function submitDeviceCommand(input: SubmitDeviceCommandInput) {
        returning id::text,status`, [commandId, input.projectId, access.teamId, input.deviceId,
         input.commandKey, input.idempotencyKey, input.capabilityCode, input.parameters,
         { reason: input.reason, confirmation: input.confirmation, confirmedByUserId: user.id,
-          confirmedAt: new Date().toISOString(), ...safety }, priority, deadlineSeconds, user.id]
+          confirmedAt: new Date().toISOString(), ...safety, ...flightHubSafety }, priority, deadlineSeconds, user.id]
     );
     const command = inserted.rows[0];
     await publishProjectEvent(client, {
