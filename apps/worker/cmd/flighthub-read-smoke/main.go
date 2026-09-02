@@ -23,6 +23,7 @@ func main() {
 	projectID := flag.Int("project-id", 0, "AeroSight project id")
 	connectorID := flag.Int64("connector-id", 0, "FlightHub connector instance id")
 	confirmed := flag.Bool(confirmationFlag, false, "explicitly allow released GET requests to the configured FlightHub account")
+	persistEvidence := flag.Bool("persist-evidence", false, "persist sanitized live-read capability evidence locally")
 	manifestPath := flag.String("manifest", "", "optional endpoint manifest path")
 	flag.Parse()
 	if !validInvocation(*confirmed, *projectID, *connectorID, flag.Args()) {
@@ -61,19 +62,32 @@ func main() {
 		exitWithSafeResult("credential_unavailable")
 	}
 	defer func() { token = "" }()
-	scope, err := flighthub.LoadReadOnlySmokeContext(ctx, database, instance)
-	if err != nil {
-		exitWithSafeResult("scope_unavailable")
-	}
 	client, err := flighthub.NewChinaClient(flighthub.Config{Timeout: 8 * time.Second, MaxRetries: 1, MaxConcurrent: 2, RequestsPerSecond: 2, RequestBurst: 2, RequestID: smokeRequestID})
 	if err != nil {
 		exitWithSafeResult("configuration_unavailable")
 	}
+	scope, err := flighthub.LoadReadOnlySmokeContext(ctx, database, instance)
+	if err != nil {
+		exitWithSafeResult("scope_unavailable")
+	}
+	hydratedScope, hydrationErr := flighthub.HydrateReadOnlySmokeContext(ctx, client, token, scope)
+	if hydrationErr == nil {
+		scope = hydratedScope
+	} else if *persistEvidence {
+		exitWithSafeResult("scope_unavailable")
+	}
+	results := flighthub.RunReadOnlySmoke(ctx, client, token, endpoints, scope)
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetEscapeHTML(true)
-	for _, result := range flighthub.RunReadOnlySmoke(ctx, client, token, endpoints, scope) {
+	for _, result := range results {
 		if err := encoder.Encode(result); err != nil {
 			exitWithSafeResult("output_unavailable")
+		}
+	}
+	if *persistEvidence {
+		repository := connector.NewSQLResourceRepository(database)
+		if err := flighthub.PersistReadOnlySmokeEvidence(ctx, repository, instance, endpoints, results, scope, time.Now().UTC(), 15*time.Minute); err != nil {
+			exitWithSafeResult("evidence_unavailable")
 		}
 	}
 }

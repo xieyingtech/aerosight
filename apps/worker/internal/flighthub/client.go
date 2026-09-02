@@ -492,7 +492,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 		var decoded envelope
 		decodeErr := json.Unmarshal(body, &decoded)
 		if statusErr := classifyStatus(response.StatusCode, response.Header.Get("Retry-After"), client.now()); statusErr != nil {
-			if statusErr.SafeCode == "upstream_error" && decodeErr == nil && decoded.Data != nil {
+			if statusErr.SafeCode == "upstream_error" && decodeErr == nil {
 				if businessErr, _ := classifyBusinessCode(decoded.Code, response.StatusCode, emptyCodes); businessErr != nil {
 					statusErr = businessErr
 				}

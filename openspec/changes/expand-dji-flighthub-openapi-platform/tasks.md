@@ -93,7 +93,7 @@
 ## 10. 真实验收、回填与发布门槛
 
 - [x] 10.1 提供显式 opt-in 的真实只读 smoke 命令，覆盖所有无副作用 released GET，输出仅含 endpoint、类别、计数/字段集合和耗时；用输出扫描证明不含 Token、SN、UUID、坐标或 URL。
-- [ ] 10.2 使用当前本地司空连接对 system/project/device/state/HMS/topology/task/wayline/flight-area/model/open-model/live-share/cloud-control 运行真实只读验收，并将成功、空状态、参数要求和权限差异写入 capability evidence，不修改任何远端资源。
+- [x] 10.2 使用当前本地司空连接对 system/project/device/state/HMS/topology/task/wayline/flight-area/model/open-model/live-share/cloud-control 运行真实只读验收，并将成功、空状态、参数要求和权限差异写入 capability evidence，不修改任何远端资源。
 - [ ] 10.3 对项目 1123 启用状态资源流并回填 Dock 2 与 M3TD 的 telemetry/pose，验证数据库各有最新位置、地图同时显示正确设施/无人机图层且刷新时间随真实轮询推进。
 - [ ] 10.4 比较司空与本地的航线、任务、模型及其他目录计数和抽样关联，验证本地已同步当前已知的 13 条航线、2 个模型及可访问任务且不泄露原始标识。
 - [ ] 10.5 执行跨租户、断开连接器、部分分页失败、429、业务空码、临时 URL、命令未知结果和 Worker 重启的端到端故障矩阵，并保存通过证据。

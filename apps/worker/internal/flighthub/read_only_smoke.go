@@ -1,6 +1,7 @@
 package flighthub
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/csv"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,9 +28,10 @@ type ReadOnlySmokeEndpoint struct {
 }
 
 type ReadOnlySmokeContext struct {
-	ProjectUUID      string
-	OrganizationUUID string
-	Values           map[string]string
+	ProjectUUID        string
+	OrganizationUUID   string
+	AccountFingerprint string
+	Values             map[string]string
 }
 
 type ReadOnlySmokeResult struct {
@@ -37,6 +40,11 @@ type ReadOnlySmokeResult struct {
 	Count      int      `json:"count"`
 	Fields     []string `json:"fields"`
 	DurationMS int64    `json:"durationMs"`
+}
+
+type ReadOnlySmokeEvidenceRepository interface {
+	SaveCapabilitySnapshot(context.Context, connector.Instance, connector.CapabilitySnapshot) error
+	SaveCapabilityAccountFingerprint(context.Context, connector.Instance, string) error
 }
 
 func LoadReadOnlySmokeManifest(reader io.Reader) ([]ReadOnlySmokeEndpoint, error) {
@@ -126,10 +134,51 @@ func LoadReadOnlySmokeContext(ctx context.Context, database *sql.DB, instance co
 	if err := rows.Err(); err != nil {
 		return ReadOnlySmokeContext{}, err
 	}
-	return ReadOnlySmokeContext{ProjectUUID: scope.ProjectUUID, OrganizationUUID: scope.OrganizationUUID, Values: values}, nil
+	return ReadOnlySmokeContext{ProjectUUID: scope.ProjectUUID, OrganizationUUID: scope.OrganizationUUID, AccountFingerprint: scope.AccountFingerprint, Values: values}, nil
+}
+
+func HydrateReadOnlySmokeContext(ctx context.Context, client *Client, token string, scope ReadOnlySmokeContext) (ReadOnlySmokeContext, error) {
+	if client == nil || strings.TrimSpace(token) == "" || !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(scope.ProjectUUID))) {
+		return ReadOnlySmokeContext{}, &APIError{SafeCode: "request_invalid"}
+	}
+	projects, err := client.ListProjects(ctx, token)
+	if err != nil {
+		return ReadOnlySmokeContext{}, err
+	}
+	organizationUUID := ""
+	for _, project := range projects {
+		if !strings.EqualFold(project.UUID, scope.ProjectUUID) {
+			continue
+		}
+		if organizationUUID != "" || !uuidPattern.MatchString(strings.ToLower(strings.TrimSpace(project.OrganizationUUID))) {
+			return ReadOnlySmokeContext{}, &APIError{SafeCode: "scope_forbidden"}
+		}
+		organizationUUID = strings.ToLower(strings.TrimSpace(project.OrganizationUUID))
+	}
+	if organizationUUID == "" || (scope.OrganizationUUID != "" && !strings.EqualFold(scope.OrganizationUUID, organizationUUID)) {
+		return ReadOnlySmokeContext{}, &APIError{SafeCode: "scope_forbidden"}
+	}
+	currentRole, err := client.GetCurrentOrganizationRole(ctx, token, organizationUUID)
+	if err != nil {
+		return ReadOnlySmokeContext{}, err
+	}
+	if !strings.EqualFold(strings.TrimSpace(currentRole.OrganizationUUID), organizationUUID) {
+		return ReadOnlySmokeContext{}, &APIError{SafeCode: "scope_forbidden"}
+	}
+	fingerprint, err := CapabilityAccountFingerprint(organizationUUID, currentRole.UserID)
+	if err != nil {
+		return ReadOnlySmokeContext{}, err
+	}
+	scope.OrganizationUUID = organizationUUID
+	scope.AccountFingerprint = fingerprint
+	if scope.Values == nil {
+		scope.Values = map[string]string{}
+	}
+	return scope, nil
 }
 
 func RunReadOnlySmoke(ctx context.Context, client *Client, token string, endpoints []ReadOnlySmokeEndpoint, scope ReadOnlySmokeContext) []ReadOnlySmokeResult {
+	endpoints = orderReadOnlySmokeEndpoints(endpoints)
 	results := make([]ReadOnlySmokeResult, 0, len(endpoints))
 	for _, endpoint := range endpoints {
 		started := time.Now()
@@ -151,7 +200,7 @@ func RunReadOnlySmoke(ctx context.Context, client *Client, token string, endpoin
 		} else if strings.HasPrefix(endpoint.Path, "/openapi/v2.0/live-shares/") {
 			profile = "live-share-detail"
 		}
-		payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: path, Profile: profile})
+		payload, err := client.request(ctx, token, projectUUID, requestSpec{Method: http.MethodGet, Path: path, Profile: profile, DataOptional: true})
 		result.DurationMS = elapsedMilliseconds(started)
 		if err != nil {
 			var apiError *APIError
@@ -165,10 +214,226 @@ func RunReadOnlySmoke(ctx context.Context, client *Client, token string, endpoin
 			results = append(results, result)
 			continue
 		}
+		learnReadOnlySmokeValues(endpoint.ID, payload.Data, scope.Values)
 		result.Category, result.Count, result.Fields = summarizeSmokePayload(payload)
 		results = append(results, result)
 	}
 	return results
+}
+
+func orderReadOnlySmokeEndpoints(endpoints []ReadOnlySmokeEndpoint) []ReadOnlySmokeEndpoint {
+	ordered := append([]ReadOnlySmokeEndpoint(nil), endpoints...)
+	priority := map[string]int{
+		"454273364e0": 1, // project list
+		"456447011e0": 2, // organization list
+		"456680822e0": 3, // project devices
+		"456680824e0": 4, // wayline list
+		"454273439e0": 5, // flight task list
+		"458069507e0": 6, // model list
+		"458069512e0": 7, // running open models
+	}
+	sort.SliceStable(ordered, func(left, right int) bool {
+		leftPriority, leftKnown := priority[ordered[left].ID]
+		rightPriority, rightKnown := priority[ordered[right].ID]
+		if leftKnown != rightKnown {
+			return leftKnown
+		}
+		return leftKnown && leftPriority < rightPriority
+	})
+	return ordered
+}
+
+func learnReadOnlySmokeValues(endpointID string, raw json.RawMessage, values map[string]string) {
+	if values == nil || len(raw) == 0 {
+		return
+	}
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&value) != nil {
+		return
+	}
+	switch endpointID {
+	case "456680824e0":
+		setSmokeValue(values, "wayline_id", firstSmokeScalar(value, "id"))
+	case "454273439e0", "454273433e0":
+		setSmokeValue(values, "task_uuid", firstSmokeScalar(value, "uuid"))
+	case "458069507e0":
+		setSmokeValue(values, "model_id", firstSmokeScalar(value, "id"))
+	case "458069512e0":
+		setSmokeValue(values, "model_uuid", firstSmokeScalar(value, "model_uuid"))
+		setSmokeValue(values, "resource_uuid", firstSmokeScalar(value, "resource_uuid"))
+	case "458069510e0":
+		setSmokeValue(values, "file_id", firstSmokeScalar(value, "file_id"))
+	}
+}
+
+func setSmokeValue(values map[string]string, name, value string) {
+	if strings.TrimSpace(values[name]) == "" && strings.TrimSpace(value) != "" {
+		values[name] = value
+	}
+}
+
+func firstSmokeScalar(value any, key string) string {
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			if found := firstSmokeScalar(item, key); found != "" {
+				return found
+			}
+		}
+	case map[string]any:
+		if raw, exists := typed[key]; exists {
+			switch scalar := raw.(type) {
+			case string:
+				return strings.TrimSpace(scalar)
+			case json.Number:
+				if integer, err := strconv.ParseInt(scalar.String(), 10, 64); err == nil && integer >= 0 {
+					return strconv.FormatInt(integer, 10)
+				}
+			}
+		}
+		for _, nestedKey := range []string{"list", "items", "records", "rows", "data"} {
+			if nested, exists := typed[nestedKey]; exists {
+				if found := firstSmokeScalar(nested, key); found != "" {
+					return found
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func PersistReadOnlySmokeEvidence(
+	ctx context.Context,
+	repository ReadOnlySmokeEvidenceRepository,
+	instance connector.Instance,
+	endpoints []ReadOnlySmokeEndpoint,
+	results []ReadOnlySmokeResult,
+	scope ReadOnlySmokeContext,
+	verifiedAt time.Time,
+	ttl time.Duration,
+) error {
+	if repository == nil || instance.ID <= 0 || instance.ProjectID <= 0 || !validAccountFingerprint(scope.AccountFingerprint) ||
+		verifiedAt.IsZero() || ttl <= 0 || len(endpoints) != len(results) || len(results) != ReadOnlySmokeEndpointCount {
+		return &APIError{SafeCode: "request_invalid"}
+	}
+	endpointByID := make(map[string]ReadOnlySmokeEndpoint, len(endpoints))
+	for _, endpoint := range endpoints {
+		if _, duplicate := endpointByID[endpoint.ID]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		endpointByID[endpoint.ID] = endpoint
+	}
+	grouped := map[string][]ReadOnlySmokeResult{}
+	seenResults := make(map[string]struct{}, len(results))
+	for _, result := range results {
+		endpoint, exists := endpointByID[result.Endpoint]
+		if !exists || !safeSmokeCategory(result.Category) && result.Category != "succeeded" && result.Category != "prerequisite_missing" {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		if _, duplicate := seenResults[result.Endpoint]; duplicate {
+			return &APIError{SafeCode: "request_invalid"}
+		}
+		seenResults[result.Endpoint] = struct{}{}
+		capabilityCode := readOnlySmokeCapability(endpoint)
+		if capabilityCode != "" {
+			grouped[capabilityCode] = append(grouped[capabilityCode], result)
+		}
+	}
+	if len(seenResults) != len(endpointByID) {
+		return &APIError{SafeCode: "request_invalid"}
+	}
+	if err := repository.SaveCapabilityAccountFingerprint(ctx, instance, scope.AccountFingerprint); err != nil {
+		return err
+	}
+	expiresAt := verifiedAt.Add(ttl)
+	capabilityCodes := make([]string, 0, len(grouped))
+	for code := range grouped {
+		capabilityCodes = append(capabilityCodes, code)
+	}
+	sort.Strings(capabilityCodes)
+	for _, capabilityCode := range capabilityCodes {
+		items := grouped[capabilityCode]
+		safeItems := make([]map[string]any, 0, len(items))
+		for _, item := range items {
+			safeItems = append(safeItems, map[string]any{
+				"endpointId": item.Endpoint, "category": item.Category, "count": item.Count,
+				"fields": append([]string(nil), item.Fields...), "durationMs": item.DurationMS,
+			})
+		}
+		status, reason := summarizeReadOnlySmokeEvidence(items)
+		if err := repository.SaveCapabilitySnapshot(ctx, instance, connector.CapabilitySnapshot{
+			CapabilityCode: capabilityCode, Status: status, EvidenceLevel: "live-read", Region: "cn", Deployment: "cn-public-cloud",
+			AccountFingerprint: scope.AccountFingerprint, Details: map[string]any{"source": "read-only-smoke", "reason": reason, "endpoints": safeItems},
+			VerifiedAt: verifiedAt, ExpiresAt: &expiresAt,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func readOnlySmokeCapability(endpoint ReadOnlySmokeEndpoint) string {
+	switch endpoint.Domain {
+	case "system":
+		return "health.read"
+	case "organization", "project":
+		return "organization.read"
+	case "device":
+		switch endpoint.ID {
+		case "458069501e0":
+			return "state.read"
+		case "458069499e0", "457048706e0":
+			return "health.read"
+		default:
+			return "inventory.read"
+		}
+	case "flight":
+		return "flight.read"
+	case "live":
+		return "live.read"
+	case "geospatial":
+		return "geospatial.read"
+	case "model":
+		return "model.read"
+	case "control":
+		if endpoint.ID == "454273421e0" {
+			return "tca.status.read"
+		}
+		return "device.control"
+	default:
+		return ""
+	}
+}
+
+func summarizeReadOnlySmokeEvidence(results []ReadOnlySmokeResult) (string, string) {
+	counts := map[string]int{}
+	for _, result := range results {
+		counts[result.Category]++
+	}
+	if counts["succeeded"] > 0 {
+		if counts["succeeded"] == len(results) {
+			return "supported", "read_only_smoke_succeeded"
+		}
+		return "supported", "read_only_smoke_partial"
+	}
+	if counts["empty"] > 0 {
+		return "empty", "read_only_smoke_empty"
+	}
+	if counts["scope_forbidden"] > 0 || counts["credential_invalid"] > 0 {
+		return "forbidden", "read_only_smoke_forbidden"
+	}
+	if counts["rate_limited"] > 0 || counts["request_timeout"] > 0 || counts["upstream_unavailable"] > 0 || counts["cancelled"] > 0 {
+		return "degraded", "read_only_smoke_degraded"
+	}
+	if counts["not_applicable"] > 0 {
+		return "not_applicable", "read_only_smoke_not_applicable"
+	}
+	if counts["configuration_required"] > 0 || counts["parameter_required"] > 0 || counts["prerequisite_missing"] > 0 || counts["scope_not_found"] > 0 {
+		return "unverified", "read_only_smoke_context_required"
+	}
+	return "failed", "read_only_smoke_failed"
 }
 
 func resolveReadOnlySmokePath(template string, scope ReadOnlySmokeContext) (string, bool) {
@@ -261,7 +526,7 @@ func safeSmokeCategory(value string) bool {
 	switch value {
 	case "credential_invalid", "scope_forbidden", "scope_not_found", "rate_limited", "upstream_unavailable",
 		"request_timeout", "response_too_large", "schema_incompatible", "request_invalid", "upstream_error",
-		"parameter_required", "not_applicable", "empty":
+		"parameter_required", "configuration_required", "not_applicable", "empty", "cancelled":
 		return true
 	default:
 		return false
