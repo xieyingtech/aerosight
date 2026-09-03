@@ -26,6 +26,7 @@ func TestSQLDeviceStreamChannelProjectorCreatesIdempotentDockChannel(t *testing.
 	defer database.Close()
 	ctx := context.Background()
 	suffix := time.Now().UnixNano()
+	accountFingerprint := strings.Repeat("a", 64)
 	var teamID, projectID, foreignProjectID, dockID, foreignDockID int
 	var adapterID, definitionID int64
 	if err := database.QueryRowContext(ctx, `insert into teams(name) values($1) returning id`, fmt.Sprintf("flighthub-stream-%d", suffix)).Scan(&teamID); err != nil {
@@ -42,16 +43,18 @@ func TestSQLDeviceStreamChannelProjectorCreatesIdempotentDockChannel(t *testing.
 		t.Fatal(err)
 	}
 	if err := database.QueryRowContext(ctx, `insert into device_adapters(
-		project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status
-	) values($1,$2,$3,'dji-flighthub2',$4,'2','connected') returning id`,
-		projectID, teamID, fmt.Sprintf("flighthub-stream-%d", suffix), definitionID).Scan(&adapterID); err != nil {
+		project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status,discovery_scope_json
+	) values($1,$2,$3,'dji-flighthub2',$4,'2','connected',jsonb_build_object('accountFingerprint',$5::text)) returning id`,
+		projectID, teamID, fmt.Sprintf("flighthub-stream-%d", suffix), definitionID, accountFingerprint).Scan(&adapterID); err != nil {
 		t.Fatal(err)
 	}
 	createDock := func(project int, name string, adapter any) int {
 		t.Helper()
 		var id int
-		if err := database.QueryRowContext(ctx, `insert into devices(project_id,adapter_id,device_type_id,name,type,status)
-			select $1,$2,id,$3,'dock','online' from device_types where type_key='dji.dock2' and status='active'
+		if err := database.QueryRowContext(ctx, `insert into devices(
+			project_id,adapter_id,device_type_id,name,type,status,device_model,firmware_version
+		) select $1,$2,id,$3,'dock','online','3-2-0','01.00.0900'
+			from device_types where type_key='dji.dock2' and status='active'
 			order by version desc limit 1 returning id`, project, adapter, name).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
@@ -86,14 +89,51 @@ func TestSQLDeviceStreamChannelProjectorCreatesIdempotentDockChannel(t *testing.
 		t.Fatal(err)
 	}
 	if err := database.QueryRowContext(ctx, `select count(*) from device_capabilities
-		where project_id=$1 and device_id=$2 and capability_code=$3`, projectID, dockID, flightHubVideoReadCapability).Scan(&capabilityCount); err != nil {
+		where project_id=$1 and device_id=$2 and capability_code=any($3::text[])`, projectID, dockID,
+		[]string{flightHubVideoReadCapability, flightHubVideoControlCapability}).Scan(&capabilityCount); err != nil {
 		t.Fatal(err)
 	}
-	if channelCount != 1 || capabilityCount != 1 || channelKey != "165-0-7" || availability != "available" ||
+	if channelCount != 1 || capabilityCount != 2 || channelKey != "165-0-7" || availability != "available" ||
 		sourceKey != ConnectorKey || sourceID != fmt.Sprint(adapterID) || strings.Contains(stableID, snapshot.SN) {
 		t.Fatalf("dock channel projection count=%d capability=%d key=%s availability=%s source=%s/%s stableHasSN=%v",
 			channelCount, capabilityCount, channelKey, availability, sourceKey, sourceID, strings.Contains(stableID, snapshot.SN))
 	}
+	assertControlAvailability := func(wantAvailability, wantReason string) {
+		t.Helper()
+		var gotAvailability string
+		var gotReason sql.NullString
+		if err := database.QueryRowContext(ctx, `select availability,availability_reason from device_capabilities
+			where project_id=$1 and device_id=$2 and capability_code=$3`, projectID, dockID,
+			flightHubVideoControlCapability).Scan(&gotAvailability, &gotReason); err != nil {
+			t.Fatal(err)
+		}
+		if gotAvailability != wantAvailability || gotReason.String != wantReason || gotReason.Valid != (wantReason != "") {
+			t.Fatalf("live control availability=%s/%v want=%s/%s", gotAvailability, gotReason, wantAvailability, wantReason)
+		}
+	}
+	assertControlAvailability("unavailable", flightHubLiveActionDisabledReason)
+
+	if _, err := database.ExecContext(ctx, `insert into project_feature_flags(project_id,flighthub_action_flags_json)
+		values($1,'{"live.control":true}'::jsonb)
+		on conflict(project_id) do update set flighthub_action_flags_json=excluded.flighthub_action_flags_json`, projectID); err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.ApplyDeviceStreamChannels(ctx, instance, poll); err != nil {
+		t.Fatal(err)
+	}
+	assertControlAvailability("unavailable", flightHubLiveFieldAcceptanceRequiredReason)
+
+	if _, err := database.ExecContext(ctx, `insert into connector_capability_snapshots(
+		project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,
+		account_fingerprint,device_model,firmware_version,verified_at,expires_at
+	) values($1,$2,$3,'live.control','supported','field-write','cn','cn-public-cloud',$4,'3-2-0','01.00.0900',now(),now()+interval '1 hour')`,
+		projectID, teamID, adapterID, accountFingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if err := projector.ApplyDeviceStreamChannels(ctx, instance, poll); err != nil {
+		t.Fatal(err)
+	}
+	assertControlAvailability("available", "")
 
 	delete(snapshot.State, "live_status")
 	poll.Mapped = MapDeviceState(snapshot)

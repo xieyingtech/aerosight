@@ -12,7 +12,12 @@ import (
 	"aerosight/worker/internal/connector"
 )
 
-const flightHubVideoReadCapability = "stream.video.read"
+const (
+	flightHubVideoReadCapability               = "stream.video.read"
+	flightHubVideoControlCapability            = "stream.video.control"
+	flightHubLiveActionDisabledReason          = "FLIGHTHUB_LIVE_ACTION_DISABLED"
+	flightHubLiveFieldAcceptanceRequiredReason = "FLIGHTHUB_LIVE_FIELD_ACCEPTANCE_REQUIRED"
+)
 
 var flightHubCameraIndexPattern = regexp.MustCompile(`^[0-9]{1,4}-[0-9]{1,4}-[0-9]{1,4}$`)
 
@@ -57,13 +62,28 @@ func (projector *SQLDeviceHealthProjector) ApplyDeviceStreamChannels(ctx context
 	}
 
 	if len(channels) > 0 {
-		result, capabilityErr := tx.ExecContext(ctx, `insert into device_capabilities(
+		controlAvailability, controlReason, availabilityErr := flightHubLiveControlAvailability(
+			ctx, tx, instance, poll.Device.DeviceID,
+		)
+		if availabilityErr != nil {
+			return availabilityErr
+		}
+		capabilities := []struct {
+			code         string
+			availability string
+			reason       string
+		}{
+			{code: flightHubVideoReadCapability, availability: "available"},
+			{code: flightHubVideoControlCapability, availability: controlAvailability, reason: controlReason},
+		}
+		for _, capability := range capabilities {
+			result, capabilityErr := tx.ExecContext(ctx, `insert into device_capabilities(
 			device_id,project_id,capability_code,version,declared_by_adapter_id,params_schema_json,
 			input_schema_json,output_schema_json,risk_level,source_json,availability,availability_reason
 		) select $1,$2,capability->>'code',driver.version,$3,
 			coalesce(capability->'inputSchema','{}'::jsonb),coalesce(capability->'inputSchema','{}'::jsonb),
 			coalesce(capability->'outputSchema','{}'::jsonb),coalesce(capability->>'risk','low'),$4::jsonb,
-			'available',null
+			$7,nullif($8,'')
 		from device_types device_type
 		join driver_definitions driver on driver.id=device_type.driver_definition_id
 		cross join lateral jsonb_array_elements(case when jsonb_typeof(driver.manifest_json->'capabilities')='array'
@@ -73,17 +93,19 @@ func (projector *SQLDeviceHealthProjector) ApplyDeviceStreamChannels(ctx context
 			declared_by_adapter_id=excluded.declared_by_adapter_id,params_schema_json=excluded.params_schema_json,
 			input_schema_json=excluded.input_schema_json,output_schema_json=excluded.output_schema_json,
 			risk_level=excluded.risk_level,source_json=excluded.source_json,
-			availability='available',availability_reason=null,updated_at=now()`,
-			poll.Device.DeviceID, instance.ProjectID, instance.ID,
-			streamChannelSource(instance.ID, poll.Mapped.MapperVersion), deviceTypeID, flightHubVideoReadCapability)
-		if capabilityErr != nil {
-			return capabilityErr
-		}
-		if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected != 1 {
-			if rowsErr != nil {
-				return rowsErr
+			availability=excluded.availability,availability_reason=excluded.availability_reason,updated_at=now()`,
+				poll.Device.DeviceID, instance.ProjectID, instance.ID,
+				streamChannelSource(instance.ID, poll.Mapped.MapperVersion), deviceTypeID, capability.code,
+				capability.availability, capability.reason)
+			if capabilityErr != nil {
+				return capabilityErr
 			}
-			return errors.New("FlightHub stream channel capability is outside driver contract")
+			if affected, rowsErr := result.RowsAffected(); rowsErr != nil || affected != 1 {
+				if rowsErr != nil {
+					return rowsErr
+				}
+				return errors.New("FlightHub stream channel capability is outside driver contract")
+			}
 		}
 	}
 
@@ -126,6 +148,35 @@ func (projector *SQLDeviceHealthProjector) ApplyDeviceStreamChannels(ctx context
 		return err
 	}
 	return tx.Commit()
+}
+
+func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance connector.Instance, deviceID int) (string, string, error) {
+	var featureEnabled, fieldAccepted bool
+	err := tx.QueryRowContext(ctx, `select
+		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false),
+		exists(select 1 from connector_capability_snapshots capability
+			where capability.project_id=adapter.project_id and capability.connector_instance_id=adapter.id
+				and capability.capability_code='live.control' and capability.status='supported'
+				and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
+				and capability.region='cn' and capability.deployment='cn-public-cloud'
+				and capability.evidence_level='field-write'
+				and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
+				and (capability.expires_at is null or capability.expires_at>now()))
+	from device_adapters adapter
+	join devices device on device.adapter_id=adapter.id and device.project_id=adapter.project_id
+	left join project_feature_flags flags on flags.project_id=adapter.project_id
+	where adapter.id=$1 and adapter.project_id=$2 and device.id=$3`,
+		instance.ID, instance.ProjectID, deviceID).Scan(&featureEnabled, &fieldAccepted)
+	if err != nil {
+		return "", "", err
+	}
+	if !featureEnabled {
+		return "unavailable", flightHubLiveActionDisabledReason, nil
+	}
+	if !fieldAccepted {
+		return "unavailable", flightHubLiveFieldAcceptanceRequiredReason, nil
+	}
+	return "available", "", nil
 }
 
 func streamChannelSource(connectorID int64, mapperVersion string) string {
