@@ -1,6 +1,7 @@
 export type FlightHubPlaybackGateInput = {
   canView: boolean;
   status: string;
+  startAcceptedAt: Date | null;
   localAuthorizationRevokedAt: Date | null;
   credentialExpiresAt: Date | null;
   now: Date;
@@ -8,7 +9,8 @@ export type FlightHubPlaybackGateInput = {
 
 export function flightHubPlaybackGate(input: FlightHubPlaybackGateInput) {
   if (!input.canView) throw new Error("FLIGHTHUB_PLAYBACK_PERMISSION_REVOKED");
-  if (!new Set(["live", "degraded"]).has(input.status)) return { available: false, reason: `stream-${input.status}` } as const;
+  if (!new Set(["starting", "live", "degraded"]).has(input.status)) return { available: false, reason: `stream-${input.status}` } as const;
+  if (input.status === "starting" && !input.startAcceptedAt) return { available: false, reason: "stream-starting-unaccepted" } as const;
   if (input.localAuthorizationRevokedAt) return { available: false, reason: "playback-authorization-revoked" } as const;
   if (!input.credentialExpiresAt || input.credentialExpiresAt.getTime() <= input.now.getTime()) {
     return { available: false, reason: "playback-credential-expired" } as const;

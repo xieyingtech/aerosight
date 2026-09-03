@@ -26,6 +26,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      '@volcengine/rtc':
+        specifier: 4.69.1
+        version: 4.69.1
       ai:
         specifier: ^7.0.83
         version: 7.0.83(zod@4.4.3)
@@ -1581,6 +1584,9 @@ packages:
       maplibre-gl:
         optional: true
 
+  '@volcengine/rtc@4.69.1':
+    resolution: {integrity: sha512-xw9DCZ6fv4L59cCc3rJEt9vjxwoJCgIiL6x3K0xcPHC1b5RBmba+2tDi6gOOmqviuDanPBnyJps1yNQyYt8nMQ==}
+
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
 
@@ -1937,6 +1943,9 @@ packages:
   etag@1.8.1:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
+
+  eventemitter3@4.0.7:
+    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
 
   eventsource-parser@3.1.1:
     resolution: {integrity: sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ==}
@@ -4718,6 +4727,10 @@ snapshots:
     optionalDependencies:
       maplibre-gl: 5.24.0
 
+  '@volcengine/rtc@4.69.1':
+    dependencies:
+      eventemitter3: 4.0.7
+
   '@workflow/serde@4.1.0': {}
 
   accepts@2.0.0:
@@ -4999,6 +5012,8 @@ snapshots:
   esprima@4.0.1: {}
 
   etag@1.8.1: {}
+
+  eventemitter3@4.0.7: {}
 
   eventsource-parser@3.1.1: {}
 

@@ -49,6 +49,7 @@ type LiveStreamRow = {
   supplierCredentialExpiresAt: Date | null;
   supplierCredentialEnvelope: CredentialEnvelope | null;
   localAuthorizationRevokedAt: Date | null;
+  startAcceptedAt: Date | null;
 };
 
 function mediaPublishCredentials(adapterId: string, projectId: number, envelope: CredentialEnvelope | null) {
@@ -70,7 +71,7 @@ const projection = `id, project_id as "projectId", team_id as "teamId", device_i
   supplier_protocol as "supplierProtocol",supplier_adapter_version as "supplierAdapterVersion",
   supplier_credential_expires_at as "supplierCredentialExpiresAt",
   supplier_credential_envelope_json as "supplierCredentialEnvelope",
-  local_authorization_revoked_at as "localAuthorizationRevokedAt"`;
+  local_authorization_revoked_at as "localAuthorizationRevokedAt",start_accepted_at as "startAcceptedAt"`;
 
 const qualifiedProjection = `stream.id,stream.project_id as "projectId",stream.team_id as "teamId",
   stream.device_id as "deviceId",stream.stream_key as "streamKey",stream.source_type as "sourceType",
@@ -80,7 +81,7 @@ const qualifiedProjection = `stream.id,stream.project_id as "projectId",stream.t
   stream.supplier_protocol as "supplierProtocol",stream.supplier_adapter_version as "supplierAdapterVersion",
   stream.supplier_credential_expires_at as "supplierCredentialExpiresAt",
   stream.supplier_credential_envelope_json as "supplierCredentialEnvelope",
-  stream.local_authorization_revoked_at as "localAuthorizationRevokedAt"`;
+  stream.local_authorization_revoked_at as "localAuthorizationRevokedAt",stream.start_accepted_at as "startAcceptedAt"`;
 
 function publicSession(row: LiveStreamRow): LiveStreamSession {
   return {
@@ -394,10 +395,14 @@ export async function getLiveStreamPlayback(projectId: number, streamId: number)
   }
   const session = publicSession(row);
   assertLiveStreamProjectScope(session, projectId);
-  const availability = playbackAvailability(session, new Date(), row.playbackLocatorExpiresAt);
+  const acceptedFlightHubStart = session.sourceType === "dji_flighthub" && session.status === "starting" && Boolean(row.startAcceptedAt);
+  const availability = acceptedFlightHubStart
+    ? { available: Boolean(session.playbackRef), reason: session.playbackRef ? null : "playback-unavailable" }
+    : playbackAvailability(session, new Date(), row.playbackLocatorExpiresAt);
   if (!availability.available) return { session, available: false, reason: availability.reason };
   if (session.sourceType === "dji_flighthub") {
     const gate = flightHubPlaybackGate({ canView: true, status: session.status,
+      startAcceptedAt: row.startAcceptedAt,
       localAuthorizationRevokedAt: row.localAuthorizationRevokedAt,
       credentialExpiresAt: row.supplierCredentialExpiresAt, now: new Date() });
     if (!gate.available) return { session, available: false, reason: gate.reason };
@@ -410,7 +415,8 @@ export async function getLiveStreamPlayback(projectId: number, streamId: number)
           playback_locator_expires_at=least(supplier_credential_expires_at,now()+interval '60 seconds'),
           updated_at=now()
         where project_id=$1 and id=$2 and source_type='dji_flighthub'
-          and status in('live','degraded')
+          and status in('starting','live','degraded')
+          and (status<>'starting' or start_accepted_at is not null)
           and local_authorization_revoked_at is null
           and supplier_credential_expires_at>now()
           and supplier_credential_envelope_json is not null

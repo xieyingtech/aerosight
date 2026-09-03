@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
+import { VolcRTCPlayer } from "@/components/volc-rtc-player";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 import { isLiveStreamPlayable } from "@/lib/realtime-workbench-core";
 
 type PlaybackState =
   | { status: "idle" | "loading" | "error"; candidates?: never; index?: never }
-  | { status: "ready"; candidates: { protocol: "webrtc" | "hls" | "simulator"; url: string }[]; index: number };
+  | { status: "ready"; candidates: { protocol: "webrtc" | "hls" | "simulator" | "volc-rtc"; url: string }[]; index: number };
 
 function HistoricalMedia({ projectId, media }: { projectId: number; media: Record<string, unknown> }) {
   const [accessUrl, setAccessUrl] = useState<string | null>(null);
@@ -92,7 +93,8 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
 
   useEffect(() => {
     const streamStatus = String(model.stream?.status ?? "");
-    if (!streamId || !isLiveStreamPlayable(streamStatus)) { setPlayback({ status: "idle" }); return; }
+    const acceptedFlightHubStart = String(model.stream?.sourceType) === "dji_flighthub" && streamStatus === "starting";
+    if (!streamId || (!isLiveStreamPlayable(streamStatus) && !acceptedFlightHubStart)) { setPlayback({ status: "idle" }); return; }
     const controller = new AbortController();
     setPlayback({ status: "loading" });
     fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
@@ -105,8 +107,8 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
         playback?: { candidates?: { protocol: "webrtc" | "hls"; url: string }[]; expiresAt: string;
           protocol?: string; credential?: string };
       };
-      const direct = result.playback?.credential && new Set(["webrtc", "hls"]).has(result.playback.protocol ?? "")
-        ? [{ protocol: result.playback.protocol as "webrtc" | "hls", url: result.playback.credential }] : [];
+      const direct = result.playback?.credential && new Set(["webrtc", "hls", "volc-rtc"]).has(result.playback.protocol ?? "")
+        ? [{ protocol: result.playback.protocol as "webrtc" | "hls" | "volc-rtc", url: result.playback.credential }] : [];
       const candidates = [...(result.playback?.candidates ?? []), ...direct,
         ...(result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : [])];
       if (!result.available || candidates.length === 0) throw new Error("playback unavailable");
@@ -164,13 +166,15 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
     </div>
     <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-slate-950 text-slate-200">
-      {!isLiveStreamPlayable(status) ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? "正在停止直播…" : "正在等待设备推流…"}</div>
+      {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? "正在停止直播…" : "正在等待设备推流…"}</div>
         : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
         : playback.status === "error" ? <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />直播连接失败或 locator 已过期</div>
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "webrtc"
             ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
             ? <video autoPlay className="h-full w-full object-contain" controls muted onError={() => setPlayback((current) => current.status === "ready" && current.index + 1 < current.candidates.length ? { ...current, index: current.index + 1 } : { status: "error" })} src={playback.candidates[playback.index].url} />
+          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "volc-rtc"
+            ? <VolcRTCPlayer credential={playback.candidates[playback.index].url} />
             : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "simulator"
               ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
               : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}

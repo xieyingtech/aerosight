@@ -105,7 +105,8 @@ test("FlightHub playback authorization is atomically claimed before credential d
   const decrypt = branch.indexOf("decryptCredentialObject");
   assert(authorizationUpdate >= 0 && decrypt > authorizationUpdate,
     "supplier credential must only be decrypted after the conditional authorization update");
-  assert.match(branch, /status in\('live','degraded'\)/);
+  assert.match(branch, /status in\('starting','live','degraded'\)/);
+  assert.match(branch, /status<>'starting' or start_accepted_at is not null/);
   assert.match(branch, /local_authorization_revoked_at is null/);
   assert.match(branch, /supplier_credential_expires_at>now\(\)/);
   assert.match(branch, /supplier_credential_envelope_json is not null[\s\S]*returning[\s\S]*supplier_credential_envelope_json/);
