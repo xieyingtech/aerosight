@@ -30,7 +30,7 @@ test("Volc RTC remount waits for the previous fixed viewer identity to leave", (
 
 test("Volc RTC timeout is presented as a local viewer failure with a local-only retry", () => {
   const source = readFileSync(new URL("../components/volc-rtc-player.tsx", import.meta.url), "utf8");
-  assert.match(source, /司空直播已启动，但当前浏览器未建立 RTC 观看连接/);
+  assert.match(source, /直播已启动，但当前浏览器未建立 RTC 观看连接/);
   assert.match(source, /重试观看/);
   assert.match(source, /setViewerAttempt\(\(current\) => current \+ 1\)/);
   assert.match(source, /\[credential, viewerAttempt\]/);

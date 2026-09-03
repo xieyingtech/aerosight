@@ -4,7 +4,6 @@ export const DJI_FLIGHTHUB_CHINA_API_ORIGIN = "https://es-flight-api-cn.djigate.
 export const DJI_FLIGHTHUB_CONSOLE_URL = "https://fh.dji.com";
 
 const environmentSchema = z.object({
-  DJI_FLIGHTHUB_ENABLED: z.enum(["true", "false"]).default("false"),
   DJI_FLIGHTHUB_API_BASE_URL: z.string().trim().default(DJI_FLIGHTHUB_CHINA_API_ORIGIN),
   DJI_FLIGHTHUB_HTTP_TIMEOUT_MS: z.coerce.number().int().min(500).max(30_000).default(8_000),
   DJI_FLIGHTHUB_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(2),
@@ -13,7 +12,6 @@ const environmentSchema = z.object({
 });
 
 export type FlightHubWebConfig = {
-  enabled: boolean;
   apiBaseUrl: string;
   timeoutMs: number;
   maxRetries: number;
@@ -50,7 +48,6 @@ export function parseFlightHubWebConfig(
     throw new Error("DJI_FLIGHTHUB_CONFIGURATION_INVALID");
   }
   return {
-    enabled: parsed.data.DJI_FLIGHTHUB_ENABLED === "true",
     apiBaseUrl: normalizeOfficialOrigin(parsed.data.DJI_FLIGHTHUB_API_BASE_URL),
     timeoutMs: parsed.data.DJI_FLIGHTHUB_HTTP_TIMEOUT_MS,
     maxRetries: parsed.data.DJI_FLIGHTHUB_MAX_RETRIES,

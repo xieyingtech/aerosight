@@ -34,7 +34,7 @@
 ## Impact
 
 - Worker：`apps/worker/internal/flighthub` 客户端、运行时调度、重试/限流、状态与任务同步器，以及 Connector/outbox/command ledger 对账。
-- Web/API：连接器诊断、设备详情与地图、任务/航线、直播、地图空域、建模和受控操作页面；所有项目资源继续通过团队成员关系授权。
+- Web/API：通用设备、任务、实时作业和地图页面读取归一化投影；连接器诊断、厂商目录与受控操作收敛到连接器实例扩展工作区；所有项目资源继续通过团队成员关系授权。
 - 数据：优先复用 `devices`、`device_telemetry`、`device_latest_telemetry`、`observations`、`poses`、`device_commands`、`command_attempts`、`task_runs`、`assets`、`live_streams`、`issues`、`perception_events` 与现有审计/审批表；仅在这些模型无法表达远端状态时增加项目级投影表和迁移。
 - 外部系统：DJI 司空 2 中国大陆公有云 OpenAPI v2、动态直播供应商和短期对象存储 URL；请求只能发往部署允许列表内的官方 HTTPS 主机。
 - 兼容性：现有目录同步和历史数据保持可读；新字段/表采用向前迁移，未具备权限或未验收的能力表现为不可用而不是破坏现有连接。

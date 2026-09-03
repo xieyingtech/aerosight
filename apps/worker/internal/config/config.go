@@ -21,7 +21,6 @@ type Config struct {
 	MediaAPIBaseURL           string
 	MediaAPIUser              string
 	MediaAPIPassword          string
-	FlightHubEnabled          bool
 	FlightHubAPIBaseURL       string
 	FlightHubHTTPTimeout      time.Duration
 	FlightHubMaxRetries       int
@@ -46,7 +45,6 @@ func Load() (Config, error) {
 		MediaAPIPassword:       strings.TrimSpace(os.Getenv("MEDIA_ADMIN_PASSWORD")),
 	}
 	var problems []error
-	config.FlightHubEnabled, problems = booleanValue("DJI_FLIGHTHUB_ENABLED", false)
 	config.FlightHubAPIBaseURL = valueOrDefault("DJI_FLIGHTHUB_API_BASE_URL", "https://es-flight-api-cn.djigate.com")
 	config.FlightHubHTTPTimeout, problems = durationMilliseconds("DJI_FLIGHTHUB_HTTP_TIMEOUT_MS", 8*time.Second, problems)
 	config.FlightHubMaxRetries, problems = integerValue("DJI_FLIGHTHUB_MAX_RETRIES", 2, 0, 3, problems)
@@ -92,18 +90,6 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("invalid AeroSight worker configuration: %w", errors.Join(problems...))
 	}
 	return config, nil
-}
-
-func booleanValue(name string, fallback bool) (bool, []error) {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return fallback, nil
-	}
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		return false, []error{fmt.Errorf("%s must be true or false", name)}
-	}
-	return parsed, nil
 }
 
 func integerValue(name string, fallback, minimum, maximum int, problems []error) (int, []error) {

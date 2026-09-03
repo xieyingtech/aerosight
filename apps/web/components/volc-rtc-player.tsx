@@ -94,8 +94,8 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   }, [credential, viewerAttempt]);
 
   const viewerError = errorCode === "JOIN_TIMEOUT"
-    ? "司空直播已启动，但当前浏览器未建立 RTC 观看连接。"
-    : "司空直播已启动，但当前浏览器的 RTC 观看连接失败。";
+    ? "直播已启动，但当前浏览器未建立 RTC 观看连接。"
+    : "直播已启动，但当前浏览器的 RTC 观看连接失败。";
 
   return <div className="relative h-full w-full">
     <div className="h-full w-full" ref={containerRef} />

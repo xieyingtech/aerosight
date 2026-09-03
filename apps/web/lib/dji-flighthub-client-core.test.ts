@@ -36,8 +36,7 @@ function client(fetchImpl: FlightHubFetch, overrides: Partial<ConstructorParamet
 }
 
 test("FlightHub deployment config only accepts the China official HTTPS origin", () => {
-  const config = parseFlightHubWebConfig({ DJI_FLIGHTHUB_ENABLED: "true" });
-  assert.equal(config.enabled, true);
+  const config = parseFlightHubWebConfig({});
   assert.equal(config.apiBaseUrl, DJI_FLIGHTHUB_CHINA_API_ORIGIN);
   for (const forbidden of [
     "http://es-flight-api-cn.djigate.com",

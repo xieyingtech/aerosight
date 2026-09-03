@@ -34,7 +34,7 @@ export default async function ModelsPage({ params }: { params: Promise<{ id: str
   const { id } = await params;
   const projectId = Number(id);
   const workspace = await readFlightHubModels(projectId);
-  return <Page title="模型与重建" description="司空模型目录、开放模型资源、长作业进度、产物与受控操作可用性。"
+  return <Page title="建模资源" description="查看连接器同步的模型目录、重建作业、产物与操作可用性。"
     actions={<Button asChild variant="outline"><Link href={`/projects/${projectId}/assets`}>查看模型资产</Link></Button>}>
     <div className="space-y-8">
       <Card size="sm"><CardHeader><CardTitle>{workspace.access.canOperate ? "操作者视图" : "只读视图"}</CardTitle>
@@ -54,7 +54,7 @@ export default async function ModelsPage({ params }: { params: Promise<{ id: str
                 <div className="flex flex-wrap gap-1">{connector.actions.map((action) => <Badge key={action.action}
                   variant={action.available ? "default" : "secondary"}>{actionLabels[action.action] ?? action.action}：{action.available ? "可用" : "不可用"}</Badge>)}</div>
               </CardContent></Card>;
-          }) : <Card size="sm"><CardContent className="text-muted-foreground">暂无司空连接器；模型目录为空。</CardContent></Card>}
+          }) : <Card size="sm"><CardContent className="text-muted-foreground">暂无提供建模能力的连接器。</CardContent></Card>}
         </div>
       </Section>
 

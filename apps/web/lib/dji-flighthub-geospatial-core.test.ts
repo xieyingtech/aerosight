@@ -76,11 +76,14 @@ test("geospatial SQL and API do not select remote identity or secret-bearing fie
   assert.match(core, /membership\.team_id=project\.team_id/);
 });
 
-test("geospatial page renders map and source, version and freshness for all four domains", () => {
+test("connector geospatial workspace keeps the map primary and projects every resource domain into its side panel", () => {
   const page = readFileSync(new URL("../app/(app)/projects/[id]/geospatial/page.tsx", import.meta.url), "utf8");
   assert.match(page, /FlightHubGeospatialMap/);
-  for (const heading of ["空域地图", "司空标注", "飞行区", "离线地图", "AirSense"]) assert(page.includes(`title="${heading}"`));
-  for (const label of ["来源", "版本", "新鲜度"]) assert(page.includes(`label: "${label}"`));
+  assert.match(page, /title="地图与空间资源"/);
+  assert.match(page, /xl:grid-cols-\[minmax\(0,1fr\)_360px\]/);
+  for (const heading of ["地图标注", "飞行区", "空间告警", "离线地图"]) assert(page.includes(`title="${heading}"`));
+  assert.match(page, /来源：/);
+  assert.match(page, /freshnessBadge/);
 });
 
 test("Postgres geospatial workspace isolates another project end to end", {

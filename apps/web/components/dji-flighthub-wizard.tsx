@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ExternalLinkIcon, KeyRoundIcon, Loader2Icon, RefreshCwIcon, ShieldCheckIcon, UnplugIcon } from "lucide-react";
+import { BoxesIcon, ExternalLinkIcon, KeyRoundIcon, Loader2Icon, MapIcon, PlaneTakeoffIcon, RefreshCwIcon, ShieldCheckIcon, UnplugIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ function statusVariant(status: string): "default" | "secondary" | "destructive" 
   return "outline";
 }
 
-export function DjiFlightHubSetup({ projectId, enabled, onCreated }: { projectId: number; enabled: boolean; onCreated: () => void }) {
+export function DjiFlightHubSetup({ projectId, onCreated }: { projectId: number; onCreated: () => void }) {
   const [phase, setPhase] = useState<"token" | "project">("token");
   const [token, setToken] = useState("");
   const [projects, setProjects] = useState<FlightHubProject[]>([]);
@@ -172,9 +173,7 @@ export function DjiFlightHubSetup({ projectId, enabled, onCreated }: { projectId
     <div className="rounded-lg bg-muted/35 p-3 text-sm text-muted-foreground">
       在司空中进入“我的组织 → 组织设置 → OpenAPI → 复制密钥”。这不是 OAuth；Token 只存在于当前向导内存，连接后加密保存。
     </div>
-    {!enabled ? <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-      当前部署尚未启用司空连接器。请先设置 <code>DJI_FLIGHTHUB_ENABLED=true</code>。
-    </div> : <div className="space-y-3 rounded-lg border p-3">
+    <div className="space-y-3 rounded-lg border p-3">
       <div className="text-xs text-muted-foreground">步骤 {phase === "token" ? "1/2 · 验证 Token" : "2/2 · 选择司空项目"}</div>
       {phase === "token" ? <div className="grid gap-3 md:grid-cols-[1fr_auto]">
         <label className="space-y-1 text-sm">司空组织 Token
@@ -195,7 +194,7 @@ export function DjiFlightHubSetup({ projectId, enabled, onCreated }: { projectId
           <Button disabled={busy} onClick={() => { clearTransientToken(); setError(null); }} type="button" variant="outline">重新输入 Token</Button>
         </div>
       </div>}
-    </div>}
+    </div>
     {error && <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" role="alert">{error}</div>}
   </div>;
 }
@@ -364,6 +363,16 @@ export function DjiFlightHubConnections({
         <div className="rounded-lg bg-muted/35 p-3"><span className="text-muted-foreground">缺失</span><p className="mt-1 font-medium">{selectedConnector.missingCount}</p></div>
         <div className="rounded-lg bg-muted/35 p-3"><span className="text-muted-foreground">健康</span><p className="mt-1 font-medium">{selectedConnector.lastErrorCode ?? selectedConnector.lastSyncStatus ?? "等待同步"}</p></div>
       </div>
+      <nav aria-label="连接器扩展工作区" className="grid gap-2 sm:grid-cols-3">
+        {[
+          { href: `/projects/${projectId}/flight-operations`, icon: PlaneTakeoffIcon, title: "航线与飞行任务", description: "查看该连接器同步的航线、轨迹与飞行结果" },
+          { href: `/projects/${projectId}/geospatial`, icon: MapIcon, title: "地图与空间资源", description: "查看标注、飞行区与空间告警" },
+          { href: `/projects/${projectId}/models`, icon: BoxesIcon, title: "建模资源", description: "查看重建作业、模型目录与产物" },
+        ].map((item) => <Link className="group rounded-lg border p-3 transition-colors hover:border-primary/40 hover:bg-muted/35" href={item.href} key={item.href}>
+          <span className="flex items-center gap-2 text-sm font-medium"><item.icon className="size-4 text-primary" />{item.title}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{item.description}</span>
+        </Link>)}
+      </nav>
       <section className="space-y-3 rounded-lg border p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2"><h3 className="text-sm font-medium">能力与同步诊断</h3>{diagnosticHealth && <Badge variant={diagnosticHealth.status === "failed" ? "destructive" : diagnosticHealth.status === "degraded" ? "secondary" : "default"}>{diagnosticHealth.label}</Badge>}</div>

@@ -5,14 +5,14 @@ import { legacyProjectEventListHref, projectNavigationHref, visibleProjectNaviga
 test("project manager sees the complete project workspace navigation", () => {
   assert.deepEqual(
     visibleProjectNavigation("admin").map((item) => item.key),
-    ["overview", "realtime", "tasks", "flight-operations", "geospatial", "models", "devices", "connectors", "issues", "algorithms", "agents", "assets", "settings"]
+    ["overview", "realtime", "tasks", "devices", "connectors", "issues", "algorithms", "agents", "assets", "settings"]
   );
 });
 
 test("member navigation hides management and ungranted agent capabilities", () => {
   assert.deepEqual(
     visibleProjectNavigation("member").map((item) => item.key),
-    ["overview", "realtime", "tasks", "flight-operations", "geospatial", "models", "devices", "issues", "assets"]
+    ["overview", "realtime", "tasks", "devices", "issues", "assets"]
   );
   assert(visibleProjectNavigation("member", ["agent:use"]).some((item) => item.key === "agents"));
   assert(!visibleProjectNavigation("member").some((item) => item.key === "connectors"));
@@ -26,4 +26,11 @@ test("project overview is the stable project root and switch target", () => {
 test("legacy alert list links migrate to the project issue list", () => {
   assert.equal(legacyProjectEventListHref(42), "/projects/42/issues");
   assert(!visibleProjectNavigation("admin").some((item) => item.segment === "events"));
+});
+
+test("connector-specific workspaces do not become global project navigation", () => {
+  const items = visibleProjectNavigation("admin");
+  for (const segment of ["flight-operations", "geospatial", "models"]) {
+    assert(!items.some((item) => item.segment === segment));
+  }
 });

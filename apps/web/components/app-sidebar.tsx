@@ -55,7 +55,6 @@ export function AppSidebar({
   ];
   const projectIcons = {
     overview: <MapIcon />, realtime: <RadioTowerIcon />, tasks: <WaypointsIcon />,
-    "flight-operations": <PlaneTakeoffIcon />, geospatial: <MapIcon />, models: <BoxesIcon />,
     devices: <CpuIcon />, connectors: <PlugIcon />, issues: <BellRingIcon />, algorithms: <BoxesIcon />,
     agents: <BotIcon />, assets: <FolderKanbanIcon />, settings: <SettingsIcon />
   };

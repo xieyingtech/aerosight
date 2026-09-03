@@ -13,7 +13,7 @@
 
 ## 2. 部署与健康检查
 
-1. Web 与所有 Worker 使用相同的 `DJI_FLIGHTHUB_ENABLED`、固定 API base、超时、重试和响应大小配置。
+1. Web 与所有 Worker 使用相同的固定 API base、超时、重试和响应大小配置；是否运行由各连接器实例的状态决定。
 2. 网络只放行固定官方主机 443；DNS/TLS 代理不得改写主机。响应中的对象存储/媒体 URL 由用途 allowlist 单独判断。
 3. 运行 `pnpm db:migrate`，确认迁移 ledger 正常；不要手工跳过迁移。
 4. 滚动启动 Worker，再启动 Web；检查 `/healthz`、`/readyz`、`/metrics` 和连接器诊断。

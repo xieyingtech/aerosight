@@ -137,19 +137,17 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     window.setTimeout(() => { void refresh(session.id); }, 500);
   };
 
-  return <div className="space-y-4">
-    <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={snapshot} />
-    <section className="rounded-xl border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索所有设备，包括没有地图坐标的设备。</p></div>
-        <button className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs disabled:opacity-50" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />刷新状态</button>
-      </div>
-      <div className="mt-3"><InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按设备名称、类型或驱动搜索并选择" value={selection.deviceId ? String(selection.deviceId) : null} /></div>
-    </section>
-
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,.65fr)]">
-      <ProjectMap className="h-[620px]" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
-      <aside className="space-y-4">
+  return <div className="grid min-h-[600px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <ProjectMap className="h-[65svh] min-h-[520px] xl:h-full xl:min-h-0" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
+    <aside className="min-h-0 space-y-3 xl:overflow-y-auto xl:pr-1">
+      <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={snapshot} />
+      <section className="rounded-xl border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索并选择设备</p></div>
+          <button aria-label="刷新状态" className="inline-flex size-8 items-center justify-center rounded-md border disabled:opacity-50" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} /></button>
+        </div>
+        <div className="mt-3"><InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按名称、类型或驱动搜索" value={selection.deviceId ? String(selection.deviceId) : null} /></div>
+      </section>
         {selectedDevice ? <>
           <section className="rounded-xl border bg-card p-4">
             <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">{String(selectedDevice.typeName ?? selectedDevice.category ?? "设备")}</p><h2 className="text-lg font-medium">{String(selectedDevice.name)}</h2><p className="mt-1 text-xs text-muted-foreground">{String(selectedDevice.driverKey ?? "未绑定驱动")}@{String(selectedDevice.driverVersion ?? "-")}</p></div><Badge variant="outline">{String(selectedDevice.status ?? "unknown")}</Badge></div>
@@ -160,10 +158,9 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
           <LiveChannelControls activeStreamKeys={activeStreamKeys} device={selectedDevice} onStarted={handleStreamStarted} projectId={snapshot.project.id} />
           <section className="overflow-hidden rounded-xl border bg-card"><LiveStreamPanel cursor={null} mode="live" onStreamChanged={async () => { await refresh(); }} selectedStreamId={selection.streamId} selection={mapSelection} snapshot={snapshot} /></section>
         </> : <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
-      </aside>
-    </div>
-    {transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
-    {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
-    {timelineSnapshot && <ProjectTimeline snapshot={timelineSnapshot} />}
+      {transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
+      {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
+      {timelineSnapshot && <ProjectTimeline snapshot={timelineSnapshot} />}
+    </aside>
   </div>;
 }

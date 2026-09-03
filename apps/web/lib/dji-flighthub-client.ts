@@ -7,7 +7,6 @@ export function createFlightHubProjectClient(
   environment: Record<string, string | undefined> = process.env
 ) {
   const config = parseFlightHubWebConfig(environment);
-  if (!config.enabled) throw new Error("DJI_FLIGHTHUB_DISABLED");
   return new FlightHubProjectClient({
     apiBaseUrl: config.apiBaseUrl,
     timeoutMs: config.timeoutMs,

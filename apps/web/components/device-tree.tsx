@@ -131,7 +131,7 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
           </div>)}</div> : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">该设备类型尚未声明能力</p>}
       </section>
       {device.flightHubControl && <section>
-        <div className="mb-3 flex items-center gap-2"><CameraIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">司空相机 / TCA 前置状态</h3></div>
+        <div className="mb-3 flex items-center gap-2"><CameraIcon className="size-4 text-muted-foreground" /><h3 className="text-sm font-semibold">相机 / TCA 前置状态</h3></div>
         <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <DetailItem label="连接器" value={device.flightHubControl.connectorStatus === "connected" ? "已连接" : "未连接"} />
           <DetailItem label="设备状态" value={device.flightHubControl.stateFresh ? "30 秒内有效" : "已过期，禁止上游调用"} />

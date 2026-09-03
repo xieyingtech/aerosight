@@ -3,7 +3,6 @@ import { DjiFlightHubConnections, type OtherConnectorSummary } from "@/component
 import { Page } from "@/components/page";
 import { getProject } from "@/lib/data";
 import { listDeviceAdapters } from "@/lib/device-adapters";
-import { parseFlightHubWebConfig } from "@/lib/dji-flighthub-config";
 import { listFlightHubConnections, listFlightHubDiscoveryActivity } from "@/lib/dji-flighthub-lifecycle";
 
 export default async function ConnectorsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +15,6 @@ export default async function ConnectorsPage({ params }: { params: Promise<{ id:
     listFlightHubConnections(projectId),
     listFlightHubDiscoveryActivity(projectId),
   ]);
-  const flightHubEnabled = parseFlightHubWebConfig(process.env).enabled;
   const flightHubIds = new Set(flightHubConnections.map((connector) => connector.id));
   const otherConnectors: OtherConnectorSummary[] = connectors
     .filter((connector) => !flightHubIds.has(connector.id))
@@ -31,7 +29,7 @@ export default async function ConnectorsPage({ params }: { params: Promise<{ id:
 
   return (
     <Page
-      actions={<ConnectorCreateDialog flightHubEnabled={flightHubEnabled} projectId={projectId} />}
+      actions={<ConnectorCreateDialog projectId={projectId} />}
       description="查看和管理项目已接入的平台连接"
       title="连接器"
     >

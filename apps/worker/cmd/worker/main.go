@@ -99,7 +99,7 @@ func main() {
 	var flightHubCommandStatusReconciler *flighthub.ControlCommandStatusReconciler
 	var flightHubControlSessionHandler *flighthub.ControlSessionHandler
 	flightHubTokenResolver := flighthub.EncryptedTokenResolver{AuthSecret: workerConfig.AuthSecret}
-	if workerConfig.FlightHubEnabled {
+	{
 		createdFlightHubClient, flightHubErr := flighthub.NewChinaClient(flighthub.Config{
 			Timeout: workerConfig.FlightHubHTTPTimeout, MaxRetries: workerConfig.FlightHubMaxRetries,
 			MaxProjectPages: 50, MaxResponseBytes: workerConfig.FlightHubMaxResponseBytes,
@@ -210,7 +210,7 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register("connector.sync.requested", flightHubScheduler.OutboxHandler)
-		logger.Info("FlightHub connector enabled", "region", "cn", "poll_interval", workerConfig.FlightHubPollInterval.String())
+		logger.Info("FlightHub connector runtime registered", "region", "cn", "poll_interval", workerConfig.FlightHubPollInterval.String())
 	}
 	driverRegistry := driver.NewRegistry()
 	if err := dji.RegisterDriver(driverRegistry, func(context.Context, driver.AdapterConfig) error { return nil }); err != nil {
@@ -321,7 +321,7 @@ func main() {
 			os.Exit(1)
 		}
 		consumer.Register(flighthub.WaylineUploadEventType, waylineUploadHandler.Handler)
-	} else if workerConfig.FlightHubEnabled {
+	} else {
 		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
 	}
 	if flightHubClient != nil {

@@ -37,8 +37,8 @@ export default async function FlightOperationsPage({ params }: { params: Promise
   const projectId = Number(id);
   const operations = await readFlightHubFlightOperations(projectId);
   return <Page
-    title="飞行运营"
-    description="司空航线、飞行任务、轨迹、产物、告警与受控写操作的项目级只读投影。"
+    title="航线与飞行任务"
+    description="查看连接器同步的航线、飞行任务、轨迹、产物与告警。"
     actions={operations.access.canOperate ? <Button asChild variant="outline"><Link href={`/projects/${projectId}/tasks`}>进入受控任务操作</Link></Button> : undefined}
   >
     <div className="space-y-8">
@@ -52,7 +52,7 @@ export default async function FlightOperationsPage({ params }: { params: Promise
         </CardHeader>
       </Card>
 
-      <Section title="司空连接器" description="操作可用性同时受成员权限、连接状态、功能开关和 field-write 现场验收约束。">
+      <Section title="数据连接" description="操作可用性同时受成员权限、连接状态、功能开关和现场验收约束。">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {operations.connectors.length ? operations.connectors.map((connector) => <Card key={connector.id} size="sm">
             <CardHeader><CardTitle>{connector.name}</CardTitle><CardDescription>本地连接器 #{connector.id}</CardDescription><CardAction>{statusBadge(connector.status)}</CardAction></CardHeader>
@@ -61,11 +61,11 @@ export default async function FlightOperationsPage({ params }: { params: Promise
               <p>功能开关：{connector.actionEnabled ? "已开启" : "已关闭"} · 现场验收：{connector.actionVerified ? "已通过" : "未通过"}</p>
               {operations.access.canOperate ? <p className="text-foreground">{connector.actionReady ? "当前可提交受控任务操作" : "当前不可提交写操作"}</p> : null}
             </CardContent>
-          </Card>) : <Card size="sm"><CardContent className="text-muted-foreground">暂无司空连接器</CardContent></Card>}
+          </Card>) : <Card size="sm"><CardContent className="text-muted-foreground">暂无提供飞行目录的连接器</CardContent></Card>}
         </div>
       </Section>
 
-      <Section title="航线" description="仅展示司空同步的非秘密摘要与本地任务关联。">
+      <Section title="航线" description="展示连接器同步的安全摘要与本地任务关联。">
         <DataTable items={operations.waylines} columns={[
           { key: "name", label: "名称", render: (item) => item.taskId ? <Link className="font-medium text-primary hover:underline" href={`/projects/${projectId}/tasks/${item.taskId}`}>{item.name}</Link> : item.name },
           { key: "status", label: "状态", render: (item) => statusBadge(item.status) },
@@ -118,7 +118,7 @@ export default async function FlightOperationsPage({ params }: { params: Promise
         ]} />
       </Section>
 
-      <Section title="飞行与 AI 告警" description="告警关联本地任务、感知事件和案件，不暴露司空远端标识。">
+      <Section title="飞行与 AI 告警" description="告警关联本地任务、感知事件和案件，不暴露上游标识。">
         <DataTable items={operations.alerts} columns={[
           { key: "title", label: "告警", render: (item) => item.issueId ? <Link className="font-medium text-primary hover:underline" href={`/projects/${projectId}/issues/${item.issueId}`}>{item.title}</Link> : item.title },
           { key: "kind", label: "类型" }, { key: "severity", label: "级别", render: (item) => statusBadge(item.severity) },

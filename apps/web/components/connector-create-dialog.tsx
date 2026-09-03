@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 type ConnectorType = "dji.flighthub2";
 
-export function ConnectorCreateDialog({ projectId, flightHubEnabled }: { projectId: number; flightHubEnabled: boolean }) {
+export function ConnectorCreateDialog({ projectId }: { projectId: number }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ConnectorType | null>(null);
@@ -49,7 +49,7 @@ export function ConnectorCreateDialog({ projectId, flightHubEnabled }: { project
         <p className="mt-3 text-xs text-muted-foreground">其他依赖现场设备的接入方式将在具备设备并完成验收后开放。</p>
       </div> : <div className="space-y-4 py-2">
         <Button onClick={() => setSelectedType(null)} size="sm" type="button" variant="ghost"><ArrowLeftIcon />返回类型选择</Button>
-        <DjiFlightHubSetup enabled={flightHubEnabled} onCreated={handleCreated} projectId={projectId} />
+        <DjiFlightHubSetup onCreated={handleCreated} projectId={projectId} />
       </div>}
     </DialogContent>
   </Dialog>;

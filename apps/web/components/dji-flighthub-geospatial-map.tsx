@@ -15,9 +15,9 @@ type MapFeature = {
 };
 
 const layers: Array<{ id: LayerKind; label: string }> = [
-  { id: "map-element", label: "司空标注" },
+  { id: "map-element", label: "地图标注" },
   { id: "flight-area", label: "飞行区" },
-  { id: "air-sense-warning", label: "AirSense" },
+  { id: "air-sense-warning", label: "空间告警" },
 ];
 
 function firstCoordinate(geometry: FlightHubGeospatialGeometry): [number, number] | null {
