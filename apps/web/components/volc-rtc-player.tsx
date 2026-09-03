@@ -8,11 +8,13 @@ import { parseVolcRTCPlaybackCredential } from "@/lib/volc-rtc-player-core";
 export function VolcRTCPlayer({ credential }: { credential: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"joining" | "waiting" | "playing" | "error">("joining");
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => Promise<void>) | null = null;
     setStatus("joining");
+    setErrorCode(null);
     void (async () => {
       try {
         const parsed = parseVolcRTCPlaybackCredential(credential);
@@ -29,20 +31,34 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
         });
         engine.on(rtc.default.events.onUserPublishStream, ({ userId, mediaType }) => {
           if (disposed || !containerRef.current) return;
+          if ((mediaType & rtc.MediaType.VIDEO) !== rtc.MediaType.VIDEO) return;
           engine.setRemoteVideoPlayer(rtc.StreamIndex.STREAM_INDEX_MAIN, {
             userId, renderDom: containerRef.current
           });
-          void engine.subscribeStream(userId, mediaType).catch(() => { if (!disposed) setStatus("error"); });
+          void engine.subscribeStream(userId, rtc.MediaType.VIDEO).catch(() => {
+            if (!disposed) {
+              setErrorCode("VIDEO_SUBSCRIBE_FAILED");
+              setStatus("error");
+            }
+          });
           setStatus("waiting");
         });
-        engine.on(rtc.default.events.onError, () => { if (!disposed) setStatus("error"); });
+        engine.on(rtc.default.events.onError, ({ errorCode: code }) => {
+          if (!disposed) {
+            setErrorCode(code);
+            setStatus("error");
+          }
+        });
         await engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
           isAutoPublish: false, isAutoSubscribeAudio: false, isAutoSubscribeVideo: false
         });
         await engine.setUserVisibility(false);
         if (!disposed) setStatus("waiting");
       } catch {
-        if (!disposed) setStatus("error");
+        if (!disposed) {
+          setErrorCode("CLIENT_INIT_FAILED");
+          setStatus("error");
+        }
       }
     })();
     return () => {
@@ -56,7 +72,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   return <div className="relative h-full w-full">
     <div className="h-full w-full" ref={containerRef} />
     {status !== "playing" && <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-center text-xs text-slate-200">
-      {status === "error" ? <div><VideoOffIcon className="mx-auto mb-2 size-7" />RTC 直播连接失败</div>
+      {status === "error" ? <div><VideoOffIcon className="mx-auto mb-2 size-7" />RTC 直播连接失败{errorCode ? `（${errorCode}）` : ""}</div>
         : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? "正在加入 RTC 房间…" : "已加入，等待 Dock 视频流…"}</div>}
     </div>}
   </div>;

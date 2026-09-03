@@ -96,25 +96,41 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     const acceptedFlightHubStart = String(model.stream?.sourceType) === "dji_flighthub" && streamStatus === "starting";
     if (!streamId || (!isLiveStreamPlayable(streamStatus) && !acceptedFlightHubStart)) { setPlayback({ status: "idle" }); return; }
     const controller = new AbortController();
+    const retryUntil = Date.now() + 25_000;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     setPlayback({ status: "loading" });
-    fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
-      signal: controller.signal, cache: "no-store"
-    }).then(async (response) => {
-      if (!response.ok) throw new Error("playback request failed");
-      const result = await response.json() as {
-        available: boolean;
-        locator?: { url: string; expiresAt: string };
-        playback?: { candidates?: { protocol: "webrtc" | "hls"; url: string }[]; expiresAt: string;
-          protocol?: string; credential?: string };
-      };
-      const direct = result.playback?.credential && new Set(["webrtc", "hls", "volc-rtc"]).has(result.playback.protocol ?? "")
-        ? [{ protocol: result.playback.protocol as "webrtc" | "hls" | "volc-rtc", url: result.playback.credential }] : [];
-      const candidates = [...(result.playback?.candidates ?? []), ...direct,
-        ...(result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : [])];
-      if (!result.available || candidates.length === 0) throw new Error("playback unavailable");
-      setPlayback({ status: "ready", candidates, index: 0 });
-    }).catch((error) => { if (error?.name !== "AbortError") setPlayback({ status: "error" }); });
-    return () => controller.abort();
+    const loadPlayback = async () => {
+      try {
+        const response = await fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
+          signal: controller.signal, cache: "no-store"
+        });
+        if (!response.ok) throw new Error("playback request failed");
+        const result = await response.json() as {
+          available: boolean;
+          locator?: { url: string; expiresAt: string };
+          playback?: { candidates?: { protocol: "webrtc" | "hls"; url: string }[]; expiresAt: string;
+            protocol?: string; credential?: string };
+        };
+        const direct = result.playback?.credential && new Set(["webrtc", "hls", "volc-rtc"]).has(result.playback.protocol ?? "")
+          ? [{ protocol: result.playback.protocol as "webrtc" | "hls" | "volc-rtc", url: result.playback.credential }] : [];
+        const candidates = [...(result.playback?.candidates ?? []), ...direct,
+          ...(result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : [])];
+        if (!result.available || candidates.length === 0) throw new Error("playback unavailable");
+        setPlayback({ status: "ready", candidates, index: 0 });
+      } catch (error) {
+        if ((error as { name?: string })?.name === "AbortError" || controller.signal.aborted) return;
+        if (acceptedFlightHubStart && Date.now() < retryUntil) {
+          retryTimer = setTimeout(() => { void loadPlayback(); }, 1_000);
+          return;
+        }
+        setPlayback({ status: "error" });
+      }
+    };
+    void loadPlayback();
+    return () => {
+      controller.abort();
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [model.stream?.status, snapshot.project.id, streamId]);
 
   if (model.mode === "history") {
