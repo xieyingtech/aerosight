@@ -5,6 +5,14 @@ import { RefreshCwIcon, VideoOffIcon } from "lucide-react";
 
 import { parseVolcRTCPlaybackCredential } from "@/lib/volc-rtc-player-core";
 
+let volcRTCCleanupTail = Promise.resolve();
+
+function enqueueVolcRTCCleanup(release: () => Promise<void>) {
+  const run = async () => { try { await release(); } catch { /* cleanup is best effort */ } };
+  volcRTCCleanupTail = volcRTCCleanupTail.then(run, run);
+  return volcRTCCleanupTail;
+}
+
 export function VolcRTCPlayer({ credential }: { credential: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"joining" | "waiting" | "playing" | "error">("joining");
@@ -19,6 +27,8 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
     setConnectionState(null);
     void (async () => {
       try {
+        await volcRTCCleanupTail;
+        if (disposed) return;
         const parsed = parseVolcRTCPlaybackCredential(credential);
         const rtc = await import("@volcengine/rtc");
         if (disposed || !containerRef.current) return;
@@ -66,7 +76,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
       } catch (error) {
         const release = cleanup;
         cleanup = null;
-        if (release) await release();
+        if (release) await enqueueVolcRTCCleanup(release);
         if (!disposed) {
           setErrorCode(error instanceof Error && error.message === "VOLC_RTC_JOIN_TIMEOUT"
             ? "JOIN_TIMEOUT" : "CLIENT_INIT_FAILED");
@@ -78,7 +88,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
       disposed = true;
       const release = cleanup;
       cleanup = null;
-      if (release) void release();
+      if (release) void enqueueVolcRTCCleanup(release);
     };
   }, [credential]);
 

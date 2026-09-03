@@ -21,3 +21,9 @@ test("Volc RTC viewer becomes invisible before joining with default network nego
   assert.ok(source.indexOf("await engine.setUserVisibility(false)") < source.indexOf("engine.joinRoom("));
   assert.doesNotMatch(source, /JOIN_ROOM_CONFIG|joinWithTcpOnly/);
 });
+
+test("Volc RTC remount waits for the previous fixed viewer identity to leave", () => {
+  const source = readFileSync(new URL("../components/volc-rtc-player.tsx", import.meta.url), "utf8");
+  assert.match(source, /await volcRTCCleanupTail;[\s\S]*createEngine/);
+  assert.match(source, /enqueueVolcRTCCleanup\(release\)/);
+});
