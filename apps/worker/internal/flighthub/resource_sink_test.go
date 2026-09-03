@@ -91,7 +91,13 @@ func TestResourceSinkProjectsControlEvidenceAfterTelemetryAcceptance(t *testing.
 }
 
 type healthProjectorFixture struct {
-	polls []HealthPoll
+	polls        []HealthPoll
+	channelPolls []DeviceStatePoll
+}
+
+func (fixture *healthProjectorFixture) ApplyDeviceStreamChannels(_ context.Context, _ connector.Instance, poll DeviceStatePoll) error {
+	fixture.channelPolls = append(fixture.channelPolls, poll)
+	return nil
 }
 
 type flightCatalogProjectorFixture struct {

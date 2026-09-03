@@ -62,5 +62,6 @@ PostgreSQL 集成用例使用当前迁移后的本地测试数据库实际执行
 - 生产构建：`pnpm build` 通过；Next.js 编译、类型检查、页面数据和静态页面生成完成，Go Worker 二进制构建完成。
 - 补充发布门禁：司空文档/manifest 检查、OpenSpec strict 和 `git diff --check` 在记录本节后重新执行。
 - 代码变更后复验：2026-09-03 新增低风险验收 runner 并记录现场失败结果后，使用 `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off` 重跑 `go test ./...`、`pnpm check` 和 `pnpm build`，结果全部通过；Web 388 项中 383 通过、5 项按设计在未配置显式 PostgreSQL 测试 URL 时跳过。
+- Dock 视频通道修复后复验：2026-09-03 将 Dock 2 官方型号通道投影接入独立 `device-state` 流；数据库集成验证覆盖幂等、状态降级、跨项目隔离及非法 camera index 写前拒绝。随后重跑 `go test ./...`、`pnpm test:migrations`、`pnpm check` 和 `pnpm build`，全部通过；Web 388 项中 383 通过、5 项按设计跳过。
 
 上述验证不替代 7.7 坐标基准或 10.6/10.7 现场写入验收；现场结果若导致代码变化，发布前必须重新运行本节全部命令并更新记录。

@@ -33,6 +33,7 @@ type DeviceFreshnessProjector interface {
 }
 
 type DeviceHealthProjector interface {
+	ApplyDeviceStreamChannels(context.Context, connector.Instance, DeviceStatePoll) error
 	Apply(context.Context, connector.Instance, HealthPoll) error
 }
 
@@ -114,6 +115,9 @@ func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instanc
 		RequireActiveAdapter: true, AdapterLeaseOwner: instance.LeaseOwner, AdapterLeaseEpoch: instance.LeaseEpoch,
 	})
 	if _, err = sink.telemetry.IngestBatch(ctx, batch); err != nil {
+		return err
+	}
+	if err := sink.health.ApplyDeviceStreamChannels(ctx, instance, poll); err != nil {
 		return err
 	}
 	if sink.controls != nil {

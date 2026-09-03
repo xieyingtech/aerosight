@@ -37,6 +37,11 @@ func TestVersionedStateMapperFieldMatrixForDock2AndM3TD(t *testing.T) {
 		{"dock live", dock, func(value MappedDeviceState) bool {
 			return value.Live != nil && value.Live.Available && !value.Live.Active
 		}},
+		{"dock stream channel", dock, func(value MappedDeviceState) bool {
+			return reflect.DeepEqual(value.StreamChannels, []StreamChannelState{{
+				CameraIndex: "165-0-7", DisplayName: "Dock 2 Camera", Availability: "available",
+			}})
+		}},
 		{"aircraft position", aircraft, func(value MappedDeviceState) bool {
 			return value.Position != nil && value.Position.Validity == "valid" && value.DeviceKind == "aircraft"
 		}},
@@ -58,6 +63,9 @@ func TestVersionedStateMapperFieldMatrixForDock2AndM3TD(t *testing.T) {
 	}
 	if dock.Position.CoordinateReference != "unverified" || aircraft.Position.CoordinateReference != "unverified" {
 		t.Fatalf("coordinate reference must remain explicit pending field acceptance: dock=%#v aircraft=%#v", dock.Position, aircraft.Position)
+	}
+	if len(aircraft.StreamChannels) != 0 {
+		t.Fatalf("aircraft state must not invent a camera channel without an official camera index: %#v", aircraft.StreamChannels)
 	}
 }
 
@@ -81,7 +89,7 @@ func TestStateMapperRejectsInvalidCoordinatesWithoutDiscardingOtherTelemetry(t *
 
 func TestUnknownModelAndFieldsOnlyProduceDiagnosticsAndNeverExpandCapabilities(t *testing.T) {
 	unknown := mappedFixtureState(t, "state-unknown-model", "UNKNOWN_REDACTED")
-	if unknown.KnownModel || len(unknown.CapabilityEvidence) != 0 || unknown.Position != nil || !reflect.DeepEqual(unknown.Diagnostics, []StateFieldDiagnostic{{Name: "future_field", JSONType: "object"}}) {
+	if unknown.KnownModel || len(unknown.CapabilityEvidence) != 0 || unknown.Position != nil || len(unknown.StreamChannels) != 0 || !reflect.DeepEqual(unknown.Diagnostics, []StateFieldDiagnostic{{Name: "future_field", JSONType: "object"}}) {
 		t.Fatalf("unknown model mapping=%#v", unknown)
 	}
 
@@ -95,5 +103,19 @@ func TestUnknownModelAndFieldsOnlyProduceDiagnosticsAndNeverExpandCapabilities(t
 	withUnknown := MapDeviceState(snapshot)
 	if !reflect.DeepEqual(baseline.CapabilityEvidence, withUnknown.CapabilityEvidence) || !reflect.DeepEqual(withUnknown.Diagnostics, []StateFieldDiagnostic{{Name: "future_control_capability", JSONType: "object"}}) {
 		t.Fatalf("unknown field changed effective evidence: baseline=%#v mapped=%#v", baseline.CapabilityEvidence, withUnknown)
+	}
+}
+
+func TestDockStreamChannelDegradesWhenLiveStateIsMissing(t *testing.T) {
+	mapped := MapDeviceState(DeviceStateSnapshot{
+		SN: "DOCK_REDACTED", Model: DeviceModel{Key: "3-2-0", Class: "airport"},
+		State: map[string]json.RawMessage{"mode_code": json.RawMessage(`0`)},
+	})
+	want := []StreamChannelState{{
+		CameraIndex: "165-0-7", DisplayName: "Dock 2 Camera", Availability: "degraded",
+		AvailabilityReason: "live_status_unavailable",
+	}}
+	if !reflect.DeepEqual(mapped.StreamChannels, want) {
+		t.Fatalf("degraded dock stream channel=%#v", mapped.StreamChannels)
 	}
 }

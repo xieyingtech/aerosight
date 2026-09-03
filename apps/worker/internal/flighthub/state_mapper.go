@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const StateMapperVersion = "dji-flighthub-state/v1"
+const StateMapperVersion = "dji-flighthub-state/v2"
 
 type StateFieldDiagnostic struct {
 	Name     string `json:"name"`
@@ -58,6 +58,13 @@ type LiveState struct {
 	Summary   string `json:"summary,omitempty"`
 }
 
+type StreamChannelState struct {
+	CameraIndex        string `json:"cameraIndex"`
+	DisplayName        string `json:"displayName"`
+	Availability       string `json:"availability"`
+	AvailabilityReason string `json:"availabilityReason,omitempty"`
+}
+
 type MappedDeviceState struct {
 	MapperVersion      string                 `json:"mapperVersion"`
 	ModelKey           string                 `json:"modelKey"`
@@ -70,6 +77,7 @@ type MappedDeviceState struct {
 	Battery            *BatteryState          `json:"battery,omitempty"`
 	Environment        *EnvironmentState      `json:"environment,omitempty"`
 	Live               *LiveState             `json:"live,omitempty"`
+	StreamChannels     []StreamChannelState   `json:"streamChannels,omitempty"`
 	HorizontalSpeedMPS *float64               `json:"horizontalSpeedMetersPerSecond,omitempty"`
 	VerticalSpeedMPS   *float64               `json:"verticalSpeedMetersPerSecond,omitempty"`
 	CapabilityEvidence []string               `json:"capabilityEvidence"`
@@ -80,6 +88,12 @@ type modelStateMapper struct {
 	Kind         string
 	KnownFields  map[string]struct{}
 	Capabilities []string
+	Channels     []modelStreamChannel
+}
+
+type modelStreamChannel struct {
+	CameraIndex string
+	DisplayName string
 }
 
 func fields(names ...string) map[string]struct{} {
@@ -99,7 +113,8 @@ var modelStateMappers = map[string]modelStateMapper{
 			"live_status", "longitude", "mode_code", "network_state", "position_state", "rainfall", "silent_mode",
 			"temperature", "wind_speed", "wireless_link", "wireless_link_topo",
 		),
-		Capabilities: []string{"device.state.read", "device.position.read", "device.health.read"},
+		Capabilities: []string{"device.state.read", "device.position.read", "device.health.read", "stream.video.read"},
+		Channels:     []modelStreamChannel{{CameraIndex: "165-0-7", DisplayName: "Dock 2 Camera"}},
 	},
 	"0-91-1": {
 		Kind: "aircraft",
@@ -135,6 +150,7 @@ func MapDeviceState(snapshot DeviceStateSnapshot) MappedDeviceState {
 		result.Battery = mapBattery(snapshot.State, mapper.Kind)
 		result.Environment = mapEnvironment(snapshot.State)
 		result.Live = mapLive(snapshot.State)
+		result.StreamChannels = mapStreamChannels(mapper.Channels, result.Live)
 		result.HorizontalSpeedMPS, _ = numberValue(snapshot.State["horizontal_speed"])
 		result.VerticalSpeedMPS, _ = numberValue(snapshot.State["vertical_speed"])
 	}
@@ -144,6 +160,27 @@ func MapDeviceState(snapshot DeviceStateSnapshot) MappedDeviceState {
 		}
 	}
 	sort.Slice(result.Diagnostics, func(left, right int) bool { return result.Diagnostics[left].Name < result.Diagnostics[right].Name })
+	return result
+}
+
+func mapStreamChannels(channels []modelStreamChannel, live *LiveState) []StreamChannelState {
+	if len(channels) == 0 {
+		return nil
+	}
+	result := make([]StreamChannelState, 0, len(channels))
+	for _, channel := range channels {
+		mapped := StreamChannelState{
+			CameraIndex:        channel.CameraIndex,
+			DisplayName:        channel.DisplayName,
+			Availability:       "degraded",
+			AvailabilityReason: "live_status_unavailable",
+		}
+		if live != nil && live.Available {
+			mapped.Availability = "available"
+			mapped.AvailabilityReason = ""
+		}
+		result = append(result, mapped)
+	}
 	return result
 }
 
