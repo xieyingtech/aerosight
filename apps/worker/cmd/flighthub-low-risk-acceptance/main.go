@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	workerconfig "aerosight/worker/internal/config"
 	"aerosight/worker/internal/connector"
 	"aerosight/worker/internal/flighthub"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -33,6 +34,10 @@ func main() {
 	if databaseURL == "" || len(authSecret) < 16 {
 		exitWithSafeResult("configuration_unavailable")
 	}
+	workerConfig, err := workerconfig.Load()
+	if err != nil {
+		exitWithSafeResult("configuration_unavailable")
+	}
 	database, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		exitWithSafeResult("configuration_unavailable")
@@ -52,7 +57,11 @@ func main() {
 		exitWithSafeResult("credential_unavailable")
 	}
 	defer func() { token = "" }()
-	client, err := flighthub.NewChinaClient(flighthub.Config{Timeout: 8 * time.Second, MaxRetries: 0, MaxConcurrent: 1, RequestsPerSecond: 1, RequestBurst: 1, RequestID: acceptanceRequestID})
+	client, err := flighthub.NewChinaClient(flighthub.Config{
+		Timeout: workerConfig.FlightHubHTTPTimeout, MaxRetries: 0, MaxConcurrent: 1,
+		RequestsPerSecond: 1, RequestBurst: 1, RequestID: acceptanceRequestID,
+		MaxResponseBytes: workerConfig.FlightHubMaxResponseBytes, AllowedLinkHosts: workerConfig.FlightHubAllowedLinkHosts,
+	})
 	if err != nil {
 		exitWithSafeResult("configuration_unavailable")
 	}
