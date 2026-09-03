@@ -27,6 +27,7 @@
     "drill:upgrade-rollback": "pnpm --dir apps/web drill:upgrade-rollback",
     "smoke:flighthub-read": "cd apps/worker && go run ./cmd/flighthub-read-smoke",
     "accept:flighthub-low-risk": "cd apps/worker && go run ./cmd/flighthub-low-risk-acceptance",
+    "accept:flighthub-dock-live": "cd apps/worker && go run ./cmd/flighthub-dock-live-acceptance",
     "check:flighthub-docs": "node scripts/check-flighthub-docs.mjs",
     "typecheck": "pnpm --dir apps/web typecheck",
     "check": "pnpm typecheck && pnpm test"

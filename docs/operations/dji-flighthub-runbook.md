@@ -115,6 +115,21 @@ pnpm accept:flighthub-low-risk -- \
 
 命令会在每个 POST 前重新核对连接器状态、项目作用域、账号指纹和凭据 envelope；任一变化、失败或未知结果都会阻止 evidence。输出仅含 endpoint ID、安全类别、计数/字段集合和耗时，不得据此开放 `flight.execute` 或 `model.write`。
 
+Dock 直播首次现场验收使用单独的严格入口。命令只接受精确的本地 Dock、已投影且可用的视频通道，并在 POST 前重新核对设备类型、在线状态、连接器、账号、凭据、型号和固件。只有真实启动响应能被已登记的直播供应商安全解析后，才写入 24 小时有效且绑定该 Dock 型号/固件的 `live.control` evidence，并只开启项目的 `live.control` flag；失败、未知结果或不支持的供应商均不落证据。不要对无人机 device id 运行此命令：
+
+```bash
+pnpm accept:flighthub-dock-live -- \
+  --project-id <local-project-id> \
+  --connector-id <connector-instance-id> \
+  --device-id <local-dock-device-id> \
+  --camera-index <projected-dock-camera-index> \
+  --confirm-dock-live-acceptance \
+  --persist-evidence \
+  --enable-live-control
+```
+
+输出不含 SN、URL、Token 或坐标，只含 endpoint ID、安全类别、响应字段名、供应商/协议类型和耗时。验收结束或授权撤回时，应立即从 `project_feature_flags.flighthub_action_flags_json` 删除 `live.control`，撤销本地播放授权并清除短期供应商凭据；由于官方没有 released stop API，不得宣称远端已同步停止，需继续按 `live_status`、设备状态、凭据到期和五分钟无观众规则对账。
+
 | action/endpoint | 测试窗口与资源 | 前置证据 | 预期远端结果 | 回滚/清理 | 审计引用 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
 |  |  | RBAC、flag、`field-write`、幂等键 |  |  |  |  |
