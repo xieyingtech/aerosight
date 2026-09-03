@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"aerosight/worker/internal/connector"
-	"aerosight/worker/internal/driver"
 )
 
 type CapabilitySnapshotRepository interface {
@@ -51,6 +50,7 @@ var deviceBoundFieldAcceptanceCapabilities = map[string]struct{}{
 }
 
 var accountBoundFieldAcceptanceCapabilities = map[string]struct{}{
+	"security.temporary-credential":     {},
 	"live.recording.control":            {},
 	"live.share.manage":                 {},
 	"live.converter.create":             {},
@@ -168,14 +168,13 @@ func ApplyCapabilitySnapshots(
 	scope.AccountFingerprint = strings.TrimSpace(scope.AccountFingerprint)
 	scope.DeviceModel = strings.TrimSpace(scope.DeviceModel)
 	scope.FirmwareVersion = strings.TrimSpace(scope.FirmwareVersion)
-	risks := make(map[string]driver.RiskLevel, len(Capabilities()))
+	actions := make(map[string]bool, len(Capabilities()))
 	for _, capability := range Capabilities() {
-		risks[capability.Code] = capability.Risk
+		actions[capability.Code] = capability.Kind == connector.CapabilityAction
 	}
 	effective := append([]CapabilityProbeResult(nil), results...)
 	for index := range effective {
-		risk := risks[effective[index].CapabilityCode]
-		if risk != driver.RiskHigh && risk != driver.RiskCritical {
+		if !actions[effective[index].CapabilityCode] {
 			continue
 		}
 		snapshot, reason := selectFieldAcceptanceSnapshot(effective[index].CapabilityCode, snapshots, scope)

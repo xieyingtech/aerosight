@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"aerosight/worker/internal/connector"
-	"aerosight/worker/internal/driver"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -19,16 +18,16 @@ type memoryCapabilitySnapshotRepository struct {
 	listed []connector.CapabilitySnapshot
 }
 
-func TestEveryHighRiskCapabilityHasAnExplicitFieldAcceptanceScope(t *testing.T) {
+func TestEveryActionCapabilityHasAnExplicitFieldAcceptanceScope(t *testing.T) {
 	t.Parallel()
 	for _, capability := range Capabilities() {
-		if capability.Risk != driver.RiskHigh && capability.Risk != driver.RiskCritical {
+		if capability.Kind != connector.CapabilityAction {
 			continue
 		}
 		_, deviceBound := deviceBoundFieldAcceptanceCapabilities[capability.Code]
 		_, accountBound := accountBoundFieldAcceptanceCapabilities[capability.Code]
 		if deviceBound == accountBound {
-			t.Fatalf("high-risk capability %q must have exactly one field acceptance scope", capability.Code)
+			t.Fatalf("action capability %q must have exactly one field acceptance scope", capability.Code)
 		}
 	}
 }
