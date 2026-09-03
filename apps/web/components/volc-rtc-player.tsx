@@ -23,11 +23,6 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
         const rtc = await import("@volcengine/rtc");
         if (disposed || !containerRef.current) return;
         rtc.default.setLogConfig({ logLevel: "error" });
-        rtc.default.setParameter("JOIN_ROOM_CONFIG", {
-          useTcpAfterJoinTimeout: true,
-          joinWithTcpOnly: true,
-          joinWithTcpOnlyDelay: 0
-        });
         const engine = rtc.default.createEngine(parsed.appId);
         cleanup = async () => {
           try { await engine.leaveRoom(); } catch { /* already left */ }
@@ -60,13 +55,13 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
           }
         });
         let joinTimeout: ReturnType<typeof setTimeout> | null = null;
+        await engine.setUserVisibility(false);
         const joined = engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
           isAutoPublish: false, isAutoSubscribeAudio: false, isAutoSubscribeVideo: false
         });
         await Promise.race([joined, new Promise<never>((_, reject) => {
           joinTimeout = setTimeout(() => reject(new Error("VOLC_RTC_JOIN_TIMEOUT")), 15_000);
         })]).finally(() => { if (joinTimeout) clearTimeout(joinTimeout); });
-        await engine.setUserVisibility(false);
         if (!disposed) setStatus("waiting");
       } catch (error) {
         const release = cleanup;
