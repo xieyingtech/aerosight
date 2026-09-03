@@ -18,6 +18,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   const [status, setStatus] = useState<"joining" | "waiting" | "playing" | "error">("joining");
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<string | null>(null);
+  const [viewerAttempt, setViewerAttempt] = useState(0);
 
   useEffect(() => {
     let disposed = false;
@@ -90,12 +91,22 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
       cleanup = null;
       if (release) void enqueueVolcRTCCleanup(release);
     };
-  }, [credential]);
+  }, [credential, viewerAttempt]);
+
+  const viewerError = errorCode === "JOIN_TIMEOUT"
+    ? "司空直播已启动，但当前浏览器未建立 RTC 观看连接。"
+    : "司空直播已启动，但当前浏览器的 RTC 观看连接失败。";
 
   return <div className="relative h-full w-full">
     <div className="h-full w-full" ref={containerRef} />
     {status !== "playing" && <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-center text-xs text-slate-200">
-      {status === "error" ? <div><VideoOffIcon className="mx-auto mb-2 size-7" />RTC 直播连接失败{errorCode ? `（${errorCode}）` : ""}</div>
+      {status === "error" ? <div className="max-w-sm px-4">
+        <VideoOffIcon className="mx-auto mb-2 size-7" />
+        <p>{viewerError}{errorCode ? `（${errorCode}）` : ""}</p>
+        <button className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-slate-500 px-2.5 py-1.5 text-xs hover:bg-slate-800" onClick={() => setViewerAttempt((current) => current + 1)} type="button">
+          <RefreshCwIcon className="size-3.5" />重试观看
+        </button>
+      </div>
         : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? `正在加入 RTC 房间…${connectionState ? `（${connectionState}）` : ""}` : "已加入，等待 Dock 视频流…"}</div>}
     </div>}
   </div>;
