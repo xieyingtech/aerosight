@@ -28,6 +28,7 @@ type acceptanceTarget struct {
 }
 
 func main() {
+	os.Args = normalizeCLIArgs(os.Args)
 	projectID := flag.Int("project-id", 0, "AeroSight project id")
 	connectorID := flag.Int64("connector-id", 0, "FlightHub connector instance id")
 	deviceID := flag.Int("device-id", 0, "exact AeroSight Dock device id")
@@ -107,6 +108,13 @@ func main() {
 	if result.Category != "succeeded" {
 		os.Exit(2)
 	}
+}
+
+func normalizeCLIArgs(arguments []string) []string {
+	if len(arguments) > 1 && arguments[1] == "--" {
+		return append(arguments[:1:1], arguments[2:]...)
+	}
+	return arguments
 }
 
 func loadTarget(ctx context.Context, database *sql.DB, projectID int, connectorID int64, deviceID int, cameraIndex string) (acceptanceTarget, error) {

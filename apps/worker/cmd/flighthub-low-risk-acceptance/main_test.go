@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -24,6 +25,14 @@ func TestLowRiskAcceptanceRequiresExplicitOptInAndScopedConnector(t *testing.T) 
 		if validInvocation(input.confirmed, input.projectID, input.connectorID, input.arguments) {
 			t.Fatalf("unsafe invocation was accepted: %#v", input)
 		}
+	}
+}
+
+func TestNormalizeCLIArgsAcceptsPNPMScriptSeparator(t *testing.T) {
+	got := normalizeCLIArgs([]string{"acceptance", "--", "--project-id", "1"})
+	want := []string{"acceptance", "--project-id", "1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalized args=%#v want=%#v", got, want)
 	}
 }
 

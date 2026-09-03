@@ -21,6 +21,7 @@ import (
 const confirmationFlag = "confirm-low-risk-write-acceptance"
 
 func main() {
+	os.Args = normalizeCLIArgs(os.Args)
 	projectID := flag.Int("project-id", 0, "AeroSight project id")
 	connectorID := flag.Int64("connector-id", 0, "FlightHub connector instance id")
 	confirmed := flag.Bool(confirmationFlag, false, "allow only temporary credential issuance; never upload, start a task, or control a device")
@@ -88,6 +89,13 @@ func main() {
 			exitWithSafeResult(safeAcceptanceError(err))
 		}
 	}
+}
+
+func normalizeCLIArgs(arguments []string) []string {
+	if len(arguments) > 1 && arguments[1] == "--" {
+		return append(arguments[:1:1], arguments[2:]...)
+	}
+	return arguments
 }
 
 func newAcceptanceGuard(database *sql.DB, instance connector.Instance, projectUUID, accountFingerprint string) flighthub.TemporaryCredentialAcceptanceGuard {
