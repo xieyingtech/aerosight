@@ -285,6 +285,33 @@ func TestSQLFlightHubLiveReconcilerRecoversAfterWorkerRestart(t *testing.T) {
 	if err := database.QueryRowContext(ctx, `select status from live_streams where id=$1`, streamID).Scan(&status); err != nil || status != "live" {
 		t.Fatalf("status=%s err=%v", status, err)
 	}
+	var eventCount int
+	var eventPayload []byte
+	if err := database.QueryRowContext(ctx, `select count(*),coalesce(max(payload_json::text),'')
+		from project_events where project_id=$1 and event_type='live_stream.status_changed'
+		  and payload_json->>'streamId'=$2`, projectID, fmt.Sprint(streamID)).Scan(&eventCount, &eventPayload); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 1 {
+		t.Fatalf("initial live reconcile events=%d payload=%s", eventCount, eventPayload)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(eventPayload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["status"] != "live" || payload["reason"] != "" || payload["deviceId"] != float64(deviceID) || len(payload) != 4 {
+		t.Fatalf("unsafe or incomplete live reconcile payload=%#v", payload)
+	}
+	if summary, err := firstWorker.ReconcileLiveSessions(ctx, instance); err != nil || summary.Updated != 0 {
+		t.Fatalf("idempotent reconcile summary=%#v err=%v", summary, err)
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from project_events where project_id=$1
+		and event_type='live_stream.status_changed' and payload_json->>'streamId'=$2`, projectID, fmt.Sprint(streamID)).Scan(&eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 1 {
+		t.Fatalf("idempotent live reconcile duplicated events=%d", eventCount)
+	}
 	if _, err := database.ExecContext(ctx, `update live_streams set status='stopping',playback_ref=null,
 		local_authorization_revoked_at=$2 where id=$1`, streamID, clock); err != nil {
 		t.Fatal(err)
@@ -307,6 +334,23 @@ func TestSQLFlightHubLiveReconcilerRecoversAfterWorkerRestart(t *testing.T) {
 	}
 	if status != "stopped" || reason != "FLIGHTHUB_LIVE_REMOTE_INACTIVE" || !secretColumnsEmpty {
 		t.Fatalf("status=%s reason=%s secrets-cleared=%v", status, reason, secretColumnsEmpty)
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from project_events where project_id=$1
+		and event_type='live_stream.status_changed' and payload_json->>'streamId'=$2`, projectID, fmt.Sprint(streamID)).Scan(&eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 2 {
+		t.Fatalf("terminal live reconcile events=%d", eventCount)
+	}
+	if summary, err := secondWorker.ReconcileLiveSessions(ctx, instance); err != nil || summary.Candidates != 0 || summary.Updated != 0 {
+		t.Fatalf("terminal reconcile summary=%#v err=%v", summary, err)
+	}
+	if err := database.QueryRowContext(ctx, `select count(*) from project_events where project_id=$1
+		and event_type='live_stream.status_changed' and payload_json->>'streamId'=$2`, projectID, fmt.Sprint(streamID)).Scan(&eventCount); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 2 {
+		t.Fatalf("terminal reconcile duplicated events=%d", eventCount)
 	}
 }
 

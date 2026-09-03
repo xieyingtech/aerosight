@@ -385,7 +385,8 @@ func (reconciler *FlightHubLiveReconciler) ReconcileLiveSessions(ctx context.Con
 		return FlightHubLiveReconcileSummary{}, errors.New("FlightHub live reconcile scope is invalid")
 	}
 	now := reconciler.now().UTC()
-	rows, err := reconciler.db.QueryContext(ctx, `select stream.id,stream.status,stream.started_at,
+	rows, err := reconciler.db.QueryContext(ctx, `select stream.id,stream.team_id,stream.device_id,stream.status,
+		coalesce(stream.status_reason,''),stream.started_at,
 		stream.start_attempted_at,stream.start_accepted_at,stream.last_playback_at,
 		stream.supplier_credential_expires_at,device.status,
 		latest.captured_at,
@@ -403,13 +404,17 @@ func (reconciler *FlightHubLiveReconciler) ReconcileLiveSessions(ctx context.Con
 		return FlightHubLiveReconcileSummary{}, err
 	}
 	type candidate struct {
-		id       int64
-		evidence FlightHubLiveEvidence
+		id            int64
+		teamID        int
+		deviceID      int
+		currentReason string
+		evidence      FlightHubLiveEvidence
 	}
 	candidates := make([]candidate, 0)
 	for rows.Next() {
 		var item candidate
-		if err := rows.Scan(&item.id, &item.evidence.Status, &item.evidence.StartedAt,
+		if err := rows.Scan(&item.id, &item.teamID, &item.deviceID, &item.evidence.Status, &item.currentReason,
+			&item.evidence.StartedAt,
 			&item.evidence.StartAttemptedAt, &item.evidence.StartAcceptedAt, &item.evidence.LastPlaybackAt,
 			&item.evidence.CredentialExpiresAt, &item.evidence.DeviceStatus,
 			&item.evidence.LiveCapturedAt, &item.evidence.LiveAvailable, &item.evidence.LiveActive); err != nil {
@@ -424,7 +429,11 @@ func (reconciler *FlightHubLiveReconciler) ReconcileLiveSessions(ctx context.Con
 	summary := FlightHubLiveReconcileSummary{Candidates: len(candidates)}
 	for _, item := range candidates {
 		decision := decideFlightHubLiveSession(now, item.evidence)
-		result, err := reconciler.db.ExecContext(ctx, `update live_streams set status=$4,status_reason=nullif($5,''),
+		tx, err := reconciler.db.BeginTx(ctx, nil)
+		if err != nil {
+			return summary, err
+		}
+		result, err := tx.ExecContext(ctx, `update live_streams set status=$4,status_reason=nullif($5,''),
 			remote_evidence_at=case when $6::boolean then $7 else remote_evidence_at end,
 			last_active_at=case when $4='live' then $3 else last_active_at end,
 			ended_at=case when $8 then $3 else ended_at end,
@@ -434,18 +443,47 @@ func (reconciler *FlightHubLiveReconciler) ReconcileLiveSessions(ctx context.Con
 			local_authorization_revoked_at=case when $8 then coalesce(local_authorization_revoked_at,$3) else local_authorization_revoked_at end,
 			lease_owner=case when $8 then null else lease_owner end,
 			lease_expires_at=case when $8 then null else lease_expires_at end,updated_at=now()
-		 where id=$1 and project_id=$2 and source_type=$9 and status=$10
-		   and (status<>$4 or status_reason is distinct from nullif($5,'')
-		        or ($6::boolean and remote_evidence_at is distinct from $7))`,
+			 where id=$1 and project_id=$2 and source_type=$9 and status=$10
+			   and status_reason is not distinct from nullif($11,'')
+			   and (status<>$4 or status_reason is distinct from nullif($5,'')
+			        or ($6::boolean and remote_evidence_at is distinct from $7))`,
 			item.id, instance.ProjectID, now, decision.Status, decision.Reason,
 			decision.EvidenceAt.Valid, nullableTime(decision.EvidenceAt), decision.Terminal,
-			FlightHubLiveSourceType, item.evidence.Status)
+			FlightHubLiveSourceType, item.evidence.Status, item.currentReason)
 		if err != nil {
+			_ = tx.Rollback()
 			return summary, err
 		}
-		if count, _ := result.RowsAffected(); count == 1 {
-			summary.Updated++
+		count, err := result.RowsAffected()
+		if err != nil {
+			_ = tx.Rollback()
+			return summary, err
 		}
+		if count != 1 {
+			_ = tx.Rollback()
+			continue
+		}
+		if decision.Status != item.evidence.Status || decision.Reason != item.currentReason {
+			payload, marshalErr := json.Marshal(map[string]any{
+				"streamId": item.id, "deviceId": item.deviceID,
+				"status": decision.Status, "reason": decision.Reason,
+			})
+			if marshalErr != nil {
+				_ = tx.Rollback()
+				return summary, marshalErr
+			}
+			eventID := fmt.Sprintf("flighthub-live-reconcile:%d:%s:%s", item.id, decision.Status, decision.Reason)
+			if _, err := tx.ExecContext(ctx, `insert into project_events(project_id,team_id,event_id,event_type,payload_json,occurred_at)
+				values($1,$2,$3,'live_stream.status_changed',$4,$5) on conflict(event_id) do nothing`,
+				instance.ProjectID, item.teamID, eventID, payload, now); err != nil {
+				_ = tx.Rollback()
+				return summary, err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return summary, err
+		}
+		summary.Updated++
 	}
 	return summary, nil
 }
