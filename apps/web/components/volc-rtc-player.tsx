@@ -36,10 +36,10 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
           setStatus("waiting");
         });
         engine.on(rtc.default.events.onError, () => { if (!disposed) setStatus("error"); });
-        await engine.setUserVisibility(false);
         await engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
           isAutoPublish: false, isAutoSubscribeAudio: false, isAutoSubscribeVideo: false
         });
+        await engine.setUserVisibility(false);
         if (!disposed) setStatus("waiting");
       } catch {
         if (!disposed) setStatus("error");
