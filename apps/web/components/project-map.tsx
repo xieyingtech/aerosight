@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Map, { Layer, NavigationControl, Source } from "react-map-gl/maplibre";
 import { cn } from "@/lib/utils";
-import { streetMapStyle } from "@/lib/map-style";
+import { vectorStreetMapStyle } from "@/lib/map-style";
 import { createProjectMapModel, filterProjectMapModelByTime, firstMapCoordinate, projectMapLayers } from "@/lib/project-map-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
@@ -38,7 +38,7 @@ export function ProjectMap({ snapshot, className, selection, range, onSelect }: 
       <Map
         initialViewState={{ longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
         interactiveLayerIds={interactiveLayers}
-        mapStyle={streetMapStyle}
+        mapStyle={vectorStreetMapStyle}
         onClick={(event) => {
           const properties = event.features?.[0]?.properties;
           if (properties?.entityId && onSelect) onSelect({

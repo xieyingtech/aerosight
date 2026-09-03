@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Map, { Layer, NavigationControl, Source } from "react-map-gl/maplibre";
 
 import type { FlightHubGeospatialGeometry, FlightHubGeospatialWorkspace } from "@/lib/dji-flighthub-geospatial-core";
-import { streetMapStyle } from "@/lib/map-style";
+import { vectorStreetMapStyle } from "@/lib/map-style";
 import { cn } from "@/lib/utils";
 
 type LayerKind = "map-element" | "flight-area" | "air-sense-warning";
@@ -69,7 +69,7 @@ export function FlightHubGeospatialMap({ workspace, className }: {
     <Map
       initialViewState={{ longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
       interactiveLayerIds={["geospatial-map-points", "geospatial-flight-points", "geospatial-air-sense-points", "geospatial-map-fill", "geospatial-flight-fill"]}
-      mapStyle={streetMapStyle}
+      mapStyle={vectorStreetMapStyle}
       onClick={(event) => {
         const properties = event.features?.[0]?.properties;
         setSelected(properties?.id ? {
