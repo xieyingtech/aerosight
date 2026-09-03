@@ -9,18 +9,25 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"joining" | "waiting" | "playing" | "error">("joining");
   const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<string | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => Promise<void>) | null = null;
     setStatus("joining");
     setErrorCode(null);
+    setConnectionState(null);
     void (async () => {
       try {
         const parsed = parseVolcRTCPlaybackCredential(credential);
         const rtc = await import("@volcengine/rtc");
         if (disposed || !containerRef.current) return;
         rtc.default.setLogConfig({ logLevel: "error" });
+        rtc.default.setParameter("JOIN_ROOM_CONFIG", {
+          useTcpAfterJoinTimeout: true,
+          joinWithTcpOnly: true,
+          joinWithTcpOnlyDelay: 0
+        });
         const engine = rtc.default.createEngine(parsed.appId);
         cleanup = async () => {
           try { await engine.leaveRoom(); } catch { /* already left */ }
@@ -28,6 +35,9 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
         };
         engine.on(rtc.default.events.onVideoFirstFrameDecoded, () => {
           if (!disposed) setStatus("playing");
+        });
+        engine.on(rtc.default.events.onConnectionStateChanged, ({ state }) => {
+          if (!disposed) setConnectionState(rtc.ConnectionState[state] ?? "CONNECTION_STATE_UNKNOWN");
         });
         engine.on(rtc.default.events.onUserPublishStream, ({ userId, mediaType }) => {
           if (disposed || !containerRef.current) return;
@@ -49,14 +59,22 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
             setStatus("error");
           }
         });
-        await engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
+        let joinTimeout: ReturnType<typeof setTimeout> | null = null;
+        const joined = engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
           isAutoPublish: false, isAutoSubscribeAudio: false, isAutoSubscribeVideo: false
         });
+        await Promise.race([joined, new Promise<never>((_, reject) => {
+          joinTimeout = setTimeout(() => reject(new Error("VOLC_RTC_JOIN_TIMEOUT")), 15_000);
+        })]).finally(() => { if (joinTimeout) clearTimeout(joinTimeout); });
         await engine.setUserVisibility(false);
         if (!disposed) setStatus("waiting");
-      } catch {
+      } catch (error) {
+        const release = cleanup;
+        cleanup = null;
+        if (release) await release();
         if (!disposed) {
-          setErrorCode("CLIENT_INIT_FAILED");
+          setErrorCode(error instanceof Error && error.message === "VOLC_RTC_JOIN_TIMEOUT"
+            ? "JOIN_TIMEOUT" : "CLIENT_INIT_FAILED");
           setStatus("error");
         }
       }
@@ -73,7 +91,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
     <div className="h-full w-full" ref={containerRef} />
     {status !== "playing" && <div className="absolute inset-0 flex items-center justify-center bg-slate-950 text-center text-xs text-slate-200">
       {status === "error" ? <div><VideoOffIcon className="mx-auto mb-2 size-7" />RTC 直播连接失败{errorCode ? `（${errorCode}）` : ""}</div>
-        : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? "正在加入 RTC 房间…" : "已加入，等待 Dock 视频流…"}</div>}
+        : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? `正在加入 RTC 房间…${connectionState ? `（${connectionState}）` : ""}` : "已加入，等待 Dock 视频流…"}</div>}
     </div>}
   </div>;
 }
