@@ -73,7 +73,7 @@ func (store *SQLFlightHubLiveSessionStore) Load(ctx context.Context, projectID i
 		   and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
 		   and capability.region='cn' and capability.deployment='cn-public-cloud'
 		   and capability.evidence_level='field-write'
-		   and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
+		   and capability.device_model=device.device_model and capability.firmware_version is null
 		   and (capability.expires_at is null or capability.expires_at>now()))
 	 from live_streams stream
 	 join devices device on device.id=stream.device_id and device.project_id=stream.project_id

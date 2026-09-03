@@ -40,13 +40,19 @@ type CapabilityEvaluationScope struct {
 var deviceBoundFieldAcceptanceCapabilities = map[string]struct{}{
 	"device.control":               {},
 	"flight.execute":               {},
-	"live.control":                 {},
 	"live.quality.set":             {},
 	"device.camera.change":         {},
 	"device.lens.change":           {},
 	"device.rtk.calibrate":         {},
 	"device.relay.pair":            {},
 	"device.active-project.update": {},
+}
+
+// FlightHub's released device and state reads expose the Dock model but not its
+// firmware. Live start is therefore short-lived and model-bound; if firmware
+// later becomes observable, the model-only acceptance stops matching.
+var modelBoundFieldAcceptanceCapabilities = map[string]struct{}{
+	"live.control": {},
 }
 
 var accountBoundFieldAcceptanceCapabilities = map[string]struct{}{
@@ -218,7 +224,8 @@ func selectFieldAcceptanceSnapshot(
 	scope CapabilityEvaluationScope,
 ) (*connector.CapabilitySnapshot, string) {
 	_, firmwareBound := deviceBoundFieldAcceptanceCapabilities[capabilityCode]
-	if _, accountBound := accountBoundFieldAcceptanceCapabilities[capabilityCode]; !firmwareBound && !accountBound {
+	_, modelBound := modelBoundFieldAcceptanceCapabilities[capabilityCode]
+	if _, accountBound := accountBoundFieldAcceptanceCapabilities[capabilityCode]; !firmwareBound && !modelBound && !accountBound {
 		return nil, "field_acceptance_scope_unclassified"
 	}
 	var selected *connector.CapabilitySnapshot
@@ -244,6 +251,10 @@ func selectFieldAcceptanceSnapshot(
 				firmwareChanged = true
 			}
 			if snapshot.DeviceModel != scope.DeviceModel || snapshot.FirmwareVersion != scope.FirmwareVersion {
+				continue
+			}
+		} else if modelBound {
+			if scope.DeviceModel == "" || scope.FirmwareVersion != "" || snapshot.DeviceModel != scope.DeviceModel || snapshot.FirmwareVersion != "" {
 				continue
 			}
 		} else if snapshot.DeviceModel != "" || snapshot.FirmwareVersion != "" {

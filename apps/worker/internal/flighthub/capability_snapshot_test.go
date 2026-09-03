@@ -25,10 +25,41 @@ func TestEveryActionCapabilityHasAnExplicitFieldAcceptanceScope(t *testing.T) {
 			continue
 		}
 		_, deviceBound := deviceBoundFieldAcceptanceCapabilities[capability.Code]
+		_, modelBound := modelBoundFieldAcceptanceCapabilities[capability.Code]
 		_, accountBound := accountBoundFieldAcceptanceCapabilities[capability.Code]
-		if deviceBound == accountBound {
+		if boolCount(deviceBound, modelBound, accountBound) != 1 {
 			t.Fatalf("action capability %q must have exactly one field acceptance scope", capability.Code)
 		}
+	}
+}
+
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
+}
+
+func TestLiveControlAcceptanceIsModelBoundUntilFirmwareBecomesObservable(t *testing.T) {
+	now := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	evidence := connector.CapabilitySnapshot{CapabilityCode: "live.control", Status: "supported", EvidenceLevel: "field-write",
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "3-2-0", VerifiedAt: now.Add(-time.Minute)}
+	baseline := []CapabilityProbeResult{{CapabilityCode: "live.control", Status: ProbeUnverified,
+		Layers: CapabilityProbeLayers{Contract: ProbeSupported, Deployment: ProbeSupported, Account: ProbeSupported, Implementation: ProbeSupported, Acceptance: ProbeUnverified}}}
+	matched := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "3-2-0", Now: now,
+	})[0]
+	if matched.Status != ProbeSupported {
+		t.Fatalf("model-bound live acceptance did not match: %#v", matched)
+	}
+	firmwareNowKnown := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
+		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "3-2-0", FirmwareVersion: "01.00", Now: now,
+	})[0]
+	if firmwareNowKnown.Status == ProbeSupported {
+		t.Fatalf("model-only live acceptance survived newly observable firmware: %#v", firmwareNowKnown)
 	}
 }
 

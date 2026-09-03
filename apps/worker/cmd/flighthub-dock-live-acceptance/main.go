@@ -93,6 +93,9 @@ func main() {
 	result := flighthub.RunLiveControlAcceptance(ctx, client, registry, token, scope.ProjectUUID, target.Serial, target.CameraIndex, guard)
 	target.Serial = ""
 	if result.Category == "succeeded" {
+		if err := projectVerifiedDeviceModel(ctx, database, target); err != nil {
+			exitWithSafeResult("device_model_projection_unavailable")
+		}
 		repository := connector.NewSQLResourceRepository(database)
 		if err := flighthub.PersistLiveControlAcceptanceEvidence(ctx, repository, target.Instance, result, scope.AccountFingerprint,
 			target.DeviceModel, target.FirmwareVersion, target.CameraIndex, runID, time.Now().UTC(), 24*time.Hour); err != nil {
@@ -121,7 +124,7 @@ func loadTarget(ctx context.Context, database *sql.DB, projectID int, connectorI
 	var target acceptanceTarget
 	var credential, scope []byte
 	err := database.QueryRowContext(ctx, `select device.id,identity.identity_json->'attributes'->>'serialNumber',channel.channel_key,
-		coalesce(device.device_model,''),coalesce(device.firmware_version,''),adapter.id,adapter.project_id,
+		coalesce(nullif(device.device_model,''),identity.identity_json#>>'{attributes,model,key}'),coalesce(device.firmware_version,''),adapter.id,adapter.project_id,
 		definition.connector_key,definition.version,adapter.credential_envelope_json,adapter.discovery_scope_json
 		from devices device
 		join device_adapters adapter on adapter.id=device.adapter_id and adapter.project_id=device.project_id
@@ -136,12 +139,27 @@ func loadTarget(ctx context.Context, database *sql.DB, projectID int, connectorI
 		&target.DeviceID, &target.Serial, &target.CameraIndex, &target.DeviceModel, &target.FirmwareVersion,
 		&target.Instance.ID, &target.Instance.ProjectID, &target.Instance.ConnectorKey, &target.Instance.Version, &credential, &scope,
 	)
-	if err != nil || strings.TrimSpace(target.Serial) == "" || strings.TrimSpace(target.DeviceModel) == "" || strings.TrimSpace(target.FirmwareVersion) == "" {
+	if err != nil || strings.TrimSpace(target.Serial) == "" || strings.TrimSpace(target.DeviceModel) == "" {
 		return acceptanceTarget{}, &flighthub.APIError{SafeCode: "scope_forbidden"}
 	}
 	target.Instance.CredentialEnvelope = json.RawMessage(credential)
 	target.Instance.DiscoveryScope = json.RawMessage(scope)
 	return target, nil
+}
+
+func projectVerifiedDeviceModel(ctx context.Context, database *sql.DB, target acceptanceTarget) error {
+	result, err := database.ExecContext(ctx, `update devices set device_model=$4,updated_at=now()
+		where id=$1 and project_id=$2 and adapter_id=$3
+		  and (device_model is null or device_model='' or device_model=$4)`,
+		target.DeviceID, target.Instance.ProjectID, target.Instance.ID, target.DeviceModel)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil || count != 1 {
+		return &flighthub.APIError{SafeCode: "connector_changed"}
+	}
+	return nil
 }
 
 func newAcceptanceGuard(database *sql.DB, expected acceptanceTarget, projectUUID, accountFingerprint string) flighthub.LiveControlAcceptanceGuard {

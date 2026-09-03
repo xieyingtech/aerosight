@@ -82,7 +82,7 @@ func PersistLiveControlAcceptanceEvidence(
 	cameraIndex = strings.TrimSpace(cameraIndex)
 	acceptanceRunID = strings.TrimSpace(acceptanceRunID)
 	if repository == nil || instance.ID <= 0 || instance.ProjectID <= 0 ||
-		!validAccountFingerprint(accountFingerprint) || deviceModel == "" || firmwareVersion == "" ||
+		!validAccountFingerprint(accountFingerprint) || deviceModel == "" ||
 		cameraIndex == "" || acceptanceRunID == "" || len(acceptanceRunID) > 128 || verifiedAt.IsZero() || ttl <= 0 ||
 		result.Endpoint != LiveControlAcceptanceEndpoint || result.Category != "succeeded" ||
 		strings.TrimSpace(result.Supplier) == "" || strings.TrimSpace(result.Protocol) == "" || result.DurationMS < 0 {

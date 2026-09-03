@@ -115,7 +115,7 @@ pnpm accept:flighthub-low-risk -- \
 
 命令会在每个 POST 前重新核对连接器状态、项目作用域、账号指纹和凭据 envelope；任一变化、失败或未知结果都会阻止 evidence。输出仅含 endpoint ID、安全类别、计数/字段集合和耗时，不得据此开放 `flight.execute` 或 `model.write`。
 
-Dock 直播首次现场验收使用单独的严格入口。命令只接受精确的本地 Dock、已投影且可用的视频通道，并在 POST 前重新核对设备类型、在线状态、连接器、账号、凭据、型号和固件。只有真实启动响应能被已登记的直播供应商安全解析后，才写入 24 小时有效且绑定该 Dock 型号/固件的 `live.control` evidence，并只开启项目的 `live.control` flag；失败、未知结果或不支持的供应商均不落证据。不要对无人机 device id 运行此命令：
+Dock 直播首次现场验收使用单独的严格入口。命令只接受精确的本地 Dock、已投影且可用的视频通道，并在 POST 前重新核对设备类型、在线状态、连接器、账号、凭据和型号。FlightHub 当前 released 设备/状态接口不提供固件版本，因此仅 `live.control` 使用 24 小时有效的“账号 + 精确 Dock 型号 + 通道摘要”短期 evidence；其他设备 action 仍要求型号和固件。若后续能读取固件，既有无固件直播 evidence 自动失配并要求重验。只有真实启动响应能被已登记的直播供应商安全解析后才落证据，并只开启项目的 `live.control` flag；失败、未知结果或不支持的供应商均不落证据。不要对无人机 device id 运行此命令：
 
 ```bash
 pnpm accept:flighthub-dock-live -- \

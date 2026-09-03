@@ -160,7 +160,7 @@ func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance 
 				and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
 				and capability.region='cn' and capability.deployment='cn-public-cloud'
 				and capability.evidence_level='field-write'
-				and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
+				and capability.device_model=device.device_model and capability.firmware_version is null
 				and (capability.expires_at is null or capability.expires_at>now()))
 	from device_adapters adapter
 	join devices device on device.adapter_id=adapter.id and device.project_id=adapter.project_id

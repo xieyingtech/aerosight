@@ -141,7 +141,7 @@ export async function startLiveStream(
 					and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'
 					and capability.region='cn' and capability.deployment='cn-public-cloud'
 					and capability.evidence_level='field-write'
-					and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
+					and capability.device_model=device.device_model and capability.firmware_version is null
                     and (capability.expires_at is null or capability.expires_at>now())) as "liveCapabilityVerified"
            from devices device
            left join device_adapters adapter
