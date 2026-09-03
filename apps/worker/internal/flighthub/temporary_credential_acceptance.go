@@ -98,7 +98,8 @@ func temporaryCredentialResult(endpoint string, fields []string, started time.Ti
 }
 
 func safeTemporaryCredentialCategory(value string) bool {
-	return safeSmokeCategory(value) || value == "connector_changed" || value == "acceptance_guard_failed"
+	return safeSmokeCategory(value) || value == "connector_changed" || value == "acceptance_guard_failed" ||
+		value == "temporary_link_invalid" || value == "temporary_link_expired" || value == "temporary_link_host_forbidden"
 }
 
 func PersistTemporaryCredentialAcceptanceEvidence(

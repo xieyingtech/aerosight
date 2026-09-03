@@ -129,14 +129,16 @@ func TestTemporaryCredentialAcceptancePersistsOnlyAccountBoundTemporaryCredentia
 
 func TestTemporaryCredentialAcceptanceMapsFailuresToSafeCategories(t *testing.T) {
 	t.Parallel()
-	client := &temporaryCredentialAcceptanceClientFixture{err: &APIError{SafeCode: "scope_forbidden"}}
-	results := RunTemporaryCredentialAcceptance(context.Background(), client, "TOKEN_SECRET", "project-redacted", "file-redacted", func(context.Context, string) error { return nil })
-	encoded, err := json.Marshal(results)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 2 || results[0].Category != "scope_forbidden" || results[1].Category != "scope_forbidden" || strings.Contains(string(encoded), "DJI_FLIGHTHUB") {
-		t.Fatalf("failure was not safely classified: %#v", results)
+	for _, category := range []string{"scope_forbidden", "temporary_link_invalid", "temporary_link_expired", "temporary_link_host_forbidden"} {
+		client := &temporaryCredentialAcceptanceClientFixture{err: &APIError{SafeCode: category}}
+		results := RunTemporaryCredentialAcceptance(context.Background(), client, "TOKEN_SECRET", "project-redacted", "file-redacted", func(context.Context, string) error { return nil })
+		encoded, err := json.Marshal(results)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 2 || results[0].Category != category || results[1].Category != category || strings.Contains(string(encoded), "DJI_FLIGHTHUB") {
+			t.Fatalf("failure %s was not safely classified: %#v", category, results)
+		}
 	}
 }
 

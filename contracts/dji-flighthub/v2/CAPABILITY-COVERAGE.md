@@ -13,7 +13,7 @@
 | 风险 | 59 low / 3 medium / 15 high / 12 critical |
 | manifest 验证字段 | 73 documented / 14 live-read / 1 live-empty / 1 parameter-required |
 | 真实只读验收 | 2026-09-02 对当前连接执行 59/59 GET；账号作用域 evidence 已持久化 |
-| 现场写入验收 | 尚未执行；所有 action 必须继续要求 `field-write` |
+| 现场写入验收 | 2026-09-03 仅尝试两个临时凭据接口，均未通过；`field-write=0`，所有 action 继续关闭 |
 | 坐标基准 | `unverified`；7.7 现场控制点与任务轨迹验收待完成 |
 
 manifest 的 `verification` 是版本化合同注记；数据库中的 capability snapshot 才是账号/型号/固件作用域的运行时证据。两者都不能替代审批、功能开关或现场安全条件。
@@ -23,7 +23,7 @@ manifest 的 `verification` 是版本化合同注记；数据库中的 capabilit
 | 领域 | 接口 | 运行时能力 | 本地接入 | 当前证据与限制 |
 | --- | ---: | --- | --- | --- |
 | `system` <!-- domain:system endpoints:2 --> | 2 | `health.read` | 系统健康、状态 typed client；连接器健康诊断 | GET 已纳入真实只读；非零业务码仍按失败类别处理 |
-| `security` <!-- domain:security endpoints:2 --> | 2 | `security.temporary-credential`、`security.sn.decrypt` | STS 受控上传、SN 解密短期流程 | fixture 已覆盖；两项均为写/敏感流程，默认关闭且无 `field-write` |
+| `security` <!-- domain:security endpoints:2 --> | 2 | `security.temporary-credential`、`security.sn.decrypt` | STS 受控上传、SN 解密短期流程 | fixture 已覆盖；STS 现场签发返回暂时不可用，未产生 `field-write`；SN 解密未获授权 |
 | `organization` <!-- domain:organization endpoints:8 --> | 8 | `organization.read`、`organization.project-member.write`、`organization.write` | 用户、角色、权限、成员视图及受控管理作业 | 读取已接入；组织写入/权限变更未现场验收 |
 | `project` <!-- domain:project endpoints:4 --> | 4 | `organization.read`、`organization.project-member.write`、`organization.write` | 项目发现、用户/成员/加入码读取与成员写入作业 | 项目发现真实只读通过；成员写入保持关闭 |
 | `device` <!-- domain:device endpoints:6 --> | 6 | `inventory.read`、`state.read`、`health.read` | 目录、详情、物模型、HMS、拓扑、自动录制投影 | Dock 2/M3TD 状态已真实回填；坐标仍为 `unverified` |

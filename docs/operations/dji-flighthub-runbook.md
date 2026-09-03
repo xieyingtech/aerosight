@@ -103,6 +103,18 @@
 
 适用于直播、画质/录制/分享/转换器、航线上传、任务、标注和建模等。每个 action 单独一行，禁止用一次批准覆盖整个领域。
 
+临时凭据签发可使用以下严格白名单命令。它只调用项目 STS 与开放建模上传 token，不上传对象、不发送 callback、不创建模型/任务，也不控制设备；两个 endpoint 全部成功时才写入 24 小时有效、账号绑定的 `security.temporary-credential` evidence：
+
+```bash
+pnpm accept:flighthub-low-risk -- \
+  --project-id <local-project-id> \
+  --connector-id <connector-instance-id> \
+  --confirm-low-risk-write-acceptance \
+  --persist-evidence
+```
+
+命令会在每个 POST 前重新核对连接器状态、项目作用域、账号指纹和凭据 envelope；任一变化、失败或未知结果都会阻止 evidence。输出仅含 endpoint ID、安全类别、计数/字段集合和耗时，不得据此开放 `flight.execute` 或 `model.write`。
+
 | action/endpoint | 测试窗口与资源 | 前置证据 | 预期远端结果 | 回滚/清理 | 审计引用 | 结论 |
 | --- | --- | --- | --- | --- | --- | --- |
 |  |  | RBAC、flag、`field-write`、幂等键 |  |  |  |  |

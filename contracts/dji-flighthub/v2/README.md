@@ -18,7 +18,7 @@
 
 ## 当前覆盖基线
 
-合同于 2026-08-30 对照官方 released 目录建立，包含 89 个接口：59 GET、19 POST、6 PUT、5 DELETE。2026-09-02 已使用本地连接执行显式 opt-in 的 59/59 GET 脱敏 smoke，并将账号作用域的结果写入 capability evidence；该结果没有创建任何 `field-write` 证据，也不会打开写能力。
+合同于 2026-08-30 对照官方 released 目录建立，包含 89 个接口：59 GET、19 POST、6 PUT、5 DELETE。2026-09-02 已使用本地连接执行显式 opt-in 的 59/59 GET 脱敏 smoke，并将账号作用域的结果写入 capability evidence。2026-09-03 在“不起飞、仅低风险”的授权下尝试了两个临时凭据接口，但结果未通过且 runner 拒绝持久化；当前没有创建任何 `field-write` 证据，也不会打开写能力。
 
 验证证据分四级：
 
