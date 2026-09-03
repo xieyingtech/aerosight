@@ -619,6 +619,78 @@ func TestActiveLiveCandidatesTightenIntervalAndPollCursorWins(t *testing.T) {
 	}
 }
 
+func TestActiveOperationsReconcilesLiveDuringFlightAlertBackoff(t *testing.T) {
+	now := time.Date(2026, 9, 2, 4, 45, 0, 0, time.UTC)
+	nextAttempt := now.Add(4 * time.Minute)
+	previous := connector.ResourceSyncUpdate{
+		Kind: "active-operations", Status: "backoff", Cursor: map[string]any{"previousAlerts": 3},
+		AttemptCount: 4, LastErrorCode: "schema_incompatible", NextAttemptAt: &nextAttempt,
+	}
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{"active-operations": previous}}
+	live := &liveReconcilerFixture{summary: FlightHubLiveReconcileSummary{Candidates: 1, Updated: 1}}
+	coordinator, err := NewResourceStreamCoordinator(
+		&resourceClientFixture{}, tokenResolverFixture{token: "TOKEN_REDACTED"}, store,
+		&resourceSinkFixture{}, ResourceStreamConfig{
+			OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+			CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, LiveReconciler: live,
+			Now: func() time.Time { return now },
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollCalled := false
+	err = coordinator.runStream(context.Background(), resourceStreamInstance(), "active-operations",
+		func(context.Context, connector.Instance, string) (map[string]any, time.Duration, error) {
+			pollCalled = true
+			return nil, 0, nil
+		})
+	if err != nil || live.calls != 1 || pollCalled {
+		t.Fatalf("err=%v live calls=%d poll called=%v", err, live.calls, pollCalled)
+	}
+	if state := store.state("active-operations"); state.Status != previous.Status || state.AttemptCount != previous.AttemptCount ||
+		state.LastErrorCode != previous.LastErrorCode || state.NextAttemptAt == nil || !state.NextAttemptAt.Equal(nextAttempt) ||
+		state.Cursor["previousAlerts"] != 3 {
+		t.Fatalf("flight alert backoff changed by live reconciliation: %#v", state)
+	}
+}
+
+func TestLiveReconcileFailureDoesNotFailFlightAlertStream(t *testing.T) {
+	now := time.Date(2026, 9, 2, 4, 50, 0, 0, time.UTC)
+	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}}
+	liveErr := errors.New("live repository temporarily unavailable")
+	live := &liveReconcilerFixture{summary: FlightHubLiveReconcileSummary{Candidates: 1}, err: liveErr}
+	var diagnosticKind string
+	coordinator, err := NewResourceStreamCoordinator(
+		&resourceClientFixture{}, tokenResolverFixture{token: "TOKEN_REDACTED"}, store,
+		&resourceSinkFixture{}, ResourceStreamConfig{
+			OnlineInterval: 15 * time.Second, OfflineInterval: time.Minute, HealthInterval: 5 * time.Minute,
+			CatalogInterval: 15 * time.Minute, MaxBackoff: 5 * time.Minute, LiveReconciler: live,
+			Now: func() time.Time { return now }, OnError: func(kind string, err error) {
+				if errors.Is(err, liveErr) {
+					diagnosticKind = kind
+				}
+			},
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pollCalled := false
+	err = coordinator.runStream(context.Background(), resourceStreamInstance(), "active-operations",
+		func(context.Context, connector.Instance, string) (map[string]any, time.Duration, error) {
+			pollCalled = true
+			return map[string]any{"alerts": 0, "complete": true}, time.Minute, nil
+		})
+	if err != nil || live.calls != 1 || !pollCalled || diagnosticKind != "live-reconciliation" {
+		t.Fatalf("err=%v live calls=%d poll called=%v diagnostic=%q", err, live.calls, pollCalled, diagnosticKind)
+	}
+	state := store.state("active-operations")
+	if state.Status != "idle" || state.AttemptCount != 0 || state.LastErrorCode != "" || state.Cursor["complete"] != true {
+		t.Fatalf("live failure changed flight alert stream state: %#v", state)
+	}
+}
+
 func TestResourceStreamsRunInsideLeaseWithoutSlowInventoryOrHMSBlockingPosition(t *testing.T) {
 	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
 	store := &resourceStoreFixture{states: map[string]connector.ResourceSyncUpdate{}, devices: []connector.ManagedConnectorDevice{{DeviceID: 1, Serial: "AIRCRAFT_REDACTED", Online: true}}}

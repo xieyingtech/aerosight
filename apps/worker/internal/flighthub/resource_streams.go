@@ -863,6 +863,16 @@ func (coordinator *ResourceStreamCoordinator) runStream(
 	if err != nil {
 		return err
 	}
+	preflightCursor := mergeResourceCursor(map[string]any{}, previous.Cursor)
+	liveCandidates := 0
+	if kind == "active-operations" && coordinator.config.LiveReconciler != nil {
+		liveSummary, liveErr := coordinator.config.LiveReconciler.ReconcileLiveSessions(ctx, instance)
+		preflightCursor = mergeResourceCursor(preflightCursor, liveSummary.Cursor())
+		liveCandidates = liveSummary.Candidates
+		if liveErr != nil {
+			coordinator.config.OnError("live-reconciliation", liveErr)
+		}
+	}
 	if exists && previous.NextAttemptAt != nil && previous.NextAttemptAt.After(now) {
 		return nil
 	}
@@ -871,16 +881,6 @@ func (coordinator *ResourceStreamCoordinator) runStream(
 		Kind: kind, Status: "running", Cursor: previous.Cursor, AttemptCount: attempt, StartedAt: &now,
 	}); err != nil {
 		return err
-	}
-	preflightCursor := mergeResourceCursor(map[string]any{}, previous.Cursor)
-	liveCandidates := 0
-	if kind == "active-operations" && coordinator.config.LiveReconciler != nil {
-		liveSummary, liveErr := coordinator.config.LiveReconciler.ReconcileLiveSessions(ctx, instance)
-		preflightCursor = mergeResourceCursor(preflightCursor, liveSummary.Cursor())
-		liveCandidates = liveSummary.Candidates
-		if liveErr != nil {
-			return coordinator.failStream(ctx, instance, kind, preflightCursor, attempt, now, liveErr)
-		}
 	}
 	token, err := coordinator.resolver.ResolveToken(ctx, instance)
 	if err != nil {
