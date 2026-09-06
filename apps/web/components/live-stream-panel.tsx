@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { useEffect, useMemo, useState } from "react";
 import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
@@ -20,7 +22,8 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
   useEffect(() => {
     const controller = new AbortController();
     setFailed(false);
-    fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=${action}`, {
+    setAccessUrl(null);
+    apiFetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=${action}`, {
       signal: controller.signal, cache: "no-store"
     }).then(async (response) => {
       if (!response.ok) throw new Error("media access failed");
@@ -30,10 +33,12 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
     return () => controller.abort();
   }, [action, media.id, projectId]);
   const download = async () => {
-    const response = await fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=download`, { cache: "no-store" });
+    try {
+    const response = await apiFetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=download`, { cache: "no-store" });
     if (!response.ok) { setFailed(true); return; }
     const result = await response.json() as { url: string };
     window.location.assign(result.url);
+    } catch { setFailed(true); }
   };
   return <div className="space-y-2">
     <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-muted/40 text-center text-xs text-muted-foreground">
@@ -95,7 +100,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     if (!streamId || !isLiveStreamPlayable(streamStatus)) { setPlayback({ status: "idle" }); return; }
     const controller = new AbortController();
     setPlayback({ status: "loading" });
-    fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
+    apiFetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
       signal: controller.signal, cache: "no-store"
     }).then(async (response) => {
       if (!response.ok) throw new Error("playback request failed");
@@ -115,7 +120,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   if (model.mode === "history") {
     return <div className="space-y-3 p-4">
       <div className="flex items-center gap-2 text-sm font-medium"><HistoryIcon className="size-4" />历史媒体</div>
-      {model.media ? <HistoricalMedia media={model.media} projectId={snapshot.project.id} />
+      {model.media ? <HistoricalMedia key={`${snapshot.project.id}:${String(model.media.id)}`} media={model.media} projectId={snapshot.project.id} />
         : <div className="flex aspect-video items-center justify-center rounded-lg border bg-muted/40 text-center text-xs text-muted-foreground">
           <div><VideoOffIcon className="mx-auto mb-2 size-7" />当前时间点没有可用媒体</div>
         </div>}
@@ -146,12 +151,15 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   const stopStream = async () => {
     if (!streamId || stopState === "stopping") return;
     setStopState("stopping");
-    const response = await fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/stop`, {
+    try {
+    const response = await apiFetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/stop`, {
       method: "POST"
     });
     if (!response.ok) { setStopState("error"); return; }
     setPlayback({ status: "idle" });
     await onStreamChanged?.();
+    setStopState("idle");
+    } catch { setStopState("error"); }
   };
   const lastActive = model.stream.lastActiveAt ? Date.parse(String(model.stream.lastActiveAt)) : NaN;
   const latencySeconds = Number.isFinite(lastActive) ? Math.max(0, Math.round((Date.now() - lastActive) / 1000)) : null;

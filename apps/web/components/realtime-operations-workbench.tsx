@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, WrenchIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,12 +50,13 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     deviceId: initialDeviceId, streamId: initialStreamId
   }));
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [transitionTimeout, setTransitionTimeout] = useState(false);
   const pollCount = useRef(0);
 
   const syncSelection = useCallback((next: RealtimeWorkbenchSelection, replace = true) => {
     setSelection(next);
-    const encoded = workbenchQuery(next);
+    const encoded = workbenchQuery(next, window.location.search);
     const href = encoded ? `${pathname}?${encoded}` : pathname;
     if (replace && typeof window !== "undefined" && `${window.location.pathname}${window.location.search}` !== href) {
       window.history.replaceState(window.history.state, "", href);
@@ -62,9 +65,10 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
 
   const refresh = useCallback(async (selectStreamId?: number) => {
     setRefreshing(true);
+    setRefreshFailed(false);
     try {
-      const response = await fetch(`/api/projects/${snapshot.project.id}/snapshot`, { cache: "no-store" });
-      if (!response.ok) return null;
+      const response = await apiFetch(`/api/projects/${snapshot.project.id}/snapshot`, { cache: "no-store" });
+      if (!response.ok) throw new Error("SNAPSHOT_FAILED");
       const next = await response.json() as ProjectSituationSnapshot;
       setSnapshot(next);
       const resolved = resolveWorkbenchSelection(next, {
@@ -73,6 +77,9 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
       });
       syncSelection(resolved);
       return next;
+    } catch {
+      setRefreshFailed(true);
+      return null;
     } finally {
       setRefreshing(false);
     }
@@ -162,6 +169,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
         </> : <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
       </aside>
     </div>
+    {refreshFailed && <p className="text-sm text-destructive" role="alert">状态刷新失败，当前显示上次快照，请重试。</p>}
     {transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
     {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
     {timelineSnapshot && <ProjectTimeline snapshot={timelineSnapshot} />}
