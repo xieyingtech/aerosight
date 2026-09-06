@@ -10,6 +10,7 @@ import (
 
 func (s *Server) issueReadRoutes() {
 	group := s.router.Group("/api/projects/:id/issues", s.requireUser, s.timeout)
+	group.POST("/:issueId/actions", s.mutateIssue)
 	group.GET("", func(c *gin.Context) {
 		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
 			raw, err := q.ListProjectIssues(c.Request.Context(), a.ProjectID)

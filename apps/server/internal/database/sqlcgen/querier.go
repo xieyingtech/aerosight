@@ -14,6 +14,7 @@ import (
 )
 
 type Querier interface {
+	AddIssueAssignee(ctx context.Context, arg AddIssueAssigneeParams) error
 	AdminOverview(ctx context.Context) (AdminOverviewRow, error)
 	ApproveMissionControlRun(ctx context.Context, arg ApproveMissionControlRunParams) error
 	BindDiscoveredDevice(ctx context.Context, arg BindDiscoveredDeviceParams) error
@@ -26,6 +27,7 @@ type Querier interface {
 	CountDeviceCommandConflicts(ctx context.Context, arg CountDeviceCommandConflictsParams) (int32, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
 	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
+	CreateIssueCopilotSession(ctx context.Context, arg CreateIssueCopilotSessionParams) (int32, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (int32, error)
 	CreateTeam(ctx context.Context, name string) (int32, error)
 	CreateTeamOwner(ctx context.Context, arg CreateTeamOwnerParams) error
@@ -33,6 +35,7 @@ type Querier interface {
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
+	EnsureIssueCopilot(ctx context.Context, projectID int32) (int32, error)
 	ExportPublishedReport(ctx context.Context, arg ExportPublishedReportParams) (json.RawMessage, error)
 	FindExistingDeviceCommand(ctx context.Context, arg FindExistingDeviceCommandParams) (FindExistingDeviceCommandRow, error)
 	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
@@ -62,10 +65,13 @@ type Querier interface {
 	InsertDeviceAdapter(ctx context.Context, arg InsertDeviceAdapterParams) (json.RawMessage, error)
 	InsertDeviceCommand(ctx context.Context, arg InsertDeviceCommandParams) (InsertDeviceCommandRow, error)
 	InsertDiscoveredDevice(ctx context.Context, arg InsertDiscoveredDeviceParams) (int32, error)
+	InsertIssueActivity(ctx context.Context, arg InsertIssueActivityParams) (int32, error)
 	InsertPlatformAudit(ctx context.Context, arg InsertPlatformAuditParams) (int64, error)
 	InsertProjectAudit(ctx context.Context, arg InsertProjectAuditParams) (int64, error)
 	InsertReportDraft(ctx context.Context, arg InsertReportDraftParams) (uuid.UUID, error)
 	InsertReportEvidence(ctx context.Context, arg InsertReportEvidenceParams) error
+	IssueAssigneeActive(ctx context.Context, arg IssueAssigneeActiveParams) (bool, error)
+	IssueMutationReplayed(ctx context.Context, arg IssueMutationReplayedParams) (bool, error)
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
@@ -88,6 +94,9 @@ type Querier interface {
 	LockDiscoveredDevice(ctx context.Context, arg LockDiscoveredDeviceParams) (LockDiscoveredDeviceRow, error)
 	LockFlightHubConnector(ctx context.Context, arg LockFlightHubConnectorParams) (LockFlightHubConnectorRow, error)
 	LockFlightHubSyncQueue(ctx context.Context, lockKey string) error
+	LockIssueAssigneeAgent(ctx context.Context, arg LockIssueAssigneeAgentParams) (LockIssueAssigneeAgentRow, error)
+	LockIssueAssigneeUser(ctx context.Context, arg LockIssueAssigneeUserParams) (int32, error)
+	LockIssueMutation(ctx context.Context, arg LockIssueMutationParams) (int32, error)
 	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
@@ -97,6 +106,7 @@ type Querier interface {
 	PointPublishedReport(ctx context.Context, arg PointPublishedReportParams) error
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
 	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
+	QueueIssueCopilot(ctx context.Context, arg QueueIssueCopilotParams) (uuid.UUID, error)
 	ReadChannelEvents(ctx context.Context, arg ReadChannelEventsParams) ([]ReadChannelEventsRow, error)
 	ReadChannelTelemetry(ctx context.Context, arg ReadChannelTelemetryParams) ([]ReadChannelTelemetryRow, error)
 	ReadDeviceRelations(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -115,6 +125,7 @@ type Querier interface {
 	ReadReportSources(ctx context.Context, arg ReadReportSourcesParams) (json.RawMessage, error)
 	RecordAdapterHealth(ctx context.Context, arg RecordAdapterHealthParams) error
 	RecordNetworkValidation(ctx context.Context, arg RecordNetworkValidationParams) error
+	RemoveIssueAssignee(ctx context.Context, arg RemoveIssueAssigneeParams) error
 	ReplayEvents(ctx context.Context, arg ReplayEventsParams) ([]json.RawMessage, error)
 	ReplayMedia(ctx context.Context, arg ReplayMediaParams) ([]json.RawMessage, error)
 	ReplayPoses(ctx context.Context, arg ReplayPosesParams) ([]json.RawMessage, error)
@@ -139,6 +150,7 @@ type Querier interface {
 	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
+	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)
 	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)
 	UpsertDraftReport(ctx context.Context, arg UpsertDraftReportParams) (uuid.UUID, error)
 }

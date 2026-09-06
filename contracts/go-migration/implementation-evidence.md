@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 5.6 当前入口清单：案件 actions 的 comment/status/labels/assign/unassign 已迁入 Go/sqlc，保留 clientKey 重放、版本冲突、负责人 no-op、UTF-16 长度限制与可见 Copilot 提及规则。事务内重新读取受锁保护的权限，作用域校验负责人，并原子提交案件版本/活动/负责人/Copilot 会话和任务/审计/项目事件；issue.updated 不加入 outbox。真实 PostGIS 测试覆盖开关状态、标签去重、负责人及 Copilot、无 agent:use 时普通评论、权限别名、撤权后重试拒绝、跨项目、4 请求同键只执行一次及末端事件失败整体回滚；全量 Go（真实 DB）、原 TS 9 项对应测试、sqlc 漂移与 OpenSpec strict 检查通过。复核 app/API/组件调用：旧事件 actions/agent-drafts 原本固定 410，generateOnDemandAlertDraft 和 AgentEventDraftButton 没有应用调用；案件草稿由现有 Go issue_copilot 后台链路生成并由已迁移详情读取，不新增未暴露的 TS 草稿工具端点。前端切换及端到端验收仍由第 6/8 节完成。
+
 - 5.6 第二批迁移：案件列表和完整详情读取，包含活动/链接/检测/资产/有效负责人/项目成员/活动 Agent/关联草稿。sqlc 保留原查询排序、资产筛选、非法数字检测链接处理及 bigint 字符串，在同一只读快照中完成。真实 PostGIS 测试覆盖空关联集合、系统活动、直接关联资产、负责人及草稿、无地图坐标、跨项目拒绝和 event:handle → issue:handle 权限别名（不扩展指派/Agent 权限）；sqlc 和 Go 非数据库测试通过。案件协作写入与草稿操作尚待迁移，5.6 保持未勾选。
 
 - 5.6 第一批迁移：旧 perception event 详情只读 API，保留检测证据投影、位置说明、历史反馈、ID/时间序列化及原有说明文字。核对实际 Route Handler 后保留 actions/agent-drafts 的 410 LEGACY_EVENT_READ_ONLY；没有复活未被调用的 handlePerceptionEvent 写入服务。真实 PostGIS 测试验证详情空证据/反馈、group bigint 字符串、跨项目/撤权拒绝，两个废弃写接口不改变事件状态或写审计。原 TS 证据显示两项测试、sqlc 检查和 Go 非数据库测试通过。案件读取/协作/草稿仍待迁移，5.6 保持未勾选。
