@@ -77,7 +77,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 		}
 		c.Next()
 	})
-	r.NoRoute(func(c *gin.Context) { s.failure(c, 404, "NOT_FOUND") })
+	r.NoRoute(s.pageNotFound)
 	r.NoMethod(func(c *gin.Context) { s.failure(c, 405, "METHOD_NOT_ALLOWED") })
 	r.HandleMethodNotAllowed = true
 	s.installMetrics()

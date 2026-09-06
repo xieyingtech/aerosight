@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- 旧页面兼容第一批：Go NoRoute 对已知团队/项目/10 个工作台/四类详情 GET/HEAD 返回 307，路径 ID 覆盖冲突查询，保留重复筛选与 UTF-8；只接受规范正 int32/UUID，未知或非法地址不猜测，写方法不重定向。Go HTTP 测试覆盖 16 类、末尾斜杠、HEAD 空正文、缓存、ID 上下界、查询冲突和非法路径。Next 开发 redirects 使用等价范围 regex，跳过默认斜杠重定向；真实 127.0.0.1:3307 Next dev 实测 32 次 GET/HEAD、重复筛选与冲突参数、五项 404、带斜杠单次 307 通过。旧 instrumentation 的 dev 生成缓存导致首次启动失败；递归删除被自动策略拒绝后，将已校验缓存目录保留移入 .build/next-dev-before-redirect-test，重新启动通过，测试进程已停止。TypeScript/Go 非数据库全包通过。全站新链接和报告地址仍需统一，浏览器前进后退验收尚待，6.4 未勾选。
+
+
 - TS 服务端实现清理：独立 web-api-types 承载 Go JSON DTO（时间字符串、不含算法私有 inputSnapshot），页面/表单不再通过服务端查询函数推导类型。删除 44 个 server-only 模块、Auth.js 实现/扩展类型及 Next instrumentation 管理员初始化，移除 next-auth/bcryptjs/server-only/ai/@ai-sdk/openai 包。删除旧 AI SDK registry 包装和两项专属模拟流测试（真实 Go Responses/health 集成测试已在 5.9 验证），保留并重命名无 SDK 的默认 provider/凭据兼容测试及维护脚本入口。pg 转至开发依赖，仍供旧维护脚本和存量 SQL core 类型使用，尚未算作 6.6 完成。TypeScript、291 项 Web 测试及无 DATABASE_URL/AUTH_SECRET/CREDENTIAL_ENCRYPTION_KEY 的静态构建再次通过；运行期业务读写与初始化已由 Go 接管，Go embed/生产端到端尚待完成。
 
 

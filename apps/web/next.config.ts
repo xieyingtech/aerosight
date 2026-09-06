@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+import { legacyPageRedirects } from "./lib/legacy-page-redirects";
 
 export default function nextConfig(phase: string): NextConfig {
   if (phase !== PHASE_DEVELOPMENT_SERVER) return { output: "export", trailingSlash: true };
@@ -8,6 +9,8 @@ export default function nextConfig(phase: string): NextConfig {
     throw new Error("GO_API_ORIGIN must be an HTTP(S) origin");
   }
   return {
+    skipTrailingSlashRedirect: true,
+    async redirects() { return legacyPageRedirects(); },
     async rewrites() {
       return { beforeFiles: [
         { source: "/api/:path*", destination: `${origin.origin}/api/:path*` },
