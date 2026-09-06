@@ -14,6 +14,7 @@ import (
 
 type Querier interface {
 	AdminOverview(ctx context.Context) (AdminOverviewRow, error)
+	ApproveMissionControlRun(ctx context.Context, arg ApproveMissionControlRunParams) error
 	BindDiscoveredDevice(ctx context.Context, arg BindDiscoveredDeviceParams) error
 	CancelFlightHubSyncQueue(ctx context.Context, arg CancelFlightHubSyncQueueParams) error
 	CancelFlightHubSyncRuns(ctx context.Context, arg CancelFlightHubSyncRunsParams) error
@@ -68,6 +69,7 @@ type Querier interface {
 	LockDiscoveredDevice(ctx context.Context, arg LockDiscoveredDeviceParams) (LockDiscoveredDeviceRow, error)
 	LockFlightHubConnector(ctx context.Context, arg LockFlightHubConnectorParams) (LockFlightHubConnectorRow, error)
 	LockFlightHubSyncQueue(ctx context.Context, lockKey string) error
+	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
@@ -100,6 +102,7 @@ type Querier interface {
 	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
+	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)
 }
 
 var _ Querier = (*Queries)(nil)
