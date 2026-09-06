@@ -138,6 +138,7 @@ type Querier interface {
 	ReadIssueLinks(ctx context.Context, arg ReadIssueLinksParams) ([]json.RawMessage, error)
 	ReadIssueMembers(ctx context.Context, id int32) ([]json.RawMessage, error)
 	ReadMediaAccessAsset(ctx context.Context, arg ReadMediaAccessAssetParams) (ReadMediaAccessAssetRow, error)
+	ReadMediaPublishCredential(ctx context.Context, ingestRef sql.NullString) (ReadMediaPublishCredentialRow, error)
 	ReadProjectEvents(ctx context.Context, arg ReadProjectEventsParams) ([]ReadProjectEventsRow, error)
 	ReadProjectIssue(ctx context.Context, arg ReadProjectIssueParams) (json.RawMessage, error)
 	ReadReportSources(ctx context.Context, arg ReadReportSourcesParams) (json.RawMessage, error)

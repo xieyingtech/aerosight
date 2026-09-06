@@ -20,6 +20,7 @@ type HTTP struct {
 	LoginLimit, WriteLimit                                        int
 	MetricsToken                                                  string
 	AlgorithmAllowedHosts                                         []string
+	MediaAdminUser, MediaAdminPassword                            string
 }
 
 func LoadHTTP(get func(string) string) (HTTP, error) {
@@ -83,5 +84,7 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 			cfg.AlgorithmAllowedHosts = append(cfg.AlgorithmAllowedHosts, host)
 		}
 	}
+	cfg.MediaAdminUser = get("MEDIA_ADMIN_USER")
+	cfg.MediaAdminPassword = get("MEDIA_ADMIN_PASSWORD")
 	return cfg, nil
 }
