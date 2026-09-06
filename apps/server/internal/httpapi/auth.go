@@ -144,6 +144,9 @@ func (s *Server) projectAccess(ctx context.Context, q *sqlcgen.Queries, uid, pid
 func (s *Server) authorizeWrite(uid, pid, teamID int32, permission string, managerOnly bool) database.Reauthorize {
 	return func(ctx context.Context, w *database.WriteTx) error {
 		membership, err := w.Queries.LockProjectMembership(ctx, sqlcgen.LockProjectMembershipParams{UserID: uid, ProjectID: pid})
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("PROJECT_ACCESS_DENIED")
+		}
 		if err != nil {
 			return err
 		}

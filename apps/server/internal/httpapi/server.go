@@ -25,6 +25,7 @@ import (
 )
 
 type Server struct {
+	flightHub *flightHubService
 	ready     atomic.Bool
 	router    *gin.Engine
 	sessions  *scs.SessionManager
@@ -77,6 +78,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.directoryRoutes()
 	s.streamRoutes()
 	s.projectReadRoutes()
+	s.flightHubRoutes()
 	s.router.GET("/api/projects/:id/snapshot", s.requireUser, s.timeout, s.projectSnapshot)
 	return s, nil
 }

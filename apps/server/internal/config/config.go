@@ -25,6 +25,7 @@ type Config struct {
 	FlightHubAPIBaseURL       string
 	FlightHubHTTPTimeout      time.Duration
 	FlightHubMaxRetries       int
+	FlightHubMaxProjectPages  int
 	FlightHubPollInterval     time.Duration
 	FlightHubReconcileEvery   time.Duration
 	FlightHubMaxResponseBytes int64
@@ -49,6 +50,7 @@ func Load() (Config, error) {
 	config.FlightHubAPIBaseURL = valueOrDefault("DJI_FLIGHTHUB_API_BASE_URL", "https://es-flight-api-cn.djigate.com")
 	config.FlightHubHTTPTimeout, problems = durationMilliseconds("DJI_FLIGHTHUB_HTTP_TIMEOUT_MS", 8*time.Second, problems)
 	config.FlightHubMaxRetries, problems = integerValue("DJI_FLIGHTHUB_MAX_RETRIES", 2, 0, 3, problems)
+	config.FlightHubMaxProjectPages, problems = integerValue("DJI_FLIGHTHUB_MAX_PROJECT_PAGES", 50, 1, 100, problems)
 	config.FlightHubPollInterval, problems = durationSeconds("DJI_FLIGHTHUB_POLL_INTERVAL_SECONDS", 5*time.Minute, problems)
 	config.FlightHubReconcileEvery, problems = durationSeconds("DJI_FLIGHTHUB_RECONCILE_INTERVAL_SECONDS", 15*time.Second, problems)
 	responseBytes, problems := integerValue("DJI_FLIGHTHUB_MAX_RESPONSE_BYTES", 4<<20, 1024, 16<<20, problems)

@@ -3,12 +3,14 @@ package main
 import (
 	"aerosight/server/internal/config"
 	"aerosight/server/internal/database"
+	"aerosight/server/internal/flighthub"
 	"aerosight/server/internal/httpapi"
 	"aerosight/server/internal/migrations"
 	"aerosight/server/internal/runtime"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"net"
 	"net/http"
@@ -92,6 +94,11 @@ func run(logger *slog.Logger) error {
 	}
 	defer api.Close()
 	api.AttachRuntime(bg.Callbacks)
+	flightHubClient, err := flighthub.NewChinaClient(flighthub.Config{Timeout: workerCfg.FlightHubHTTPTimeout, MaxRetries: workerCfg.FlightHubMaxRetries, MaxProjectPages: workerCfg.FlightHubMaxProjectPages, MaxResponseBytes: workerCfg.FlightHubMaxResponseBytes, RequestID: uuid.NewString})
+	if err != nil {
+		return err
+	}
+	api.AttachFlightHub(flightHubClient, workerCfg.FlightHubEnabled, workerCfg.AuthSecret)
 	server := &http.Server{Addr: httpCfg.Address, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	results := make(chan error, 2)
 	go func() { results <- bg.Run(ctx) }()

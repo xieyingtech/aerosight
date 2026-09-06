@@ -12,16 +12,23 @@ import (
 
 type Querier interface {
 	AdminOverview(ctx context.Context) (AdminOverviewRow, error)
+	CancelFlightHubSyncQueue(ctx context.Context, arg CancelFlightHubSyncQueueParams) error
+	CancelFlightHubSyncRuns(ctx context.Context, arg CancelFlightHubSyncRunsParams) error
 	ChannelGrants(ctx context.Context, arg ChannelGrantsParams) ([]ChannelGrantsRow, error)
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) (int64, error)
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
 	CompleteProjectAudit(ctx context.Context, arg CompleteProjectAuditParams) (int64, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
+	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (int32, error)
 	CreateTeam(ctx context.Context, name string) (int32, error)
 	CreateTeamOwner(ctx context.Context, arg CreateTeamOwnerParams) error
+	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
+	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
+	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
 	FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error)
+	FindQueuedFlightHubSync(ctx context.Context, arg FindQueuedFlightHubSyncParams) (string, error)
 	GetProject(ctx context.Context, arg GetProjectParams) (GetProjectRow, error)
 	GetProjectAccess(ctx context.Context, arg GetProjectAccessParams) (GetProjectAccessRow, error)
 	GetProjectDevice(ctx context.Context, arg GetProjectDeviceParams) (json.RawMessage, error)
@@ -34,11 +41,16 @@ type Querier interface {
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
+	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ListFlightHubSyncRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProfileTeams(ctx context.Context, userID int32) ([]ListProfileTeamsRow, error)
 	ListProjectDevices(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]ListProjectsRow, error)
 	ListTeamProjects(ctx context.Context, teamID int32) ([]ListTeamProjectsRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
+	LockFlightHubConnector(ctx context.Context, arg LockFlightHubConnectorParams) (LockFlightHubConnectorRow, error)
+	LockFlightHubSyncQueue(ctx context.Context, lockKey string) error
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
@@ -65,6 +77,7 @@ type Querier interface {
 	SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)
