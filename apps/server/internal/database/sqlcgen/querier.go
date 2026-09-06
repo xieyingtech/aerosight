@@ -35,6 +35,7 @@ type Querier interface {
 	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
 	FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error)
 	FindQueuedFlightHubSync(ctx context.Context, arg FindQueuedFlightHubSyncParams) (string, error)
+	GetAdapterNetworkProfile(ctx context.Context, arg GetAdapterNetworkProfileParams) (GetAdapterNetworkProfileRow, error)
 	GetProject(ctx context.Context, arg GetProjectParams) (GetProjectRow, error)
 	GetProjectAccess(ctx context.Context, arg GetProjectAccessParams) (GetProjectAccessRow, error)
 	GetProjectDevice(ctx context.Context, arg GetProjectDeviceParams) (json.RawMessage, error)
@@ -42,6 +43,8 @@ type Querier interface {
 	GetTeamManager(ctx context.Context, arg GetTeamManagerParams) (int32, error)
 	GetUser(ctx context.Context, id int32) (GetUserRow, error)
 	HasUsers(ctx context.Context) (bool, error)
+	InsertDJINetworkProfile(ctx context.Context, arg InsertDJINetworkProfileParams) (int64, error)
+	InsertDJISetupAdapter(ctx context.Context, arg InsertDJISetupAdapterParams) (json.RawMessage, error)
 	InsertDeviceAdapter(ctx context.Context, arg InsertDeviceAdapterParams) (json.RawMessage, error)
 	InsertDeviceCommand(ctx context.Context, arg InsertDeviceCommandParams) (InsertDeviceCommandRow, error)
 	InsertDiscoveredDevice(ctx context.Context, arg InsertDiscoveredDeviceParams) (int32, error)
@@ -74,6 +77,8 @@ type Querier interface {
 	ReadDeviceTree(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ReadIdempotency(ctx context.Context, arg ReadIdempotencyParams) (ReadIdempotencyRow, error)
 	ReadProjectEvents(ctx context.Context, arg ReadProjectEventsParams) ([]ReadProjectEventsRow, error)
+	RecordAdapterHealth(ctx context.Context, arg RecordAdapterHealthParams) error
+	RecordNetworkValidation(ctx context.Context, arg RecordNetworkValidationParams) error
 	ReplayEvents(ctx context.Context, arg ReplayEventsParams) ([]json.RawMessage, error)
 	ReplayMedia(ctx context.Context, arg ReplayMediaParams) ([]json.RawMessage, error)
 	ReplayPoses(ctx context.Context, arg ReplayPosesParams) ([]json.RawMessage, error)

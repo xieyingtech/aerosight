@@ -22,7 +22,9 @@ func (s *Server) deviceAdapterRoutes() {
 	g := s.router.Group("/api/projects/:id/device-adapters", s.requireUser, s.timeout)
 	g.GET("", s.listDeviceAdapters)
 	g.POST("", s.createDeviceAdapter)
+	g.POST("/dji-setup", s.createDJISetup)
 	g.PATCH("/:adapterId", s.updateDeviceAdapter)
+	g.POST("/:adapterId/test", s.testDeviceAdapterConnection)
 }
 
 func (s *Server) adapterManager(c *gin.Context) (sqlcgen.GetProjectAccessRow, error) {

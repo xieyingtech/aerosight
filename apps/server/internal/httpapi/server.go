@@ -3,6 +3,7 @@ package httpapi
 import (
 	"aerosight/server/internal/config"
 	"aerosight/server/internal/database/sqlcgen"
+	"aerosight/server/internal/device"
 	"aerosight/server/internal/observability"
 	"context"
 	"database/sql"
@@ -25,6 +26,8 @@ import (
 )
 
 type Server struct {
+	networkResolver  device.HostResolver
+	networkProbe     device.EndpointProbe
 	credentialSecret string
 	flightHub        *flightHubService
 	ready            atomic.Bool
