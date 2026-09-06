@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 4.1：在既有 Gin 分组、标准 handler、请求 ID、恢复与错误映射基础上补齐 HTTP 边界测试。检查已锁定 slog-gin 源码发现，即使关闭 body/header 仍输出 path/query/params/referer，并可将 Gin error 文本作为日志 message；新增仅用于该中间件的 slog 输出筛选器，保留请求 ID、模板路由、方法、时间、长度、状态与耗时，使用固定 message 和正确 4xx/5xx 日志级别。原请求不被改写。Gin CustomRecovery 使用 nil writer 避免无用地生成请求/堆栈 dump，只记录错误类别与请求 ID。测试覆盖路径/签名 query/Authorization/Cookie/Referer/User-Agent/正文/响应 Cookie/响应正文/Gin error 敏感值均不进入日志，合法关联 ID 保留、非法/过长 ID 替换；真实 httptest HTTP 服务验证普通 panic 的 500/请求 ID、已 Flush SSE 原数据保留且结束时不附加 JSON、panic 值不泄露。定向测试及 Go dev 全包通过（本轮不连接数据库，既有 DB 测试跳过）；不以本轮结果替代限流、期限、CSP 和生产端到端剩余验收。
+
 - 单应用镜像第一批：根 Dockerfile 分离 Node/pnpm 静态构建、Go 1.26.1 编译和 Debian/CA 运行阶段；运行层仅复制二进制，使用 UID/GID 10001、对象持久目录和单个 8080 端口，ENTRYPOINT 直接执行 Go。新增 .dockerignore 排除环境文件、源码工具缓存及本地生成物，README 给出环境/卷/迁移/停止预算说明。Docker web-build 实际通过 Linux frozen-lockfile 安装、Next 静态导出、333 个页面产物与 52 个迁移复制。完整构建在拉取 Go/Debian 基础镜像时因 auth.docker.io 网络连接失败，尚未验证运行镜像，7.5 保持未勾选。没有用前端阶段成功替代最终镜像验收。
 - 统一生产二进制实测：独立 PostGIS 空库、无源码的工作目录直接启动已构建 aerosight.exe；ready、内嵌登录页和详情壳、匿名 401、CSRF 登录、会话读取、构建后新团队/新项目写入与读取、相应静态壳、旧页面 307、API/缺失 chunk 404、退出后 401 均通过。首轮测试误把数据库初始化临时 Unix socket 就绪视为 TCP 就绪，改为 pg_isready -h 127.0.0.1 后通过；无应用代码修复。测试使用 development Cookie 模式，不代表生产 TLS、浏览器 hydration 或优雅退出已验收；测试进程与数据库容器已停止。
 

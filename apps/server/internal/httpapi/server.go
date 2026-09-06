@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/csrf"
 	sloggin "github.com/samber/slog-gin"
 	"github.com/unrolled/secure"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -62,8 +61,8 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s := &Server{router: r, sessions: sessions, store: store, queries: sqlcgen.New(db), db: db, logger: logger, cfg: cfg}
 	s.loginRate = httprate.NewRateLimiter(cfg.LoginLimit, time.Minute, httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) { writeError(w, 429, "RATE_LIMITED") }))
 	r.Use(requestid.New())
-	r.Use(sloggin.NewWithConfig(logger, sloggin.Config{WithRequestID: true, WithRequestBody: false, WithResponseBody: false, WithRequestHeader: false, WithResponseHeader: false}))
-	r.Use(gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, recovered any) {
+	r.Use(sloggin.NewWithConfig(slog.New(accessLogHandler{logger.Handler()}), sloggin.Config{WithRequestID: true, ClientErrorLevel: slog.LevelWarn, ServerErrorLevel: slog.LevelError, WithCustomMessage: func(*gin.Context) string { return "HTTP request" }}))
+	r.Use(gin.CustomRecoveryWithWriter(nil, func(c *gin.Context, recovered any) {
 		logger.Error("request panic", "request_id", requestid.Get(c))
 		if !c.Writer.Written() {
 			s.failure(c, 500, "INTERNAL_ERROR")
