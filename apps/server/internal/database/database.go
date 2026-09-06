@@ -31,7 +31,7 @@ func InTx(ctx context.Context, db *sql.DB, fn func(*sql.Tx, *sqlcgen.Queries) er
 		return err
 	}
 	defer tx.Rollback()
-	if err = fn(tx, sqlcgen.New(tx)); err != nil {
+	if err = fn(tx, sqlcgen.New(db).WithTx(tx)); err != nil {
 		return err
 	}
 	return tx.Commit()

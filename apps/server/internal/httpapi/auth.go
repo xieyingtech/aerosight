@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
 	"context"
 	"database/sql"
@@ -136,4 +137,26 @@ func (s *Server) projectAccess(ctx context.Context, q *sqlcgen.Queries, uid, pid
 		return access, errors.New("PROJECT_ACCESS_DENIED")
 	}
 	return access, nil
+}
+
+// Hold authorization rows through commit so a concurrent membership/permission
+// revocation cannot slip between the final check and the business mutation.
+func (s *Server) authorizeWrite(uid, pid, teamID int32, permission string, managerOnly bool) database.Reauthorize {
+	return func(ctx context.Context, w *database.WriteTx) error {
+		membership, err := w.Queries.LockProjectMembership(ctx, sqlcgen.LockProjectMembershipParams{UserID: uid, ProjectID: pid})
+		if err != nil {
+			return err
+		}
+		if membership.TeamID != teamID || (managerOnly && membership.Role != "owner" && membership.Role != "admin") {
+			return errors.New("PROJECT_ACCESS_DENIED")
+		}
+		grants, err := w.Queries.LockProjectPermissions(ctx, sqlcgen.LockProjectPermissionsParams{ProjectID: pid, TeamID: teamID, UserID: uid})
+		if err != nil {
+			return err
+		}
+		if !effectivePermissions(membership.Role, grants)[permission] {
+			return errors.New("PROJECT_ACCESS_DENIED")
+		}
+		return nil
+	}
 }
