@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.8 第一批迁移：媒体 access/content 接入 Go/sqlc。签发与读取分别复核项目和敏感下载权限，已发布 evidence_links 也触发敏感规则；敏感下载签发使用事务审计，签名失败回滚审计。HMAC 与原 TS 固定样本逐字节一致，保留 120 秒 TTL、动作/项目/资产绑定及 NFKC 下载名。内容通过限定项目根的文件句柄流式输出，拒绝路径穿越/反斜杠/目录别名/符号链接逃逸，并支持 Range、HEAD、私有 no-store。真实 PostGIS 测试覆盖全文/部分与后缀范围/416/HEAD、过期和动作篡改、敏感下载/权限别名/审计回滚/撤权后旧签名拒绝/跨项目；原 TS 3 项测试、Go 非数据库全包测试、sqlc 与 OpenSpec strict 通过。Windows 无创建符号链接权限，该分支测试未执行，需在 Linux 生产回归中补验；词法路径拒绝已验证。直播启动/停止/播放及 media-auth 仍待迁移，5.8 保持未勾选。
+
 - 完成 5.7 当前入口清单：provider 列表/创建/PATCH/测试已接入 Go/sqlc，配置读取原 ALGORITHM_ALLOWED_HOSTS。保留 write-only 加密凭据、空白更新保留 envelope、认证类型切换必须提供匹配凭据、默认 disabled、不支持的 adapter 显式拒绝；测试端点按原逻辑只验证适配器与 HTTPS/allowlist/全部 DNS 地址，不虚构远端推理探测。复用 Go 能力表与原凭据 AES-GCM/AAD；写事务在 DNS 完成后再授权。真实 PostGIS 覆盖创建/更新/密文兼容解密/空白保留/认证切换/跨项目/无密钥回滚/校验期间撤权，单元测试覆盖通配主机、混合地址与 IPv4-mapped 私网拒绝；全量 Go（真实 DB）、原 TS 11 项相关测试、sqlc 和 OpenSpec strict 通过。算法 provider/definition/run/retry 业务入口完成；前端调用切换和最终端到端仍由第 6/8 节完成。
 
 - 5.7 第二批迁移：算法定义 POST/PUT 与动态目录 GET 接入 Go/sqlc。配置保留通用 JSON Schema、configuration/version 输入兼容、默认映射/显示元数据、阈值校验和 UTF-16 文本长度；事务锁 provider/definition，分配递增配置版本并原子退役旧快照、发布新快照、更新当前指针及审计。保留创建返回 bigint 字符串、更新返回数值 definitionId 的原端点差异。真实 PostGIS 测试覆盖目录空数组/null、禁用 provider 可见性、4 并发保存版本连续且仅一个 published、插入快照失败回滚创建/改名/退役/审计、跨项目及撤权拒绝，并重跑算法运行集成测试。对应 TS 3 项测试、Go 非数据库全包测试、sqlc 漂移和 OpenSpec strict 通过。Provider 管理与测试接口仍待迁移，5.7 保持未勾选。
