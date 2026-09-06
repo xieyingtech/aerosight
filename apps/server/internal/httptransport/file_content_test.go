@@ -1,4 +1,4 @@
-package httpapi
+package httptransport
 
 import (
 	"bytes"

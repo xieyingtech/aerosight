@@ -4,6 +4,7 @@ import (
 	"aerosight/server/internal/config"
 	"aerosight/server/internal/database/sqlcgen"
 	"aerosight/server/internal/device"
+	"aerosight/server/internal/httptransport"
 	"aerosight/server/internal/observability"
 	"context"
 	"database/sql"
@@ -134,7 +135,7 @@ func (s *Server) Handler() http.Handler {
 	protect := csrf.Protect(s.cfg.CSRFKey, csrf.TrustedOrigins([]string{origin.Host}), csrf.Secure(strings.HasPrefix(s.cfg.PublicOrigin, "https://")), csrf.Path("/"), csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeError(w, 403, "CSRF_FAILED") })))
 	browser := s.sessions.LoadAndSave(protect(s.router))
 	dispatch := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r = withConnectionController(r, w)
+		r = httptransport.WithConnectionController(r, w)
 		// Correlate even requests rejected before Gin routing.
 		id := observability.CorrelationID(r.Header.Get("X-Request-ID"))
 		r.Header.Set("X-Request-ID", id)

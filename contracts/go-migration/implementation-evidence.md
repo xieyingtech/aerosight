@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 4.3：将连接控制器与取消感知分段传输下沉到 httptransport，媒体与算法资产复用。算法资产的 SQL 改由 sqlc 生成，保持资源/项目/版本/available/deleted 过滤并防止 int32 转换溢出；移除算法资产整条路由的普通期限，数据库与存储读取使用配置的独立操作期限，内容阶段回到原连接 context。新增 HEAD 与 Range/416，仍逐次验证签名与作用域、不压缩私有内容。真实 PostGIS 测试验证 100ms 操作期限下首段延迟 150ms 的完整约 320KB 传输、Range 精确字节、HEAD 长度/空正文、资产表锁阻塞 504。算法回调签名/幂等/16MiB 限制和资产跨项目/版本/删除/过期签名回归、媒体慢传输/Range/HEAD、SSE 15 秒后登出断流共五项通过（22.496s）。Go dev 非数据库全包、db:check 通过，临时容器停止。结合本日已记录的慢 SQL 原子回滚、认证/会话取消、2MiB/慢正文、读头/空闲 TCP、gzip/304/Range 证据完成此任务；整体运行生命周期、CSP 和全量交付验收仍独立待办。
+
 - 4.3 媒体文件期限拆分：媒体 access 授权接口保持普通业务期限；content GET/HEAD 移除整条路由期限，权限/资产数据库查询单独限时，完成后回到原始连接 context。ServeContent 保留 Range/HEAD，并通过取消感知 ReadSeeker 与 32KiB 分段 writer 处理传输，每段写使用真实连接控制器设置 10 秒写期限，完成后清除。确定性取消测试验证首段取消后不再读写；真实 PostGIS 媒体测试使用 100ms 查询期限和首段 150ms 延迟，约 280KB 下载仍完整成功。媒体 Range/HEAD/签名/租户回归及项目 SSE 超过 15 秒后登出断流通过（19.166s）；Go dev 非数据库全包通过，测试容器已停止。算法资产处理器仍需同类期限隔离及分段访问修正，4.3 尚未勾选。
 
 - 4.3 流式控制器修复：准备拆分文件授权与传输期限时发现 slog-gin 的响应包装未暴露 Unwrap，原 streamWrite 的 ResponseController.SetWriteDeadline 实际可返回 ErrNotSupported 而被忽略。现在在外层 HTTP dispatch 将底层连接控制器放入请求 context，SSE 使用该控制器设置分段写期限；每帧 Flush 后清除写期限，避免把 10 秒写预算误用于 15 秒心跳间隔。真实 HTTP 测试经过完整 Gin/日志链验证写期限设置与清除成功，不接受 ErrNotSupported；静态压缩组合测试和 Go dev 非数据库全包通过。文件授权/传输期限拆分尚未实现，4.3 保持未勾选。

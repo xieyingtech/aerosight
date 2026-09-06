@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"aerosight/server/internal/httptransport"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -67,7 +68,7 @@ func streamFrame(c *gin.Context, id, event string, data any) error {
 	return streamWrite(c, frame)
 }
 func streamWrite(c *gin.Context, frame string) error {
-	rc := connectionController(c.Request, c.Writer)
+	rc := httptransport.Controller(c.Request, c.Writer)
 	// Bound slow-client writes without imposing a lifetime on the subscription.
 	if err := rc.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
 		return err

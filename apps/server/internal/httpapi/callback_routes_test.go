@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
@@ -15,7 +16,10 @@ import (
 	"time"
 )
 
-type callbackTestStore struct{ reads, writes int }
+type callbackTestStore struct {
+	reads, writes int
+	body          []byte
+}
 
 func (s *callbackTestStore) PutRawResult(ctx context.Context, key string, body io.Reader, contentType string) (algorithm.RawResultObject, error) {
 	raw, err := io.ReadAll(body)
@@ -25,7 +29,76 @@ func (s *callbackTestStore) PutRawResult(ctx context.Context, key string, body i
 }
 func (s *callbackTestStore) ReadAlgorithmAsset(context.Context, string) (algorithm.AlgorithmAsset, error) {
 	s.reads++
+	if s.body != nil {
+		return algorithm.AlgorithmAsset{Body: s.body, ContentType: "image/jpeg"}, nil
+	}
 	return algorithm.AlgorithmAsset{Body: []byte("asset-bytes"), ContentType: "image/jpeg"}, nil
+}
+
+func TestAlgorithmAssetRangeAndTransferDeadline(t *testing.T) {
+	f := newAPIFixture(t)
+	team, pid := f.project(t)
+	var aid int
+	if err := f.db.QueryRow("insert into assets(project_id,team_id,kind,storage_key,logical_key,mime_type) values($1,$2,'image','test.jpg','test.jpg','image/jpeg') returning id", pid, team).Scan(&aid); err != nil {
+		t.Fatal(err)
+	}
+	store := &callbackTestStore{body: []byte(strings.Repeat("algorithm asset ", 20000))}
+	signer := algorithm.NewAssetURLSigner(strings.Repeat("s", 32), "https://aerosight.example")
+	f.server.AttachRuntime(algorithm.NewAssetAccessHandler(f.db, store, signer))
+	f.host.Close()
+	f.server.cfg.RequestTimeout = 100 * time.Millisecond
+	handler := f.server.Handler()
+	f.host = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(&delayedMediaWriter{ResponseWriter: w}, r)
+	}))
+	t.Cleanup(f.host.Close)
+	signed, err := signer.IssueAssetURL(pid, aid, 1, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := url.Parse(signed)
+	for _, tc := range []struct {
+		method, rng string
+		status      int
+		body        string
+	}{
+		{"GET", "", 200, string(store.body)}, {"GET", "bytes=2-5", 206, string(store.body[2:6])}, {"HEAD", "", 200, ""}, {"GET", "bytes=9999999-", 416, ""},
+	} {
+		r, _ := http.NewRequest(tc.method, f.host.URL+u.RequestURI(), nil)
+		r.Header.Set("Range", tc.rng)
+		r.Header.Set("Accept-Encoding", "gzip")
+		res, err := f.client.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil || res.StatusCode != tc.status || tc.status != 416 && string(body) != tc.body || res.Header.Get("Content-Encoding") != "" {
+			t.Fatalf("asset %s range=%s status=%d bytes=%d err=%v", tc.method, tc.rng, res.StatusCode, len(body), err)
+		}
+		if tc.status == 206 && !strings.HasPrefix(res.Header.Get("Content-Range"), "bytes 2-5/") {
+			t.Fatal("missing Content-Range")
+		}
+		if tc.method == "HEAD" && res.Header.Get("Content-Length") != strconv.Itoa(len(store.body)) {
+			t.Fatal("HEAD length")
+		}
+	}
+	tx, err := f.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("lock table assets in access exclusive mode"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.client.Get(f.host.URL + u.RequestURI())
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 504 {
+		t.Fatalf("unbounded asset lookup %d", res.StatusCode)
+	}
 }
 
 func TestUnifiedAlgorithmCallbacksAndAssets(t *testing.T) {

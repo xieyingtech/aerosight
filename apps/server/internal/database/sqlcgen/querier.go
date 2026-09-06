@@ -150,6 +150,7 @@ type Querier interface {
 	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
 	QueueIssueCopilot(ctx context.Context, arg QueueIssueCopilotParams) (uuid.UUID, error)
 	ReadAIProviderPublic(ctx context.Context, id int64) (json.RawMessage, error)
+	ReadAlgorithmAccessAsset(ctx context.Context, arg ReadAlgorithmAccessAssetParams) (ReadAlgorithmAccessAssetRow, error)
 	ReadAlgorithmProviderEndpoint(ctx context.Context, arg ReadAlgorithmProviderEndpointParams) (ReadAlgorithmProviderEndpointRow, error)
 	ReadAlgorithmProviderPublic(ctx context.Context, arg ReadAlgorithmProviderPublicParams) (json.RawMessage, error)
 	ReadAlgorithmRunAttempts(ctx context.Context, arg ReadAlgorithmRunAttemptsParams) ([]json.RawMessage, error)

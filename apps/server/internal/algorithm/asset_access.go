@@ -1,6 +1,9 @@
 package algorithm
 
 import (
+	"aerosight/server/internal/database/sqlcgen"
+	"aerosight/server/internal/httptransport"
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -75,7 +78,8 @@ func NewAssetAccessHandler(db *sql.DB, store AlgorithmAssetStore, signer *AssetU
 }
 
 func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet {
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		writer.Header().Set("Allow", "GET, HEAD")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -83,7 +87,7 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 	projectID, projectErr := strconv.Atoi(request.URL.Query().Get("projectId"))
 	version, versionErr := strconv.Atoi(request.URL.Query().Get("version"))
 	expires, expiresErr := strconv.ParseInt(request.URL.Query().Get("expires"), 10, 64)
-	if err != nil || projectErr != nil || versionErr != nil || expiresErr != nil || handler.signer == nil ||
+	if err != nil || projectErr != nil || versionErr != nil || expiresErr != nil || assetID <= 0 || assetID > 2147483647 || projectID <= 0 || projectID > 2147483647 || version <= 0 || version > 2147483647 || handler.signer == nil ||
 		!handler.signer.Verify(projectID, assetID, version, expires, request.URL.Query().Get("signature")) {
 		http.Error(writer, "asset access denied", http.StatusForbidden)
 		return
@@ -92,25 +96,33 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 		http.Error(writer, "asset unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	var storageKey, contentType string
-	err = handler.db.QueryRowContext(request.Context(), `
-		select storage_key, mime_type from assets
-		where id=$1 and project_id=$2 and version=$3 and status='available' and deleted_at is null`, assetID, projectID, version).Scan(&storageKey, &contentType)
+	lookup, cancel := httptransport.OperationContext(request.Context())
+	defer cancel()
+	row, err := sqlcgen.New(handler.db).ReadAlgorithmAccessAsset(lookup, sqlcgen.ReadAlgorithmAccessAssetParams{ID: int32(assetID), ProjectID: int32(projectID), Version: int32(version)})
 	if err != nil {
+		if lookup.Err() == context.DeadlineExceeded {
+			http.Error(writer, "asset lookup timed out", http.StatusGatewayTimeout)
+			return
+		}
 		http.Error(writer, "asset unavailable", http.StatusNotFound)
 		return
 	}
-	asset, err := handler.store.ReadAlgorithmAsset(request.Context(), storageKey)
+	asset, err := handler.store.ReadAlgorithmAsset(lookup, row.StorageKey)
 	if err != nil {
+		if lookup.Err() == context.DeadlineExceeded {
+			http.Error(writer, "asset lookup timed out", http.StatusGatewayTimeout)
+			return
+		}
 		http.Error(writer, "asset unavailable", http.StatusNotFound)
 		return
 	}
+	cancel()
+	contentType := row.MimeType.String
 	if asset.ContentType != "" {
 		contentType = asset.ContentType
 	}
 	writer.Header().Set("Content-Type", contentType)
 	writer.Header().Set("Cache-Control", "private, no-store")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
-	writer.WriteHeader(http.StatusOK)
-	_, _ = writer.Write(asset.Body)
+	httptransport.ServeContent(writer, request, bytes.NewReader(asset.Body))
 }

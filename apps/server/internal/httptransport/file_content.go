@@ -1,4 +1,4 @@
-package httpapi
+package httptransport
 
 import (
 	"context"
@@ -57,8 +57,8 @@ func (f cancelableFile) Seek(offset int64, whence int) (int64, error) {
 	return f.ReadSeeker.Seek(offset, whence)
 }
 
-func serveFileContent(w http.ResponseWriter, r *http.Request, file io.ReadSeeker) {
-	controller := connectionController(r, w)
+func ServeContent(w http.ResponseWriter, r *http.Request, file io.ReadSeeker) {
+	controller := Controller(r, w)
 	defer controller.SetWriteDeadline(time.Time{})
 	writer := &fileResponseWriter{ResponseWriter: w, ctx: r.Context(), controller: controller}
 	http.ServeContent(writer, r, "", time.Time{}, cancelableFile{ReadSeeker: file, ctx: r.Context()})

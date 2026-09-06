@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"aerosight/server/internal/httptransport"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,7 @@ func TestConnectionControllerSurvivesMiddleware(t *testing.T) {
 	s := boundaryServer(t, io.Discard)
 	result := make(chan error, 1)
 	s.router.GET("/controller-test", func(c *gin.Context) {
-		controller := connectionController(c.Request, c.Writer)
+		controller := httptransport.Controller(c.Request, c.Writer)
 		err := controller.SetWriteDeadline(time.Now().Add(time.Second))
 		if err == nil {
 			err = controller.SetWriteDeadline(time.Time{})

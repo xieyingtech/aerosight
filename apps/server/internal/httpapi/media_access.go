@@ -3,6 +3,7 @@ package httpapi
 import (
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
+	"aerosight/server/internal/httptransport"
 	"aerosight/server/internal/media"
 	"context"
 	"database/sql"
@@ -142,5 +143,5 @@ func (s *Server) readMediaContent(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	// No Last-Modified validators: each access is reauthorized and must not turn
 	// into a shared/public cache hit. ServeContent implements byte ranges/HEAD.
-	serveFileContent(c.Writer, c.Request, file)
+	httptransport.ServeContent(c.Writer, c.Request, file)
 }
