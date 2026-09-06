@@ -60,6 +60,8 @@ type Querier interface {
 	InsertDiscoveredDevice(ctx context.Context, arg InsertDiscoveredDeviceParams) (int32, error)
 	InsertPlatformAudit(ctx context.Context, arg InsertPlatformAuditParams) (int64, error)
 	InsertProjectAudit(ctx context.Context, arg InsertProjectAuditParams) (int64, error)
+	InsertReportDraft(ctx context.Context, arg InsertReportDraftParams) (uuid.UUID, error)
+	InsertReportEvidence(ctx context.Context, arg InsertReportEvidenceParams) error
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
@@ -84,6 +86,7 @@ type Querier interface {
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
 	LockReportDraft(ctx context.Context, arg LockReportDraftParams) (LockReportDraftRow, error)
 	LockReportPublication(ctx context.Context, arg LockReportPublicationParams) (uuid.UUID, error)
+	NextReportVersion(ctx context.Context, generatedReportID uuid.UUID) (int32, error)
 	PointPublishedReport(ctx context.Context, arg PointPublishedReportParams) error
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
 	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
@@ -93,6 +96,7 @@ type Querier interface {
 	ReadDeviceTree(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ReadIdempotency(ctx context.Context, arg ReadIdempotencyParams) (ReadIdempotencyRow, error)
 	ReadProjectEvents(ctx context.Context, arg ReadProjectEventsParams) ([]ReadProjectEventsRow, error)
+	ReadReportSources(ctx context.Context, arg ReadReportSourcesParams) (json.RawMessage, error)
 	RecordAdapterHealth(ctx context.Context, arg RecordAdapterHealthParams) error
 	RecordNetworkValidation(ctx context.Context, arg RecordNetworkValidationParams) error
 	ReplayEvents(ctx context.Context, arg ReplayEventsParams) ([]json.RawMessage, error)
@@ -102,6 +106,7 @@ type Querier interface {
 	ResolveChannel(ctx context.Context, arg ResolveChannelParams) (ResolveChannelRow, error)
 	RetainReportAssets(ctx context.Context, arg RetainReportAssetsParams) error
 	RetirePublishedReport(ctx context.Context, arg RetirePublishedReportParams) error
+	RetireReportDrafts(ctx context.Context, arg RetireReportDraftsParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -119,6 +124,7 @@ type Querier interface {
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)
+	UpsertDraftReport(ctx context.Context, arg UpsertDraftReportParams) (uuid.UUID, error)
 }
 
 var _ Querier = (*Queries)(nil)
