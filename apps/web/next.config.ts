@@ -9,6 +9,7 @@ export default function nextConfig(phase: string): NextConfig {
     throw new Error("GO_API_ORIGIN must be an HTTP(S) origin");
   }
   return {
+    allowedDevOrigins: [new URL(process.env.PUBLIC_ORIGIN ?? "http://localhost:3000").hostname],
     skipTrailingSlashRedirect: true,
     async redirects() { return legacyPageRedirects(); },
     async rewrites() {

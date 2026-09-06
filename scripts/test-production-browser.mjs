@@ -9,8 +9,10 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 
 const root = resolve(import.meta.dirname, '..');
+const development = process.argv.includes('--development');
+const mode = development ? 'development' : 'production';
 const id = randomUUID(), container = `aerosight-browser-${id}`;
-const output = resolve(root, '.build', `production-browser-${id}`);
+const output = resolve(root, '.build', `${mode}-browser-${id}`);
 mkdirSync(output, {recursive:true});
 const log = openSync(resolve(output,'server.log'),'w');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -26,11 +28,14 @@ async function freePort() {
   await new Promise(resolve => server.close(resolve));
   return port;
 }
-let app, browser, tls, databaseStarted = false;
+let app, browser, tls, page, databaseStarted = false;
+const errors=[];
 const sockets = new Set();
 try {
+  if (!development) {
   writeFileSync(resolve(output,'openssl.cnf'),'[req]\ndistinguished_name=dn\n[dn]\n');
   command('openssl', ['req','-config',resolve(output,'openssl.cnf'),'-x509','-newkey','rsa:2048','-nodes','-keyout',resolve(output,'key.pem'),'-out',resolve(output,'cert.pem'),'-days','1','-subj','/CN=localhost','-addext','subjectAltName=IP:127.0.0.1,DNS:localhost']);
+  }
   command('docker',['run','--rm','-d','--name',container,'-e','POSTGRES_PASSWORD=aerosight-test','-p','127.0.0.1::5432','postgis/postgis:17-3.5']);
   databaseStarted = true;
   const dbPort = command('docker',['port',container,'5432/tcp']).split(':').at(-1);
@@ -41,6 +46,8 @@ try {
   }
   assert(dbReady,'PostGIS startup timed out');
   const apiPort = await freePort();
+  const webPort = development ? await freePort() : null;
+  if (!development) {
   tls = tlsServer({key:readFileSync(resolve(output,'key.pem')),cert:readFileSync(resolve(output,'cert.pem'))},(req,res)=>{
     const upstream = httpRequest({hostname:'127.0.0.1',port:apiPort,path:req.url,method:req.method,headers:req.headers}, reply=>{
       res.writeHead(reply.statusCode,reply.headers);reply.pipe(res);
@@ -50,15 +57,17 @@ try {
   });
   tls.on('connection',socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));});
   await new Promise(resolve=>tls.listen(0,'127.0.0.1',resolve));
-  const origin=`https://127.0.0.1:${tls.address().port}`;
-  app=spawn(resolve(root,'.build',process.platform==='win32'?'aerosight.exe':'aerosight'),['serve'],{
-    cwd:output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:'production',DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
+  }
+  const origin=development ? `http://127.0.0.1:${webPort}` : `https://127.0.0.1:${tls.address().port}`;
+  const executable=development ? process.execPath : resolve(root,'.build',process.platform==='win32'?'aerosight.exe':'aerosight');
+  app=spawn(executable,development ? [resolve(root,'scripts/dev.mjs')] : ['serve'],{
+    cwd:development ? root : output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:mode,PORT:String(webPort ?? ''),GO_API_ORIGIN:`http://127.0.0.1:${apiPort}`,DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
       AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,
       OBJECT_STORAGE_LOCAL_ROOT:resolve(output,'objects'),CALLBACK_PUBLIC_BASE_URL:'',MEDIA_API_BASE_URL:'',MEDIA_ADMIN_USER:'',MEDIA_ADMIN_PASSWORD:'',DJI_FLIGHTHUB_ENABLED:'false',GIN_MODE:'release'}
   });
   let ready=false;
   for(let n=0;n<120;n++) {
-    try { const res=await fetch(`http://127.0.0.1:${apiPort}/api/auth/csrf`,{signal:AbortSignal.timeout(1000)});await res.text();if(res.ok){ready=true;break;} } catch {}
+    try { const res=await fetch(`${development ? origin : `http://127.0.0.1:${apiPort}`}/api/auth/csrf`,{signal:AbortSignal.timeout(1500)});await res.text();if(res.ok){ready=true;break;} } catch {}
     assert.equal(app.exitCode,null,'Go exited before readiness');await sleep(250);
   }
   assert(ready,'Go startup timed out');
@@ -68,11 +77,11 @@ try {
     window.cspViolations=[];
     document.addEventListener('securitypolicyviolation',event=>window.cspViolations.push({directive:event.effectiveDirective,blocked:event.blockedURI}));
   });
-  const page=await context.newPage();
-  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  page=await context.newPage();
+  page.on('pageerror',error=>errors.push(error.message));
   const response=await page.goto(origin+'/login/');
   assert.equal(response.status(),200);
-  assert(response.headers()['content-security-policy'].includes("script-src 'self' 'sha256-"));
+  if (!development) assert(response.headers()['content-security-policy'].includes("script-src 'self' 'sha256-"));
   await page.getByLabel('邮箱或手机号').fill('admin@example.com');
   await page.getByLabel('密码',{exact:true}).fill('admin');
   await page.getByRole('button',{name:'登录',exact:true}).click();
@@ -82,7 +91,7 @@ try {
   assert.deepEqual(errors,[],'hydration/runtime errors');
   assert.deepEqual(await page.evaluate(()=>window.cspViolations),[],'unexpected CSP violations');
   const cookie=(await context.cookies()).find(cookie=>cookie.name==='aerosight_session');
-  assert(cookie?.secure && cookie.httpOnly && cookie.sameSite==='Lax','production session cookie policy');
+  assert(cookie && cookie.secure===!development && cookie.httpOnly && cookie.sameSite==='Lax',`${mode} session cookie policy`);
   await page.screenshot({path:resolve(output,'projects.png'),fullPage:true});
   await page.getByRole('link',{name:'团队',exact:true}).click();
   await page.getByRole('button',{name:'新建团队',exact:true}).click();
@@ -93,7 +102,7 @@ try {
   await page.getByRole('link',{name:'新建项目',exact:true}).click();
   await page.getByLabel('项目名称',{exact:true}).fill('Browser acceptance project');
   await page.getByRole('button',{name:'创建项目',exact:true}).click();
-  await page.waitForURL(url=>url.pathname==='/projects/detail/' && Number(url.searchParams.get('projectId'))>0);
+  await page.waitForURL(url=>/^\/projects\/detail\/?$/.test(url.pathname) && Number(url.searchParams.get('projectId'))>0);
   const detailURL=page.url();
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.reload();
@@ -117,11 +126,18 @@ try {
   await page.waitForURL(url=>url.pathname==='/login/' || url.pathname==='/login');
   await page.getByRole('button',{name:'登录',exact:true}).waitFor({state:'visible'});
   assert.deepEqual(errors,[],'session lifecycle runtime errors');
+  if (!development) {
   await page.evaluate(()=>{const script=document.createElement('script');script.textContent='window.unapprovedScriptRan = true';document.body.appendChild(script);});
   await page.waitForFunction(()=>window.cspViolations.some(v=>v.directive==='script-src-elem' && v.blocked==='inline'));
   assert.equal(await page.evaluate(()=>window.unapprovedScriptRan),undefined,'unapproved inline script ran');
-  writeFileSync(resolve(output,'result.json'),JSON.stringify({passed:true,checks:['production embedded login hydration','secure session cookie','projects navigation','create team/project through UI','post-build detail direct reload','logout and protected navigation','expired session redirects','unapproved inline script blocked'],errors},null,2));
-  console.log(`PASS: production browser resources, session lifecycle, hydration and CSP script rejection; evidence ${output}`);
+  }
+  writeFileSync(resolve(output,'result.json'),JSON.stringify({passed:true,mode,checks:['login hydration','session cookie policy','projects navigation','create team/project through UI','detail direct reload','logout and protected navigation','expired session redirects',...(!development ? ['unapproved inline script blocked'] : [])],errors},null,2));
+  console.log(`PASS: ${mode} browser resources, session lifecycle and hydration; evidence ${output}`);
+} catch(error) {
+  writeFileSync(resolve(output,'failure.json'),JSON.stringify({error:String(error),errors},null,2));
+  if(page && !page.isClosed())await page.screenshot({path:resolve(output,'failure.png'),fullPage:true}).catch(()=>{});
+  console.error(`Browser failure evidence: ${output}`);
+  throw error;
 } finally {
   await browser?.close();
   if(tls){for(const socket of sockets)socket.destroy();tls.closeAllConnections();await new Promise(resolve=>tls.close(resolve));}
