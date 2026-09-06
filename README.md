@@ -28,6 +28,8 @@ pnpm test:migrations
 
 Go unit tests use the `dev` tag so a frontend export is not required. Production embed tests can be run after `pnpm build` with `go test ./internal/webassets` from `apps/server`.
 
+`pnpm check:web-boundary` prevents server dependencies, Route Handlers, Server Actions and legacy database imports from returning to the Web application. Historical SQL contract fixtures live in `contracts/go-migration/legacy-web`; `pnpm test:web` includes their tests. Database regression, benchmark and rollback tools live in `scripts/legacy-db` and use the root development dependency `pg`. The Web package has no `pg` dependency; production migrations run in Go.
+
 `pnpm test:dev-proxy` runs the actual Next/Go development launcher against an isolated PostGIS Docker container. It requires installed dependencies, Go and Docker, and checks authentication, CSRF, cookies, signed assets, Range/HEAD and SSE cancellation through Next rewrites. It stops its processes and test database afterward; logs are retained under `.build/dev-proxy-<id>/`. On Windows the test uses process-tree termination for cleanup; this does not test graceful production shutdown.
 
 ## Production startup

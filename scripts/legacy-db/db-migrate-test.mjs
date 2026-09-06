@@ -7,10 +7,10 @@ import { spawnSync } from "node:child_process";
 import pg from "pg";
 
 import { assertPostgisAvailable, migrateDatabase } from "./db-migrate.mjs";
-import { credentialAAD, decryptCredentialObject, encryptCredentialObject } from "../lib/credential-encryption.ts";
+import { credentialAAD, decryptCredentialObject, encryptCredentialObject } from "../../apps/web/lib/credential-encryption.ts";
 
 const { Client } = pg;
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const legacySchema = await readFile(
   resolve(repositoryRoot, "db/migrations/0001_baseline.sql"),
   "utf8"

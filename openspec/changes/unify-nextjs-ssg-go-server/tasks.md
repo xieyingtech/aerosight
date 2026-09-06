@@ -49,7 +49,7 @@
 - [ ] 6.3 把项目各工作台与嵌套详情改为固定路径/查询参数并补 Suspense；在构建后新建资源，验证详情访问无需重建。
 - [ ] 6.4 统一生成页面链接、报告与 AI 引用地址，实现 Go 307 与开发 Next redirects；测试全部旧路由映射、筛选保留、冲突参数、非法 ID 和前进后退。
 - [x] 6.5 在 Next 开发 phase 配置 beforeFiles API/资产 rewrites，生产只启用 export；测试 Cookie/Origin、SSE 首条消息与长连接取消、文件 Range，确认 Go 无开发代理。
-- [ ] 6.6 移除迁完的 Route Handler、Server Actions、Auth.js、pg 与 TS 服务端 AI 依赖；通过扫描、typecheck 及无数据库/无密钥静态构建检查无运行时依赖回流。
+- [x] 6.6 移除迁完的 Route Handler、Server Actions、Auth.js、pg 与 TS 服务端 AI 依赖；通过扫描、typecheck 及无数据库/无密钥静态构建检查无运行时依赖回流。
 
 ## 7. 生产托管与统一生命周期
 

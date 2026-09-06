@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 const candidates = [
-  resolve(import.meta.dirname, "../.env.local"),
-  resolve(import.meta.dirname, "../../../.env.local")
+  resolve(import.meta.dirname, "../../apps/web/.env.local"),
+  resolve(import.meta.dirname, "../../.env.local")
 ];
 
 export function loadLocalEnvironment() {

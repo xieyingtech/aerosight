@@ -9,7 +9,7 @@ import { migrateDatabase } from "./db-migrate.mjs";
 
 const { Client } = pg;
 const databaseImage = process.env.ROLLBACK_DRILL_POSTGIS_IMAGE ?? "postgis/postgis:17-3.5";
-const migrationsDirectory = resolve(import.meta.dirname, "../../../db/migrations");
+const migrationsDirectory = resolve(import.meta.dirname, "../../db/migrations");
 const legacySchema = await readFile(resolve(migrationsDirectory, "0001_baseline.sql"), "utf8");
 const migrationCount = (await readdir(migrationsDirectory))
   .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))

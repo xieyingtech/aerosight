@@ -12,7 +12,7 @@ const BASELINE_MIGRATION = "0001_baseline.sql";
 const POSTGIS_MIGRATION = "0002_enable_postgis.sql";
 const migrationsDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../db/migrations"
+  "../../db/migrations"
 );
 
 function checksum(contents) {

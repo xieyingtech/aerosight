@@ -5,13 +5,13 @@ import { cpus } from "node:os";
 import pg from "pg";
 
 import { migrateDatabase } from "./db-migrate.mjs";
-import { createProjectMapModel } from "../lib/project-map-model.ts";
-import { readProjectSituationSnapshot } from "../lib/project-snapshot-core.ts";
+import { createProjectMapModel } from "../../apps/web/lib/project-map-model.ts";
+import { readProjectSituationSnapshot } from "../../contracts/go-migration/legacy-web/project-snapshot-core.ts";
 import {
   mapSuspectedConstructionDetections,
   suspectedConstructionTemplate
-} from "../lib/suspected-construction-template.ts";
-import { buildTimelineModel } from "../lib/timeline-model.ts";
+} from "../../apps/web/lib/suspected-construction-template.ts";
+import { buildTimelineModel } from "../../apps/web/lib/timeline-model.ts";
 
 const { Client, Pool } = pg;
 const databaseImage = process.env.BENCHMARK_POSTGIS_IMAGE ?? "postgis/postgis:17-3.5";
@@ -90,8 +90,9 @@ async function seed(client) {
      values($1,$2,'benchmark-simulator','simulator','connected') returning id`, [project.id, team.id]
   )).rows[0];
   const devices = (await client.query(
-    `insert into devices(project_id,name,type,status,adapter_id,last_seen_at)
-     select $1,'benchmark-drone-' || value,'drone','online',$2,now()
+    `insert into devices(project_id,name,type,status,adapter_id,last_seen_at,device_type_id)
+     select $1,'benchmark-drone-' || value,'drone','online',$2,now(),
+       (select id from device_types where type_key='legacy.device' and version=1)
        from generate_series(1,$3::integer) value returning id`, [project.id, adapter.id, parameters.devices]
   )).rows;
   const asset = (await client.query(

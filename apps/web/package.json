@@ -7,9 +7,6 @@
     "build": "next build",
     "start": "node ../../scripts/run-server.mjs serve",
     "db:migrate": "node ../../scripts/run-server.mjs migrate",
-    "test:migrations": "node scripts/db-migrate-test.mjs",
-    "benchmark:load": "node scripts/benchmark-load.mjs",
-    "drill:upgrade-rollback": "node scripts/upgrade-rollback-drill.mjs",
     "test:unit": "node --test lib/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -36,8 +33,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
-    "@types/pg": "^8.23.1",
-    "pg": "8.23.0",
     "tailwindcss": "^4.1.18"
   },
   "packageManager": "pnpm@10.33.0"

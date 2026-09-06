@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 6.6：Web 包移除 pg/@types/pg，快照与回放 core 仅保留浏览器类型；原 SQL 实现和四项历史测试迁到 contracts/go-migration/legacy-web，五个数据库维护脚本迁到 scripts/legacy-db。根包仅以开发依赖保留 pg，正式 db:migrate 仍由 Go 执行；pnpm test:web / test:security 继续执行历史测试。新增 check:web-boundary 纳入 pnpm check，扫描 252 个 Web 源文件及依赖，拒绝 pg/Auth.js/服务端 AI/next server imports、Route Handlers、Server Actions 与历史 DB 模块导入。清除 DATABASE_URL、AUTH_SECRET、CSRF_AUTH_KEY、GO_API_ORIGIN 后 pnpm build 通过（Web 无本地环境文件，333 静态文件与 52 迁移嵌入 Go）；导出 JS/HTML/TXT 中未发现这些服务端配置名。pnpm check 通过（288 Web + 4 历史测试，Go 本轮非数据库测试），frozen/offline lockfile 安装和安全测试通过。迁移回归、升级/回滚脚本及基准实际执行通过；基准 fixture 补齐迁移后必填 device_type_id，未改运行时业务。历史 SQL/回滚工具验证不代替 8.2/8.3/8.4 的统一应用生产演练。
+
 - 完成 4.6：复核 GetProjectAccess、effectivePermissions 与 authorizeWrite 的成员/项目范围、权限别名及事务内锁定复查，并在真实 PostGIS 重跑完整 HTTP 和 Agent 测试（分别 120.255s / 0.949s）。新增 TestQueuedJobDatabaseReauthorization 九场景，覆盖当前授权、删除授权、移除成员、关闭会话、会话用户缺失、上下文过期、event:handle → issue:handle 别名，以及别名不得扩展到 issue:assign / mission:approve。拒绝场景调用真实 JobProcessor.ProcessNext，验证任务记录授权失败和完成时间、不进入 running、下一次轮询不重复领取。修复后台授权 SQL 在缺失成员时返回 NULL 导致扫描失败的问题，同时补齐后台别名查询并用 EXISTS 防止多授权行扩大结果集；缺失会话发起人按未授权处理。现有 HTTP 集成测试覆盖跨租户不可见、案件读写别名、撤权后幂等重试拒绝、任务与设备命令权限和事务回滚。OpenSpec strict 与 git diff --check 通过。
 
 - 完成 3.4：新增真实 PostGIS schema 一致性测试，分别在独立临时库执行全部嵌入迁移和 db/schema.sql，比较应用关系、列类型/维度/SRID/默认值、具名约束、索引、触发器、视图、函数定义、序列参数、RLS 策略和枚举；排除扩展自身对象及迁移 ledger，函数文本仅统一 Git 换行符。测试实际发现并修复快照的约束名称、三个 unique constraint/index 表达差异、降序索引 NULL 排序和缺失的 device_types 外键；函数定义同步为迁移结果，不改历史迁移。扩展快照 API 集成测试：参数化 GeoJSON PointZ 写入，显式经纬高投影及 LineString GeoJSON 输出逐点比对，保留回放 bbox/类型过滤验收。真实 PostGIS 的 TestSchemaSnapshotMatchesFullMigration、TestSnapshotPostGISDevicePoseAndTrack 与 pnpm db:check 通过。本项不代替第 8 节整体兼容验收。

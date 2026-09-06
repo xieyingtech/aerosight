@@ -11,6 +11,12 @@ importers:
       '@fission-ai/openspec':
         specifier: 1.10.0
         version: 1.10.0(@types/node@24.13.2)
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
 
   apps/web:
     dependencies:
@@ -75,12 +81,6 @@ importers:
       '@tailwindcss/postcss':
         specifier: ^4.1.18
         version: 4.3.1
-      '@types/pg':
-        specifier: ^8.23.1
-        version: 8.23.1
-      pg:
-        specifier: 8.23.0
-        version: 8.23.0
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.1
