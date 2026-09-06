@@ -99,6 +99,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	api.AttachFlightHub(flightHubClient, workerCfg.FlightHubEnabled, workerCfg.AuthSecret)
+	api.AttachDeviceCredentials(workerCfg.AuthSecret)
 	server := &http.Server{Addr: httpCfg.Address, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	results := make(chan error, 2)
 	go func() { results <- bg.Run(ctx) }()

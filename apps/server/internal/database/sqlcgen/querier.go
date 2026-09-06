@@ -8,10 +8,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 type Querier interface {
 	AdminOverview(ctx context.Context) (AdminOverviewRow, error)
+	BindDiscoveredDevice(ctx context.Context, arg BindDiscoveredDeviceParams) error
 	CancelFlightHubSyncQueue(ctx context.Context, arg CancelFlightHubSyncQueueParams) error
 	CancelFlightHubSyncRuns(ctx context.Context, arg CancelFlightHubSyncRunsParams) error
 	ChannelGrants(ctx context.Context, arg ChannelGrantsParams) ([]ChannelGrantsRow, error)
@@ -24,6 +27,7 @@ type Querier interface {
 	CreateProject(ctx context.Context, arg CreateProjectParams) (int32, error)
 	CreateTeam(ctx context.Context, name string) (int32, error)
 	CreateTeamOwner(ctx context.Context, arg CreateTeamOwnerParams) error
+	DeclareDiscoveredCapability(ctx context.Context, arg DeclareDiscoveredCapabilityParams) error
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
@@ -38,12 +42,15 @@ type Querier interface {
 	GetTeamManager(ctx context.Context, arg GetTeamManagerParams) (int32, error)
 	GetUser(ctx context.Context, id int32) (GetUserRow, error)
 	HasUsers(ctx context.Context) (bool, error)
+	InsertDeviceAdapter(ctx context.Context, arg InsertDeviceAdapterParams) (json.RawMessage, error)
 	InsertDeviceCommand(ctx context.Context, arg InsertDeviceCommandParams) (InsertDeviceCommandRow, error)
+	InsertDiscoveredDevice(ctx context.Context, arg InsertDiscoveredDeviceParams) (int32, error)
 	InsertPlatformAudit(ctx context.Context, arg InsertPlatformAuditParams) (int64, error)
 	InsertProjectAudit(ctx context.Context, arg InsertProjectAuditParams) (int64, error)
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
+	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubSyncRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -52,8 +59,10 @@ type Querier interface {
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]ListProjectsRow, error)
 	ListTeamProjects(ctx context.Context, teamID int32) ([]ListTeamProjectsRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
+	LockDJIAdapterEnvelope(ctx context.Context, arg LockDJIAdapterEnvelopeParams) (pqtype.NullRawMessage, error)
 	LockDeviceCommandGrants(ctx context.Context, arg LockDeviceCommandGrantsParams) ([]LockDeviceCommandGrantsRow, error)
 	LockDeviceCommandTarget(ctx context.Context, arg LockDeviceCommandTargetParams) (LockDeviceCommandTargetRow, error)
+	LockDiscoveredDevice(ctx context.Context, arg LockDiscoveredDeviceParams) (LockDiscoveredDeviceRow, error)
 	LockFlightHubConnector(ctx context.Context, arg LockFlightHubConnectorParams) (LockFlightHubConnectorRow, error)
 	LockFlightHubSyncQueue(ctx context.Context, lockKey string) error
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
@@ -70,6 +79,7 @@ type Querier interface {
 	ReplayPoses(ctx context.Context, arg ReplayPosesParams) ([]json.RawMessage, error)
 	ReserveIdempotency(ctx context.Context, arg ReserveIdempotencyParams) (int64, error)
 	ResolveChannel(ctx context.Context, arg ResolveChannelParams) (ResolveChannelRow, error)
+	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotDeviceGrants(ctx context.Context, arg SnapshotDeviceGrantsParams) ([]json.RawMessage, error)
@@ -82,6 +92,8 @@ type Querier interface {
 	SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
+	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 }
 

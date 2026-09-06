@@ -25,16 +25,17 @@ import (
 )
 
 type Server struct {
-	flightHub *flightHubService
-	ready     atomic.Bool
-	router    *gin.Engine
-	sessions  *scs.SessionManager
-	store     *postgresstore.PostgresStore
-	queries   *sqlcgen.Queries
-	db        *sql.DB
-	logger    *slog.Logger
-	cfg       config.HTTP
-	loginRate *httprate.RateLimiter
+	credentialSecret string
+	flightHub        *flightHubService
+	ready            atomic.Bool
+	router           *gin.Engine
+	sessions         *scs.SessionManager
+	store            *postgresstore.PostgresStore
+	queries          *sqlcgen.Queries
+	db               *sql.DB
+	logger           *slog.Logger
+	cfg              config.HTTP
+	loginRate        *httprate.RateLimiter
 }
 
 func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
@@ -79,6 +80,8 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.streamRoutes()
 	s.projectReadRoutes()
 	s.flightHubRoutes()
+	s.deviceAdapterRoutes()
+	s.router.POST("/api/projects/:id/device-adapters/discoveries/:identityId/bind", s.requireUser, s.timeout, s.bindDiscoveredDevice)
 	s.router.POST("/api/projects/:id/devices/:deviceId/commands", s.requireUser, s.timeout, s.submitDeviceCommand)
 	s.router.GET("/api/projects/:id/snapshot", s.requireUser, s.timeout, s.projectSnapshot)
 	return s, nil
