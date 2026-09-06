@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.6 第二批迁移：案件列表和完整详情读取，包含活动/链接/检测/资产/有效负责人/项目成员/活动 Agent/关联草稿。sqlc 保留原查询排序、资产筛选、非法数字检测链接处理及 bigint 字符串，在同一只读快照中完成。真实 PostGIS 测试覆盖空关联集合、系统活动、直接关联资产、负责人及草稿、无地图坐标、跨项目拒绝和 event:handle → issue:handle 权限别名（不扩展指派/Agent 权限）；sqlc 和 Go 非数据库测试通过。案件协作写入与草稿操作尚待迁移，5.6 保持未勾选。
+
 - 5.6 第一批迁移：旧 perception event 详情只读 API，保留检测证据投影、位置说明、历史反馈、ID/时间序列化及原有说明文字。核对实际 Route Handler 后保留 actions/agent-drafts 的 410 LEGACY_EVENT_READ_ONLY；没有复活未被调用的 handlePerceptionEvent 写入服务。真实 PostGIS 测试验证详情空证据/反馈、group bigint 字符串、跨项目/撤权拒绝，两个废弃写接口不改变事件状态或写审计。原 TS 证据显示两项测试、sqlc 检查和 Go 非数据库测试通过。案件读取/协作/草稿仍待迁移，5.6 保持未勾选。
 
 - 完成 5.5 当前入口清单：新增任务模板列表/详情 Go 查询，测试空数组、nullable description、触发类型、跨项目及成员删除后拒绝。核对 app 页面/Route Handler/Server Actions：任务定义只有读取入口；task-versions.ts 的 createTaskDraft/publishTaskDraft/listTaskVersions 无应用调用，没有把未暴露的 TS 工具函数新增为公开 API。现有任务运行控制、工作台、审计、演练与报告入口已迁移，后台调度/执行继续复用 Go。全量 Go 真实 PostGIS 回归、sqlc 和 OpenSpec strict 通过。前端调用切换及旧 TS 清理继续由第 6 节完成，完整端到端验收仍由第 8 节覆盖。
