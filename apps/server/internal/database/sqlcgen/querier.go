@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -32,6 +33,7 @@ type Querier interface {
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
+	ExportPublishedReport(ctx context.Context, arg ExportPublishedReportParams) (json.RawMessage, error)
 	FindExistingDeviceCommand(ctx context.Context, arg FindExistingDeviceCommandParams) (FindExistingDeviceCommandRow, error)
 	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
 	FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error)
@@ -80,7 +82,11 @@ type Querier interface {
 	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
+	LockReportDraft(ctx context.Context, arg LockReportDraftParams) (LockReportDraftRow, error)
+	LockReportPublication(ctx context.Context, arg LockReportPublicationParams) (uuid.UUID, error)
+	PointPublishedReport(ctx context.Context, arg PointPublishedReportParams) error
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
+	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
 	ReadChannelEvents(ctx context.Context, arg ReadChannelEventsParams) ([]ReadChannelEventsRow, error)
 	ReadChannelTelemetry(ctx context.Context, arg ReadChannelTelemetryParams) ([]ReadChannelTelemetryRow, error)
 	ReadDeviceRelations(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -94,6 +100,8 @@ type Querier interface {
 	ReplayPoses(ctx context.Context, arg ReplayPosesParams) ([]json.RawMessage, error)
 	ReserveIdempotency(ctx context.Context, arg ReserveIdempotencyParams) (int64, error)
 	ResolveChannel(ctx context.Context, arg ResolveChannelParams) (ResolveChannelRow, error)
+	RetainReportAssets(ctx context.Context, arg RetainReportAssetsParams) error
+	RetirePublishedReport(ctx context.Context, arg RetirePublishedReportParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)

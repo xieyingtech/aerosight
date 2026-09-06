@@ -85,6 +85,8 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.flightHubRoutes()
 	s.deviceAdapterRoutes()
 	s.missionReadRoutes()
+	s.router.POST("/api/projects/:id/reports/:reportId/publish", s.requireUser, s.timeout, s.publishReport)
+	s.router.GET("/api/projects/:id/reports/:reportId/export", s.requireUser, s.timeout, s.exportReport)
 	s.router.POST("/api/projects/:id/task-runs/:runId/control", s.requireUser, s.timeout, s.controlMissionRun)
 	s.router.GET("/api/projects/:id/task-runs/:runId/audit-trace", s.requireUser, s.timeout, s.getMissionAuditTrace)
 	s.router.POST("/api/projects/:id/task-runs/:runId/emergency-stop-drill", s.requireUser, s.timeout, s.runEmergencyStopDrill)
