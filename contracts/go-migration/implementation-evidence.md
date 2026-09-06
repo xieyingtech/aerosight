@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.3 静态 gzip：使用已锁定 gin-contrib/gzip 1.2.7，仅接入 Gin 静态 NoRoute 链，排除 API/算法资产、旧链接重定向、二进制资源、HEAD、Range/If-Range 和升级请求；解析 Accept-Encoding 权重，显式 gzip;q=0 优先于通配符。静态文本按 Accept-Encoding 区分缓存，压缩响应的内容哈希 ETag 转为弱标识，保留身份编码强 ETag 和分段读取语义。真实 HTTP 服务测试覆盖 HTML/JS 解压后内容一致、压缩拒绝、HEAD 无正文、Range 206 精确字节与 Content-Range、字体不压缩、SSE 不压缩、页面/API/算法资产 404、压缩 ETag/If-None-Match 304 无正文。Go dev 全包通过（本轮未连接数据库）。普通请求取消/数据库超时回滚、读头/空闲期限和超长 SSE 的 4.3 其余验收仍待，该任务保持未勾选。
+
 - 完成 4.2 数据库验收：独立 PostGIS 中先以普通团队写入耗尽用户额度，下一写入返回 429/Retry-After 且团队数量不变；普通任务 pause 同样限流，emergency_stop 仍完成 running→canceling。相同旧版本重试返回 409；随后撤销团队管理角色，另一个运行急停返回 403 且状态/版本不变。数据库验证仅产生一份项目审计、事件和 outbox，无拒绝/重试额外副作用。首版测试错误预期急停发布两条 outbox，核对单次 w.Publish 行为后修正为一条。既有设备安全测试增加普通额度耗尽步骤，确认普通命令 429 后返航仍通过原确认、活动任务例外与高优先级检查。真实 TLS 响应验证 nosniff、DENY、HSTS；不可信 X-Forwarded-Proto 不在明文响应开启 HSTS。定向集成测试通过；完整 HTTP 包真实 DB 回归通过（102.787s），随后新增/修改测试也已定向执行。临时数据库容器已停止。上一批伪造 IP、用户隔离、JSON 429 与 Retry-After 证据继续有效；CSP/长连接期限仍属 7.2/4.3。
 
 - 4.2 限流接线第一批：发现 WRITE_RATE_LIMIT 原先只读取配置、未执行限制；现于 requireUser 完成认证后以用户 ID 使用 httprate 普通写桶，项目与频道 SSE 共用独立建连桶，新增 SSE_RATE_LIMIT 默认 30/min。读请求不消耗写额度，机器回调/媒体鉴权不进入浏览器用户桶。任务控制与设备命令在解析动作后使用同一写桶，emergency_stop 与 flight.return_home 不受普通写桶阻断，仍执行原权限、事务复查、安全和幂等逻辑。环境示例补齐三种额度与可信代理列表。定向测试验证默认不信任代理时轮换 X-Forwarded-For/X-Real-IP 仍命中相同登录额度，显式可信 loopback 按转发来源区分；429 JSON 与 Retry-After、跨用户隔离、读/写/SSE 桶隔离及项目/频道 SSE 共桶均通过。Go dev 全包通过，数据库测试未在本轮运行；额度耗尽后真实授权急停/拒绝越权的集成验收与安全头验证仍待，因此 4.2 不勾选。

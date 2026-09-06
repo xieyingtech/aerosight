@@ -130,5 +130,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("ETag", file.etag)
+	if w.Header().Get("Content-Encoding") == "gzip" {
+		w.Header().Set("ETag", "W/"+file.etag)
+	}
 	http.ServeContent(w, r, path.Base(name), time.Time{}, bytes.NewReader(file.data))
 }
