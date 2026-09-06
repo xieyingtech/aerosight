@@ -27,6 +27,7 @@ import (
 )
 
 type Server struct {
+	staticPages         http.Handler
 	aiHTTPClientFactory func(*url.URL, []netip.Addr) *http.Client
 	mediaStorageRoot    string
 	networkResolver     device.HostResolver

@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- 完成 7.1：prepare:web 校验关键 HTML/chunks、拒绝 symlink/non-regular，再复制 333 个 out 文件到忽略目录；生产 all:dist embed 包含 Next 下划线元数据，New 在启动时检查页面并加载至内存，serve 接入 Gin 同一端口。dev 标签返回无静态 handler，测试命令使用 dev 标签，生产构建显式要求静态产物。静态响应含稳定 MIME、ETag/304、HEAD、Range、哈希目录 immutable、HTML/元数据 no-cache、页面 404；拒绝穿越/反斜杠/目录列出，API 与算法资产不回退 HTML。Gin HEAD 404 需显式提交 header，已由组合测试捕获并修正。真实嵌入页面（根、登录、项目及构建后 ID 详情壳）与 HTTP 边界测试通过；临时移走 dist 后生产编译按预期失败、dev 编译成功，恢复后生产 aerosight.exe 构建通过；临时移走 login/index.html 后复制在修改目标前拒绝，恢复后再次复制成功。迁移 SQL 嵌入沿用已验证 prepare:server。Go dev 全包（非数据库）、生产静态/Gin 测试和 OpenSpec strict 通过。7.2 CSP、4.3 gzip、7.5 默认构建启动入口及无 Node 镜像/完整数据库端到端仍待完成。
+
+
 - 新链接统一：地图选中设备/案件、设备树实时入口及存量只读工具格式器不再生成旧 ID 路径；共享 projectNavigationHref 支持结构化参数并固定调用方项目 ID。Go 报告的运行/任务版本/设备/轨迹/步骤/事件/反馈/资产引用全部改用固定页面查询参数，与聊天引用共用 projectPageURL；历史已存报告保持原内容，通过 307 兼容。新增报告八种引用地址断言及 Go/TS 特殊字符、参数覆盖、调用方参数不变测试，更新两个旧工具地址断言。TypeScript、292 项 Web 单元测试及 Go 非数据库全包通过。6.4 的浏览器前进后退/完整页面跳转验收仍待生产托管后执行，因此未勾选。
 
 

@@ -19,7 +19,7 @@
     "db:migrate": "pnpm --dir apps/web db:migrate",
     "test:migrations": "pnpm --dir apps/web test:migrations",
     "test:web": "pnpm --dir apps/web test:unit",
-    "test:worker": "pnpm prepare:server && cd apps/server && go test ./...",
+    "test:worker": "pnpm prepare:server && cd apps/server && go test -tags dev ./...",
     "test:security": "node scripts/test-security-acceptance.mjs",
     "test:all": "pnpm test && pnpm test:migrations && pnpm test:security",
     "benchmark:load": "pnpm --dir apps/web benchmark:load",
@@ -29,7 +29,8 @@
     "check": "pnpm typecheck && pnpm test",
     "db:generate": "node scripts/sqlc.mjs",
     "db:check": "node scripts/sqlc.mjs --check",
-    "prepare:server": "node scripts/prepare-server.mjs"
+    "prepare:server": "node scripts/prepare-server.mjs",
+    "prepare:web": "node scripts/prepare-web.mjs"
   },
   "devDependencies": {
     "@fission-ai/openspec": "1.10.0"

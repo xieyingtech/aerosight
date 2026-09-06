@@ -8,6 +8,7 @@ bin/
 *.test
 coverage.out
 apps/server/internal/migrations/sql/
+apps/server/internal/webassets/dist/
 
 # Next.js
 apps/web/.next/

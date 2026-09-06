@@ -7,6 +7,7 @@ import (
 	"aerosight/server/internal/httpapi"
 	"aerosight/server/internal/migrations"
 	"aerosight/server/internal/runtime"
+	"aerosight/server/internal/webassets"
 	"context"
 	"errors"
 	"fmt"
@@ -58,6 +59,10 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	pages, err := webassets.Embedded()
+	if err != nil {
+		return err
+	}
 	workerCfg, err := config.Load()
 	if err != nil {
 		return err
@@ -93,6 +98,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	defer api.Close()
+	api.AttachStaticPages(pages)
 	api.AttachRuntime(bg.Callbacks)
 	flightHubClient, err := flighthub.NewChinaClient(flighthub.Config{Timeout: workerCfg.FlightHubHTTPTimeout, MaxRetries: workerCfg.FlightHubMaxRetries, MaxProjectPages: workerCfg.FlightHubMaxProjectPages, MaxResponseBytes: workerCfg.FlightHubMaxResponseBytes, RequestID: uuid.NewString})
 	if err != nil {

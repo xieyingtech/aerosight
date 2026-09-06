@@ -93,5 +93,12 @@ func (s *Server) pageNotFound(c *gin.Context) {
 			return
 		}
 	}
+	if s.staticPages != nil && c.Request.URL.Path != "/api" && !strings.HasPrefix(c.Request.URL.Path, "/api/") && c.Request.URL.Path != "/algorithm-assets" && !strings.HasPrefix(c.Request.URL.Path, "/algorithm-assets/") {
+		s.staticPages.ServeHTTP(c.Writer, c.Request)
+		c.Writer.WriteHeaderNow()
+		return
+	}
 	s.failure(c, 404, "NOT_FOUND")
 }
+
+func (s *Server) AttachStaticPages(handler http.Handler) { s.staticPages = handler }
