@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const componentPath = new URL("../components/dji-flighthub-wizard.tsx", import.meta.url);
-const pagePath = new URL("../app/(app)/projects/[id]/connectors/page.tsx", import.meta.url);
+const pagePath = new URL("../app/(app)/projects/connectors/page.tsx", import.meta.url);
 
 test("FlightHub wizard keeps tokens in component memory and clears every terminal path", async () => {
   const source = await readFile(componentPath, "utf8");
@@ -27,8 +27,9 @@ test("FlightHub wizard serializes repeated actions and exposes no control action
 
 test("ordinary project members fail before connector management UI is rendered", async () => {
   const source = await readFile(pagePath, "utf8");
-  const guard = source.indexOf('if (project.role === "member")');
-  const render = source.indexOf("<DjiFlightHubWizard");
+  const guard = source.indexOf('project.role==="member"?');
+  const render = source.indexOf("<Workspace");
   assert.ok(guard >= 0 && render > guard);
-  assert.match(source, /PROJECT_ACCESS_DENIED/);
+  assert.match(source.slice(guard, render), /role="alert"/);
+  assert.match(source, /StaticAPIPage/);
 });

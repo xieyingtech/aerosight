@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiJSON, APIError } from "@/lib/api-client";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,18 +23,19 @@ function parameterProperties(schema: Record<string, unknown>) {
 export function AlgorithmCatalog({ projectId, entries, canRun }: { projectId: number; entries: Entry[]; canRun: boolean }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   async function run(entry: Entry, data: FormData) {
-    setError(null);
+    setError(null); setPending(true);
     const values = Object.fromEntries(data.entries());
-    const response = await fetch(`/api/projects/${projectId}/algorithm-runs`, {
+    try { const result = await apiJSON<{runId:string}>(`/api/projects/${projectId}/algorithm-runs`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         configurationSnapshotId: Number(entry.configurationSnapshotId), assetId: Number(data.get("assetId")),
         parameters: coerceSchemaParameters(entry.schemas.parameters, values)
       })
     });
-    const result = await response.json();
-    if (!response.ok) setError(result.error ?? "算法运行提交失败");
-    else router.push(`/projects/${projectId}/algorithms/runs/${result.runId}`);
+    router.push(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${encodeURIComponent(result.runId)}`);
+    } catch (error) { setError(error instanceof APIError ? error.code : "算法运行提交失败，请稍后重试。"); }
+    finally { setPending(false); }
   }
   return <div className="grid gap-3 md:grid-cols-2">{entries.map((entry) => <Card key={entry.id}>
     <CardHeader><CardTitle>{entry.name}</CardTitle><CardDescription>{entry.capabilityCode} · {entry.execution.modelOrProcess}</CardDescription></CardHeader>
@@ -43,6 +45,6 @@ export function AlgorithmCatalog({ projectId, entries, canRun }: { projectId: nu
         {Object.entries(parameterProperties(entry.schemas.parameters)).map(([key, property]) => <label className="grid gap-1 text-xs" key={key}><span>{String(property.title ?? key)}</span>
           {property.type === "boolean" ? <select className="h-9 rounded-md border bg-transparent px-3 text-sm" name={key}><option value="">默认</option><option value="true">是</option><option value="false">否</option></select>
             : <Input name={key} placeholder={String(property.description ?? key)} type={property.type === "number" || property.type === "integer" ? "number" : "text"} />}</label>)}
-        <Button disabled={!entry.provider.available} type="submit">运行</Button></form> : null}
+        <Button disabled={pending || !entry.provider.available} type="submit">运行</Button></form> : null}
     </CardContent></Card>)}{entries.length === 0 ? <p className="text-sm text-muted-foreground">尚无可用算法定义</p> : null}{error ? <p className="text-sm text-destructive">{error}</p> : null}</div>;
 }

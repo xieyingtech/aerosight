@@ -1,5 +1,6 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
 import { useEffect, useRef, useState } from "react";
 import {
   CloudIcon,
@@ -130,7 +131,7 @@ export function DjiFlightHubWizard({
   const readJson = async <T,>(response: Response): Promise<T> => response.json() as Promise<T>;
 
   const refresh = async () => {
-    const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub`, { cache: "no-store" });
+    const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub`, { cache: "no-store" });
     if (!response.ok) return;
     const data = await readJson<PageData>(response);
     setConnectors(data.connectors);
@@ -145,7 +146,7 @@ export function DjiFlightHubWizard({
     }
     setBusyAction("discover"); setError(null); setNotice(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/projects`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/projects`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         cache: "no-store",
@@ -173,7 +174,7 @@ export function DjiFlightHubWizard({
     }
     setBusyAction("create"); setError(null); setNotice(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         cache: "no-store",
@@ -197,7 +198,7 @@ export function DjiFlightHubWizard({
     if (action === "disconnect" && !window.confirm("断开后会停止新同步，但保留设备、身份和审计历史。确认断开？")) return;
     setBusyAction(`${action}:${connectorId}`); setError(null); setNotice(null);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}${action === "sync" ? "/sync" : ""}`,
         { method: action === "sync" ? "POST" : "DELETE", cache: "no-store" }
       );
@@ -223,7 +224,7 @@ export function DjiFlightHubWizard({
     setBusyAction(`token:${connectorId}`); setError(null); setNotice(null);
     setUpdateTokens((current) => ({ ...current, [connectorId]: "" }));
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/token`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/token`, {
         method: "PUT", headers: { "content-type": "application/json" }, cache: "no-store",
         body: JSON.stringify({ token: replacement }),
       });
