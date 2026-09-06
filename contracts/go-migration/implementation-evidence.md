@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.9 第一批迁移：平台 AI provider 列表、创建、PATCH、DELETE 接入 Go/sqlc。保留 OpenAI 类型、默认项必须启用、空密钥保留原 envelope、替换密钥重置 untested、平台 AAD 和 write-only 凭据、bigint 字符串/null/时间格式；复用 HTTPS 与全部 DNS 地址校验。注册表事务锁序列化默认切换，用户角色行锁完成写入前再授权，业务和平台审计整体提交。真实 PostGIS 测试覆盖 4 并发默认创建、密文兼容解密、空白更新、加密失败时默认项/审计回滚、删除不存在项及 URL 校验期间撤权；相关算法 provider 回归、Go 非数据库全包测试、原 TS 2 项、sqlc 和 OpenSpec strict 通过。官方 SDK 测试端点、聊天会话和六个只读工具尚待实现，5.9 保持未勾选。
+
 - 完成 5.8 当前入口清单：直播启动迁入 Go/sqlc，锁设备后校验在线/可用能力/显式授权、选择频道、同频道重放和驱动并发额度；DJI 拓扑生成 video_id，验证适配器推流凭据，只把无密码的服务端 RTMP 目标写入命令，原子提交会话/命令/outbox/项目事件/审计。保留现有 Route Handler 不接收 taskRunId 的行为；模拟器直接 live，DJI requested。启动/停止统一 device→session 锁顺序。真实 PostGIS 覆盖 4 并发只建一次、第二频道额度、离线/无能力/缺频道/拓扑/凭据拒绝、同频道重放前再授权、DJI 参数/优先级、outbox 失败全回滚、并发启动/停止及跨项目。全量 Go（真实 DB）、额外并发测试、原 TS 13 项、sqlc 和 OpenSpec strict 通过。媒体 Linux 补验使用本地 Go 交叉编译测试二进制，在 bookworm 容器实际执行 TestMediaProjectFileBoundary，符号链接逃逸分支通过（无 skip）；此前 Windows 权限限制的补验已完成。前端切换与生产端到端仍由第 6/8 节覆盖。
 
 - 5.8 第四批迁移：停止直播 POST 接入 Go/sqlc；事务内复查 mission:operate 并锁会话，保留 DJI stopping/45 秒租约/优先级 30 停止命令、模拟器及失败会话直接 stopped、重复停止重放和 replay 模式拒绝。命令冲突返回实际 ID，修复旧逻辑派发不存在 UUID 的边界；命令/outbox 与状态/审计原子提交。真实 PostGIS 验证 4 并发仅一条停止命令/派发事件、已有命令不重复派发、模拟器与 failed 行为、outbox 故障回滚、跨项目/权限拒绝，并重跑播放及媒体鉴权测试；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动仍待迁移，Linux 符号链接补验仍待执行，5.8 保持未勾选。

@@ -129,6 +129,10 @@ func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) 
 }
 
 func (s *Server) validateAlgorithmURL(ctx context.Context, raw string) (*url.URL, int, error) {
+	return s.validateOutboundURL(ctx, raw, s.cfg.AlgorithmAllowedHosts)
+}
+
+func (s *Server) validateOutboundURL(ctx context.Context, raw string, allowedHosts []string) (*url.URL, int, error) {
 	fail := func(code string) (*url.URL, int, error) { return nil, 0, errors.New(code) }
 	target, err := url.Parse(raw)
 	if err != nil || target.Hostname() == "" {
@@ -142,7 +146,7 @@ func (s *Server) validateAlgorithmURL(ctx context.Context, raw string) (*url.URL
 	}
 	host := strings.TrimSuffix(strings.ToLower(target.Hostname()), ".")
 	allowed := false
-	for _, pattern := range s.cfg.AlgorithmAllowedHosts {
+	for _, pattern := range allowedHosts {
 		pattern = strings.TrimSuffix(strings.ToLower(pattern), ".")
 		if strings.HasPrefix(pattern, "*.") {
 			allowed = allowed || (strings.HasSuffix(host, pattern[1:]) && host != pattern[2:])

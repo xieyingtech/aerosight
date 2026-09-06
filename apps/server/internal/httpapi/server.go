@@ -91,6 +91,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.algorithmRunRoutes()
 	s.algorithmDefinitionRoutes()
 	s.algorithmProviderRoutes()
+	s.aiProviderRoutes()
 	s.mediaAccessRoutes()
 	s.router.POST("/api/media-auth", s.timeout, s.mediaAuth)
 	s.router.GET("/api/projects/:id/live-streams/:streamId/playback", s.requireUser, s.timeout, s.getLivePlayback)
