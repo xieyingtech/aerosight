@@ -139,7 +139,12 @@ func (handler *CallbackHandler) ServeHTTP(writer http.ResponseWriter, request *h
 		http.Error(writer, "callback authentication failed", http.StatusUnauthorized)
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(request.Body, 16<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(writer, request.Body, 16<<20))
+	var oversized *http.MaxBytesError
+	if errors.As(err, &oversized) {
+		http.Error(writer, "callback body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil || len(body) == 0 {
 		http.Error(writer, "invalid callback body", http.StatusBadRequest)
 		return

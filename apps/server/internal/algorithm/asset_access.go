@@ -95,7 +95,7 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 	var storageKey, contentType string
 	err = handler.db.QueryRowContext(request.Context(), `
 		select storage_key, mime_type from assets
-		where id=$1 and project_id=$2 and version=$3 and status='available'`, assetID, projectID, version).Scan(&storageKey, &contentType)
+		where id=$1 and project_id=$2 and version=$3 and status='available' and deleted_at is null`, assetID, projectID, version).Scan(&storageKey, &contentType)
 	if err != nil {
 		http.Error(writer, "asset unavailable", http.StatusNotFound)
 		return

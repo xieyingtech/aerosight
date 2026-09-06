@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 5.11：复核 cmd/aerosight 已把 runtime.Callbacks 接入 Gin 同一端口，并给算法回调/资产组补 context deadline，继续使用原独立机器认证（不经过 SCS/CSRF）。修复回调 LimitReader 静默截断，实际正文超过 16 MiB 明确返回 413；算法资产查询排除 deleted_at 非空记录。真实 PostGIS 的统一 HTTP 集成测试通过无 Cookie/CSRF 外部签名回调、processing→completed、重复回调只存一次原始结果、同 callback ID 不同正文 409、过期/跨项目 401、超大正文 413；资产签名有效读取、篡改项目/过期 403、签名有效但项目或版本不匹配 404、软删除 404，未授权请求不触发存储读取。已有算法签名/状态机单元测试、Go 非数据库全包、sqlc 和 OpenSpec strict 通过。部署公共地址切换与生产端到端仍由第 7/8 节完成。
+
 - 完成 5.9 当前入口清单：聊天 POST 接入官方 openai-go/v3 Responses API；保留配置模型/base URL/数据库密钥、中文系统提示、最近 20 条历史、最多 8 次模型调用及六个只读工具。无 Node sidecar；请求关闭自动重试和上游 store，逐轮带回 output message phase、加密 reasoning 与 function_call_output，每次模型/工具调用前复查 agent:use 和 open 会话，工具内再校验项目范围；最终只落库脱敏回答/精简证据。独立 AI_REQUEST_TIMEOUT 默认 120s，错误返回安全代码，响应正文上限 4 MiB，失败只保留原先已提交的用户消息，不伪造助手回复；达到八步无文本时保留原存储 fallback 和空 content 返回行为。真实 PostGIS + SDK 假上游覆盖完整两轮六工具 Responses 请求与回传/20 条历史/推理续传/模型 ID/最终证据、八步、500/超大正文/超时、非法输入/无 provider/关闭会话/越权参数/未知写工具/中途撤权。全量 Go（真实 DB）、13 项原 TS 相关测试、sqlc 和 OpenSpec strict 通过。第 6 节仍负责客户端静态化及 TS 服务端依赖移除，第 8 节负责生产单二进制端到端。
 
 - 5.9 第四批迁移：六个聊天只读工具的 sqlc 查询、严格输入校验、递归 scope 注入拒绝、只读快照权限复查及结果格式接入 Go。保留设备/任务/案件/可用资产/轨迹/地图计数与质量字段、数据新鲜度、100 条/64 KiB 上限；证据链接直接采用设计中的固定页面查询参数，数值 ID 引用避免科学计数法。修复旧 query_issues 的 limit 与底层 query_events schema 不一致问题，设备 ID 筛选和任务/案件 limit 在查询中生效；检测关联字符串拒绝超出 bigint 范围，避免坏链接破坏案件查询。真实 PostGIS 覆盖六工具空值/两项目隔离/撤权拒绝、设备筛选、案件 limit、仅 available 资产且不泄露 storage_key、两点 LineString 和项目计数；格式测试覆盖嵌套注入、写工具拒绝、引用 URL 编码、记录/字节上限及新鲜度。原 TS 3 项、会话集成回归、Go 非数据库全包、sqlc 和 OpenSpec strict 通过。Responses 编排尚待接入，5.9 保持未勾选。
