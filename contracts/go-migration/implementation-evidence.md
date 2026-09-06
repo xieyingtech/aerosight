@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.7 第一批迁移：算法运行创建、列表、详情/attempt 和失败重试接入 Go/sqlc。创建在事务中锁定当前发布配置、启用 provider 和可用资产，固定 SHA-256/版本/参数，并原子提交运行、审计和请求事件/outbox；重试保留源配置与参数，只允许 failed/timed_out。修复旧 TS 重试复制旧 runId 导致 Go processor 拒绝快照的问题：重试使用新 runId/请求上下文，清除旧 callback 和资产签名，worker 再签发。原 SSR 页面只展示安全诊断；新浏览器 API 不返回私有 inputSnapshot，保留安全 view 和标准化结果。真实 PostGIS 测试覆盖创建、worker Input 解码及范围一致性、详情/attempt/null、输入别名、跨项目、禁用 provider、缺 checksum、撤权、重试及 outbox 故障全回滚；对应 TS 4 项测试、Go 非数据库全包测试、sqlc 漂移及 OpenSpec strict 通过。Provider/definition 配置管理尚待迁移，5.7 保持未勾选。
+
 - 完成 5.6 当前入口清单：案件 actions 的 comment/status/labels/assign/unassign 已迁入 Go/sqlc，保留 clientKey 重放、版本冲突、负责人 no-op、UTF-16 长度限制与可见 Copilot 提及规则。事务内重新读取受锁保护的权限，作用域校验负责人，并原子提交案件版本/活动/负责人/Copilot 会话和任务/审计/项目事件；issue.updated 不加入 outbox。真实 PostGIS 测试覆盖开关状态、标签去重、负责人及 Copilot、无 agent:use 时普通评论、权限别名、撤权后重试拒绝、跨项目、4 请求同键只执行一次及末端事件失败整体回滚；全量 Go（真实 DB）、原 TS 9 项对应测试、sqlc 漂移与 OpenSpec strict 检查通过。复核 app/API/组件调用：旧事件 actions/agent-drafts 原本固定 410，generateOnDemandAlertDraft 和 AgentEventDraftButton 没有应用调用；案件草稿由现有 Go issue_copilot 后台链路生成并由已迁移详情读取，不新增未暴露的 TS 草稿工具端点。前端切换及端到端验收仍由第 6/8 节完成。
 
 - 5.6 第二批迁移：案件列表和完整详情读取，包含活动/链接/检测/资产/有效负责人/项目成员/活动 Agent/关联草稿。sqlc 保留原查询排序、资产筛选、非法数字检测链接处理及 bigint 字符串，在同一只读快照中完成。真实 PostGIS 测试覆盖空关联集合、系统活动、直接关联资产、负责人及草稿、无地图坐标、跨项目拒绝和 event:handle → issue:handle 权限别名（不扩展指派/Agent 权限）；sqlc 和 Go 非数据库测试通过。案件协作写入与草稿操作尚待迁移，5.6 保持未勾选。

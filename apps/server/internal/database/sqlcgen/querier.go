@@ -60,6 +60,7 @@ type Querier interface {
 	GetTeamManager(ctx context.Context, arg GetTeamManagerParams) (int32, error)
 	GetUser(ctx context.Context, id int32) (GetUserRow, error)
 	HasUsers(ctx context.Context) (bool, error)
+	InsertCatalogAlgorithmRun(ctx context.Context, arg InsertCatalogAlgorithmRunParams) error
 	InsertDJINetworkProfile(ctx context.Context, arg InsertDJINetworkProfileParams) (int64, error)
 	InsertDJISetupAdapter(ctx context.Context, arg InsertDJISetupAdapterParams) (json.RawMessage, error)
 	InsertDeviceAdapter(ctx context.Context, arg InsertDeviceAdapterParams) (json.RawMessage, error)
@@ -75,6 +76,7 @@ type Querier interface {
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
+	ListAlgorithmRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -88,6 +90,7 @@ type Querier interface {
 	ListTaskDefinitions(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListTeamProjects(ctx context.Context, teamID int32) ([]ListTeamProjectsRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
+	LockAlgorithmRetrySource(ctx context.Context, arg LockAlgorithmRetrySourceParams) (LockAlgorithmRetrySourceRow, error)
 	LockDJIAdapterEnvelope(ctx context.Context, arg LockDJIAdapterEnvelopeParams) (pqtype.NullRawMessage, error)
 	LockDeviceCommandGrants(ctx context.Context, arg LockDeviceCommandGrantsParams) ([]LockDeviceCommandGrantsRow, error)
 	LockDeviceCommandTarget(ctx context.Context, arg LockDeviceCommandTargetParams) (LockDeviceCommandTargetRow, error)
@@ -107,6 +110,9 @@ type Querier interface {
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
 	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
 	QueueIssueCopilot(ctx context.Context, arg QueueIssueCopilotParams) (uuid.UUID, error)
+	ReadAlgorithmRunAttempts(ctx context.Context, arg ReadAlgorithmRunAttemptsParams) ([]json.RawMessage, error)
+	ReadAlgorithmRunDetail(ctx context.Context, arg ReadAlgorithmRunDetailParams) (json.RawMessage, error)
+	ReadAlgorithmRunSource(ctx context.Context, arg ReadAlgorithmRunSourceParams) (ReadAlgorithmRunSourceRow, error)
 	ReadChannelEvents(ctx context.Context, arg ReadChannelEventsParams) ([]ReadChannelEventsRow, error)
 	ReadChannelTelemetry(ctx context.Context, arg ReadChannelTelemetryParams) ([]ReadChannelTelemetryRow, error)
 	ReadDeviceRelations(ctx context.Context, projectID int32) ([]json.RawMessage, error)
