@@ -19,11 +19,11 @@ test("member navigation hides management and ungranted agent capabilities", () =
 });
 
 test("project overview is the stable project root and switch target", () => {
-  assert.equal(projectNavigationHref(42, ""), "/projects/42");
-  assert.equal(projectNavigationHref(42, "devices"), "/projects/42/devices");
+  assert.equal(projectNavigationHref(42, ""), "/projects/detail/?projectId=42");
+  assert.equal(projectNavigationHref(42, "devices"), "/projects/devices/?projectId=42");
 });
 
 test("legacy alert list links migrate to the project issue list", () => {
-  assert.equal(legacyProjectEventListHref(42), "/projects/42/issues");
+  assert.equal(legacyProjectEventListHref(42), "/projects/issues/?projectId=42");
   assert(!visibleProjectNavigation("admin").some((item) => item.segment === "events"));
 });

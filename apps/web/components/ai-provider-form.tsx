@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { apiJSON, APIError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AIProviderView } from "@/lib/ai-providers";
@@ -15,18 +15,16 @@ function payload(formData: FormData) {
   };
 }
 
-export function AIProviderForm({ provider }: { provider?: AIProviderView }) {
-  const router = useRouter();
+export function AIProviderForm({ provider, onChanged }: { provider?: AIProviderView; onChanged?: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   async function request(url: string, method: string, body?: unknown) {
     setBusy(true); setError(null);
-    const response = await fetch(url, { method, headers: body ? { "content-type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined });
-    const result = await response.json();
-    setBusy(false);
-    if (!response.ok) { setError(result.error ?? "操作失败"); return false; }
-    router.refresh(); return true;
+    try {
+      await apiJSON(url, { method, headers: body ? { "content-type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
+      onChanged?.(); return true;
+    } catch (error) { setError(error instanceof APIError ? error.code : "操作失败，请重试。"); return false; }
+    finally { setBusy(false); }
   }
   async function submit(formData: FormData) {
     await request(provider ? `/api/admin/ai-providers/${provider.id}` : "/api/admin/ai-providers", provider ? "PATCH" : "POST", payload(formData));

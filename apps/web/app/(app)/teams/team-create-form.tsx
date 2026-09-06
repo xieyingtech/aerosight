@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Plus } from "lucide-react";
-import { createTeamAction } from "@/app/actions";
+import { apiJSON } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,11 +17,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function TeamCreateForm() {
-  const [state, action, pending] = useActionState(createTeamAction, {});
+export function TeamCreateForm({ onCreated }: { onCreated?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(async (_: { error?: string }, form: FormData): Promise<{ error?: string }> => {
+    const name = String(form.get("name") ?? "").trim();
+    if (!name || name.length > 100) return { error: "请输入 1–100 字符的团队名称" };
+    try { await apiJSON("/api/teams", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }); setOpen(false); onCreated?.(); return {}; }
+    catch { return { error: "创建团队失败，请重试。" }; }
+  }, {});
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg"><Plus />新建团队</Button>
       </DialogTrigger>

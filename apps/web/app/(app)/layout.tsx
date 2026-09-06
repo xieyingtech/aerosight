@@ -1,17 +1,5 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { SiteHeader } from "@/components/site-header";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { listProjects, requireUser } from "@/lib/data";
+import { ClientAppShell } from "@/components/client-app-shell";
 
-export default async function Layout({ children }: { children: React.ReactNode }) {
-  const [user, projects] = await Promise.all([requireUser(), listProjects()]);
-  return (
-    <SidebarProvider>
-      <AppSidebar projects={projects} user={user} />
-      <SidebarInset>
-        <SiteHeader />
-        <main className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</main>
-      </SidebarInset>
-    </SidebarProvider>
-  );
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <ClientAppShell>{children}</ClientAppShell>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   BellRingIcon, BotIcon, BoxesIcon, Building2Icon, ChevronLeftIcon, ChevronsUpDownIcon,
   CpuIcon, FolderKanbanIcon, GaugeIcon, LayoutDashboardIcon, MapIcon, PlaneTakeoffIcon,
@@ -40,7 +40,8 @@ export function AppSidebar({
   }>;
 }) {
   const pathname = usePathname();
-  const projectId = Number(pathname.match(/^\/projects\/(\d+)/)?.[1]);
+  const query = useSearchParams();
+  const projectId = Number(query.get("projectId") ?? pathname.match(/^\/projects\/(\d+)/)?.[1]);
   const currentProject = projects.find((project) => project.id === projectId);
   const navMain = [
     { title: "项目", url: "/projects", icon: <FolderKanbanIcon /> },
@@ -90,7 +91,7 @@ export function AppSidebar({
                   <DropdownMenuLabel>切换项目</DropdownMenuLabel>
                   {projects.map((project) => (
                     <DropdownMenuItem asChild key={project.id}>
-                      <Link href={`/projects/${project.id}`}><MapIcon />{project.name}</Link>
+                      <Link href={projectNavigationHref(project.id, "")}><MapIcon />{project.name}</Link>
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />

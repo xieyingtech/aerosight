@@ -32,7 +32,11 @@ export function NavMain({ items, label }: { items: NavItem[]; label: string }) {
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
-          const isActive = item.exact || item.url === "/admin" ? pathname === item.url : pathname.startsWith(item.url);
+          const targetPath = item.url.split("?")[0].replace(/\/$/, "");
+          const currentPath = pathname.replace(/\/$/, "");
+          const isActive = item.exact || targetPath === "/admin"
+            ? currentPath === targetPath
+            : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
           return (
             <Collapsible asChild defaultOpen={isActive} key={item.title}>
               <SidebarMenuItem>

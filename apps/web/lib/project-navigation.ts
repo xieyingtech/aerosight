@@ -36,8 +36,7 @@ export function visibleProjectNavigation(
 }
 
 export function projectNavigationHref(projectId: number, segment: string) {
-  const base = `/projects/${projectId}`;
-  return segment ? `${base}/${segment}` : base;
+  return `/projects/${segment || "detail"}/?projectId=${projectId}`;
 }
 
 export function legacyProjectEventListHref(projectId: number) {

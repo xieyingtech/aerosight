@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { listTeams } from "@/lib/data";
 import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
@@ -7,17 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TeamCreateForm } from "./team-create-form";
 
-export default async function TeamsPage({
-  searchParams
-}: {
-  searchParams: Promise<{ search?: string }>;
-}) {
-  const params = await searchParams;
-  const teams = await listTeams(params.search);
+export default function TeamsPage() {
+  return <Suspense fallback={<p role="status">正在加载…</p>}><TeamsContent /></Suspense>;
+}
+
+function TeamsContent() {
+  const params = useSearchParams();
+  const search = params.get("search") ?? "";
+  const state = useAPI<Record<string, unknown>[]>(`/api/teams?search=${encodeURIComponent(search)}`);
+  return <APIStateView state={state}>{(teams) => <TeamsView teams={teams} params={{ search }} onCreated={state.reload} />}</APIStateView>;
+}
+
+function TeamsView({ teams, params, onCreated }: { teams: Record<string, unknown>[]; params: { search: string }; onCreated: () => void }) {
 
   return (
     <Page
-      actions={<TeamCreateForm />}
+      actions={<TeamCreateForm onCreated={onCreated} />}
       description={`共 ${teams.length} 个团队`}
       title="团队"
     >
@@ -36,7 +40,7 @@ export default async function TeamsPage({
             key: "name",
             label: "团队",
             render: (item) => (
-              <Link className="font-medium text-primary hover:underline" href={`/teams/${String(item.id)}`}>
+              <Link className="font-medium text-primary hover:underline" href={`/teams/detail/?teamId=${String(item.id)}`}>
                 {String(item.name)}
               </Link>
             )
@@ -56,3 +60,9 @@ function roleLabel(role: string) {
   if (role === "admin") return "管理员";
   return "成员";
 }
+"use client";
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAPI } from "@/lib/use-api";
+import { APIStateView } from "@/components/api-state";

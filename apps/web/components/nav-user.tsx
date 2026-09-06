@@ -2,13 +2,23 @@
 
 import Link from "next/link";
 import { ChevronsUpDownIcon, LogOutIcon, UserIcon } from "lucide-react";
-import { logoutAction } from "@/app/actions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { logout } from "@/lib/api-client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 
 export function NavUser({ user }: { user: { name: string; email: string | null } }) {
   const { isMobile } = useSidebar();
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+  const signOut = async () => {
+    setPending(true);
+    try { await logout(); router.replace("/login"); }
+    catch { toast.error("退出失败，请重试。"); setPending(false); }
+  };
   const initials = user.name.slice(0, 2).toUpperCase();
 
   return (
@@ -40,9 +50,7 @@ export function NavUser({ user }: { user: { name: string; email: string | null }
               <DropdownMenuItem asChild><Link href="/profile"><UserIcon />个人中心</Link></DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <form action={logoutAction}>
-              <DropdownMenuItem asChild><button className="w-full" type="submit"><LogOutIcon />退出登录</button></DropdownMenuItem>
-            </form>
+            <DropdownMenuItem disabled={pending} onSelect={() => void signOut()}><LogOutIcon />退出登录</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
