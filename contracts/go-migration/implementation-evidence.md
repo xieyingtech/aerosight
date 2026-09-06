@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 7.2/6.1 浏览器验收第一批：固定根开发依赖 playwright 1.61.0，新增 pnpm test:production-browser，使用已构建生产 Go 二进制（工作目录为独立 .build 测试目录）、临时 PostGIS、测试 HTTPS 终止代理和真实 Edge。验证登录表单 hydration/提交、导航后项目列表加载完成、Secure/HttpOnly/SameSite=Lax Cookie、没有 pageerror 或意外 CSP violation，注入未允许内联脚本后浏览器报告拦截且脚本未执行。最终成功证据位于 .build/production-browser-616bff9a-c0ca-4bbf-8027-856e2470b0a3/result.json 与 projects.png，已查看截图确认空列表显示完整。首次截图在加载中，补充可见“新建项目”断言后重跑成功；修复 TLS 测试连接清理，进程和容器已退出。7.2 的地图/直播以及 6.1 完整开发/生产会话生命周期仍待后续验收，任务不提前勾选。
+
 - 7.2 第二批：使用已固定版本 unrolled/secure 的 ContentSecurityPolicy/Process 为每个 HTML 应用脚本 self + 当前页哈希策略，禁用脚本属性、eval、object 和外部嵌入本应用；保留内联样式及 blob worker。新增 CSP_MAP_ORIGINS（默认 MapLibre demo tiles）和 CSP_MEDIA_ORIGINS，加载配置时拒绝通配符、凭据、路径、查询、片段及指令注入，生产只接受 HTTPS，开发可用 HTTP；媒体/地图来源不扩展 script-src。页面 GET/HEAD/304/404、页间哈希隔离、配置拒绝测试及静态 Gin 集成测试通过。依据官方 https://github.com/unrolled/secure 与本地 v1.17.0 API 接入；Context7 未提供该库准确匹配。生产浏览器 hydration、地图 worker 和直播验收尚未执行，7.2 保持未勾选。
 
 - 7.2 第一批：prepare:web 按导出 HTML 生成 csp-manifest.json，记录每页文件 SHA-256 和去重排序的内联脚本 CSP 哈希；Docker 构建包含生成模块。生产 Embedded 使用 Go HTML tokenizer 独立重新计算脚本哈希，拒绝清单缺失、文件/哈希漂移、未知页面及版本不匹配；静态 handler 不对外提供清单。Node 测试验证 Unicode、原始实体文本、带 > 的引号属性、换行归一化和字节差异；Go 故障注入与实际 333 文件生产 embed 测试通过，pnpm build:server 通过。此批尚未发送 CSP 响应头，地图/媒体来源配置与生产浏览器验收待后续完成，7.2 保持未勾选。

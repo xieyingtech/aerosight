@@ -32,6 +32,8 @@ Go unit tests use the `dev` tag so a frontend export is not required. Production
 
 `pnpm test:dev-proxy` runs the actual Next/Go development launcher against an isolated PostGIS Docker container. It requires installed dependencies, Go and Docker, and checks authentication, CSRF, cookies, signed assets, Range/HEAD and SSE cancellation through Next rewrites. It stops its processes and test database afterward; logs are retained under `.build/dev-proxy-<id>/`. On Windows the test uses process-tree termination for cleanup; this does not test graceful production shutdown.
 
+After `pnpm build`, `pnpm test:production-browser` uses the production Go binary, disposable PostGIS and a local HTTPS termination fixture to test login hydration, the loaded project list, Secure session cookies and CSP rejection of an unapproved inline script. It requires Docker, OpenSSL and a Playwright browser; Windows uses installed Edge by default, other platforms use Playwright Chromium. `PLAYWRIGHT_CHANNEL` can select another installed channel. Screenshots, results and logs remain in `.build/production-browser-<id>/`. The temporary certificate is trusted only by the test browser context. This test does not yet cover map/media behavior or graceful shutdown.
+
 ## Production startup
 
 ```bash

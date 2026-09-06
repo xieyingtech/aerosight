@@ -17,6 +17,7 @@
     "test:worker": "pnpm prepare:server && cd apps/server && go test -tags dev ./...",
     "test:security": "node scripts/test-security-acceptance.mjs",
     "test:dev-proxy": "node scripts/test-dev-proxy.mjs",
+    "test:production-browser": "node scripts/test-production-browser.mjs",
     "test:all": "pnpm test && pnpm test:migrations && pnpm test:security",
     "benchmark:load": "node scripts/legacy-db/benchmark-load.mjs",
     "drill:fresh-environment": "node scripts/fresh-environment-drill.mjs",
@@ -33,7 +34,8 @@
   },
   "devDependencies": {
     "@fission-ai/openspec": "1.10.0",
+    "@types/pg": "^8.23.1",
     "pg": "8.23.0",
-    "@types/pg": "^8.23.1"
+    "playwright": "1.61.0"
   }
 }
