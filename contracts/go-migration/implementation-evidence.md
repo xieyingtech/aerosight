@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.8 第三批迁移：浏览器直播 playback API 接入 Go/sqlc；在事务内锁授权与会话，复核 stream.* 能力显式 deny/allow，签发 60 秒候选并更新 locator 期限。保留 requested/stopped/无 ref/无协议原因、模拟器 locator、WebRTC→HLS 顺序、数值 session ID 与 null 字段；模拟器固定签名与原 TS 字节一致。真实 PostGIS 测试验证过期 locator 刷新、签发 DJI token 通过 media-auth、owner 显式 deny、成员独立能力授权、停止后不可用、跨项目与撤权拒绝；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动/停止仍待迁移，5.8 保持未勾选。
+
 - 5.8 第二批迁移：media-auth 机器接口与播放 token 签发/验证核心。按原接口区分管理员 API、绑定活动 live_stream 的适配器推流凭据、read/playback 的路径/协议/期限 token；额外 MediaMTX 字段不影响解析，不依赖 Cookie/CSRF，也不创建浏览器会话。保留 MEDIA_ADMIN_USER/PASSWORD 原字符串；加密凭据沿用 device-adapter AAD。固定时间 token 与原 TS 字节一致。真实 PostGIS 测试覆盖管理员凭据、推流状态/路径/错误密码/错误 AAD、query token、协议/路径越界与过期，重跑资产访问集成测试；Go 非数据库全包、原 TS 13 项直播核心测试、sqlc 与 OpenSpec strict 通过。直播启动/停止及浏览器播放地址签发 API 仍待迁移，5.8 保持未勾选。
 
 - 5.8 第一批迁移：媒体 access/content 接入 Go/sqlc。签发与读取分别复核项目和敏感下载权限，已发布 evidence_links 也触发敏感规则；敏感下载签发使用事务审计，签名失败回滚审计。HMAC 与原 TS 固定样本逐字节一致，保留 120 秒 TTL、动作/项目/资产绑定及 NFKC 下载名。内容通过限定项目根的文件句柄流式输出，拒绝路径穿越/反斜杠/目录别名/符号链接逃逸，并支持 Range、HEAD、私有 no-store。真实 PostGIS 测试覆盖全文/部分与后缀范围/416/HEAD、过期和动作篡改、敏感下载/权限别名/审计回滚/撤权后旧签名拒绝/跨项目；原 TS 3 项测试、Go 非数据库全包测试、sqlc 与 OpenSpec strict 通过。Windows 无创建符号链接权限，该分支测试未执行，需在 Linux 生产回归中补验；词法路径拒绝已验证。直播启动/停止/播放及 media-auth 仍待迁移，5.8 保持未勾选。

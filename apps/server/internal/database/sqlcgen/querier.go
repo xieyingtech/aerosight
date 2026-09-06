@@ -108,6 +108,7 @@ type Querier interface {
 	LockIssueAssigneeAgent(ctx context.Context, arg LockIssueAssigneeAgentParams) (LockIssueAssigneeAgentRow, error)
 	LockIssueAssigneeUser(ctx context.Context, arg LockIssueAssigneeUserParams) (int32, error)
 	LockIssueMutation(ctx context.Context, arg LockIssueMutationParams) (int32, error)
+	LockLivePlayback(ctx context.Context, arg LockLivePlaybackParams) (LockLivePlaybackRow, error)
 	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
@@ -157,6 +158,7 @@ type Querier interface {
 	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
 	SetAlgorithmProviderCredential(ctx context.Context, arg SetAlgorithmProviderCredentialParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
+	SetLivePlaybackExpiry(ctx context.Context, arg SetLivePlaybackExpiryParams) error
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotDeviceGrants(ctx context.Context, arg SnapshotDeviceGrantsParams) ([]json.RawMessage, error)
