@@ -60,23 +60,13 @@ test("concurrent credential encryption produces isolated authenticated envelopes
   });
 });
 
-test("connection mutations serialize connector rows and never expose credential columns", async () => {
-  const lifecycleSource = await readFile(new URL("./dji-flighthub-lifecycle.ts", import.meta.url), "utf8");
-  const connectionSource = await readFile(new URL("./dji-flighthub-connections.ts", import.meta.url), "utf8");
-  const routeSource = await readFile(
-    new URL("../app/api/projects/[id]/connectors/dji-flighthub/route.ts", import.meta.url),
-    "utf8"
-  );
-
-  assert.match(lifecycleSource, /for update of adapter/i);
-  assert.match(lifecycleSource, /pg_advisory_xact_lock/);
-  assert.match(connectionSource, /withAuditedProjectWrite/);
-  assert.match(connectionSource, /credential_envelope_json/);
-  assert(!routeSource.includes("credential_envelope_json"));
-  assert(!routeSource.includes("ciphertext"));
-  assert(!routeSource.includes("authenticationTag"));
-  assert(!routeSource.includes("localStorage"));
-  assert(!routeSource.includes("sessionStorage"));
+test("Go connector writes lock rows and read projections exclude credentials", async () => {
+  const writes = await readFile(new URL("../../server/internal/database/queries/flighthub_writes.sql", import.meta.url), "utf8");
+  const reads = await readFile(new URL("../../server/internal/database/queries/flighthub_reads.sql", import.meta.url), "utf8");
+  assert.match(writes, /pg_advisory_xact_lock/);
+  assert.match(writes, /for update of adapter/i);
+  assert.match(writes, /credential_envelope_json/);
+  assert.doesNotMatch(reads, /credential_envelope_json|ciphertext|authenticationTag|select\s+\*/i);
 });
 
 test("schema enforces one external FlightHub scope per AeroSight project without a special table", async () => {

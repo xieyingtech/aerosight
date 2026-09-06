@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { DataTable } from "@/components/data-table";
@@ -61,7 +63,6 @@ function ProjectsView({ projects, params }: { projects: Record<string, unknown>[
     </Page>
   );
 }
-"use client";
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";

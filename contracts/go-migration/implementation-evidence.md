@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- 首次生产静态导出通过：比对冻结清单确认全部 43 个 Next Route Handler 已有迁移记录后移除，删除无页面调用的 Server Actions；生产 phase 启用 output:export/trailingSlash，根页客户端跳转，开发 API/资产 rewrites 保留。构建发现并修正项目列表、团队列表及 AI provider 页 use client 指令位置错误（此前 tsc 无法捕获）。DATABASE_URL/AUTH_SECRET/CREDENTIAL_ENCRYPTION_KEY 为空时 next build 成功，全部页面标为 Static，生成 out；扫描 HTML/JS 未见上述配置名、GO_API_ORIGIN 或默认内部 Go 地址。FlightHub 旧 Route Handler 源码边界测试迁至 Go sqlc 写锁及无凭据读投影；293 项 Web 测试与 OpenSpec strict 通过。Auth.js、pg、AI SDK 和仅服务端 TS 库仍在仓库，类型需要解耦后继续清理；因此 6.6 未完成。Go embed、无 Node 运行与完整静态浏览器验收尚待执行，不能把本次导出成功视为单服务交付完成。
+
+
 - 实时前端接线：设备命令/直播启动、频道启动、直播停止、播放授权/下载、快照刷新和回放统一使用 Go API transport，保留原 JSON/取消信号和同源媒体行为；网络/解析失败恢复操作 busy 并给出状态提示，不自动重放写请求。实时选择更新保留 projectId 和其他筛选，只替换 deviceId/streamId，新增重复参数及清空选择回归。历史媒体按项目/资源 key 隔离，避免切换时复用旧 URL；刷新失败明确提示仍显示上次快照。删除无调用方的旧事件操作/草案按钮，当前历史事件页继续只读，Go 对应兼容 API 保留。TypeScript 和全部 293 项 Web 单元测试通过；实际 SSE/代理/Range/生产浏览器联调仍在第 6/8 节，未以单元测试替代。
 
 

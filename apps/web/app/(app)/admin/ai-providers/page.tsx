@@ -1,3 +1,5 @@
+"use client";
+
 import { AIProviderForm } from "@/components/ai-provider-form";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +21,6 @@ export default function AdminAIProvidersPage() {
     </div>
   </Page>}</APIStateView>;
 }
-"use client";
 
 import { useAPI } from "@/lib/use-api";
 import { APIStateView } from "@/components/api-state";

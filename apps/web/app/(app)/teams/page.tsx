@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
@@ -60,7 +62,6 @@ function roleLabel(role: string) {
   if (role === "admin") return "管理员";
   return "成员";
 }
-"use client";
 
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
