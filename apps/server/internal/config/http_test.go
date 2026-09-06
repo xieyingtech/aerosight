@@ -8,6 +8,10 @@ import (
 func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
 	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	get := func(k string) string { return env[k] }
+	env["ALGORITHM_ALLOWED_HOSTS"] = " algorithm.example, , *.trusted.example "
+	if cfg, err := LoadHTTP(get); err != nil || len(cfg.AlgorithmAllowedHosts) != 2 || cfg.AlgorithmAllowedHosts[0] != "algorithm.example" || cfg.AlgorithmAllowedHosts[1] != "*.trusted.example" {
+		t.Fatalf("algorithm allowlist %+v %v", cfg.AlgorithmAllowedHosts, err)
+	}
 	if _, err := LoadHTTP(get); err != nil {
 		t.Fatal(err)
 	}

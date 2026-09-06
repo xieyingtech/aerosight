@@ -19,6 +19,7 @@ type HTTP struct {
 	SessionLifetime, SessionIdle, RequestTimeout, ShutdownTimeout time.Duration
 	LoginLimit, WriteLimit                                        int
 	MetricsToken                                                  string
+	AlgorithmAllowedHosts                                         []string
 }
 
 func LoadHTTP(get func(string) string) (HTTP, error) {
@@ -75,6 +76,11 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 					return cfg, fmt.Errorf("TRUSTED_PROXIES contains an invalid IP/CIDR")
 				}
 			}
+		}
+	}
+	for _, host := range strings.Split(get("ALGORITHM_ALLOWED_HOSTS"), ",") {
+		if host = strings.TrimSpace(host); host != "" {
+			cfg.AlgorithmAllowedHosts = append(cfg.AlgorithmAllowedHosts, host)
 		}
 	}
 	return cfg, nil
