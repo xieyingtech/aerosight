@@ -7,6 +7,26 @@ import (
 	"time"
 )
 
+func TestCSPOriginConfiguration(t *testing.T) {
+	for _, raw := range []string{"*", "https:", "https://*.example", "https://user:pass@example.test", "https://example.test/path", "https://example.test?", "https://example.test?q=1", "https://example.test#fragment", "https://example.test;script-src", "https://example.test\nscript-src 'unsafe-inline'", "data:", "http://media.example"} {
+		if _, err := cspOrigins(raw, false); err == nil {
+			t.Fatalf("accepted production origin %q", raw)
+		}
+	}
+	origins, err := cspOrigins(" https://maps.example/,https://maps.example,https://media.example:8889 ", false)
+	if err != nil || len(origins) != 2 || origins[0] != "https://maps.example" || origins[1] != "https://media.example:8889" {
+		t.Fatalf("origins: %+v %v", origins, err)
+	}
+	if _, err := cspOrigins("http://localhost:8889", true); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	cfg, err := LoadHTTP(func(k string) string { return env[k] })
+	if err != nil || len(cfg.CSPMapOrigins) != 1 || cfg.CSPMapOrigins[0] != "https://demotiles.maplibre.org" || len(cfg.CSPMediaOrigins) != 0 {
+		t.Fatalf("default CSP: %+v %v", cfg.CSPMapOrigins, err)
+	}
+}
+
 func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
 	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	get := func(k string) string { return env[k] }

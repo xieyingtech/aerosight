@@ -12,11 +12,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/unrolled/secure"
 )
 
 type asset struct {
 	data              []byte
 	contentType, etag string
+	policy            *secure.Secure
 }
 type Handler struct{ files map[string]asset }
 
@@ -63,7 +66,7 @@ func New(source fs.FS) (*Handler, error) {
 		if contentType == "" {
 			contentType = "application/octet-stream"
 		}
-		h.files[name] = asset{data, contentType, fmt.Sprintf(`"%x"`, sha256.Sum256(data))}
+		h.files[name] = asset{data: data, contentType: contentType, etag: fmt.Sprintf(`"%x"`, sha256.Sum256(data))}
 		return nil
 	})
 	if err != nil {
@@ -74,6 +77,7 @@ func New(source fs.FS) (*Handler, error) {
 			return nil, fmt.Errorf("missing static export: %s", required)
 		}
 	}
+	h.ConfigureCSP(nil, nil)
 	return h, nil
 }
 
@@ -117,6 +121,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		if path.Ext(name) == "" || path.Ext(name) == ".html" {
 			file = h.files["404.html"]
+			if file.policy != nil {
+				if err := file.policy.Process(w, r); err != nil {
+					return
+				}
+			}
 			w.Header().Set("Content-Type", file.contentType)
 			w.Header().Set("Content-Length", strconv.Itoa(len(file.data)))
 			w.WriteHeader(404)
@@ -130,6 +139,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(name, "_next/static/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	}
+	if file.policy != nil {
+		if err := file.policy.Process(w, r); err != nil {
+			return
+		}
 	}
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("ETag", file.etag)

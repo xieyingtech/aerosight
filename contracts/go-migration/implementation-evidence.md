@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 7.2 第二批：使用已固定版本 unrolled/secure 的 ContentSecurityPolicy/Process 为每个 HTML 应用脚本 self + 当前页哈希策略，禁用脚本属性、eval、object 和外部嵌入本应用；保留内联样式及 blob worker。新增 CSP_MAP_ORIGINS（默认 MapLibre demo tiles）和 CSP_MEDIA_ORIGINS，加载配置时拒绝通配符、凭据、路径、查询、片段及指令注入，生产只接受 HTTPS，开发可用 HTTP；媒体/地图来源不扩展 script-src。页面 GET/HEAD/304/404、页间哈希隔离、配置拒绝测试及静态 Gin 集成测试通过。依据官方 https://github.com/unrolled/secure 与本地 v1.17.0 API 接入；Context7 未提供该库准确匹配。生产浏览器 hydration、地图 worker 和直播验收尚未执行，7.2 保持未勾选。
+
 - 7.2 第一批：prepare:web 按导出 HTML 生成 csp-manifest.json，记录每页文件 SHA-256 和去重排序的内联脚本 CSP 哈希；Docker 构建包含生成模块。生产 Embedded 使用 Go HTML tokenizer 独立重新计算脚本哈希，拒绝清单缺失、文件/哈希漂移、未知页面及版本不匹配；静态 handler 不对外提供清单。Node 测试验证 Unicode、原始实体文本、带 > 的引号属性、换行归一化和字节差异；Go 故障注入与实际 333 文件生产 embed 测试通过，pnpm build:server 通过。此批尚未发送 CSP 响应头，地图/媒体来源配置与生产浏览器验收待后续完成，7.2 保持未勾选。
 
 - 完成 6.6：Web 包移除 pg/@types/pg，快照与回放 core 仅保留浏览器类型；原 SQL 实现和四项历史测试迁到 contracts/go-migration/legacy-web，五个数据库维护脚本迁到 scripts/legacy-db。根包仅以开发依赖保留 pg，正式 db:migrate 仍由 Go 执行；pnpm test:web / test:security 继续执行历史测试。新增 check:web-boundary 纳入 pnpm check，扫描 252 个 Web 源文件及依赖，拒绝 pg/Auth.js/服务端 AI/next server imports、Route Handlers、Server Actions 与历史 DB 模块导入。清除 DATABASE_URL、AUTH_SECRET、CSRF_AUTH_KEY、GO_API_ORIGIN 后 pnpm build 通过（Web 无本地环境文件，333 静态文件与 52 迁移嵌入 Go）；导出 JS/HTML/TXT 中未发现这些服务端配置名。pnpm check 通过（288 Web + 4 历史测试，Go 本轮非数据库测试），frozen/offline lockfile 安装和安全测试通过。迁移回归、升级/回滚脚本及基准实际执行通过；基准 fixture 补齐迁移后必填 device_type_id，未改运行时业务。历史 SQL/回滚工具验证不代替 8.2/8.3/8.4 的统一应用生产演练。

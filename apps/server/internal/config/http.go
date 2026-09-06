@@ -23,6 +23,7 @@ type HTTP struct {
 	AlgorithmAllowedHosts                                         []string
 	MediaAdminUser, MediaAdminPassword                            string
 	AIRequestTimeout                                              time.Duration
+	CSPMapOrigins, CSPMediaOrigins                                []string
 }
 
 func LoadHTTP(get func(string) string) (HTTP, error) {
@@ -92,5 +93,37 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 	}
 	cfg.MediaAdminUser = get("MEDIA_ADMIN_USER")
 	cfg.MediaAdminPassword = get("MEDIA_ADMIN_PASSWORD")
+	mapOrigins := get("CSP_MAP_ORIGINS")
+	if mapOrigins == "" {
+		mapOrigins = "https://demotiles.maplibre.org"
+	}
+	if cfg.CSPMapOrigins, err = cspOrigins(mapOrigins, cfg.Development); err != nil {
+		return cfg, fmt.Errorf("CSP_MAP_ORIGINS: %w", err)
+	}
+	if cfg.CSPMediaOrigins, err = cspOrigins(get("CSP_MEDIA_ORIGINS"), cfg.Development); err != nil {
+		return cfg, fmt.Errorf("CSP_MEDIA_ORIGINS: %w", err)
+	}
 	return cfg, nil
+}
+
+func cspOrigins(raw string, development bool) ([]string, error) {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		u, err := url.Parse(value)
+		if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || (u.Path != "" && u.Path != "/") ||
+			(u.Scheme != "https" && !(development && u.Scheme == "http")) || strings.ContainsAny(value, "*;'\"<>\r\n\t ") {
+			return nil, fmt.Errorf("must contain comma-separated HTTPS origins (HTTP allowed in development)")
+		}
+		origin := u.Scheme + "://" + u.Host
+		if !seen[origin] {
+			result = append(result, origin)
+			seen[origin] = true
+		}
+	}
+	return result, nil
 }

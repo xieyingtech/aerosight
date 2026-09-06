@@ -11,12 +11,37 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/unrolled/secure"
 	"golang.org/x/net/html"
 )
 
 type cspEntry struct {
 	Digest string   `json:"digest"`
 	Hashes []string `json:"hashes"`
+}
+
+// ConfigureCSP must run before serving requests. Sources come from validated
+// application configuration; they never come from request headers or URLs.
+func (h *Handler) ConfigureCSP(mapOrigins, mediaOrigins []string) {
+	for name, file := range h.files {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		scripts := "'self'"
+		for _, hash := range scriptHashes(file.data) {
+			scripts += " '" + hash + "'"
+		}
+		maps := strings.Join(mapOrigins, " ")
+		media := strings.Join(mediaOrigins, " ")
+		policy := "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; " +
+			"script-src " + scripts + "; script-src-attr 'none'; " +
+			"style-src 'self' 'unsafe-inline'; font-src 'self' " + maps + "; " +
+			"img-src 'self' data: blob: " + maps + " " + media + "; " +
+			"connect-src 'self' " + maps + " " + media + "; " +
+			"worker-src 'self' blob:; media-src 'self' blob: " + media + "; frame-src 'self' " + media + ";"
+		file.policy = secure.New(secure.Options{ContentSecurityPolicy: policy, ReferrerPolicy: "same-origin"})
+		h.files[name] = file
+	}
 }
 
 // Read the actual script text independently of the build-time extractor.

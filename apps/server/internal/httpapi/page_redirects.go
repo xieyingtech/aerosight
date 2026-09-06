@@ -101,4 +101,9 @@ func (s *Server) pageNotFound(c *gin.Context) {
 	s.failure(c, 404, "NOT_FOUND")
 }
 
-func (s *Server) AttachStaticPages(handler http.Handler) { s.staticPages = handler }
+func (s *Server) AttachStaticPages(handler http.Handler) {
+	if pages, ok := handler.(interface{ ConfigureCSP([]string, []string) }); ok {
+		pages.ConfigureCSP(s.cfg.CSPMapOrigins, s.cfg.CSPMediaOrigins)
+	}
+	s.staticPages = handler
+}

@@ -50,6 +50,8 @@ The deployment executable embeds frontend pages and migrations; it can run witho
 
 Supply environment variables directly when running the executable. Use `AEROSIGHT_ENV=production`, an HTTPS `PUBLIC_ORIGIN`, and an appropriate `HTTP_LISTEN_ADDRESS` behind the deployment TLS endpoint. Database, MQTT and MediaMTX remain external services. The separate callback listener belongs to the legacy worker maintenance command; unified `serve` handles callbacks on its HTTP port.
 
+Static HTML receives a page-specific CSP with build-verified inline script hashes. `CSP_MAP_ORIGINS` defaults to `https://demotiles.maplibre.org`; `CSP_MEDIA_ORIGINS` lists the browser-visible MediaMTX origins used for playback. Both accept comma-separated HTTPS origins without paths, credentials or wildcards (HTTP is allowed in development). Media origins allow connections, images, video and playback frames, but never external scripts. Map workers may use `blob:`; inline styles remain enabled for the UI. Go development mode serves no frontend pages, so Next continues to manage its own HMR resources.
+
 The root Dockerfile builds the Next export and Go executable in separate stages. Its final image contains the Go executable and CA certificates, runs as UID/GID 10001, and exposes application port 8080. Node.js and the source checkout are not copied into the runtime image. Build context rules exclude local environment files and generated artifacts.
 
 ```bash
