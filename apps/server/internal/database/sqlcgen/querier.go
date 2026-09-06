@@ -18,6 +18,7 @@ type Querier interface {
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) (int64, error)
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
 	CompleteProjectAudit(ctx context.Context, arg CompleteProjectAuditParams) (int64, error)
+	CountDeviceCommandConflicts(ctx context.Context, arg CountDeviceCommandConflictsParams) (int32, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
 	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
 	CreateProject(ctx context.Context, arg CreateProjectParams) (int32, error)
@@ -26,6 +27,7 @@ type Querier interface {
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
+	FindExistingDeviceCommand(ctx context.Context, arg FindExistingDeviceCommandParams) (FindExistingDeviceCommandRow, error)
 	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
 	FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error)
 	FindQueuedFlightHubSync(ctx context.Context, arg FindQueuedFlightHubSyncParams) (string, error)
@@ -36,6 +38,7 @@ type Querier interface {
 	GetTeamManager(ctx context.Context, arg GetTeamManagerParams) (int32, error)
 	GetUser(ctx context.Context, id int32) (GetUserRow, error)
 	HasUsers(ctx context.Context) (bool, error)
+	InsertDeviceCommand(ctx context.Context, arg InsertDeviceCommandParams) (InsertDeviceCommandRow, error)
 	InsertPlatformAudit(ctx context.Context, arg InsertPlatformAuditParams) (int64, error)
 	InsertProjectAudit(ctx context.Context, arg InsertProjectAuditParams) (int64, error)
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
@@ -49,6 +52,8 @@ type Querier interface {
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]ListProjectsRow, error)
 	ListTeamProjects(ctx context.Context, teamID int32) ([]ListTeamProjectsRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
+	LockDeviceCommandGrants(ctx context.Context, arg LockDeviceCommandGrantsParams) ([]LockDeviceCommandGrantsRow, error)
+	LockDeviceCommandTarget(ctx context.Context, arg LockDeviceCommandTargetParams) (LockDeviceCommandTargetRow, error)
 	LockFlightHubConnector(ctx context.Context, arg LockFlightHubConnectorParams) (LockFlightHubConnectorRow, error)
 	LockFlightHubSyncQueue(ctx context.Context, lockKey string) error
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
