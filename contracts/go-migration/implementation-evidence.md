@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 6.2：生产浏览器增加 browser-page-states 验收，覆盖项目列表、团队列表、个人页和五个管理页面（总览/用户/团队/项目/AI Provider）。使用浏览器网络 fixture 控制请求等待、返回 503 和 403，逐页断言加载提示、失败提示、移除 fixture 后重试真实 Go API 成功，以及拒绝时不渲染内容标题；项目真实空库列表显示“暂无数据”，团队/个人及管理页面在空资源状态正常加载。公共 SessionProvider 的会话 503 提示与重试恢复通过。另在真实 PostGIS 将账号平台角色降为 user，浏览器管理布局明确拒绝，实际 /api/admin/overview 返回 403，再恢复角色继续原流程。成功证据 .build/production-browser-3b57e9b2-baa9-494f-9bac-f60403e3f366/page-states.json 与 result.json；八页 fixture 验证的是 UI 状态处理，真实降权验证后端授权，不混淆两者。完整资源/会话/CSP 原流程同时通过，无 pageerror。7.2 地图/媒体加载验收仍未完成。
+
 - 完成 6.1：同一浏览器验收脚本增加 --development / pnpm test:development-browser，通过真实 scripts/dev.mjs 的 Next beforeFiles 代理执行登录、CSRF 保护的团队/项目创建、详情重载、退出后 session 401、未登录详情跳转及登录后 session expiry 失效；开发 HTTP Cookie 为 HttpOnly/SameSite=Lax 且非 Secure。首次真实浏览器发现 Next 16 阻止 127.0.0.1 HMR，按官方 allowedDevOrigins 文档在 development phase 仅加入 PUBLIC_ORIGIN 主机名后通过，日志不再出现该拒绝。成功证据 .build/development-browser-3d3b3b2f-2905-4519-83aa-33156f5d057a；共用脚本的生产分支再次通过，证据 .build/production-browser-1a5d12a0-b8e4-4eb9-82c9-6b1701b509ed，仍验证 Secure Cookie 与 CSP 拦截。pnpm typecheck、diff 检查通过；两次运行均退出并清理。API 客户端保留同源相对路径限制、CSRF 获取/更新以及 401 失效事件，浏览器验证覆盖实际调用链。
 
 - 6.1/6.3 生产浏览器第二批：扩展 test:production-browser，真实界面创建团队、刷新团队列表、选择默认可管理团队创建项目、导航到固定详情 query URL 并重新加载，验证构建后新增项目无需重建。通过用户菜单退出后 API session 返回 401，直接访问项目详情回到登录页；再次登录后项目仍可见，测试库将 session expiry 设为过去后刷新会回到登录。过程无 pageerror，详情页无意外 CSP violation。真实 Edge 成功运行证据 .build/production-browser-8ed406a9-9b34-4dd0-b127-e2ecd17a3db1/result.json 与 created-project.png；已查看截图确认新项目名称和统计卡片可见。地图只显示容器，不据此认定底图/worker/直播通过；开发浏览器会话和其他嵌套详情仍未覆盖，6.1/6.3/7.2 保持未勾选。

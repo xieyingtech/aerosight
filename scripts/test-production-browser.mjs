@@ -7,6 +7,7 @@ import { request as httpRequest } from 'node:http';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
+import { verifyPageStates } from './browser-page-states.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -93,6 +94,8 @@ try {
   const cookie=(await context.cookies()).find(cookie=>cookie.name==='aerosight_session');
   assert(cookie && cookie.secure===!development && cookie.httpOnly && cookie.sameSite==='Lax',`${mode} session cookie policy`);
   await page.screenshot({path:resolve(output,'projects.png'),fullPage:true});
+  const pageStates = development ? [] : await verifyPageStates(page, origin);
+  writeFileSync(resolve(output,'page-states.json'),JSON.stringify({pages:pageStates},null,2));
   await page.getByRole('link',{name:'团队',exact:true}).click();
   await page.getByRole('button',{name:'新建团队',exact:true}).click();
   await page.getByLabel('团队名称',{exact:true}).fill('Browser acceptance team');
@@ -110,6 +113,15 @@ try {
   await page.screenshot({path:resolve(output,'created-project.png'),fullPage:true});
   assert.deepEqual(errors,[],'new resource hydration/runtime errors');
   assert.deepEqual(await page.evaluate(()=>window.cspViolations),[],'new resource CSP violations');
+  if (!development) {
+    command('docker',['exec',container,'psql','-U','postgres','-d','postgres','-c',"update users set role='user' where email='admin@example.com'"]);
+    await page.goto(origin+'/admin/');
+    await page.getByRole('alert').filter({hasText:'你没有平台管理权限。'}).waitFor({state:'visible'});
+    assert.equal((await context.request.get(origin+'/api/admin/overview')).status(),403,'server accepted revoked admin role');
+    command('docker',['exec',container,'psql','-U','postgres','-d','postgres','-c',"update users set role='admin' where email='admin@example.com'"]);
+    await page.goto(detailURL);
+    await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
+  }
   await page.getByRole('button',{name:/admin@example.com/}).click();
   await page.getByRole('menuitem',{name:'退出登录',exact:true}).click();
   await page.waitForURL(url=>url.pathname==='/login/' || url.pathname==='/login');

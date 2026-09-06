@@ -38,6 +38,8 @@ After `pnpm build`, `pnpm test:production-browser` uses the production Go binary
 
 `pnpm test:development-browser` runs the same resource and session lifecycle interactions through the actual Next development launcher, using HTTP and development cookies. It needs Docker and a Playwright browser, but no OpenSSL. Next's `allowedDevOrigins` follows the hostname in development `PUBLIC_ORIGIN`, including `127.0.0.1` when configured. Failure screenshots and details are saved alongside the service log.
 
+The production browser run also checks loading, retry and API-denial UI states for projects, teams, profile and all administration pages using controlled response fixtures. It separately revokes the actual database administrator role and verifies both the layout guard and the API reject access.
+
 ```bash
 pnpm build
 pnpm start
