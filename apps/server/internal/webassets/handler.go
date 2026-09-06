@@ -42,6 +42,9 @@ func New(source fs.FS) (*Handler, error) {
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("non-regular web asset: %s", name)
 		}
+		if name == "csp-manifest.json" {
+			return nil
+		}
 		data, err := fs.ReadFile(source, name)
 		if err != nil {
 			return err

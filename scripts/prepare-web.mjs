@@ -1,5 +1,6 @@
 import { readdir, readFile, mkdir, writeFile, unlink, lstat } from 'node:fs/promises';
 import { resolve, relative, dirname, sep } from 'node:path';
+import { pageCSPEntry } from './web-csp.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const source = resolve(root, 'apps/web/out');
@@ -29,9 +30,14 @@ function destination(name) {
 await mkdir(target,{recursive:true});
 if ((await lstat(target)).isSymbolicLink()) throw new Error('Web asset destination is a symlink');
 const old = await filesIn(target);
+const cspPages = {};
 for (const name of names) {
   await mkdir(dirname(destination(name)),{recursive:true});
-  await writeFile(destination(name), await readFile(resolve(source,name)));
+  const bytes = await readFile(resolve(source,name));
+  await writeFile(destination(name), bytes);
+  if (name.endsWith('.html')) cspPages[name] = pageCSPEntry(bytes);
 }
-for (const name of old) if (!names.includes(name)) await unlink(destination(name));
+const cspName = 'csp-manifest.json';
+await writeFile(destination(cspName), JSON.stringify({version:1,pages:cspPages})+'\n');
+for (const name of old) if (!names.includes(name) && name !== cspName) await unlink(destination(name));
 console.log(`Prepared ${names.length} static export files for Go embed`);

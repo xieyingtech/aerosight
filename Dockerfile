@@ -5,7 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
 RUN --mount=type=cache,id=aerosight-pnpm,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 COPY apps/web ./apps/web
-COPY scripts/prepare-web.mjs scripts/prepare-server.mjs ./scripts/
+COPY scripts/prepare-web.mjs scripts/web-csp.mjs scripts/prepare-server.mjs ./scripts/
 COPY db/migrations ./db/migrations
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build:web && node scripts/prepare-web.mjs && node scripts/prepare-server.mjs

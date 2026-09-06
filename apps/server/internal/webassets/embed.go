@@ -16,5 +16,12 @@ func Embedded() (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New(source)
+	handler, err := New(source)
+	if err != nil {
+		return nil, err
+	}
+	if err := handler.validateCSP(source); err != nil {
+		return nil, err
+	}
+	return handler, nil
 }
