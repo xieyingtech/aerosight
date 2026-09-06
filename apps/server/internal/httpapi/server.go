@@ -19,6 +19,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync/atomic"
@@ -26,20 +27,21 @@ import (
 )
 
 type Server struct {
-	mediaStorageRoot string
-	networkResolver  device.HostResolver
-	networkProbe     device.EndpointProbe
-	credentialSecret string
-	flightHub        *flightHubService
-	ready            atomic.Bool
-	router           *gin.Engine
-	sessions         *scs.SessionManager
-	store            *postgresstore.PostgresStore
-	queries          *sqlcgen.Queries
-	db               *sql.DB
-	logger           *slog.Logger
-	cfg              config.HTTP
-	loginRate        *httprate.RateLimiter
+	aiHTTPClientFactory func(*url.URL, []netip.Addr) *http.Client
+	mediaStorageRoot    string
+	networkResolver     device.HostResolver
+	networkProbe        device.EndpointProbe
+	credentialSecret    string
+	flightHub           *flightHubService
+	ready               atomic.Bool
+	router              *gin.Engine
+	sessions            *scs.SessionManager
+	store               *postgresstore.PostgresStore
+	queries             *sqlcgen.Queries
+	db                  *sql.DB
+	logger              *slog.Logger
+	cfg                 config.HTTP
+	loginRate           *httprate.RateLimiter
 }
 
 func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {

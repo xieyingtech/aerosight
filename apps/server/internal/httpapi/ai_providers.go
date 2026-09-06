@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -103,7 +104,7 @@ func (s *Server) aiProviderFailure(c *gin.Context, err error) {
 	switch err.Error() {
 	case "FORBIDDEN":
 		code, status = "FORBIDDEN", 403
-	case "AI_PROVIDER_INPUT_INVALID", "AI_PROVIDER_CREDENTIAL_REQUIRED", "AI_PROVIDER_NOT_FOUND", "OUTBOUND_URL_INVALID", "OUTBOUND_HTTPS_REQUIRED", "OUTBOUND_URL_CREDENTIALS_FORBIDDEN", "OUTBOUND_DNS_EMPTY", "OUTBOUND_DNS_FAILED", "OUTBOUND_ADDRESS_RESTRICTED":
+	case "AI_PROVIDER_INPUT_INVALID", "AI_PROVIDER_API_KEY_REQUIRED", "AI_PROVIDER_NOT_FOUND", "OUTBOUND_URL_INVALID", "OUTBOUND_HTTPS_REQUIRED", "OUTBOUND_URL_CREDENTIALS_FORBIDDEN", "OUTBOUND_DNS_EMPTY", "OUTBOUND_DNS_FAILED", "OUTBOUND_ADDRESS_RESTRICTED":
 		code = err.Error()
 	}
 	s.failure(c, status, code)
@@ -127,6 +128,7 @@ func (s *Server) aiProviderRoutes() {
 	g.POST("", s.saveAIProvider)
 	g.PATCH("/:providerId", s.saveAIProvider)
 	g.DELETE("/:providerId", s.deleteAIProvider)
+	g.POST("/:providerId/test", s.testAIProvider)
 }
 
 func (s *Server) saveAIProvider(c *gin.Context) {
@@ -151,7 +153,7 @@ func (s *Server) saveAIProvider(c *gin.Context) {
 		return
 	}
 	if creating && input.APIKey == "" {
-		s.aiProviderFailure(c, errors.New("AI_PROVIDER_CREDENTIAL_REQUIRED"))
+		s.aiProviderFailure(c, errors.New("AI_PROVIDER_API_KEY_REQUIRED"))
 		return
 	}
 	ctx := c.Request.Context()
@@ -251,6 +253,74 @@ func (s *Server) deleteAIProvider(c *gin.Context) {
 			return nil, errors.New("AI_PROVIDER_NOT_FOUND")
 		}
 		return gin.H{"id": id, "deleted": true}, nil
+	})
+	if err != nil {
+		s.aiProviderFailure(c, err)
+		return
+	}
+	c.JSON(200, result)
+}
+
+func (s *Server) testAIProvider(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("providerId"), 10, 64)
+	if err != nil || id <= 0 {
+		s.aiProviderFailure(c, errors.New("AI_PROVIDER_NOT_FOUND"))
+		return
+	}
+	ctx := c.Request.Context()
+	uid := currentUser(c).ID
+	audit := database.AuditContext{ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), Action: "ai_provider.test", ResourceType: "ai_provider", ResourceID: strconv.FormatInt(id, 10), Input: gin.H{"providerId": id}}
+	result, err := database.AuditedPlatformWrite(ctx, s.db, audit, s.authorizePlatformWrite(uid), func(w *database.WriteTx) (gin.H, error) {
+		p, e := w.Queries.LockAIProvider(ctx, id)
+		if errors.Is(e, sql.ErrNoRows) {
+			return nil, errors.New("AI_PROVIDER_NOT_FOUND")
+		}
+		if e != nil {
+			return nil, e
+		}
+		var envelope credentials.Envelope
+		if e = json.Unmarshal(p.CredentialEnvelopeJson, &envelope); e != nil {
+			return nil, e
+		}
+		var credential struct {
+			APIKey string `json:"apiKey"`
+		}
+		if e = credentials.DecryptJSON(envelope, s.credentialSecret, credentials.AAD("ai-provider", id, nil), &credential); e != nil {
+			return nil, e
+		}
+		if credential.APIKey == "" {
+			return nil, errors.New("AI_PROVIDER_API_KEY_REQUIRED")
+		}
+		baseURL := p.BaseUrl.String
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
+		target, e := url.Parse(baseURL)
+		if e != nil {
+			return nil, errors.New("OUTBOUND_URL_INVALID")
+		}
+		target, addresses, e := s.resolveOutboundURL(ctx, baseURL, []string{target.Hostname()})
+		if e != nil {
+			return nil, e
+		}
+		factory := s.aiHTTPClientFactory
+		if factory == nil {
+			factory = pinnedAIHTTPClient
+		}
+		client := factory(target, addresses)
+		defer client.CloseIdleConnections()
+		ok, code := probeAIModels(ctx, client, baseURL, credential.APIKey)
+		health := gin.H{"ok": ok, "code": code, "checkedAt": timestamp(time.Now())}
+		encoded, e := json.Marshal(health)
+		if e != nil {
+			return nil, e
+		}
+		status := "failed"
+		if ok {
+			status = "healthy"
+		}
+		e = w.Queries.SetAIProviderHealth(ctx, sqlcgen.SetAIProviderHealthParams{ID: id, Status: status, HealthJson: encoded, UpdatedByUserID: uid})
+		return health, e
 	})
 	if err != nil {
 		s.aiProviderFailure(c, err)

@@ -163,6 +163,27 @@ func (q *Queries) SetAIProviderCredential(ctx context.Context, arg SetAIProvider
 	return err
 }
 
+const setAIProviderHealth = `-- name: SetAIProviderHealth :exec
+UPDATE ai_providers SET status=$2,health_json=$3,last_tested_at=now(),updated_by_user_id=$4,updated_at=now() WHERE id=$1
+`
+
+type SetAIProviderHealthParams struct {
+	ID              int64           `json:"id"`
+	Status          string          `json:"status"`
+	HealthJson      json.RawMessage `json:"health_json"`
+	UpdatedByUserID int32           `json:"updated_by_user_id"`
+}
+
+func (q *Queries) SetAIProviderHealth(ctx context.Context, arg SetAIProviderHealthParams) error {
+	_, err := q.db.ExecContext(ctx, setAIProviderHealth,
+		arg.ID,
+		arg.Status,
+		arg.HealthJson,
+		arg.UpdatedByUserID,
+	)
+	return err
+}
+
 const updateAIProvider = `-- name: UpdateAIProvider :exec
 UPDATE ai_providers SET name=$2,provider_type='openai',base_url=$3,model_id=$4,enabled=$5,is_default=$6,updated_by_user_id=$7,updated_at=now() WHERE id=$1
 `

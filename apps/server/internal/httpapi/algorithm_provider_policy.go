@@ -133,7 +133,12 @@ func (s *Server) validateAlgorithmURL(ctx context.Context, raw string) (*url.URL
 }
 
 func (s *Server) validateOutboundURL(ctx context.Context, raw string, allowedHosts []string) (*url.URL, int, error) {
-	fail := func(code string) (*url.URL, int, error) { return nil, 0, errors.New(code) }
+	target, addresses, err := s.resolveOutboundURL(ctx, raw, allowedHosts)
+	return target, len(addresses), err
+}
+
+func (s *Server) resolveOutboundURL(ctx context.Context, raw string, allowedHosts []string) (*url.URL, []netip.Addr, error) {
+	fail := func(code string) (*url.URL, []netip.Addr, error) { return nil, nil, errors.New(code) }
 	target, err := url.Parse(raw)
 	if err != nil || target.Hostname() == "" {
 		return fail("OUTBOUND_URL_INVALID")
@@ -182,5 +187,5 @@ func (s *Server) validateOutboundURL(ctx context.Context, raw string, allowedHos
 			return fail("OUTBOUND_ADDRESS_RESTRICTED")
 		}
 	}
-	return target, len(addresses), nil
+	return target, addresses, nil
 }

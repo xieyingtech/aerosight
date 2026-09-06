@@ -34,3 +34,6 @@ UPDATE ai_providers SET credential_envelope_json=$2,status='untested' WHERE id=$
 
 -- name: DeleteAIProvider :execrows
 DELETE FROM ai_providers WHERE id=$1;
+
+-- name: SetAIProviderHealth :exec
+UPDATE ai_providers SET status=$2,health_json=$3,last_tested_at=now(),updated_by_user_id=$4,updated_at=now() WHERE id=$1;

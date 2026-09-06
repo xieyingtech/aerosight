@@ -173,6 +173,7 @@ type Querier interface {
 	RetirePublishedReport(ctx context.Context, arg RetirePublishedReportParams) error
 	RetireReportDrafts(ctx context.Context, arg RetireReportDraftsParams) error
 	SetAIProviderCredential(ctx context.Context, arg SetAIProviderCredentialParams) error
+	SetAIProviderHealth(ctx context.Context, arg SetAIProviderHealthParams) error
 	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
 	SetAlgorithmProviderCredential(ctx context.Context, arg SetAlgorithmProviderCredentialParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
