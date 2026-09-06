@@ -146,6 +146,9 @@ func (s *Server) Handler() http.Handler {
 	return secure.New(secure.Options{ContentTypeNosniff: true, FrameDeny: true, STSSeconds: 31536000, IsDevelopment: s.cfg.Development}).Handler(dispatch)
 }
 func (s *Server) failure(c *gin.Context, status int, code string) {
+	if c.Request.Context().Err() == context.DeadlineExceeded {
+		status, code = http.StatusGatewayTimeout, "REQUEST_TIMEOUT"
+	}
 	c.AbortWithStatusJSON(status, gin.H{"error": code})
 }
 func writeError(w http.ResponseWriter, status int, code string) {

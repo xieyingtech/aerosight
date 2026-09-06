@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.3 请求期限第一批：统一 failure 映射在请求 context 已 DeadlineExceeded 时返回 504/REQUEST_TIMEOUT，避免取消的任务写入误报 409 业务冲突。独立 PostGIS 故障注入在 outbox 插入触发器 pg_sleep(5)，HTTP 请求期限设为 100ms，验证两秒内取消、504、任务状态/版本原样保留，审计/project_events/outbox 全部回滚。重跑项目与频道 SSE 真实 DB 测试通过：普通 API 期限为 1 秒，SSE 持续到 5/15 秒授权复查并正常发送撤权事件，未被普通期限或静态 gzip 截断，等待期间无连接占用。三项真实 DB 测试通过（24.332s），Go dev 全包非数据库检查通过，临时容器已停止。当前期限仍从业务路由 middleware 开始，认证/会话读取的期限边界与服务器读头/空闲期限验收需要继续补齐；4.3 保持未勾选。
+
 - 4.3 静态 gzip：使用已锁定 gin-contrib/gzip 1.2.7，仅接入 Gin 静态 NoRoute 链，排除 API/算法资产、旧链接重定向、二进制资源、HEAD、Range/If-Range 和升级请求；解析 Accept-Encoding 权重，显式 gzip;q=0 优先于通配符。静态文本按 Accept-Encoding 区分缓存，压缩响应的内容哈希 ETag 转为弱标识，保留身份编码强 ETag 和分段读取语义。真实 HTTP 服务测试覆盖 HTML/JS 解压后内容一致、压缩拒绝、HEAD 无正文、Range 206 精确字节与 Content-Range、字体不压缩、SSE 不压缩、页面/API/算法资产 404、压缩 ETag/If-None-Match 304 无正文。Go dev 全包通过（本轮未连接数据库）。普通请求取消/数据库超时回滚、读头/空闲期限和超长 SSE 的 4.3 其余验收仍待，该任务保持未勾选。
 
 - 完成 4.2 数据库验收：独立 PostGIS 中先以普通团队写入耗尽用户额度，下一写入返回 429/Retry-After 且团队数量不变；普通任务 pause 同样限流，emergency_stop 仍完成 running→canceling。相同旧版本重试返回 409；随后撤销团队管理角色，另一个运行急停返回 403 且状态/版本不变。数据库验证仅产生一份项目审计、事件和 outbox，无拒绝/重试额外副作用。首版测试错误预期急停发布两条 outbox，核对单次 w.Publish 行为后修正为一条。既有设备安全测试增加普通额度耗尽步骤，确认普通命令 429 后返航仍通过原确认、活动任务例外与高优先级检查。真实 TLS 响应验证 nosniff、DENY、HSTS；不可信 X-Forwarded-Proto 不在明文响应开启 HSTS。定向集成测试通过；完整 HTTP 包真实 DB 回归通过（102.787s），随后新增/修改测试也已定向执行。临时数据库容器已停止。上一批伪造 IP、用户隔离、JSON 429 与 Retry-After 证据继续有效；CSP/长连接期限仍属 7.2/4.3。
