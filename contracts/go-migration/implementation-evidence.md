@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.3 媒体文件期限拆分：媒体 access 授权接口保持普通业务期限；content GET/HEAD 移除整条路由期限，权限/资产数据库查询单独限时，完成后回到原始连接 context。ServeContent 保留 Range/HEAD，并通过取消感知 ReadSeeker 与 32KiB 分段 writer 处理传输，每段写使用真实连接控制器设置 10 秒写期限，完成后清除。确定性取消测试验证首段取消后不再读写；真实 PostGIS 媒体测试使用 100ms 查询期限和首段 150ms 延迟，约 280KB 下载仍完整成功。媒体 Range/HEAD/签名/租户回归及项目 SSE 超过 15 秒后登出断流通过（19.166s）；Go dev 非数据库全包通过，测试容器已停止。算法资产处理器仍需同类期限隔离及分段访问修正，4.3 尚未勾选。
+
 - 4.3 流式控制器修复：准备拆分文件授权与传输期限时发现 slog-gin 的响应包装未暴露 Unwrap，原 streamWrite 的 ResponseController.SetWriteDeadline 实际可返回 ErrNotSupported 而被忽略。现在在外层 HTTP dispatch 将底层连接控制器放入请求 context，SSE 使用该控制器设置分段写期限；每帧 Flush 后清除写期限，避免把 10 秒写预算误用于 15 秒心跳间隔。真实 HTTP 测试经过完整 Gin/日志链验证写期限设置与清除成功，不接受 ErrNotSupported；静态压缩组合测试和 Go dev 非数据库全包通过。文件授权/传输期限拆分尚未实现，4.3 保持未勾选。
 
 - 4.3 请求体与连接期限：把 API 2MiB 限制提前至 SCS/CSRF 之前，防止 gorilla/csrf 表单解析先读取超大正文；API 与算法回调写请求设置 socket 读取期限，算法回调保留独立 16MiB 大小上限。真实 HTTP 测试验证 2MiB 完整读取、超出一字节拒绝、缺 CSRF header 的大表单读取不超过 2MiB+1、只发送部分正文的连接在期限后结束读取。测试捕获并修复过早清除读取期限导致 net/http 排空未发送正文时再次等待的问题；连接后续期限由 net/http 管理。提取 main 共用的 HTTP server 构造函数，断言生产 ReadHeaderTimeout=5s、IdleTimeout=60s、无全局 ReadTimeout/WriteTimeout；真实 TCP 测试缩短相同实例期限到 100ms 后验证未结束请求头和 keep-alive 空闲连接关闭。Go dev 全包通过。继续审查发现媒体内容/算法资产仍挂普通业务 timeout，文件流期限隔离尚需修正验证，4.3 继续未勾选。

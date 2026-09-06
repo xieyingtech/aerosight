@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -17,8 +16,8 @@ import (
 
 func (s *Server) AttachMediaStorage(root string) { s.mediaStorageRoot = root }
 func (s *Server) mediaAccessRoutes() {
-	group := s.router.Group("/api/projects/:id/assets/:assetId", s.requireUser, s.timeout)
-	group.GET("/access", s.issueMediaAccess)
+	group := s.router.Group("/api/projects/:id/assets/:assetId", s.requireUser)
+	group.GET("/access", s.timeout, s.issueMediaAccess)
 	group.GET("/content", s.readMediaContent)
 	group.HEAD("/content", s.readMediaContent)
 }
@@ -103,7 +102,14 @@ func (s *Server) readMediaContent(c *gin.Context) {
 		fail()
 		return
 	}
-	asset, _, err := s.readMediaAsset(c.Request.Context(), currentUser(c).ID, pid, aid, action)
+	lookup, cancel := context.WithTimeout(c.Request.Context(), s.cfg.RequestTimeout)
+	asset, _, err := s.readMediaAsset(lookup, currentUser(c).ID, pid, aid, action)
+	lookupError := lookup.Err()
+	cancel()
+	if lookupError == context.DeadlineExceeded {
+		s.failure(c, 504, "REQUEST_TIMEOUT")
+		return
+	}
 	if err != nil {
 		fail()
 		return
@@ -136,5 +142,5 @@ func (s *Server) readMediaContent(c *gin.Context) {
 	c.Header("X-Content-Type-Options", "nosniff")
 	// No Last-Modified validators: each access is reauthorized and must not turn
 	// into a shared/public cache hit. ServeContent implements byte ranges/HEAD.
-	http.ServeContent(c.Writer, c.Request, "", time.Time{}, file)
+	serveFileContent(c.Writer, c.Request, file)
 }

@@ -5,12 +5,66 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+type delayedMediaWriter struct {
+	http.ResponseWriter
+	delayed bool
+}
+
+func (w *delayedMediaWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func (w *delayedMediaWriter) Write(p []byte) (int, error) {
+	if !w.delayed {
+		w.delayed = true
+		time.Sleep(150 * time.Millisecond)
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func TestMediaDownloadOutlivesQueryDeadline(t *testing.T) {
+	f := newAPIFixture(t)
+	team, pid := f.project(t)
+	root := t.TempDir()
+	f.server.AttachDeviceCredentials("0123456789abcdef0123456789abcdef")
+	f.server.AttachMediaStorage(root)
+	dir := filepath.Join(root, "projects", fmt.Sprint(pid))
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Repeat("download data ", 20000)
+	if err := os.WriteFile(filepath.Join(dir, "large.bin"), []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var asset int
+	if err := f.db.QueryRow("insert into assets(project_id,team_id,kind,storage_key,logical_key,mime_type) values($1,$2,'video',$3,'large.bin','application/octet-stream') returning id", pid, team, fmt.Sprintf("projects/%d/large.bin", pid)).Scan(&asset); err != nil {
+		t.Fatal(err)
+	}
+	res := f.request(t, "GET", fmt.Sprintf("/api/projects/%d/assets/%d/access?action=play", pid, asset), "")
+	data := decodedResponse(t, res)
+	if res.StatusCode != 200 {
+		t.Fatalf("access %d %+v", res.StatusCode, data)
+	}
+	f.host.Close()
+	f.server.cfg.RequestTimeout = 100 * time.Millisecond
+	handler := f.server.Handler()
+	f.host = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(&delayedMediaWriter{ResponseWriter: w}, r)
+	}))
+	t.Cleanup(f.host.Close)
+	start := time.Now()
+	res = f.request(t, "GET", data["url"].(string), "")
+	got, err := io.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil || res.StatusCode != 200 || string(got) != body || time.Since(start) <= f.server.cfg.RequestTimeout {
+		t.Fatalf("download truncated: status=%d bytes=%d err=%v", res.StatusCode, len(got), err)
+	}
+}
 
 func TestMediaAccessHTTPRangeAndAuthorization(t *testing.T) {
 	f := newAPIFixture(t)
