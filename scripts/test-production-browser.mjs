@@ -8,6 +8,7 @@ import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { verifyPageStates } from './browser-page-states.mjs';
+import { verifyLegacyLinks } from './browser-legacy-links.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -107,6 +108,8 @@ try {
   await page.getByRole('button',{name:'创建项目',exact:true}).click();
   await page.waitForURL(url=>/^\/projects\/detail\/?$/.test(url.pathname) && Number(url.searchParams.get('projectId'))>0);
   const detailURL=page.url();
+  const legacyLinks=await verifyLegacyLinks(page,context,origin,detailURL);
+  writeFileSync(resolve(output,'legacy-links.json'),JSON.stringify(legacyLinks,null,2));
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.reload();
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});

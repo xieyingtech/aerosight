@@ -40,6 +40,8 @@ After `pnpm build`, `pnpm test:production-browser` uses the production Go binary
 
 The production browser run also checks loading, retry and API-denial UI states for projects, teams, profile and all administration pages using controlled response fixtures. It separately revokes the actual database administrator role and verifies both the layout guard and the API reject access.
 
+Both browser modes verify all 16 legacy page mappings with GET/HEAD, conflicting IDs, repeated filters and invalid IDs, then exercise browser back/forward navigation through a redirected project detail. Results are recorded in `legacy-links.json`.
+
 ```bash
 pnpm build
 pnpm start
