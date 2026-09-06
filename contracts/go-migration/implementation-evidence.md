@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.8 第四批迁移：停止直播 POST 接入 Go/sqlc；事务内复查 mission:operate 并锁会话，保留 DJI stopping/45 秒租约/优先级 30 停止命令、模拟器及失败会话直接 stopped、重复停止重放和 replay 模式拒绝。命令冲突返回实际 ID，修复旧逻辑派发不存在 UUID 的边界；命令/outbox 与状态/审计原子提交。真实 PostGIS 验证 4 并发仅一条停止命令/派发事件、已有命令不重复派发、模拟器与 failed 行为、outbox 故障回滚、跨项目/权限拒绝，并重跑播放及媒体鉴权测试；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动仍待迁移，Linux 符号链接补验仍待执行，5.8 保持未勾选。
+
 - 5.8 第三批迁移：浏览器直播 playback API 接入 Go/sqlc；在事务内锁授权与会话，复核 stream.* 能力显式 deny/allow，签发 60 秒候选并更新 locator 期限。保留 requested/stopped/无 ref/无协议原因、模拟器 locator、WebRTC→HLS 顺序、数值 session ID 与 null 字段；模拟器固定签名与原 TS 字节一致。真实 PostGIS 测试验证过期 locator 刷新、签发 DJI token 通过 media-auth、owner 显式 deny、成员独立能力授权、停止后不可用、跨项目与撤权拒绝；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动/停止仍待迁移，5.8 保持未勾选。
 
 - 5.8 第二批迁移：media-auth 机器接口与播放 token 签发/验证核心。按原接口区分管理员 API、绑定活动 live_stream 的适配器推流凭据、read/playback 的路径/协议/期限 token；额外 MediaMTX 字段不影响解析，不依赖 Cookie/CSRF，也不创建浏览器会话。保留 MEDIA_ADMIN_USER/PASSWORD 原字符串；加密凭据沿用 device-adapter AAD。固定时间 token 与原 TS 字节一致。真实 PostGIS 测试覆盖管理员凭据、推流状态/路径/错误密码/错误 AAD、query token、协议/路径越界与过期，重跑资产访问集成测试；Go 非数据库全包、原 TS 13 项直播核心测试、sqlc 与 OpenSpec strict 通过。直播启动/停止及浏览器播放地址签发 API 仍待迁移，5.8 保持未勾选。

@@ -70,6 +70,7 @@ type Querier interface {
 	InsertDeviceCommand(ctx context.Context, arg InsertDeviceCommandParams) (InsertDeviceCommandRow, error)
 	InsertDiscoveredDevice(ctx context.Context, arg InsertDiscoveredDeviceParams) (int32, error)
 	InsertIssueActivity(ctx context.Context, arg InsertIssueActivityParams) (int32, error)
+	InsertLiveControlCommand(ctx context.Context, arg InsertLiveControlCommandParams) (uuid.UUID, error)
 	InsertPlatformAudit(ctx context.Context, arg InsertPlatformAuditParams) (int64, error)
 	InsertProjectAudit(ctx context.Context, arg InsertProjectAuditParams) (int64, error)
 	InsertReportDraft(ctx context.Context, arg InsertReportDraftParams) (uuid.UUID, error)
@@ -108,6 +109,7 @@ type Querier interface {
 	LockIssueAssigneeAgent(ctx context.Context, arg LockIssueAssigneeAgentParams) (LockIssueAssigneeAgentRow, error)
 	LockIssueAssigneeUser(ctx context.Context, arg LockIssueAssigneeUserParams) (int32, error)
 	LockIssueMutation(ctx context.Context, arg LockIssueMutationParams) (int32, error)
+	LockLiveControlSession(ctx context.Context, arg LockLiveControlSessionParams) (LockLiveControlSessionRow, error)
 	LockLivePlayback(ctx context.Context, arg LockLivePlaybackParams) (LockLivePlaybackRow, error)
 	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
@@ -171,6 +173,7 @@ type Querier interface {
 	SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	StopLiveControlSession(ctx context.Context, arg StopLiveControlSessionParams) error
 	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
 	UpdateAlgorithmDefinition(ctx context.Context, arg UpdateAlgorithmDefinitionParams) error
 	UpdateAlgorithmProvider(ctx context.Context, arg UpdateAlgorithmProviderParams) error

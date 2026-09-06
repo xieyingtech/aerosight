@@ -94,6 +94,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.mediaAccessRoutes()
 	s.router.POST("/api/media-auth", s.timeout, s.mediaAuth)
 	s.router.GET("/api/projects/:id/live-streams/:streamId/playback", s.requireUser, s.timeout, s.getLivePlayback)
+	s.router.POST("/api/projects/:id/live-streams/:streamId/stop", s.requireUser, s.timeout, s.stopLiveStream)
 	s.router.POST("/api/projects/:id/task-runs/:runId/reports", s.requireUser, s.timeout, s.createReportDraft)
 	s.router.POST("/api/projects/:id/reports/:reportId/publish", s.requireUser, s.timeout, s.publishReport)
 	s.router.GET("/api/projects/:id/reports/:reportId/export", s.requireUser, s.timeout, s.exportReport)
