@@ -83,8 +83,8 @@ func TestLoginCSRFRestartAndLogout(t *testing.T) {
 		t.Fatalf("login: %d %s", response.StatusCode, body)
 	}
 	for _, cookie := range response.Cookies() {
-		if cookie.Name == "aerosight_session" && !cookie.HttpOnly {
-			t.Fatal("session readable by JS")
+		if cookie.Name == "aerosight_session" && (!cookie.HttpOnly || cookie.Secure || cookie.SameSite != http.SameSiteLaxMode) {
+			t.Fatal("incorrect development session cookie policy")
 		}
 	}
 	response = call("GET", "/api/auth/session", "", "", "")

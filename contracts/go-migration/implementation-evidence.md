@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.5 CSRF 矩阵第一批：真实 PostGIS 中登录/退出/团队写入口分别测试缺 Token、格式错误 Token、其他客户端的有效 Token、非法 Origin 与 Origin:null；伪造 X-Forwarded-Host/Proto 不影响拒绝。全部返回 403/CSRF_FAILED、请求 ID 和 no-store；拒绝写入前后团队数量一致，拒绝退出后会话仍有效，正确 Token 的写入和退出仍成功。真实 TLS 服务验证 CSRF Cookie 的 Secure/HttpOnly/Path、会话 Cookie 的 Secure/HttpOnly/SameSite=Lax 与 HTTPS 登录/会话读取；开发登录测试补充 Secure=false 与 SameSite=Lax。与既有登录持久化及有效机器回调独立认证回归共四项通过（5.318s），开发 Cookie 断言单独重跑通过；Go HTTP 非数据库检查通过，临时容器已停止。真实 Next rewrites 的代理请求验收仍待，4.5 保持未勾选。
+
 - 完成 2.2：补齐 HTTP 配置矩阵，验证默认 HTTP/worker 连接池 20/10、覆盖为 7/3、SSE 默认/覆盖额度、非法整数预算、CSRF base64 长度与 dev 默认公开来源。修复监听地址只做 SplitHostPort、错误端口可能延迟到迁移后才失败的问题，现在预先校验数字端口范围。dev 标签启动测试直接调用 serve，使用不可连接数据库地址，验证缺 CSRF、短 AUTH_SECRET、无效预算和端口均先返回相应配置错误；同时断言 dev Embedded 返回 nil 而不访问前端产物。main 使用两个独立 database.Open 分别传入预算，migrate 独立使用单连接。结合此前 7.1 缺 dist 的 dev 编译成功/生产编译失败证据及统一命令 migrate 首次 52/重复 0 项证据完成此任务。定向配置/启动测试和 Go dev 全包非数据库测试通过；开发 Next/Go 实际联调仍在第 6/8 节验收。
 
 - 完成 4.3：将连接控制器与取消感知分段传输下沉到 httptransport，媒体与算法资产复用。算法资产的 SQL 改由 sqlc 生成，保持资源/项目/版本/available/deleted 过滤并防止 int32 转换溢出；移除算法资产整条路由的普通期限，数据库与存储读取使用配置的独立操作期限，内容阶段回到原连接 context。新增 HEAD 与 Range/416，仍逐次验证签名与作用域、不压缩私有内容。真实 PostGIS 测试验证 100ms 操作期限下首段延迟 150ms 的完整约 320KB 传输、Range 精确字节、HEAD 长度/空正文、资产表锁阻塞 504。算法回调签名/幂等/16MiB 限制和资产跨项目/版本/删除/过期签名回归、媒体慢传输/Range/HEAD、SSE 15 秒后登出断流共五项通过（22.496s）。Go dev 非数据库全包、db:check 通过，临时容器停止。结合本日已记录的慢 SQL 原子回滚、认证/会话取消、2MiB/慢正文、读头/空闲 TCP、gzip/304/Range 证据完成此任务；整体运行生命周期、CSP 和全量交付验收仍独立待办。
