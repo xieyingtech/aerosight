@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 4.2 数据库验收：独立 PostGIS 中先以普通团队写入耗尽用户额度，下一写入返回 429/Retry-After 且团队数量不变；普通任务 pause 同样限流，emergency_stop 仍完成 running→canceling。相同旧版本重试返回 409；随后撤销团队管理角色，另一个运行急停返回 403 且状态/版本不变。数据库验证仅产生一份项目审计、事件和 outbox，无拒绝/重试额外副作用。首版测试错误预期急停发布两条 outbox，核对单次 w.Publish 行为后修正为一条。既有设备安全测试增加普通额度耗尽步骤，确认普通命令 429 后返航仍通过原确认、活动任务例外与高优先级检查。真实 TLS 响应验证 nosniff、DENY、HSTS；不可信 X-Forwarded-Proto 不在明文响应开启 HSTS。定向集成测试通过；完整 HTTP 包真实 DB 回归通过（102.787s），随后新增/修改测试也已定向执行。临时数据库容器已停止。上一批伪造 IP、用户隔离、JSON 429 与 Retry-After 证据继续有效；CSP/长连接期限仍属 7.2/4.3。
+
 - 4.2 限流接线第一批：发现 WRITE_RATE_LIMIT 原先只读取配置、未执行限制；现于 requireUser 完成认证后以用户 ID 使用 httprate 普通写桶，项目与频道 SSE 共用独立建连桶，新增 SSE_RATE_LIMIT 默认 30/min。读请求不消耗写额度，机器回调/媒体鉴权不进入浏览器用户桶。任务控制与设备命令在解析动作后使用同一写桶，emergency_stop 与 flight.return_home 不受普通写桶阻断，仍执行原权限、事务复查、安全和幂等逻辑。环境示例补齐三种额度与可信代理列表。定向测试验证默认不信任代理时轮换 X-Forwarded-For/X-Real-IP 仍命中相同登录额度，显式可信 loopback 按转发来源区分；429 JSON 与 Retry-After、跨用户隔离、读/写/SSE 桶隔离及项目/频道 SSE 共桶均通过。Go dev 全包通过，数据库测试未在本轮运行；额度耗尽后真实授权急停/拒绝越权的集成验收与安全头验证仍待，因此 4.2 不勾选。
 
 - 完成 4.1：在既有 Gin 分组、标准 handler、请求 ID、恢复与错误映射基础上补齐 HTTP 边界测试。检查已锁定 slog-gin 源码发现，即使关闭 body/header 仍输出 path/query/params/referer，并可将 Gin error 文本作为日志 message；新增仅用于该中间件的 slog 输出筛选器，保留请求 ID、模板路由、方法、时间、长度、状态与耗时，使用固定 message 和正确 4xx/5xx 日志级别。原请求不被改写。Gin CustomRecovery 使用 nil writer 避免无用地生成请求/堆栈 dump，只记录错误类别与请求 ID。测试覆盖路径/签名 query/Authorization/Cookie/Referer/User-Agent/正文/响应 Cookie/响应正文/Gin error 敏感值均不进入日志，合法关联 ID 保留、非法/过长 ID 替换；真实 httptest HTTP 服务验证普通 panic 的 500/请求 ID、已 Flush SSE 原数据保留且结束时不附加 JSON、panic 值不泄露。定向测试及 Go dev 全包通过（本轮不连接数据库，既有 DB 测试跳过）；不以本轮结果替代限流、期限、CSP 和生产端到端剩余验收。

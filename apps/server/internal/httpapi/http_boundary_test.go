@@ -133,3 +133,28 @@ func TestHTTPInvalidCorrelationIDIsReplaced(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPSecurityHeaders(t *testing.T) {
+	s := boundaryServer(t, io.Discard)
+	s.cfg.Development = false
+	s.cfg.PublicOrigin = "https://frontend.test"
+	ts := httptest.NewTLSServer(s.Handler())
+	defer ts.Close()
+	res, err := ts.Client().Get(ts.URL + "/unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	for header, want := range map[string]string{"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Strict-Transport-Security": "max-age=31536000"} {
+		if got := res.Header.Get(header); got != want {
+			t.Fatalf("%s=%q want %q", header, got, want)
+		}
+	}
+	r := httptest.NewRequest("GET", "http://frontend.test/unknown", nil)
+	r.Header.Set("X-Forwarded-Proto", "https")
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, r)
+	if got := w.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("untrusted forwarding header enabled HSTS: %s", got)
+	}
+}

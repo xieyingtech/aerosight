@@ -95,6 +95,16 @@ func TestDeviceCommandSafetyIdempotencyAndAudit(t *testing.T) {
 	if status != 409 || data["error"] != "DEVICE_COMMAND_ACTIVE_TASK_CONFLICT" {
 		t.Fatalf("task conflict %d %+v", status, data)
 	}
+	f.server.writeRate = userRateLimiter(1, 1)
+	quota := f.request(t, "POST", "/api/teams", `{"name":"consume command quota"}`)
+	quota.Body.Close()
+	if quota.StatusCode != 201 {
+		t.Fatalf("consume quota %d", quota.StatusCode)
+	}
+	status, data = call()
+	if status != 429 {
+		t.Fatalf("ordinary command bypassed quota %d %+v", status, data)
+	}
 	input["capabilityCode"] = "flight.return_home"
 	input["commandKey"] = "return_home"
 	input["confirmation"] = fmt.Sprintf("CONFIRM %d flight.return_home", did)
