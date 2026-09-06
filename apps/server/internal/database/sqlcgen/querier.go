@@ -22,6 +22,12 @@ type Querier interface {
 	CancelFlightHubSyncQueue(ctx context.Context, arg CancelFlightHubSyncQueueParams) error
 	CancelFlightHubSyncRuns(ctx context.Context, arg CancelFlightHubSyncRunsParams) error
 	ChannelGrants(ctx context.Context, arg ChannelGrantsParams) ([]ChannelGrantsRow, error)
+	ChatQueryAssets(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ChatQueryDevices(ctx context.Context, arg ChatQueryDevicesParams) ([]json.RawMessage, error)
+	ChatQueryIssues(ctx context.Context, arg ChatQueryIssuesParams) ([]json.RawMessage, error)
+	ChatQueryMapContext(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ChatQueryTasks(ctx context.Context, arg ChatQueryTasksParams) ([]json.RawMessage, error)
+	ChatQueryTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ClearAIProviderDefault(ctx context.Context) error
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) (int64, error)
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
