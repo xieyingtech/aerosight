@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.3 流式控制器修复：准备拆分文件授权与传输期限时发现 slog-gin 的响应包装未暴露 Unwrap，原 streamWrite 的 ResponseController.SetWriteDeadline 实际可返回 ErrNotSupported 而被忽略。现在在外层 HTTP dispatch 将底层连接控制器放入请求 context，SSE 使用该控制器设置分段写期限；每帧 Flush 后清除写期限，避免把 10 秒写预算误用于 15 秒心跳间隔。真实 HTTP 测试经过完整 Gin/日志链验证写期限设置与清除成功，不接受 ErrNotSupported；静态压缩组合测试和 Go dev 非数据库全包通过。文件授权/传输期限拆分尚未实现，4.3 保持未勾选。
+
 - 4.3 请求体与连接期限：把 API 2MiB 限制提前至 SCS/CSRF 之前，防止 gorilla/csrf 表单解析先读取超大正文；API 与算法回调写请求设置 socket 读取期限，算法回调保留独立 16MiB 大小上限。真实 HTTP 测试验证 2MiB 完整读取、超出一字节拒绝、缺 CSRF header 的大表单读取不超过 2MiB+1、只发送部分正文的连接在期限后结束读取。测试捕获并修复过早清除读取期限导致 net/http 排空未发送正文时再次等待的问题；连接后续期限由 net/http 管理。提取 main 共用的 HTTP server 构造函数，断言生产 ReadHeaderTimeout=5s、IdleTimeout=60s、无全局 ReadTimeout/WriteTimeout；真实 TCP 测试缩短相同实例期限到 100ms 后验证未结束请求头和 keep-alive 空闲连接关闭。Go dev 全包通过。继续审查发现媒体内容/算法资产仍挂普通业务 timeout，文件流期限隔离尚需修正验证，4.3 继续未勾选。
 
 - 4.3 认证期限：检查已锁定 postgresstore 源码确认其使用无 context 的 database/sql 操作；新增 SCS CtxStore 适配，通过 sqlc 执行同格式 Find/Commit/Delete，保留嵌入 postgresstore 与清理生命周期，每次操作受父 context 和普通请求期限约束。登录/退出路由补业务期限，requireUser 的用户查询独立设置期限且不把该短期限传入后续 SSE。SCS 存储错误返回脱敏 JSON，期限错误为 504/REQUEST_TIMEOUT。真实 PostGIS ACCESS EXCLUSIVE 锁测试验证会话读取 HTTP 504、提交/删除取消、父 context 取消、解除阻塞后原会话仍有效，以及 users 查询阻塞也返回 504。登录/轮换/重启持久化/退出和项目 SSE 登出断流回归通过（19.171s）；补充 users 锁测试再次通过。Go dev 非数据库全包与 db:check 通过；临时容器已停止。服务器读头/空闲期限、请求体限制验收和会话清理停止的生命周期验收仍待，4.3/7.3 未勾选。
