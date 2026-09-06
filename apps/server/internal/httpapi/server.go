@@ -138,6 +138,16 @@ func (s *Server) Handler() http.Handler {
 		id := observability.CorrelationID(r.Header.Get("X-Request-ID"))
 		r.Header.Set("X-Request-ID", id)
 		w.Header().Set("X-Request-ID", id)
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			// Apply before CSRF, which can parse form bodies before Gin runs.
+			r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/callbacks/algorithms/") {
+			if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
+				controller := http.NewResponseController(w)
+				_ = controller.SetReadDeadline(time.Now().Add(s.cfg.RequestTimeout))
+			}
+		}
 		if (strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/media-auth") || r.URL.Path == "/metrics" {
 			w.Header().Set("Cache-Control", "no-store")
 			if s.cfg.Development {

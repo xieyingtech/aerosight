@@ -107,7 +107,7 @@ func run(logger *slog.Logger) error {
 	api.AttachFlightHub(flightHubClient, workerCfg.FlightHubEnabled, workerCfg.AuthSecret)
 	api.AttachDeviceCredentials(workerCfg.AuthSecret)
 	api.AttachMediaStorage(workerCfg.ObjectStorageLocalRoot)
-	server := &http.Server{Addr: httpCfg.Address, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	server := newHTTPServer(ctx, httpCfg.Address, api.Handler())
 	results := make(chan error, 2)
 	go func() { results <- bg.Run(ctx) }()
 	go func() { results <- server.ListenAndServe() }()
@@ -142,4 +142,8 @@ func run(logger *slog.Logger) error {
 		return first
 	}
 	return shutdownErr
+}
+
+func newHTTPServer(ctx context.Context, address string, handler http.Handler) *http.Server {
+	return &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 }

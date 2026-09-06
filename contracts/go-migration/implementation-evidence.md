@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.3 请求体与连接期限：把 API 2MiB 限制提前至 SCS/CSRF 之前，防止 gorilla/csrf 表单解析先读取超大正文；API 与算法回调写请求设置 socket 读取期限，算法回调保留独立 16MiB 大小上限。真实 HTTP 测试验证 2MiB 完整读取、超出一字节拒绝、缺 CSRF header 的大表单读取不超过 2MiB+1、只发送部分正文的连接在期限后结束读取。测试捕获并修复过早清除读取期限导致 net/http 排空未发送正文时再次等待的问题；连接后续期限由 net/http 管理。提取 main 共用的 HTTP server 构造函数，断言生产 ReadHeaderTimeout=5s、IdleTimeout=60s、无全局 ReadTimeout/WriteTimeout；真实 TCP 测试缩短相同实例期限到 100ms 后验证未结束请求头和 keep-alive 空闲连接关闭。Go dev 全包通过。继续审查发现媒体内容/算法资产仍挂普通业务 timeout，文件流期限隔离尚需修正验证，4.3 继续未勾选。
+
 - 4.3 认证期限：检查已锁定 postgresstore 源码确认其使用无 context 的 database/sql 操作；新增 SCS CtxStore 适配，通过 sqlc 执行同格式 Find/Commit/Delete，保留嵌入 postgresstore 与清理生命周期，每次操作受父 context 和普通请求期限约束。登录/退出路由补业务期限，requireUser 的用户查询独立设置期限且不把该短期限传入后续 SSE。SCS 存储错误返回脱敏 JSON，期限错误为 504/REQUEST_TIMEOUT。真实 PostGIS ACCESS EXCLUSIVE 锁测试验证会话读取 HTTP 504、提交/删除取消、父 context 取消、解除阻塞后原会话仍有效，以及 users 查询阻塞也返回 504。登录/轮换/重启持久化/退出和项目 SSE 登出断流回归通过（19.171s）；补充 users 锁测试再次通过。Go dev 非数据库全包与 db:check 通过；临时容器已停止。服务器读头/空闲期限、请求体限制验收和会话清理停止的生命周期验收仍待，4.3/7.3 未勾选。
 
 - 4.3 请求期限第一批：统一 failure 映射在请求 context 已 DeadlineExceeded 时返回 504/REQUEST_TIMEOUT，避免取消的任务写入误报 409 业务冲突。独立 PostGIS 故障注入在 outbox 插入触发器 pg_sleep(5)，HTTP 请求期限设为 100ms，验证两秒内取消、504、任务状态/版本原样保留，审计/project_events/outbox 全部回滚。重跑项目与频道 SSE 真实 DB 测试通过：普通 API 期限为 1 秒，SSE 持续到 5/15 秒授权复查并正常发送撤权事件，未被普通期限或静态 gzip 截断，等待期间无连接占用。三项真实 DB 测试通过（24.332s），Go dev 全包非数据库检查通过，临时容器已停止。当前期限仍从业务路由 middleware 开始，认证/会话读取的期限边界与服务器读头/空闲期限验收需要继续补齐；4.3 保持未勾选。
