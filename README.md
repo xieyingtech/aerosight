@@ -46,6 +46,18 @@ The deployment executable embeds frontend pages and migrations; it can run witho
 
 Supply environment variables directly when running the executable. Use `AEROSIGHT_ENV=production`, an HTTPS `PUBLIC_ORIGIN`, and an appropriate `HTTP_LISTEN_ADDRESS` behind the deployment TLS endpoint. Database, MQTT and MediaMTX remain external services. The separate callback listener belongs to the legacy worker maintenance command; unified `serve` handles callbacks on its HTTP port.
 
+The root Dockerfile builds the Next export and Go executable in separate stages. Its final image contains the Go executable and CA certificates, runs as UID/GID 10001, and exposes application port 8080. Node.js and the source checkout are not copied into the runtime image. Build context rules exclude local environment files and generated artifacts.
+
+```bash
+docker build -t aerosight:local .
+docker run --rm --env-file /path/to/production.env aerosight:local migrate
+docker run --name aerosight --env-file /path/to/production.env \
+  -p 127.0.0.1:8080:8080 -v aerosight-objects:/var/lib/aerosight/objects \
+  --stop-timeout 35 aerosight:local
+```
+
+The production environment file must provide `DATABASE_URL`, the existing `AUTH_SECRET`, `CSRF_AUTH_KEY`, and HTTPS `PUBLIC_ORIGIN`. Preserve the image's `HTTP_LISTEN_ADDRESS=0.0.0.0:8080` and `AEROSIGHT_ENV=production`; do not reuse the development example unchanged. Point database/MQTT/media addresses to hosts reachable from the container. Configure `CALLBACK_PUBLIC_BASE_URL` for the same public application endpoint when needed. A bind-mounted object directory must be writable by UID 10001; preserve object data across releases. Terminate TLS at the deployment endpoint and allow at least the configured `SHUTDOWN_TIMEOUT` (default 30 seconds) before forcibly stopping the container.
+
 ## Spec-driven development
 
 This repository uses [OpenSpec](https://openspec.dev/) for non-trivial feature,

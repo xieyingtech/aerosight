@@ -4,6 +4,9 @@
 
 ## 2026-09-06
 
+- 单应用镜像第一批：根 Dockerfile 分离 Node/pnpm 静态构建、Go 1.26.1 编译和 Debian/CA 运行阶段；运行层仅复制二进制，使用 UID/GID 10001、对象持久目录和单个 8080 端口，ENTRYPOINT 直接执行 Go。新增 .dockerignore 排除环境文件、源码工具缓存及本地生成物，README 给出环境/卷/迁移/停止预算说明。Docker web-build 实际通过 Linux frozen-lockfile 安装、Next 静态导出、333 个页面产物与 52 个迁移复制。完整构建在拉取 Go/Debian 基础镜像时因 auth.docker.io 网络连接失败，尚未验证运行镜像，7.5 保持未勾选。没有用前端阶段成功替代最终镜像验收。
+- 统一生产二进制实测：独立 PostGIS 空库、无源码的工作目录直接启动已构建 aerosight.exe；ready、内嵌登录页和详情壳、匿名 401、CSRF 登录、会话读取、构建后新团队/新项目写入与读取、相应静态壳、旧页面 307、API/缺失 chunk 404、退出后 401 均通过。首轮测试误把数据库初始化临时 Unix socket 就绪视为 TCP 就绪，改为 pg_isready -h 127.0.0.1 后通过；无应用代码修复。测试使用 development Cookie 模式，不代表生产 TLS、浏览器 hydration 或优雅退出已验收；测试进程与数据库容器已停止。
+
 - 统一命令第一批：pnpm build 顺序执行 Next 静态构建、迁移/页面产物校验复制和 Go 生产编译；start 启动已有统一二进制，db:migrate 使用 Go migrate，dev 协调 Next 与 Go dev 两个进程并在任一退出时停止另一进程。启动脚本读取根 .env.local，删除旧默认 worker 启动器，保留独立维护编译入口。README 与环境示例补齐 CSRF、HTTP、PUBLIC_ORIGIN 及开发代理配置。新 pnpm build 完整通过（333 个静态文件、52 个 SQL 迁移）；独立 PostGIS 中新 db:migrate 首次应用 52 项、重复应用 0 项，容器已停止。pnpm check 通过（292 项 Web 测试和 Go dev 全包；此轮未配置数据库测试变量，不能代替先前数据库证据）。三个 Node 脚本语法检查通过。运行镜像、真实默认启动及开发进程联调尚待，7.5 保持未勾选。
 
 
