@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 6.1/6.3 生产浏览器第二批：扩展 test:production-browser，真实界面创建团队、刷新团队列表、选择默认可管理团队创建项目、导航到固定详情 query URL 并重新加载，验证构建后新增项目无需重建。通过用户菜单退出后 API session 返回 401，直接访问项目详情回到登录页；再次登录后项目仍可见，测试库将 session expiry 设为过去后刷新会回到登录。过程无 pageerror，详情页无意外 CSP violation。真实 Edge 成功运行证据 .build/production-browser-8ed406a9-9b34-4dd0-b127-e2ecd17a3db1/result.json 与 created-project.png；已查看截图确认新项目名称和统计卡片可见。地图只显示容器，不据此认定底图/worker/直播通过；开发浏览器会话和其他嵌套详情仍未覆盖，6.1/6.3/7.2 保持未勾选。
+
 - 7.2/6.1 浏览器验收第一批：固定根开发依赖 playwright 1.61.0，新增 pnpm test:production-browser，使用已构建生产 Go 二进制（工作目录为独立 .build 测试目录）、临时 PostGIS、测试 HTTPS 终止代理和真实 Edge。验证登录表单 hydration/提交、导航后项目列表加载完成、Secure/HttpOnly/SameSite=Lax Cookie、没有 pageerror 或意外 CSP violation，注入未允许内联脚本后浏览器报告拦截且脚本未执行。最终成功证据位于 .build/production-browser-616bff9a-c0ca-4bbf-8027-856e2470b0a3/result.json 与 projects.png，已查看截图确认空列表显示完整。首次截图在加载中，补充可见“新建项目”断言后重跑成功；修复 TLS 测试连接清理，进程和容器已退出。7.2 的地图/直播以及 6.1 完整开发/生产会话生命周期仍待后续验收，任务不提前勾选。
 
 - 7.2 第二批：使用已固定版本 unrolled/secure 的 ContentSecurityPolicy/Process 为每个 HTML 应用脚本 self + 当前页哈希策略，禁用脚本属性、eval、object 和外部嵌入本应用；保留内联样式及 blob worker。新增 CSP_MAP_ORIGINS（默认 MapLibre demo tiles）和 CSP_MEDIA_ORIGINS，加载配置时拒绝通配符、凭据、路径、查询、片段及指令注入，生产只接受 HTTPS，开发可用 HTTP；媒体/地图来源不扩展 script-src。页面 GET/HEAD/304/404、页间哈希隔离、配置拒绝测试及静态 Gin 集成测试通过。依据官方 https://github.com/unrolled/secure 与本地 v1.17.0 API 接入；Context7 未提供该库准确匹配。生产浏览器 hydration、地图 worker 和直播验收尚未执行，7.2 保持未勾选。
