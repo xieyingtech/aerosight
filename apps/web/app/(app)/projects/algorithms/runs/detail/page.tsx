@@ -3,12 +3,10 @@ import { AlgorithmRunRetryButton } from "@/components/algorithm-run-retry-button
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { readAlgorithmRun } from "@/lib/algorithm-runs";
+import type { AlgorithmRunDetail } from "@/lib/web-api-types";
 
 import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
-import type { JSONValueOf } from "@/lib/api-types";
-type LegacyModel = JSONValueOf<Awaited<ReturnType<typeof readAlgorithmRun>>>;
-type Model = Omit<LegacyModel, "run"> & {run: Omit<LegacyModel["run"], "inputSnapshot">};
+type Model = AlgorithmRunDetail;
 export default function DetailPage() {
  return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=uuidParam(query,"runId");return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>
  {(model,query)=>{const projectId=positiveParam(query)!;const {run,attempts,view}=model;

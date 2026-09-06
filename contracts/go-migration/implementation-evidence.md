@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- TS 服务端实现清理：独立 web-api-types 承载 Go JSON DTO（时间字符串、不含算法私有 inputSnapshot），页面/表单不再通过服务端查询函数推导类型。删除 44 个 server-only 模块、Auth.js 实现/扩展类型及 Next instrumentation 管理员初始化，移除 next-auth/bcryptjs/server-only/ai/@ai-sdk/openai 包。删除旧 AI SDK registry 包装和两项专属模拟流测试（真实 Go Responses/health 集成测试已在 5.9 验证），保留并重命名无 SDK 的默认 provider/凭据兼容测试及维护脚本入口。pg 转至开发依赖，仍供旧维护脚本和存量 SQL core 类型使用，尚未算作 6.6 完成。TypeScript、291 项 Web 测试及无 DATABASE_URL/AUTH_SECRET/CREDENTIAL_ENCRYPTION_KEY 的静态构建再次通过；运行期业务读写与初始化已由 Go 接管，Go embed/生产端到端尚待完成。
+
+
 - 首次生产静态导出通过：比对冻结清单确认全部 43 个 Next Route Handler 已有迁移记录后移除，删除无页面调用的 Server Actions；生产 phase 启用 output:export/trailingSlash，根页客户端跳转，开发 API/资产 rewrites 保留。构建发现并修正项目列表、团队列表及 AI provider 页 use client 指令位置错误（此前 tsc 无法捕获）。DATABASE_URL/AUTH_SECRET/CREDENTIAL_ENCRYPTION_KEY 为空时 next build 成功，全部页面标为 Static，生成 out；扫描 HTML/JS 未见上述配置名、GO_API_ORIGIN 或默认内部 Go 地址。FlightHub 旧 Route Handler 源码边界测试迁至 Go sqlc 写锁及无凭据读投影；293 项 Web 测试与 OpenSpec strict 通过。Auth.js、pg、AI SDK 和仅服务端 TS 库仍在仓库，类型需要解耦后继续清理；因此 6.6 未完成。Go embed、无 Node 运行与完整静态浏览器验收尚待执行，不能把本次导出成功视为单服务交付完成。
 
 

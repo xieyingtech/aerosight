@@ -4,7 +4,7 @@ import { useState } from "react";
 import { apiJSON, APIError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AgentSessionView } from "@/lib/agent-sessions";
+import type { AgentSessionView } from "@/lib/web-api-types";
 
 export function AgentConsole({projectId,sessions,onChanged}:{projectId:number;sessions:AgentSessionView[];onChanged:()=>void}){
   const [error,setError]=useState<string|null>(null);const [busy,setBusy]=useState(false);const session=sessions[0];

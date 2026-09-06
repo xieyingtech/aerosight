@@ -6,7 +6,7 @@ import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { issueEvidenceSummary } from "@/lib/issue-view-core";
-import type { readIssue } from "@/lib/issues";
+import type { IssueDetail } from "@/lib/web-api-types";
 
 function displayDate(value: unknown) {
   if (!value) return "—";
@@ -27,8 +27,7 @@ const activityLabels: Record<string, string> = {
 };
 
 import { positiveParam, StaticAPIPage } from "@/components/static-api-page";
-import type { JSONValueOf } from "@/lib/api-types";
-type Model = JSONValueOf<Awaited<ReturnType<typeof readIssue>>>;
+type Model = IssueDetail;
 export default function DetailPage() {
  return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=positiveParam(query,"issueId");return pid&&id?`/api/projects/${pid}/issues/${id}`:null;}}>
  {(model,query,reload)=>{const projectId=positiveParam(query)!;

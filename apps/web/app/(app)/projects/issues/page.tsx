@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
-import type { IssueListItem } from "@/lib/issues";
+import type { IssueListItem } from "@/lib/web-api-types";
 
 function displayDate(value: string | Date) {
   return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));

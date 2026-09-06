@@ -4,11 +4,10 @@ import Link from "next/link";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
-import type { readPerceptionEvent } from "@/lib/perception-events";
+import type { PerceptionEventDetail } from "@/lib/web-api-types";
 
 import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
-import type { JSONValueOf } from "@/lib/api-types";
-type Model=JSONValueOf<Awaited<ReturnType<typeof readPerceptionEvent>>>;
+type Model=PerceptionEventDetail;
 export default function PerceptionEventPage(){
  return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=uuidParam(query,"eventId");return pid&&id?`/api/projects/${pid}/events/${id}`:null;}}>
  {(model,query)=>{const projectId=positiveParam(query)!;const event=model.event;

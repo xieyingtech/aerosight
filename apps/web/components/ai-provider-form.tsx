@@ -4,7 +4,7 @@ import { useState } from "react";
 import { apiJSON, APIError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { AIProviderView } from "@/lib/ai-providers";
+import type { AIProviderView } from "@/lib/web-api-types";
 
 function payload(formData: FormData) {
   return {

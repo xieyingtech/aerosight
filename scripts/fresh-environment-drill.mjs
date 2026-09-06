@@ -18,7 +18,7 @@ const commands = [
     name: "configuration contracts",
     command: ["pnpm", "--dir", "apps/web", "exec", "node", "--test",
       "lib/runtime-config.test.ts", "lib/object-storage-core.test.ts",
-      "lib/algorithm-provider-policy.test.ts", "lib/agent-provider-registry.test.ts",
+      "lib/algorithm-provider-policy.test.ts", "lib/stored-ai-provider-policy.test.ts",
       "lib/dependency-health-core.test.ts"]
   },
   { name: "empty, current, legacy and repeated migrations", command: ["pnpm", "test:migrations"] },

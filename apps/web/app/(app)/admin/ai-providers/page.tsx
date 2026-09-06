@@ -3,7 +3,7 @@
 import { AIProviderForm } from "@/components/ai-provider-form";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
-import type { AIProviderView } from "@/lib/ai-providers";
+import type { AIProviderView } from "@/lib/web-api-types";
 
 export default function AdminAIProvidersPage() {
   const state = useAPI<AIProviderView[]>("/api/admin/ai-providers");
