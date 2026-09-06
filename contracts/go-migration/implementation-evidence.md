@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 第 6 节第一批：新增浏览器同源 API transport、typed JSON 错误、CSRF 合并获取/失效、可选认证与受保护 401 通知、登录/退出/会话方法；禁止外部/归一化后越出 /api 的路径，不自动重试业务写入，保留 Response 用于 Range/流式消费。新增 useAPI 和统一加载/失败显示，切换路径或刷新时不展示旧项目数据，卸载取消请求。7 项 transport 测试验证并发 CSRF、Header/凭据、401/403、取消隔离、不重放写入、路径限制及 HTML 错误；全项目 typecheck 通过。Next.js 静态导出限制已用 Context7 /vercel/next.js 核对。此批为页面迁移基础，尚未把旧登录/SSR 页面切到 Go 会话，也未启用 export 或完成双入口验收，6.1/6.2 保持未勾选。
+
 - 完成 5.1 当前入口清单：复核原 4 个 Server Actions（登录/退出已由 4.4 接管，业务写入为创建团队/项目），个人资料及平台用户/团队/项目页面只有只读入口，不新增不存在的编辑功能。现有 Go/sqlc 目录 API 已覆盖全部目标；修正创建名称为 trim 后 UTF-16 最大 100，并接受项目表单的字符串 teamId。真实 PostGIS 验证空列表、团队创建/owner、项目创建和自动 Copilot、资料及管理员投影不泄露密码、非法输入、owner 插入失败时团队回滚、owner/admin 允许建项目/member 和已移除成员拒绝、平台 admin 不绕过团队管理权限、scope 列表及团队/项目/平台权限拒绝。创建继续保留原无业务审计契约，项目写入前在同一事务内锁定 manager 成员记录。Go 非数据库全包、sqlc 和 OpenSpec strict 通过。Server Action 的 Go 替代入口已就绪；第 6 节负责前端调用切换和删除原 actions，尚未宣称静态前端构建完成。
 
 - 完成 5.11：复核 cmd/aerosight 已把 runtime.Callbacks 接入 Gin 同一端口，并给算法回调/资产组补 context deadline，继续使用原独立机器认证（不经过 SCS/CSRF）。修复回调 LimitReader 静默截断，实际正文超过 16 MiB 明确返回 413；算法资产查询排除 deleted_at 非空记录。真实 PostGIS 的统一 HTTP 集成测试通过无 Cookie/CSRF 外部签名回调、processing→completed、重复回调只存一次原始结果、同 callback ID 不同正文 409、过期/跨项目 401、超大正文 413；资产签名有效读取、篡改项目/过期 403、签名有效但项目或版本不匹配 404、软删除 404，未授权请求不触发存储读取。已有算法签名/状态机单元测试、Go 非数据库全包、sqlc 和 OpenSpec strict 通过。部署公共地址切换与生产端到端仍由第 7/8 节完成。
