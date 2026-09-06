@@ -1,3 +1,9 @@
+-- name: ListProjectAssets :many
+select to_jsonb(result_row) as item from (
+  select id, kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt"
+  from assets where project_id=$1 and status='available' order by created_at desc
+) result_row;
+
 -- name: ReadDeviceTree :many
 select to_jsonb(result_row) as item from (
 select device.id,device.device_type_id::text as "deviceTypeId",device.name,device_type.category,device.status,device.data_freshness as "dataFreshness",

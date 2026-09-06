@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- 前端接线补齐素材列表遗漏：GET /api/projects/:id/assets 使用 sqlc 显式投影，保持旧 listProjectItems 的 available 筛选、创建时间倒序、数值 ID、nullable MIME/采集时间及 ISO 时间；不返回存储路径。真实 PostGIS TestProjectAssetListContract 验证空数组、筛选/排序/DTO、项目隔离和撤权 404。Go 非数据库全包、db:check 和 OpenSpec strict 通过。任务、案件、素材库和设置页面改为静态查询参数入口，保留表格和管理权限提示，任务模板与运行列表分别加载；Next 路由类型生成和 TypeScript 检查通过。详情链接已使用目标固定路径，详情页和浏览器联调仍待完成，第 6 节保持未勾选。
+
+
 - 前端静态化第一批：登录/退出、公共会话布局、团队/项目列表与创建、团队/项目概览、平台管理和个人资料改为浏览器加载 Go API；统一加载、错误重试和访问拒绝状态。团队/项目详情及设备、智能体、实时作业采用固定路径和查询参数，查询参数读取包在 Suspense 中，侧栏项目切换与高亮适配固定路径。智能体和 AI provider 写操作使用 CSRF 客户端并在成功后重新请求数据。Next 开发 phase 添加 beforeFiles API/算法资产 rewrites，生产 export 尚未启用。next typegen、TypeScript 和 11 项 API/导航测试通过；清理了引用已删除页面的旧 .next/dev/types/validator.ts 生成缓存。剩余项目工作台、详情、旧地址兼容、浏览器联调和生产构建仍待完成，第 6 节保持未勾选，不能视为完整静态站已可部署。
 
 - 第 6 节第一批：新增浏览器同源 API transport、typed JSON 错误、CSRF 合并获取/失效、可选认证与受保护 401 通知、登录/退出/会话方法；禁止外部/归一化后越出 /api 的路径，不自动重试业务写入，保留 Response 用于 Range/流式消费。新增 useAPI 和统一加载/失败显示，切换路径或刷新时不展示旧项目数据，卸载取消请求。7 项 transport 测试验证并发 CSRF、Header/凭据、401/403、取消隔离、不重放写入、路径限制及 HTML 错误；全项目 typecheck 通过。Next.js 静态导出限制已用 Context7 /vercel/next.js 核对。此批为页面迁移基础，尚未把旧登录/SSR 页面切到 Go 会话，也未启用 export 或完成双入口验收，6.1/6.2 保持未勾选。

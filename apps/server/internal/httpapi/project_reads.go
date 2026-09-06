@@ -52,6 +52,15 @@ func (s *Server) scopedRead(c *gin.Context, read func(*sqlcgen.Queries, sqlcgen.
 }
 func (s *Server) projectReadRoutes() {
 	api := s.router.Group("/api/projects/:id", s.requireUser, s.timeout)
+	api.GET("/assets", func(c *gin.Context) {
+		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
+			raw, err := q.ListProjectAssets(c.Request.Context(), a.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			return decodeSnapshotRows(raw)
+		})
+	})
 	api.GET("/devices", func(c *gin.Context) {
 		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
 			raw, err := q.ListProjectDevices(c.Request.Context(), a.ProjectID)

@@ -42,6 +42,36 @@ func (q *Queries) GetProjectDevice(ctx context.Context, arg GetProjectDevicePara
 	return item, err
 }
 
+const listProjectAssets = `-- name: ListProjectAssets :many
+select to_jsonb(result_row) as item from (
+  select id, kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt"
+  from assets where project_id=$1 and status='available' order by created_at desc
+) result_row
+`
+
+func (q *Queries) ListProjectAssets(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
+	rows, err := q.db.QueryContext(ctx, listProjectAssets, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []json.RawMessage{}
+	for rows.Next() {
+		var item json.RawMessage
+		if err := rows.Scan(&item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectDevices = `-- name: ListProjectDevices :many
 select to_jsonb(result_row) as item from (
 select device.id, device.name, device.type, device.status,

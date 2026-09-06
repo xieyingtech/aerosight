@@ -107,6 +107,7 @@ type Querier interface {
 	ListLegacyPerceptionEvents(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListMissionRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProfileTeams(ctx context.Context, userID int32) ([]ListProfileTeamsRow, error)
+	ListProjectAssets(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProjectDevices(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProjectIssues(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListProjects(ctx context.Context, arg ListProjectsParams) ([]ListProjectsRow, error)

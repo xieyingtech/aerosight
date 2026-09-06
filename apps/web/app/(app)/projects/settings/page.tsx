@@ -1,12 +1,12 @@
+"use client";
 import { SettingsIcon } from "lucide-react";
 
 import { Page } from "@/components/page";
-import { getProject } from "@/lib/data";
+import { positiveParam, StaticAPIPage } from "@/components/static-api-page";
 
-export default async function ProjectSettingsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const project = await getProject(Number(id));
-  if (project.role === "member") throw new Error("PROJECT_ACCESS_DENIED");
+export default function ProjectSettingsPage() {
+ return <StaticAPIPage<{role:string}> endpoint={(query)=>{const id=positiveParam(query);return id?`/api/projects/${id}`:null;}}>
+ {(project)=>{if(project.role==="member") return <p className="p-4 text-sm text-destructive" role="alert">你没有项目管理权限。</p>;
   return (
     <Page description="功能开关、安全策略和项目级配置" title="项目设置">
       <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed bg-muted/20 p-8 text-center">
@@ -16,4 +16,5 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
       </div>
     </Page>
   );
+ }}</StaticAPIPage>;
 }
