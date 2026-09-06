@@ -88,6 +88,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.legacyEventRoutes()
 	s.issueReadRoutes()
 	s.algorithmRunRoutes()
+	s.algorithmDefinitionRoutes()
 	s.router.POST("/api/projects/:id/task-runs/:runId/reports", s.requireUser, s.timeout, s.createReportDraft)
 	s.router.POST("/api/projects/:id/reports/:reportId/publish", s.requireUser, s.timeout, s.publishReport)
 	s.router.GET("/api/projects/:id/reports/:reportId/export", s.requireUser, s.timeout, s.exportReport)

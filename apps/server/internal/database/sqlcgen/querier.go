@@ -25,6 +25,7 @@ type Querier interface {
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
 	CompleteProjectAudit(ctx context.Context, arg CompleteProjectAuditParams) (int64, error)
 	CountDeviceCommandConflicts(ctx context.Context, arg CountDeviceCommandConflictsParams) (int32, error)
+	CreateAlgorithmDefinition(ctx context.Context, arg CreateAlgorithmDefinitionParams) (int64, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
 	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
 	CreateIssueCopilotSession(ctx context.Context, arg CreateIssueCopilotSessionParams) (int32, error)
@@ -60,6 +61,7 @@ type Querier interface {
 	GetTeamManager(ctx context.Context, arg GetTeamManagerParams) (int32, error)
 	GetUser(ctx context.Context, id int32) (GetUserRow, error)
 	HasUsers(ctx context.Context) (bool, error)
+	InsertAlgorithmConfiguration(ctx context.Context, arg InsertAlgorithmConfigurationParams) (int64, error)
 	InsertCatalogAlgorithmRun(ctx context.Context, arg InsertCatalogAlgorithmRunParams) error
 	InsertDJINetworkProfile(ctx context.Context, arg InsertDJINetworkProfileParams) (int64, error)
 	InsertDJISetupAdapter(ctx context.Context, arg InsertDJISetupAdapterParams) (json.RawMessage, error)
@@ -76,6 +78,7 @@ type Querier interface {
 	ListAdminProjects(ctx context.Context) ([]ListAdminProjectsRow, error)
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
+	ListAlgorithmCatalog(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListAlgorithmRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -90,6 +93,8 @@ type Querier interface {
 	ListTaskDefinitions(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListTeamProjects(ctx context.Context, teamID int32) ([]ListTeamProjectsRow, error)
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
+	LockAlgorithmDefinition(ctx context.Context, arg LockAlgorithmDefinitionParams) (int64, error)
+	LockAlgorithmDefinitionProvider(ctx context.Context, arg LockAlgorithmDefinitionProviderParams) (int32, error)
 	LockAlgorithmRetrySource(ctx context.Context, arg LockAlgorithmRetrySourceParams) (LockAlgorithmRetrySourceRow, error)
 	LockDJIAdapterEnvelope(ctx context.Context, arg LockDJIAdapterEnvelopeParams) (pqtype.NullRawMessage, error)
 	LockDeviceCommandGrants(ctx context.Context, arg LockDeviceCommandGrantsParams) ([]LockDeviceCommandGrantsRow, error)
@@ -105,6 +110,7 @@ type Querier interface {
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
 	LockReportDraft(ctx context.Context, arg LockReportDraftParams) (LockReportDraftRow, error)
 	LockReportPublication(ctx context.Context, arg LockReportPublicationParams) (uuid.UUID, error)
+	NextAlgorithmConfigurationVersion(ctx context.Context, arg NextAlgorithmConfigurationVersionParams) (int32, error)
 	NextReportVersion(ctx context.Context, generatedReportID uuid.UUID) (int32, error)
 	PointPublishedReport(ctx context.Context, arg PointPublishedReportParams) error
 	PublishProjectEvent(ctx context.Context, arg PublishProjectEventParams) (int64, error)
@@ -138,8 +144,10 @@ type Querier interface {
 	ReserveIdempotency(ctx context.Context, arg ReserveIdempotencyParams) (int64, error)
 	ResolveChannel(ctx context.Context, arg ResolveChannelParams) (ResolveChannelRow, error)
 	RetainReportAssets(ctx context.Context, arg RetainReportAssetsParams) error
+	RetireAlgorithmConfigurations(ctx context.Context, arg RetireAlgorithmConfigurationsParams) error
 	RetirePublishedReport(ctx context.Context, arg RetirePublishedReportParams) error
 	RetireReportDrafts(ctx context.Context, arg RetireReportDraftsParams) error
+	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -154,6 +162,7 @@ type Querier interface {
 	SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
+	UpdateAlgorithmDefinition(ctx context.Context, arg UpdateAlgorithmDefinitionParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)
