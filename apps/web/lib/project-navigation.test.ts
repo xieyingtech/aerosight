@@ -23,6 +23,14 @@ test("project overview is the stable project root and switch target", () => {
   assert.equal(projectNavigationHref(42, "devices"), "/projects/devices/?projectId=42");
 });
 
+test("resource links encode values and retain their authoritative project", () => {
+  const url = new URL(projectNavigationHref(42, "issues/detail", {projectId:99, issueId:7, selected:"a&b 中文"}), "http://frontend.test");
+  assert.equal(url.pathname, "/projects/issues/detail/");
+  assert.equal(url.searchParams.get("projectId"), "42");
+  assert.equal(url.searchParams.get("issueId"), "7");
+  assert.equal(url.searchParams.get("selected"), "a&b 中文");
+});
+
 test("legacy alert list links migrate to the project issue list", () => {
   assert.equal(legacyProjectEventListHref(42), "/projects/issues/?projectId=42");
   assert(!visibleProjectNavigation("admin").some((item) => item.segment === "events"));

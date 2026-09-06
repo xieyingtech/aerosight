@@ -27,7 +27,7 @@ test("large read results are truncated and retain stable references and freshnes
   assert.equal(result.items.length, AGENT_TOOL_RESULT_LIMIT);
   assert.equal(result.truncated, true);
   assert.equal(result.freshnessSeconds, 90);
-  assert.deepEqual(result.items[0].reference, { type: "device", id: "1", href: "/projects/17/devices?selected=1" });
+  assert.deepEqual(result.items[0].reference, { type: "device", id: "1", href: "/projects/devices/?projectId=17&selected=1" });
 });
 
 test("oversized payloads stop before entering model context", () => {

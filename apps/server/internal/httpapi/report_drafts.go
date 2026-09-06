@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"net/url"
 	"strconv"
 )
 
@@ -56,8 +57,14 @@ func aggregateReport(pid, id int32, s reportSources) (gin.H, []gin.H, error) {
 			}
 		}
 	}
-	root := fmt.Sprintf("/projects/%d", pid)
-	runLink := fmt.Sprintf("%s/tasks/runs/%d", root, id)
+	link := func(section, key, value string) string {
+		parameters := url.Values{}
+		if key != "" {
+			parameters.Set(key, value)
+		}
+		return projectPageURL(pid, "/projects/"+section+"/", parameters)
+	}
+	runLink := link("tasks/runs/detail", "runId", fmt.Sprint(id))
 	refs := []gin.H{}
 	ref := func(kind string, key, version any, href string) {
 		refs = append(refs, gin.H{"type": kind, "id": reportText(key), "version": reportText(version), "href": href})
@@ -66,30 +73,30 @@ func aggregateReport(pid, id int32, s reportSources) (gin.H, []gin.H, error) {
 	var taskVersion, device any
 	if s.Run["taskVersionId"] != nil {
 		taskVersion = gin.H{"id": s.Run["taskVersionId"], "version": s.Run["taskVersion"], "definition": s.Run["definition"]}
-		ref("task_version", s.Run["taskVersionId"], s.Run["taskVersion"], root+"/tasks")
+		ref("task_version", s.Run["taskVersionId"], s.Run["taskVersion"], link("tasks", "", ""))
 	}
 	if s.Run["deviceId"] != nil {
 		device = gin.H{"id": s.Run["deviceId"], "name": s.Run["deviceName"], "type": s.Run["deviceType"]}
-		ref("device", s.Run["deviceId"], s.Run["deviceUpdatedAt"], root+"/devices?selected="+reportText(s.Run["deviceId"]))
+		ref("device", s.Run["deviceId"], s.Run["deviceUpdatedAt"], link("devices", "selected", reportText(s.Run["deviceId"])))
 	}
 	if s.Track != nil {
-		ref("track", s.Run["deviceId"], reportText(s.Track["pointCount"])+":"+reportText(s.Track["endedAt"]), root+"?selected="+reportText(s.Run["deviceId"]))
+		ref("track", s.Run["deviceId"], reportText(s.Track["pointCount"])+":"+reportText(s.Track["endedAt"]), link("detail", "selected", reportText(s.Run["deviceId"])))
 	}
 	for _, row := range s.Steps {
 		ref("step", row["id"], row["status"], runLink)
 	}
 	for _, row := range s.Events {
-		ref("event", row["id"], "state:"+reportText(row["stateVersion"]), root+"/events/"+reportText(row["id"]))
+		ref("event", row["id"], "state:"+reportText(row["stateVersion"]), link("events/detail", "eventId", reportText(row["id"])))
 	}
 	for _, row := range s.Feedback {
-		ref("feedback", row["id"], row["createdAt"], root+"/events/"+reportText(row["eventId"]))
+		ref("feedback", row["id"], row["createdAt"], link("events/detail", "eventId", reportText(row["eventId"])))
 	}
 	for _, row := range s.Assets {
 		version := row["checksum"]
 		if version == nil {
 			version = "version:" + reportText(row["version"])
 		}
-		ref("asset", row["id"], version, root+"/assets?selected="+reportText(row["id"]))
+		ref("asset", row["id"], version, link("assets", "selected", reportText(row["id"])))
 		refs[len(refs)-1]["assetId"] = row["id"]
 		refs[len(refs)-1]["checksumSha256"] = row["checksum"]
 	}

@@ -95,4 +95,19 @@ func TestReportAggregateIncludesAllEvidence(t *testing.T) {
 	if refs[7]["version"] != "abc" || refs[7]["assetId"] != float64(7) {
 		t.Fatalf("asset %+v", refs[7])
 	}
+	want := []string{
+		"/projects/tasks/runs/detail/?projectId=1&runId=1",
+		"/projects/tasks/?projectId=1",
+		"/projects/devices/?projectId=1&selected=4",
+		"/projects/detail/?projectId=1&selected=4",
+		"/projects/tasks/runs/detail/?projectId=1&runId=1",
+		"/projects/events/detail/?eventId=event&projectId=1",
+		"/projects/events/detail/?eventId=event&projectId=1",
+		"/projects/assets/?projectId=1&selected=7",
+	}
+	for i, href := range want {
+		if refs[i]["href"] != href {
+			t.Fatalf("reference %d: %+v", i, refs[i])
+		}
+	}
 }

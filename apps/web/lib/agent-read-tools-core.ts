@@ -1,3 +1,4 @@
+import { projectNavigationHref } from "./project-navigation.ts";
 import { assertAgentToolArgsDoNotContainScope, type AgentExecutionContext } from "./agent-execution-context-core.ts";
 import { agentToolRegistry, parseAgentToolInput, type AgentToolName } from "./agent-tool-registry.ts";
 
@@ -60,12 +61,11 @@ export function formatAgentReadToolResult(
 }
 
 function referenceHref(projectId: number, name: AgentReadToolName, id: string) {
-  const base = `/projects/${projectId}`;
-  if (name === "query_devices") return `${base}/devices?selected=${encodeURIComponent(id)}`;
-  if (name === "query_missions") return `${base}/tasks/runs/${encodeURIComponent(id)}`;
-  if (name === "query_events") return `${base}/issues/${encodeURIComponent(id)}`;
-  if (name === "query_assets") return `${base}/assets?selected=${encodeURIComponent(id)}`;
-  return `${base}?selected=${encodeURIComponent(id)}`;
+  if (name === "query_devices") return projectNavigationHref(projectId, "devices", {selected:id});
+  if (name === "query_missions") return projectNavigationHref(projectId, "tasks/runs/detail", {runId:id});
+  if (name === "query_events") return projectNavigationHref(projectId, "issues/detail", {issueId:id});
+  if (name === "query_assets") return projectNavigationHref(projectId, "assets", {selected:id});
+  return projectNavigationHref(projectId, "detail", {selected:id});
 }
 
 function newestTimestamp(items: readonly Record<string, unknown>[]) {

@@ -12,6 +12,15 @@ import (
 
 var pageUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+func projectPageURL(pid int32, path string, parameters url.Values) string {
+	query := url.Values{}
+	for key, values := range parameters {
+		query[key] = append([]string(nil), values...)
+	}
+	query.Set("projectId", strconv.Itoa(int(pid)))
+	return (&url.URL{Path: path, RawQuery: query.Encode()}).String()
+}
+
 func validPageID(value string) bool {
 	if value == "" || value[0] == '0' {
 		return false

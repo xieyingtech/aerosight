@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { filterDeviceTree, flattenDeviceTree } from "@/lib/device-manager-core";
 import type { DeviceTreeNode } from "@/lib/device-tree-core";
 import { cn } from "@/lib/utils";
+import { projectNavigationHref } from "@/lib/project-navigation";
 
 const CATEGORY_LABELS: Record<string, string> = {
   aircraft: "无人机", camera: "摄像头", dock: "机场", robot: "机器人", sensor: "传感器"
@@ -89,7 +90,7 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
           <p className="mt-1 text-xs text-muted-foreground">设备 ID {device.id} · {device.typeKey}</p>
         </div>
       </div>
-      <Button asChild size="sm"><Link href={`/projects/${projectId}/realtime?deviceId=${device.id}`}>进入实时作业<ArrowRightIcon /></Link></Button>
+      <Button asChild size="sm"><Link href={projectNavigationHref(projectId, "realtime", {deviceId: device.id})}>进入实时作业<ArrowRightIcon /></Link></Button>
     </header>
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
       <section>

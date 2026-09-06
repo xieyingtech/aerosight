@@ -35,8 +35,12 @@ export function visibleProjectNavigation(
   });
 }
 
-export function projectNavigationHref(projectId: number, segment: string) {
-  return `/projects/${segment || "detail"}/?projectId=${projectId}`;
+export function projectNavigationHref(projectId: number, segment: string, parameters: Record<string, string | number> = {}) {
+  const query = new URLSearchParams({projectId: String(projectId)});
+  for (const [key, value] of Object.entries(parameters)) {
+    if (key !== "projectId") query.set(key, String(value));
+  }
+  return `/projects/${segment || "detail"}/?${query}`;
 }
 
 export function legacyProjectEventListHref(projectId: number) {

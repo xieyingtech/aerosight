@@ -117,7 +117,7 @@ func chatEvidenceReference(pid int32, name, id string) gin.H {
 	default:
 		query.Set("selected", id)
 	}
-	return gin.H{"type": kind, "id": id, "href": path + "?" + query.Encode()}
+	return gin.H{"type": kind, "id": id, "href": projectPageURL(pid, path, query)}
 }
 
 func formatChatToolResult(pid int32, name string, rows []gin.H, limit int, now time.Time) (gin.H, error) {

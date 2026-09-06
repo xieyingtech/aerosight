@@ -9,6 +9,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestProjectPageURLScopeAndEncoding(t *testing.T) {
+	parameters := url.Values{"projectId": {"99"}, "selected": {"a&b 中文"}, "layer": {"one", "two"}}
+	href := projectPageURL(42, "/projects/assets/", parameters)
+	u, err := url.Parse(href)
+	if err != nil || u.Path != "/projects/assets/" || u.Query().Get("projectId") != "42" || u.Query().Get("selected") != "a&b 中文" || len(u.Query()["layer"]) != 2 {
+		t.Fatal(href)
+	}
+	if parameters.Get("projectId") != "99" {
+		t.Fatal("mutated caller parameters")
+	}
+}
+
 func TestLegacyPageRedirects(t *testing.T) {
 	id := "01234567-89ab-cdef-0123-456789abcdef"
 	cases := map[string]string{
