@@ -25,7 +25,7 @@
 - [x] 4.2 安装安全头、分组限流和可信代理处理，隔离急停与普通写额度；验证伪造转发头、429/Retry-After 和额度耗尽后的授权急停。
 - [x] 4.3 配置 context deadline、服务器读头/空闲期限、体积限制及静态 gzip；验证超时取消、SSE 不被截断和 Range 不被压缩改变。
 - [x] 4.4 接入 SCS/postgresstore、bcrypt 和四个 auth API；测试历史密码、会话轮换、重启持久性、退出、过期和旧 Cookie 拒绝。
-- [ ] 4.5 接入 gorilla/csrf，明确公开来源、开发 Cookie、独立回调组；测试登录/退出/写请求缺 Token、非法 Origin、有效代理请求和有效机器回调。
+- [x] 4.5 接入 gorilla/csrf，明确公开来源、开发 Cookie、独立回调组；测试登录/退出/写请求缺 Token、非法 Origin、有效代理请求和有效机器回调。
 - [ ] 4.6 迁移用户/团队/项目权限服务及事务内复查；运行跨租户、显式权限别名、权限撤销和排队任务再授权测试。
 
 ## 5. 业务 API 迁移
@@ -48,7 +48,7 @@
 - [ ] 6.2 把公共布局、团队/项目列表、管理与个人页面改为静态壳和客户端加载；验证加载、空结果、失败与访问拒绝状态。
 - [ ] 6.3 把项目各工作台与嵌套详情改为固定路径/查询参数并补 Suspense；在构建后新建资源，验证详情访问无需重建。
 - [ ] 6.4 统一生成页面链接、报告与 AI 引用地址，实现 Go 307 与开发 Next redirects；测试全部旧路由映射、筛选保留、冲突参数、非法 ID 和前进后退。
-- [ ] 6.5 在 Next 开发 phase 配置 beforeFiles API/资产 rewrites，生产只启用 export；测试 Cookie/Origin、SSE 首条消息与长连接取消、文件 Range，确认 Go 无开发代理。
+- [x] 6.5 在 Next 开发 phase 配置 beforeFiles API/资产 rewrites，生产只启用 export；测试 Cookie/Origin、SSE 首条消息与长连接取消、文件 Range，确认 Go 无开发代理。
 - [ ] 6.6 移除迁完的 Route Handler、Server Actions、Auth.js、pg 与 TS 服务端 AI 依赖；通过扫描、typecheck 及无数据库/无密钥静态构建检查无运行时依赖回流。
 
 ## 7. 生产托管与统一生命周期

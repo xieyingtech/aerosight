@@ -16,6 +16,7 @@
     "test:web": "pnpm --dir apps/web test:unit",
     "test:worker": "pnpm prepare:server && cd apps/server && go test -tags dev ./...",
     "test:security": "node scripts/test-security-acceptance.mjs",
+    "test:dev-proxy": "node scripts/test-dev-proxy.mjs",
     "test:all": "pnpm test && pnpm test:migrations && pnpm test:security",
     "benchmark:load": "pnpm --dir apps/web benchmark:load",
     "drill:fresh-environment": "node scripts/fresh-environment-drill.mjs",

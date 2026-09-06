@@ -28,6 +28,8 @@ pnpm test:migrations
 
 Go unit tests use the `dev` tag so a frontend export is not required. Production embed tests can be run after `pnpm build` with `go test ./internal/webassets` from `apps/server`.
 
+`pnpm test:dev-proxy` runs the actual Next/Go development launcher against an isolated PostGIS Docker container. It requires installed dependencies, Go and Docker, and checks authentication, CSRF, cookies, signed assets, Range/HEAD and SSE cancellation through Next rewrites. It stops its processes and test database afterward; logs are retained under `.build/dev-proxy-<id>/`. On Windows the test uses process-tree termination for cleanup; this does not test graceful production shutdown.
+
 ## Production startup
 
 ```bash
