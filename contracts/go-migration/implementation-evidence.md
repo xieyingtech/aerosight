@@ -5,6 +5,9 @@
 ## 2026-09-06
 
 
+- 前端详情迁移：任务运行、案件、算法运行和历史事件详情采用固定 detail 路径 + projectId/资源 ID，统一 Suspense、参数验证和 Go API 加载。算法 ID/历史事件 ID 按 UUID 校验，数据库日期按 JSON 字符串显示，算法详情类型明确不包含私有 inputSnapshot。任务控制与案件协作通过 CSRF 客户端写入后重新读取数据，保留 expectedVersion、独立权限和错误提示；算法重试跳转固定新运行地址。证据预览改用可取消的共享 API hook，避免切换资源时展示上一个资源的 URL；旧事件列表入口客户端转至案件列表并保留查询参数。Next 路由类型生成、TypeScript 及 API/任务权限/算法诊断/案件证据 13 项测试通过。剩余算法/连接器工作台、全站旧链接兼容与浏览器生产验收未完成，第 6 节保持未勾选。
+
+
 - 前端接线补齐素材列表遗漏：GET /api/projects/:id/assets 使用 sqlc 显式投影，保持旧 listProjectItems 的 available 筛选、创建时间倒序、数值 ID、nullable MIME/采集时间及 ISO 时间；不返回存储路径。真实 PostGIS TestProjectAssetListContract 验证空数组、筛选/排序/DTO、项目隔离和撤权 404。Go 非数据库全包、db:check 和 OpenSpec strict 通过。任务、案件、素材库和设置页面改为静态查询参数入口，保留表格和管理权限提示，任务模板与运行列表分别加载；Next 路由类型生成和 TypeScript 检查通过。详情链接已使用目标固定路径，详情页和浏览器联调仍待完成，第 6 节保持未勾选。
 
 

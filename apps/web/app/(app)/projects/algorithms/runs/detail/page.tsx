@@ -1,18 +1,22 @@
+"use client";
 import { AlgorithmRunRetryButton } from "@/components/algorithm-run-retry-button";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { readAlgorithmRun } from "@/lib/algorithm-runs";
+import type { readAlgorithmRun } from "@/lib/algorithm-runs";
 
-export default async function AlgorithmRunDetailPage({ params }: { params: Promise<{ id: string; runId: string }> }) {
-  const { id, runId } = await params;
-  const projectId = Number(id);
-  const { run, attempts, view } = await readAlgorithmRun(projectId, runId);
+import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
+import type { JSONValueOf } from "@/lib/api-types";
+type LegacyModel = JSONValueOf<Awaited<ReturnType<typeof readAlgorithmRun>>>;
+type Model = Omit<LegacyModel, "run"> & {run: Omit<LegacyModel["run"], "inputSnapshot">};
+export default function DetailPage() {
+ return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=uuidParam(query,"runId");return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>
+ {(model,query)=>{const projectId=positiveParam(query)!;const {run,attempts,view}=model;
   return <Page title={run.definitionName} description={`算法运行 ${run.id}`} actions={view.retryAllowed ? <AlgorithmRunRetryButton projectId={projectId} runId={run.id} /> : undefined}>
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
         <Card><CardHeader><CardDescription>状态</CardDescription><CardTitle><Badge variant={run.status === "failed" || run.status === "timed_out" ? "destructive" : "outline"}>{run.status}</Badge></CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{run.errorCode ? `${run.errorCode}：${run.errorMessage ?? "无错误详情"}` : "运行未报告错误"}</CardContent></Card>
-        <Card><CardHeader><CardDescription>耗时</CardDescription><CardTitle>{view.durationMs === null ? "尚未开始" : `${(view.durationMs / 1000).toFixed(2)} 秒`}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">开始 {run.startedAt?.toLocaleString("zh-CN") ?? "-"}<br />结束 {run.finishedAt?.toLocaleString("zh-CN") ?? "-"}</CardContent></Card>
+        <Card><CardHeader><CardDescription>耗时</CardDescription><CardTitle>{view.durationMs === null ? "尚未开始" : `${(view.durationMs / 1000).toFixed(2)} 秒`}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">开始 {run.startedAt ? new Date(run.startedAt).toLocaleString("zh-CN") : "-"}<br />结束 {run.finishedAt ? new Date(run.finishedAt).toLocaleString("zh-CN") : "-"}</CardContent></Card>
         <Card><CardHeader><CardDescription>运行来源</CardDescription><CardTitle>{view.provenance.modelRevision ?? "Provider 未提供 revision"}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">{view.provenance.providerType} · {view.provenance.modelOrProcess}<br />{view.provenance.modelDigest ?? "未提供模型 digest"}</CardContent></Card>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -25,4 +29,5 @@ export default async function AlgorithmRunDetailPage({ params }: { params: Promi
       {!view.retryAllowed && ["failed", "timed_out"].includes(run.status) ? <p className="text-sm text-muted-foreground">当前账号无权重试此失败运行。</p> : null}
     </div>
   </Page>;
+ }}</StaticAPIPage>;
 }

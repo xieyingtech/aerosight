@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { apiJSON, APIError } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Assignee = Record<string, unknown>;
 
-export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign, canUseAgent }: {
+export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign, canUseAgent, onChanged }: {
   projectId: number; issueId: number; stateVersion: number; status: string; labels: string[];
   assignees: Assignee[]; members: Assignee[]; agents: Assignee[]; canHandle: boolean; canAssign: boolean; canUseAgent: boolean;
+  onChanged: () => void;
 }) {
-  const router = useRouter();
   const [comment, setComment] = useState("");
   const [labelText, setLabelText] = useState(labels.join(", "));
   const [selected, setSelected] = useState("");
@@ -20,14 +20,13 @@ export function IssueCollaborationPanel({ projectId, issueId, stateVersion, stat
   const [error, setError] = useState<string | null>(null);
   async function mutate(mutation: Record<string, unknown>) {
     setPending(true); setError(null);
-    const response = await fetch(`/api/projects/${projectId}/issues/${issueId}/actions`, {
+    try { await apiJSON(`/api/projects/${projectId}/issues/${issueId}/actions`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ expectedVersion: stateVersion, clientKey: crypto.randomUUID(), mutation })
     });
-    const result = await response.json();
-    setPending(false);
-    if (!response.ok) { setError(result.error ?? "案件更新失败"); return; }
-    setComment(""); router.refresh();
+    setComment(""); onChanged();
+    } catch (error) { setError(error instanceof APIError ? error.code : "案件更新失败，请稍后重试。"); }
+    finally { setPending(false); }
   }
   const options = [
     ...members.map((item) => ({ value: `user:${String(item.id)}`, label: `${String(item.name)}（成员）` })),

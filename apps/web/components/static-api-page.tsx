@@ -12,6 +12,10 @@ export function positiveParam(query: PageQuery, key = "projectId"): number | nul
   const id = Number(value);
   return Number.isSafeInteger(id) && id <= 2147483647 ? id : null;
 }
+export function uuidParam(query: PageQuery, key: string): string | null {
+  const value = query.get(key);
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
+}
 type Props<T> = { endpoint: (query: PageQuery) => string | null; children: (data: T, query: PageQuery, reload: () => void) => ReactNode };
 function Content<T>({ endpoint, children }: Props<T>) {
   const query = useSearchParams();

@@ -1,3 +1,4 @@
+"use client";
 import Link from "next/link";
 import { EvidenceImage } from "@/components/evidence-image";
 import { IssueCollaborationPanel } from "@/components/issue-collaboration-panel";
@@ -5,7 +6,7 @@ import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { issueEvidenceSummary } from "@/lib/issue-view-core";
-import { readIssue } from "@/lib/issues";
+import type { readIssue } from "@/lib/issues";
 
 function displayDate(value: unknown) {
   if (!value) return "—";
@@ -25,10 +26,12 @@ const activityLabels: Record<string, string> = {
   "labels.changed": "更新标签"
 };
 
-export default async function IssueDetailPage({ params }: { params: Promise<{ id: string; issueId: string }> }) {
-  const { id, issueId } = await params;
-  const projectId = Number(id);
-  const model = await readIssue(projectId, Number(issueId));
+import { positiveParam, StaticAPIPage } from "@/components/static-api-page";
+import type { JSONValueOf } from "@/lib/api-types";
+type Model = JSONValueOf<Awaited<ReturnType<typeof readIssue>>>;
+export default function DetailPage() {
+ return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=positiveParam(query,"issueId");return pid&&id?`/api/projects/${pid}/issues/${id}`:null;}}>
+ {(model,query,reload)=>{const projectId=positiveParam(query)!;
   const issue = model.issue;
   const summary = issueEvidenceSummary({ detections: model.detections, assets: model.assets });
   const labels = Array.isArray(issue.labels) ? issue.labels : [];
@@ -43,7 +46,7 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ id
 
       <Card><CardHeader><CardTitle>案件说明</CardTitle><CardDescription>{labels.length ? labels.map(String).join(" · ") : "暂无标签"}</CardDescription></CardHeader><CardContent className="space-y-2 text-sm">
         <p>{String(issue.description || "暂无补充说明")}</p>
-        <p className="text-muted-foreground">任务：{issue.taskRunId ? <Link className="underline" href={`/projects/${projectId}/tasks/runs/${String(issue.taskRunId)}`}>{String(issue.taskName || "任务")} · Run #{String(issue.taskRunId)}</Link> : "手动案件"}</p>
+        <p className="text-muted-foreground">任务：{issue.taskRunId ? <Link className="underline" href={`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(issue.taskRunId)}`}>{String(issue.taskName || "任务")} · Run #{String(issue.taskRunId)}</Link> : "手动案件"}</p>
         {issue.taskVersionId ? <p className="text-muted-foreground">任务版本：v{String(issue.taskVersion || "—")}（快照 #{String(issue.taskVersionId)}） · 条件范围 {String(issue.conditionScopeKey || "—")}</p> : null}
       </CardContent></Card>
 
@@ -67,10 +70,11 @@ export default async function IssueDetailPage({ params }: { params: Promise<{ id
         {model.drafts.map((draft) => { const payload = (draft.payload ?? {}) as Record<string, unknown>; return <article className="space-y-2 rounded-lg border p-4" key={String(draft.id)}><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{String(draft.title)}</h3><Badge variant="outline">待人工确认</Badge></div><p className="whitespace-pre-wrap text-sm">{String(payload.analysis ?? "草案内容不可用")}</p><p className="text-xs text-muted-foreground">模型 {String(draft.modelId)} · 提示模板 {String(draft.promptTemplateVersion)} · 证据快照 {String(draft.evidenceVersionHash).slice(0, 12)}</p></article>; })}
       </CardContent></Card> : null}
       <Card><CardHeader><CardTitle>协作处置</CardTitle><CardDescription>评论、标签、状态以及成员/智能体指派受项目权限和乐观并发保护。</CardDescription></CardHeader><CardContent>
-        <IssueCollaborationPanel agents={model.agents} assignees={model.assignees} canAssign={model.canAssign} canHandle={model.canHandle} canUseAgent={model.canUseAgent}
+        <IssueCollaborationPanel onChanged={reload} agents={model.agents} assignees={model.assignees} canAssign={model.canAssign} canHandle={model.canHandle} canUseAgent={model.canUseAgent}
           issueId={Number(issue.id)} labels={labels.map(String)} members={model.members} projectId={projectId}
           stateVersion={Number(issue.stateVersion)} status={String(issue.status)} />
       </CardContent></Card>
     </div>
   </Page>;
+ }}</StaticAPIPage>;
 }
