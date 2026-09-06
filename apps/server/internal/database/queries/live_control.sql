@@ -1,3 +1,7 @@
+-- name: LockLiveControlDevice :one
+SELECT device.id FROM devices device JOIN live_streams stream ON stream.device_id=device.id AND stream.project_id=device.project_id
+WHERE stream.project_id=$1 AND stream.id=$2 FOR UPDATE OF device;
+
 -- name: LockLiveControlSession :one
 SELECT id,device_id,stream_key,source_type,status,playback_ref,last_active_at,status_reason,vendor_stream_ref
 FROM live_streams WHERE project_id=$1 AND id=$2 FOR UPDATE;

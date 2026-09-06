@@ -41,6 +41,10 @@ func (s *Server) stopLiveStream(c *gin.Context) {
 	}
 	audit := database.AuditContext{ProjectID: pid, TeamID: access.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), Action: "live_stream.stop", ResourceType: "live_stream", ResourceID: strconv.FormatInt(sid, 10), Input: gin.H{}, PolicyResult: map[string]any{"permission": "mission:operate"}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, access.TeamID, "mission:operate", false), func(w *database.WriteTx) (gin.H, error) {
+		// Match start's device -> session lock order before command FK checks.
+		if _, e := w.Queries.LockLiveControlDevice(ctx, sqlcgen.LockLiveControlDeviceParams{ProjectID: pid, ID: sid}); e != nil {
+			return nil, e
+		}
 		row, e := w.Queries.LockLiveControlSession(ctx, sqlcgen.LockLiveControlSessionParams{ProjectID: pid, ID: sid})
 		if e != nil {
 			return nil, e

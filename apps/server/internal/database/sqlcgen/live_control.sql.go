@@ -52,6 +52,23 @@ func (q *Queries) InsertLiveControlCommand(ctx context.Context, arg InsertLiveCo
 	return id, err
 }
 
+const lockLiveControlDevice = `-- name: LockLiveControlDevice :one
+SELECT device.id FROM devices device JOIN live_streams stream ON stream.device_id=device.id AND stream.project_id=device.project_id
+WHERE stream.project_id=$1 AND stream.id=$2 FOR UPDATE OF device
+`
+
+type LockLiveControlDeviceParams struct {
+	ProjectID int32 `json:"project_id"`
+	ID        int64 `json:"id"`
+}
+
+func (q *Queries) LockLiveControlDevice(ctx context.Context, arg LockLiveControlDeviceParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, lockLiveControlDevice, arg.ProjectID, arg.ID)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockLiveControlSession = `-- name: LockLiveControlSession :one
 SELECT id,device_id,stream_key,source_type,status,playback_ref,last_active_at,status_reason,vendor_stream_ref
 FROM live_streams WHERE project_id=$1 AND id=$2 FOR UPDATE

@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 5.8 当前入口清单：直播启动迁入 Go/sqlc，锁设备后校验在线/可用能力/显式授权、选择频道、同频道重放和驱动并发额度；DJI 拓扑生成 video_id，验证适配器推流凭据，只把无密码的服务端 RTMP 目标写入命令，原子提交会话/命令/outbox/项目事件/审计。保留现有 Route Handler 不接收 taskRunId 的行为；模拟器直接 live，DJI requested。启动/停止统一 device→session 锁顺序。真实 PostGIS 覆盖 4 并发只建一次、第二频道额度、离线/无能力/缺频道/拓扑/凭据拒绝、同频道重放前再授权、DJI 参数/优先级、outbox 失败全回滚、并发启动/停止及跨项目。全量 Go（真实 DB）、额外并发测试、原 TS 13 项、sqlc 和 OpenSpec strict 通过。媒体 Linux 补验使用本地 Go 交叉编译测试二进制，在 bookworm 容器实际执行 TestMediaProjectFileBoundary，符号链接逃逸分支通过（无 skip）；此前 Windows 权限限制的补验已完成。前端切换与生产端到端仍由第 6/8 节覆盖。
+
 - 5.8 第四批迁移：停止直播 POST 接入 Go/sqlc；事务内复查 mission:operate 并锁会话，保留 DJI stopping/45 秒租约/优先级 30 停止命令、模拟器及失败会话直接 stopped、重复停止重放和 replay 模式拒绝。命令冲突返回实际 ID，修复旧逻辑派发不存在 UUID 的边界；命令/outbox 与状态/审计原子提交。真实 PostGIS 验证 4 并发仅一条停止命令/派发事件、已有命令不重复派发、模拟器与 failed 行为、outbox 故障回滚、跨项目/权限拒绝，并重跑播放及媒体鉴权测试；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动仍待迁移，Linux 符号链接补验仍待执行，5.8 保持未勾选。
 
 - 5.8 第三批迁移：浏览器直播 playback API 接入 Go/sqlc；在事务内锁授权与会话，复核 stream.* 能力显式 deny/allow，签发 60 秒候选并更新 locator 期限。保留 requested/stopped/无 ref/无协议原因、模拟器 locator、WebRTC→HLS 顺序、数值 session ID 与 null 字段；模拟器固定签名与原 TS 字节一致。真实 PostGIS 测试验证过期 locator 刷新、签发 DJI token 通过 media-auth、owner 显式 deny、成员独立能力授权、停止后不可用、跨项目与撤权拒绝；Go 非数据库全包、sqlc 和 OpenSpec strict 通过。直播启动/停止仍待迁移，5.8 保持未勾选。
