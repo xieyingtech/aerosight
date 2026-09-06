@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 完成 3.4：新增真实 PostGIS schema 一致性测试，分别在独立临时库执行全部嵌入迁移和 db/schema.sql，比较应用关系、列类型/维度/SRID/默认值、具名约束、索引、触发器、视图、函数定义、序列参数、RLS 策略和枚举；排除扩展自身对象及迁移 ledger，函数文本仅统一 Git 换行符。测试实际发现并修复快照的约束名称、三个 unique constraint/index 表达差异、降序索引 NULL 排序和缺失的 device_types 外键；函数定义同步为迁移结果，不改历史迁移。扩展快照 API 集成测试：参数化 GeoJSON PointZ 写入，显式经纬高投影及 LineString GeoJSON 输出逐点比对，保留回放 bbox/类型过滤验收。真实 PostGIS 的 TestSchemaSnapshotMatchesFullMigration、TestSnapshotPostGISDevicePoseAndTrack 与 pnpm db:check 通过。本项不代替第 8 节整体兼容验收。
+
 - 完成 4.5/6.5：新增 pnpm test:dev-proxy，通过实际 scripts/dev.mjs 启动 Next dev 与 Go dev，使用随机 loopback 端口、独立 PostGIS 容器和临时对象目录。实测 Next beforeFiles rewrites 下匿名 401、CSRF/Set-Cookie、缺 Token/非法 Origin 登录拒绝、有效登录/session、创建团队/项目、媒体 Range/HEAD、算法资产无 Cookie 签名 Range/错误签名拒绝、SSE 首帧心跳五秒内到达及客户端取消后 Go 日志确认 handler 返回、错误 Token 退出不失效/有效退出后 401。直接 Go dev /login/ 返回 404，未反向代理前端。脚本初版与增加签名资产检查后均通过；测试树与数据库已停止，日志保留在忽略目录。Windows 测试清理使用 taskkill /T，仅针对本次启动 PID，不作为优雅退出证据。结合上一批真实 TLS/dev Cookie、CSRF 拒绝矩阵和有效机器回调测试完成 4.5。再次 pnpm build 完整通过，所有页面 Static、333 文件/52 SQL 嵌入并生成 Go 二进制；out 扫描未发现 GO_API_ORIGIN/默认 Go 内部地址/服务端密钥配置名，完成 6.5 生产隔离部分。此脚本是 HTTP/协议验收，尚不替代浏览器 hydration、页面交互或生产生命周期验收。
 
 - 4.5 CSRF 矩阵第一批：真实 PostGIS 中登录/退出/团队写入口分别测试缺 Token、格式错误 Token、其他客户端的有效 Token、非法 Origin 与 Origin:null；伪造 X-Forwarded-Host/Proto 不影响拒绝。全部返回 403/CSRF_FAILED、请求 ID 和 no-store；拒绝写入前后团队数量一致，拒绝退出后会话仍有效，正确 Token 的写入和退出仍成功。真实 TLS 服务验证 CSRF Cookie 的 Secure/HttpOnly/Path、会话 Cookie 的 Secure/HttpOnly/SameSite=Lax 与 HTTPS 登录/会话读取；开发登录测试补充 Secure=false 与 SameSite=Lax。与既有登录持久化及有效机器回调独立认证回归共四项通过（5.318s），开发 Cookie 断言单独重跑通过；Go HTTP 非数据库检查通过，临时容器已停止。真实 Next rewrites 的代理请求验收仍待，4.5 保持未勾选。

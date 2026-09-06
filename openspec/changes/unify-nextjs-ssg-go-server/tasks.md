@@ -16,7 +16,7 @@
 - [x] 3.1 建立 sqlc 配置、查询目录、生成目录和固定工具入口，使用 database/sql + pgx stdlib；以至少一个读写查询验证生成代码可编译。
 - [x] 3.2 建立 DTO 映射和 sqlc nullable/JSONB/ID 约定；通过契约测试验证类型化结果不改变 HTTP 序列化。
 - [x] 3.3 建立共享事务入口，生成查询通过 WithTx 参与已有 *sql.Tx；用故障注入验证业务、审计、幂等、outbox 和项目事件整体回滚。
-- [ ] 3.4 验证 PostGIS 显式投影与输入查询，并建立 schema 快照/迁移结果一致性检查；在真实 PostGIS 上通过坐标与 GeoJSON 往返测试。
+- [x] 3.4 验证 PostGIS 显式投影与输入查询，并建立 schema 快照/迁移结果一致性检查；在真实 PostGIS 上通过坐标与 GeoJSON 往返测试。
 - [x] 3.5 提供 pnpm db:generate/db:check，检查通过临时目录比较且生成代码提交；人为制造漂移验证失败，检查不覆盖工作文件。
 
 ## 4. HTTP 与认证基础

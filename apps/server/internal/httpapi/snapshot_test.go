@@ -85,7 +85,8 @@ func TestSnapshotPostGISDevicePoseAndTrack(t *testing.T) {
 		if err := f.db.QueryRow("insert into observations(project_id,team_id,adapter_id,device_id,observation_type,source_event_id,captured_at,received_at) values($1,$2,$3,$4,'pose',$5,now()+$6*interval '1 second',now()) returning id", pid, team, adapter, device, fmt.Sprintf("pose-%d", n), n).Scan(&observation); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := f.db.Exec("insert into poses(observation_id,project_id,device_id,captured_at,standard_position) values($1,$2,$3,now()+$4*interval '1 second',ST_SetSRID(ST_MakePoint($5,30,50),4326))", observation, pid, device, n, 120+float64(n)/10); err != nil {
+		geometry := fmt.Sprintf(`{"type":"Point","coordinates":[%g,30,50]}`, 120+float64(n)/10)
+		if _, err := f.db.Exec("insert into poses(observation_id,project_id,device_id,captured_at,standard_position) values($1,$2,$3,now()+$4*interval '1 second',ST_SetSRID(ST_GeomFromGeoJSON($5),4326))", observation, pid, device, n, geometry); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -107,6 +108,12 @@ func TestSnapshotPostGISDevicePoseAndTrack(t *testing.T) {
 	geometry := tracks[0].(map[string]any)["geometry"].(map[string]any)
 	if geometry["type"] != "LineString" || len(geometry["coordinates"].([]any)) != 2 {
 		t.Fatalf("track %+v", geometry)
+	}
+	for n, point := range geometry["coordinates"].([]any) {
+		coordinates := point.([]any)
+		if len(coordinates) != 3 || coordinates[0] != 120+float64(n)/10 || coordinates[1] != float64(30) || coordinates[2] != float64(50) {
+			t.Fatalf("GeoJSON round trip point %d: %+v", n, coordinates)
+		}
 	}
 	if data["freshness"].(map[string]any)["isRealtime"] != true {
 		t.Fatal("device freshness lost")

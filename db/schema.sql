@@ -287,7 +287,7 @@ CREATE TABLE "detection_group_members" (
 	"detection_id" bigint NOT NULL,
 	"added_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "detection_group_members_detection_unique" UNIQUE("detection_id"),
-	CONSTRAINT "detection_group_members_pk" PRIMARY KEY("detection_group_id", "detection_id")
+	CONSTRAINT "detection_group_members_pkey" PRIMARY KEY("detection_group_id", "detection_id")
 );
 --> statement-breakpoint
 CREATE TABLE "event_rules" (
@@ -522,15 +522,17 @@ CREATE TABLE "live_streams" (
 	CONSTRAINT "live_streams_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_evidence_link()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF OLD.is_published THEN
-		RAISE EXCEPTION 'published evidence links are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.protect_published_evidence_link()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if old.is_published then
+    raise exception 'published evidence links are immutable' using errcode = '55000';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER evidence_links_published_immutable
 BEFORE UPDATE OR DELETE ON evidence_links
@@ -611,9 +613,9 @@ CREATE TABLE "devices" (
 	"metadata_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "devices_id_project_unique" UNIQUE("id", "project_id"),
 	CONSTRAINT "devices_connectivity_status_valid" CHECK (status in ('online', 'degraded', 'offline', 'unknown'))
 );
+CREATE UNIQUE INDEX "devices_id_project_unique" ON "devices"("id", "project_id");
 --> statement-breakpoint
 CREATE TABLE "device_external_identities" (
 	"id" bigserial PRIMARY KEY NOT NULL,
@@ -665,7 +667,7 @@ CREATE TABLE "device_telemetry" (
 	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"payload_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"quality_json" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	CONSTRAINT "device_telemetry_pk" PRIMARY KEY("id", "captured_at")
+	CONSTRAINT "device_telemetry_pkey" PRIMARY KEY("id", "captured_at")
 ) PARTITION BY RANGE (captured_at);
 --> statement-breakpoint
 CREATE TABLE "device_telemetry_default" PARTITION OF "device_telemetry" DEFAULT;
@@ -676,7 +678,7 @@ CREATE TABLE "telemetry_event_dedup" (
 	"project_id" integer NOT NULL,
 	"captured_at" timestamp with time zone NOT NULL,
 	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "telemetry_event_dedup_pk" PRIMARY KEY("adapter_id", "event_id")
+	CONSTRAINT "telemetry_event_dedup_pkey" PRIMARY KEY("adapter_id", "event_id")
 );
 --> statement-breakpoint
 CREATE TABLE "device_latest_telemetry" (
@@ -892,7 +894,7 @@ CREATE TABLE "outbox_consumptions" (
 	"consumer_name" text NOT NULL,
 	"event_id" text NOT NULL,
 	"consumed_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "outbox_consumptions_pk" PRIMARY KEY("consumer_name", "event_id")
+	CONSTRAINT "outbox_consumptions_pkey" PRIMARY KEY("consumer_name", "event_id")
 );
 --> statement-breakpoint
 CREATE TABLE "projects" (
@@ -903,9 +905,9 @@ CREATE TABLE "projects" (
 	"created_by_user_id" integer,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"current_safety_policy_version_id" bigint,
-	CONSTRAINT "projects_id_team_unique" UNIQUE("id", "team_id")
+	"current_safety_policy_version_id" bigint
 );
+CREATE UNIQUE INDEX "projects_id_team_unique" ON "projects"("id", "team_id");
 --> statement-breakpoint
 CREATE TABLE "project_feature_flags" (
 	"project_id" integer PRIMARY KEY NOT NULL,
@@ -1189,9 +1191,9 @@ CREATE TABLE "team_members" (
 	"team_id" integer NOT NULL,
 	"user_id" integer NOT NULL,
 	"role" text DEFAULT 'member' NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "team_members_team_user_unique" UNIQUE("team_id", "user_id")
+	"created_at" timestamp DEFAULT now() NOT NULL
 );
+CREATE UNIQUE INDEX "team_members_team_user_unique" ON "team_members"("team_id", "user_id");
 --> statement-breakpoint
 CREATE TABLE "teams" (
 	"id" serial PRIMARY KEY NOT NULL,
@@ -1213,43 +1215,49 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_phone_unique" UNIQUE("phone")
 );
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_task_version()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF OLD.status IN ('published', 'retired') THEN
-		RAISE EXCEPTION 'published task versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.protect_published_task_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if old.status in ('published', 'retired') then
+    raise exception 'published task versions are immutable' using errcode = '55000';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER task_versions_published_immutable
 BEFORE UPDATE OR DELETE ON task_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_task_version();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_task_step()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF EXISTS (SELECT 1 FROM task_versions WHERE id = OLD.task_version_id AND status IN ('published', 'retired')) THEN
-		RAISE EXCEPTION 'published task steps are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.protect_published_task_step()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if exists (select 1 from task_versions where id = old.task_version_id and status in ('published', 'retired')) then
+    raise exception 'published task steps are immutable' using errcode = '55000';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER task_steps_published_immutable
 BEFORE UPDATE OR DELETE ON task_steps
 FOR EACH ROW EXECUTE FUNCTION protect_published_task_step();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_safety_policy_version()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF OLD.status = 'published' THEN
-		RAISE EXCEPTION 'published safety policy versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.protect_published_safety_policy_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if old.status = 'published' then
+    raise exception 'published safety policy versions are immutable' using errcode = '55000';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER safety_policy_versions_published_immutable
 BEFORE UPDATE OR DELETE ON safety_policy_versions
@@ -1317,7 +1325,7 @@ CREATE TABLE "device_protocol_cursors" (
 	"last_timestamp_ms" bigint NOT NULL,
 	"last_transaction_id" text NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "device_protocol_cursors_pk" PRIMARY KEY("adapter_id", "route_key"),
+	CONSTRAINT "device_protocol_cursors_pkey" PRIMARY KEY("adapter_id", "route_key"),
 	CONSTRAINT "device_protocol_cursors_project_team_fk" FOREIGN KEY ("project_id", "team_id") REFERENCES "projects"("id", "team_id") ON DELETE cascade,
 	CONSTRAINT "device_protocol_cursors_adapter_project_fk" FOREIGN KEY ("adapter_id", "project_id") REFERENCES "device_adapters"("id", "project_id") ON DELETE cascade
 );
@@ -1326,44 +1334,51 @@ CREATE TRIGGER algorithm_definition_versions_published_immutable
 BEFORE UPDATE OR DELETE ON algorithm_definition_versions
 FOR EACH ROW EXECUTE FUNCTION protect_published_algorithm_definition_version();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION validate_approval_decision()
-RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE request approval_requests%ROWTYPE;
-BEGIN
-	SELECT * INTO request FROM approval_requests WHERE id = NEW.approval_request_id FOR UPDATE;
-	IF request.status <> 'pending' THEN
-		RAISE EXCEPTION 'approval request is not pending' USING ERRCODE = '55000';
-	END IF;
-	IF request.expires_at <= NEW.decided_at THEN
-		RAISE EXCEPTION 'approval request expired' USING ERRCODE = '55000';
-	END IF;
-	IF request.require_separation AND request.requested_by_user_id = NEW.approver_user_id THEN
-		RAISE EXCEPTION 'requester cannot approve own request' USING ERRCODE = '42501';
-	END IF;
-	RETURN NEW;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.validate_approval_decision()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare request approval_requests%rowtype;
+begin
+  select * into request from approval_requests where id = new.approval_request_id for update;
+  if request.status <> 'pending' then
+    raise exception 'approval request is not pending' using errcode = '55000';
+  end if;
+  if request.expires_at <= new.decided_at then
+    raise exception 'approval request expired' using errcode = '55000';
+  end if;
+  if request.require_separation and request.requested_by_user_id = new.approver_user_id then
+    raise exception 'requester cannot approve own request' using errcode = '42501';
+  end if;
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER approvals_validate_decision
 BEFORE INSERT ON approvals FOR EACH ROW EXECUTE FUNCTION validate_approval_decision();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION project_approval_request_status()
-RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE required_count integer;
-DECLARE approved_count integer;
-BEGIN
-	IF NEW.decision = 'rejected' THEN
-		UPDATE approval_requests SET status = 'rejected', decided_at = NEW.decided_at WHERE id = NEW.approval_request_id;
-		RETURN NEW;
-	END IF;
-	SELECT required_approvals INTO required_count FROM approval_requests WHERE id = NEW.approval_request_id;
-	SELECT count(*) INTO approved_count FROM approvals WHERE approval_request_id = NEW.approval_request_id AND decision = 'approved';
-	IF approved_count >= required_count THEN
-		UPDATE approval_requests SET status = 'approved', decided_at = NEW.decided_at WHERE id = NEW.approval_request_id;
-	END IF;
-	RETURN NEW;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.project_approval_request_status()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare required_count integer;
+declare approved_count integer;
+begin
+  if new.decision = 'rejected' then
+    update approval_requests set status = 'rejected', decided_at = new.decided_at
+      where id = new.approval_request_id;
+    return new;
+  end if;
+  select required_approvals into required_count from approval_requests where id = new.approval_request_id;
+  select count(*) into approved_count from approvals
+    where approval_request_id = new.approval_request_id and decision = 'approved';
+  if approved_count >= required_count then
+    update approval_requests set status = 'approved', decided_at = new.decided_at
+      where id = new.approval_request_id;
+  end if;
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER approvals_project_request_status
 AFTER INSERT ON approvals FOR EACH ROW EXECUTE FUNCTION project_approval_request_status();
@@ -1701,8 +1716,8 @@ ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_task_run_project_fk" FOR
 ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_adapter_project_fk" FOREIGN KEY ("adapter_id","project_id") REFERENCES "public"."device_adapters"("id","project_id") ON DELETE SET NULL ("adapter_id") ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "live_streams" ADD CONSTRAINT "live_streams_started_by_fk" FOREIGN KEY ("started_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_agent_id_agents_id_fk" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_events" ADD CONSTRAINT "audit_events_actor_agent_id_fkey" FOREIGN KEY ("actor_agent_id") REFERENCES "public"."agents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_adapters" ADD CONSTRAINT "device_adapters_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_device_id_devices_id_fk" FOREIGN KEY ("device_id") REFERENCES "public"."devices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "device_capabilities" ADD CONSTRAINT "device_capabilities_device_project_fk" FOREIGN KEY ("device_id","project_id") REFERENCES "public"."devices"("id","project_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -1762,15 +1777,15 @@ ALTER TABLE "issues" ADD CONSTRAINT "issues_task_version_project_fk" FOREIGN KEY
 ALTER TABLE "issues" ADD CONSTRAINT "issues_opened_by_user_id_users_id_fk" FOREIGN KEY ("opened_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "issues" ADD CONSTRAINT "issues_assignee_user_id_users_id_fk" FOREIGN KEY ("assignee_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "outbox_events" ADD CONSTRAINT "outbox_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "outbox_consumptions" ADD CONSTRAINT "outbox_consumptions_event_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."outbox_events"("event_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "outbox_consumptions" ADD CONSTRAINT "outbox_consumptions_event_id_fkey" FOREIGN KEY ("event_id") REFERENCES "public"."outbox_events"("event_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_team_id_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."teams"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "projects" ADD CONSTRAINT "projects_current_safety_policy_project_fk" FOREIGN KEY ("current_safety_policy_version_id","id") REFERENCES "public"."safety_policy_versions"("id","project_id") ON DELETE SET NULL ("current_safety_policy_version_id") ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_updated_by_user_id_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_feature_flags" ADD CONSTRAINT "project_feature_flags_updated_by_user_id_fkey" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_team_member_fk" FOREIGN KEY ("team_id","user_id") REFERENCES "public"."team_members"("team_id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_granted_by_user_id_users_id_fk" FOREIGN KEY ("granted_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "project_permissions" ADD CONSTRAINT "project_permissions_granted_by_user_id_fkey" FOREIGN KEY ("granted_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "project_events" ADD CONSTRAINT "project_events_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "safety_policy_versions" ADD CONSTRAINT "safety_policy_versions_project_team_fk" FOREIGN KEY ("project_id","team_id") REFERENCES "public"."projects"("id","team_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "safety_policy_versions" ADD CONSTRAINT "safety_policy_versions_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
@@ -1803,38 +1818,41 @@ ALTER TABLE "team_members" ADD CONSTRAINT "team_members_user_id_users_id_fk" FOR
 CREATE INDEX "agent_messages_session_created_idx" ON "agent_messages" USING btree ("session_id","created_at");--> statement-breakpoint
 CREATE INDEX "agent_sessions_project_created_idx" ON "agent_sessions" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_copilot_unique" ON "agents" USING btree ("project_id",(config_json->>'kind')) WHERE config_json->>'kind'='copilot';--> statement-breakpoint
-CREATE OR REPLACE FUNCTION provision_project_copilot_agent() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  INSERT INTO agents(project_id,name,description,status,config_json)
-  VALUES(NEW.id,'Copilot','项目级 AI 助手，可通过案件评论提及或负责人指派触发。','active',
+CREATE OR REPLACE FUNCTION public.provision_project_copilot_agent()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  insert into agents(project_id,name,description,status,config_json)
+  values(new.id,'Copilot','项目级 AI 助手，可通过案件评论提及或负责人指派触发。','active',
          '{"kind":"copilot","builtIn":true}'::jsonb);
-  RETURN NEW;
-END $$;
+  return new;
+end $function$;
 --> statement-breakpoint
 CREATE TRIGGER projects_provision_copilot_agent
   AFTER INSERT ON projects FOR EACH ROW EXECUTE FUNCTION provision_project_copilot_agent();
 --> statement-breakpoint
 CREATE INDEX "agent_sessions_issue_idx" ON "agent_sessions" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "agent_sessions_task_run_idx" ON "agent_sessions" USING btree ("task_run_id");--> statement-breakpoint
-CREATE INDEX "agent_drafts_project_created_idx" ON "agent_drafts" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "agent_drafts_session_created_idx" ON "agent_drafts" USING btree ("session_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "agent_drafts_project_created_idx" ON "agent_drafts" USING btree ("project_id","created_at" DESC);--> statement-breakpoint
+CREATE INDEX "agent_drafts_session_created_idx" ON "agent_drafts" USING btree ("session_id","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "agent_draft_evidence_project_ref_idx" ON "agent_draft_evidence" USING btree ("project_id","reference_type","reference_id");--> statement-breakpoint
 CREATE INDEX "agent_tool_jobs_claim_idx" ON "agent_tool_jobs" USING btree ("status","created_at") WHERE "agent_tool_jobs"."status"='queued';--> statement-breakpoint
-CREATE INDEX "agent_tool_jobs_session_idx" ON "agent_tool_jobs" USING btree ("session_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "agent_tool_jobs_session_idx" ON "agent_tool_jobs" USING btree ("session_id","created_at" DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "agent_tool_jobs_project_idempotency_unique" ON "agent_tool_jobs" USING btree ("project_id","idempotency_key") WHERE "agent_tool_jobs"."idempotency_key" is not null;--> statement-breakpoint
-CREATE INDEX "agent_tool_jobs_issue_created_idx" ON "agent_tool_jobs" USING btree ("issue_id","created_at" DESC NULLS LAST) WHERE "agent_tool_jobs"."issue_id" is not null;--> statement-breakpoint
+CREATE INDEX "agent_tool_jobs_issue_created_idx" ON "agent_tool_jobs" USING btree ("issue_id","created_at" DESC) WHERE "agent_tool_jobs"."issue_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "alert_automation_policy_versions_one_draft_idx" ON "alert_automation_policy_versions" USING btree ("alert_automation_policy_id") WHERE "alert_automation_policy_versions"."status"='draft';--> statement-breakpoint
 CREATE INDEX "alert_automation_policy_versions_project_status_idx" ON "alert_automation_policy_versions" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "alert_automation_runs_claim_idx" ON "alert_automation_runs" USING btree ("status","queued_at") WHERE "alert_automation_runs"."status"='queued';--> statement-breakpoint
-CREATE INDEX "alert_automation_runs_project_event_idx" ON "alert_automation_runs" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "alert_automation_drafts_project_event_idx" ON "alert_automation_drafts" USING btree ("project_id","perception_event_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "alert_automation_runs_project_event_idx" ON "alert_automation_runs" USING btree ("project_id","perception_event_id","created_at" DESC);--> statement-breakpoint
+CREATE INDEX "alert_automation_drafts_project_event_idx" ON "alert_automation_drafts" USING btree ("project_id","perception_event_id","created_at" DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "generated_report_versions_one_draft_idx" ON "generated_report_versions" USING btree ("generated_report_id") WHERE "generated_report_versions"."status"='draft';--> statement-breakpoint
-CREATE INDEX "generated_reports_project_updated_idx" ON "generated_reports" USING btree ("project_id","updated_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "generated_reports_project_updated_idx" ON "generated_reports" USING btree ("project_id","updated_at" DESC);--> statement-breakpoint
 CREATE INDEX "generated_report_evidence_asset_idx" ON "generated_report_evidence" USING btree ("project_id","asset_id") WHERE "generated_report_evidence"."asset_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "retention_policies_one_default_idx" ON "retention_policies" USING btree ("project_id") WHERE "retention_policies"."status" = 'published' and "retention_policies"."is_default";--> statement-breakpoint
 CREATE UNIQUE INDEX "retention_holds_one_active_asset_idx" ON "retention_holds" USING btree ("project_id","asset_id") WHERE "retention_holds"."status" = 'active';--> statement-breakpoint
-CREATE INDEX "retention_cleanup_runs_project_created_idx" ON "retention_cleanup_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "retention_tombstones_project_deleted_idx" ON "retention_deletion_tombstones" USING btree ("project_id","deleted_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "retention_cleanup_runs_project_created_idx" ON "retention_cleanup_runs" USING btree ("project_id","created_at" DESC);--> statement-breakpoint
+CREATE INDEX "retention_tombstones_project_deleted_idx" ON "retention_deletion_tombstones" USING btree ("project_id","deleted_at" DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "agents_project_name_unique" ON "agents" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "agents_project_status_idx" ON "agents" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_providers_project_status_idx" ON "algorithm_providers" USING btree ("project_id","status");--> statement-breakpoint
@@ -1842,17 +1860,17 @@ CREATE INDEX "algorithm_definitions_project_provider_idx" ON "algorithm_definiti
 CREATE UNIQUE INDEX "algorithm_definition_versions_one_draft_idx" ON "algorithm_definition_versions" USING btree ("algorithm_definition_id") WHERE "algorithm_definition_versions"."status" = 'draft';--> statement-breakpoint
 CREATE INDEX "algorithm_definition_versions_project_status_idx" ON "algorithm_definition_versions" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "algorithm_runs_claim_idx" ON "algorithm_runs" USING btree ("status","created_at");--> statement-breakpoint
-CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "algorithm_runs_project_created_idx" ON "algorithm_runs" USING btree ("project_id","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "algorithm_runs_task_step_idx" ON "algorithm_runs" USING btree ("task_run_step_id") WHERE "algorithm_runs"."task_run_step_id" is not null;--> statement-breakpoint
 CREATE INDEX "algorithm_run_attempts_run_idx" ON "algorithm_run_attempts" USING btree ("algorithm_run_id","attempt");--> statement-breakpoint
-CREATE INDEX "algorithm_callback_receipts_run_idx" ON "algorithm_callback_receipts" USING btree ("algorithm_run_id","received_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "detections_project_captured_idx" ON "detections" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "algorithm_callback_receipts_run_idx" ON "algorithm_callback_receipts" USING btree ("algorithm_run_id","received_at" DESC);--> statement-breakpoint
+CREATE INDEX "detections_project_captured_idx" ON "detections" USING btree ("project_id","captured_at" DESC);--> statement-breakpoint
 CREATE INDEX "detections_geometry_gist" ON "detections" USING gist ("geographic_geometry");--> statement-breakpoint
-CREATE INDEX "detection_groups_project_time_idx" ON "detection_groups" USING btree ("project_id","last_detected_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "detection_groups_project_time_idx" ON "detection_groups" USING btree ("project_id","last_detected_at" DESC);--> statement-breakpoint
 CREATE INDEX "detection_groups_geometry_gist" ON "detection_groups" USING gist ("geographic_geometry");--> statement-breakpoint
 CREATE UNIQUE INDEX "event_rule_versions_one_draft_idx" ON "event_rule_versions" USING btree ("event_rule_id") WHERE "event_rule_versions"."status" = 'draft';--> statement-breakpoint
 CREATE UNIQUE INDEX "perception_events_active_dedup_idx" ON "perception_events" USING btree ("project_id","deduplication_key") WHERE "perception_events"."status" in ('open','acknowledged','investigating');--> statement-breakpoint
-CREATE INDEX "perception_events_project_status_idx" ON "perception_events" USING btree ("project_id","status","last_detected_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "perception_events_project_status_idx" ON "perception_events" USING btree ("project_id","status","last_detected_at" DESC);--> statement-breakpoint
 CREATE INDEX "event_feedback_event_created_idx" ON "event_feedback" USING btree ("perception_event_id","created_at");--> statement-breakpoint
 CREATE INDEX "approval_requests_project_status_idx" ON "approval_requests" USING btree ("project_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "approvals_request_decided_idx" ON "approvals" USING btree ("approval_request_id","decided_at");--> statement-breakpoint
@@ -1860,15 +1878,15 @@ CREATE INDEX "assets_project_created_idx" ON "assets" USING btree ("project_id",
 CREATE INDEX "assets_task_run_idx" ON "assets" USING btree ("task_run_id");--> statement-breakpoint
 CREATE INDEX "assets_issue_idx" ON "assets" USING btree ("issue_id");--> statement-breakpoint
 CREATE INDEX "assets_device_idx" ON "assets" USING btree ("device_id");--> statement-breakpoint
-CREATE INDEX "assets_project_status_created_idx" ON "assets" USING btree ("project_id","status","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "assets_project_status_created_idx" ON "assets" USING btree ("project_id","status","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "assets_retention_idx" ON "assets" USING btree ("project_id","retention_hold_until") WHERE "assets"."status" = 'available';--> statement-breakpoint
 CREATE INDEX "asset_upload_intents_expiry_idx" ON "asset_upload_intents" USING btree ("status","expires_at");--> statement-breakpoint
 CREATE INDEX "asset_derivatives_source_idx" ON "asset_derivatives" USING btree ("project_id","source_asset_id");--> statement-breakpoint
 CREATE INDEX "evidence_links_target_idx" ON "evidence_links" USING btree ("project_id","target_type","target_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "live_streams_one_active_device_key_idx" ON "live_streams" USING btree ("project_id","device_id","stream_key") WHERE "live_streams"."status" in ('requested', 'starting', 'live', 'degraded', 'stopping');--> statement-breakpoint
-CREATE INDEX "live_streams_project_status_idx" ON "live_streams" USING btree ("project_id","status","started_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "live_streams_device_started_idx" ON "live_streams" USING btree ("device_id","started_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "audit_events_project_created_idx" ON "audit_events" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "live_streams_project_status_idx" ON "live_streams" USING btree ("project_id","status","started_at" DESC);--> statement-breakpoint
+CREATE INDEX "live_streams_device_started_idx" ON "live_streams" USING btree ("device_id","started_at" DESC);--> statement-breakpoint
+CREATE INDEX "audit_events_project_created_idx" ON "audit_events" USING btree ("project_id","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "audit_events_request_idx" ON "audit_events" USING btree ("request_id");--> statement-breakpoint
 CREATE INDEX "audit_events_resource_idx" ON "audit_events" USING btree ("project_id","resource_type","resource_id");--> statement-breakpoint
 CREATE INDEX "device_adapters_project_status_idx" ON "device_adapters" USING btree ("project_id","status");--> statement-breakpoint
@@ -1878,32 +1896,32 @@ CREATE UNIQUE INDEX "devices_project_name_unique" ON "devices" USING btree ("pro
 CREATE INDEX "devices_project_status_idx" ON "devices" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "devices_last_seen_idx" ON "devices" USING btree ("last_seen_at");--> statement-breakpoint
 CREATE INDEX "devices_registration_number_idx" ON "devices" USING btree ("uav_registration_number") WHERE "devices"."uav_registration_number" is not null;--> statement-breakpoint
-CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_external_identities_project_idx" ON "device_external_identities" USING btree ("project_id","last_seen_at" DESC);--> statement-breakpoint
 CREATE INDEX "device_connections_project_status_idx" ON "device_connections" USING btree ("project_id","status");--> statement-breakpoint
-CREATE INDEX "device_commands_dispatch_idx" ON "device_commands" USING btree ("status","priority" DESC NULLS LAST,"deadline_at");--> statement-breakpoint
+CREATE INDEX "device_commands_dispatch_idx" ON "device_commands" USING btree ("status","priority" DESC,"deadline_at");--> statement-breakpoint
 CREATE INDEX "device_commands_run_created_idx" ON "device_commands" USING btree ("task_run_id","created_at");--> statement-breakpoint
 CREATE INDEX "command_attempts_command_idx" ON "command_attempts" USING btree ("command_id","attempt");--> statement-breakpoint
-CREATE INDEX "device_connections_device_opened_idx" ON "device_connections" USING btree ("device_id","opened_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_connections_device_opened_idx" ON "device_connections" USING btree ("device_id","opened_at" DESC);--> statement-breakpoint
 CREATE INDEX "device_connections_open_heartbeat_idx" ON "device_connections" USING btree ("last_heartbeat_at") WHERE "device_connections"."closed_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "device_telemetry_source_event_unique" ON "device_telemetry" USING btree ("adapter_id","event_id","captured_at");--> statement-breakpoint
-CREATE INDEX "device_telemetry_project_time_idx" ON "device_telemetry" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "device_telemetry_device_time_idx" ON "device_telemetry" USING btree ("device_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_telemetry_project_time_idx" ON "device_telemetry" USING btree ("project_id","captured_at" DESC);--> statement-breakpoint
+CREATE INDEX "device_telemetry_device_time_idx" ON "device_telemetry" USING btree ("device_id","captured_at" DESC);--> statement-breakpoint
 CREATE INDEX "telemetry_event_dedup_received_idx" ON "telemetry_event_dedup" USING btree ("received_at");--> statement-breakpoint
-CREATE INDEX "device_latest_telemetry_project_time_idx" ON "device_latest_telemetry" USING btree ("project_id","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "device_latest_telemetry_project_time_idx" ON "device_latest_telemetry" USING btree ("project_id","captured_at" DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "coordinate_references_one_standard_idx" ON "coordinate_references" USING btree ("project_id") WHERE "coordinate_references"."is_project_standard";--> statement-breakpoint
-CREATE INDEX "sensor_calibrations_device_valid_idx" ON "sensor_calibrations" USING btree ("device_id","sensor_key","valid_from" DESC NULLS LAST);--> statement-breakpoint
-CREATE INDEX "observations_project_time_idx" ON "observations" USING btree ("project_id","captured_at" DESC NULLS LAST,"id");--> statement-breakpoint
-CREATE INDEX "observations_device_type_time_idx" ON "observations" USING btree ("device_id","observation_type","captured_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "sensor_calibrations_device_valid_idx" ON "sensor_calibrations" USING btree ("device_id","sensor_key","valid_from" DESC);--> statement-breakpoint
+CREATE INDEX "observations_project_time_idx" ON "observations" USING btree ("project_id","captured_at" DESC,"id");--> statement-breakpoint
+CREATE INDEX "observations_device_type_time_idx" ON "observations" USING btree ("device_id","observation_type","captured_at" DESC);--> statement-breakpoint
 CREATE INDEX "observations_standard_geometry_gist" ON "observations" USING gist ("standard_geometry");--> statement-breakpoint
 CREATE INDEX "observations_original_geometry_gist" ON "observations" USING gist ("original_geometry");--> statement-breakpoint
-CREATE INDEX "poses_project_time_idx" ON "poses" USING btree ("project_id","captured_at" DESC NULLS LAST,"observation_id");--> statement-breakpoint
-CREATE INDEX "poses_device_time_idx" ON "poses" USING btree ("device_id","captured_at" DESC NULLS LAST,"observation_id");--> statement-breakpoint
+CREATE INDEX "poses_project_time_idx" ON "poses" USING btree ("project_id","captured_at" DESC,"observation_id");--> statement-breakpoint
+CREATE INDEX "poses_device_time_idx" ON "poses" USING btree ("device_id","captured_at" DESC,"observation_id");--> statement-breakpoint
 CREATE INDEX "poses_standard_position_gist" ON "poses" USING gist ("standard_position");--> statement-breakpoint
 CREATE INDEX "issue_events_issue_created_idx" ON "issue_events" USING btree ("issue_id","created_at");--> statement-breakpoint
 CREATE INDEX "issue_events_project_created_idx" ON "issue_events" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "issue_events_client_key_unique" ON "issue_events" USING btree ("project_id","issue_id","client_key") WHERE "issue_events"."client_key" is not null;--> statement-breakpoint
 CREATE INDEX "idempotency_records_expiry_idx" ON "idempotency_records" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "idempotency_records_project_created_idx" ON "idempotency_records" USING btree ("project_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "idempotency_records_project_created_idx" ON "idempotency_records" USING btree ("project_id","created_at" DESC);--> statement-breakpoint
 CREATE UNIQUE INDEX "issue_links_issue_target_unique" ON "issue_links" USING btree ("issue_id","link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_target_idx" ON "issue_links" USING btree ("link_type","target_id");--> statement-breakpoint
 CREATE INDEX "issue_links_project_issue_idx" ON "issue_links" USING btree ("project_id","issue_id");--> statement-breakpoint
@@ -1930,43 +1948,54 @@ CREATE INDEX "safety_policy_versions_restricted_gist" ON "safety_policy_versions
 CREATE INDEX "task_runs_project_created_idx" ON "task_runs" USING btree ("project_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_task_created_idx" ON "task_runs" USING btree ("task_id","created_at");--> statement-breakpoint
 CREATE INDEX "task_runs_status_idx" ON "task_runs" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "task_runs_responsible_created_idx" ON "task_runs" USING btree ("responsible_user_id","created_at" DESC NULLS LAST) WHERE "task_runs"."responsible_user_id" is not null;--> statement-breakpoint
+CREATE INDEX "task_runs_responsible_created_idx" ON "task_runs" USING btree ("responsible_user_id","created_at" DESC) WHERE "task_runs"."responsible_user_id" is not null;--> statement-breakpoint
 CREATE INDEX "task_run_steps_run_status_idx" ON "task_run_steps" USING btree ("task_run_id","status","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "tasks_project_name_unique" ON "tasks" USING btree ("project_id","name");--> statement-breakpoint
 CREATE INDEX "tasks_project_status_idx" ON "tasks" USING btree ("project_id","status");--> statement-breakpoint
 CREATE INDEX "tasks_trigger_type_idx" ON "tasks" USING btree ("trigger_type");--> statement-breakpoint
 CREATE UNIQUE INDEX "task_versions_one_draft_idx" ON "task_versions" USING btree ("task_id") WHERE "task_versions"."status" = 'draft';--> statement-breakpoint
-CREATE INDEX "task_versions_project_status_idx" ON "task_versions" USING btree ("project_id","status","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "task_versions_project_status_idx" ON "task_versions" USING btree ("project_id","status","created_at" DESC);--> statement-breakpoint
 CREATE INDEX "task_steps_version_position_idx" ON "task_steps" USING btree ("task_version_id","position");--> statement-breakpoint
 CREATE UNIQUE INDEX "team_members_single_owner_unique" ON "team_members" USING btree ("team_id") WHERE "team_members"."role" = 'owner';--> statement-breakpoint
 CREATE INDEX "team_members_user_idx" ON "team_members" USING btree ("user_id");
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_event_rule_version() RETURNS trigger AS $$
-BEGIN
-	IF OLD.status IN ('published','retired') THEN
-		RAISE EXCEPTION 'published event rule versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION public.protect_published_event_rule_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$ begin
+  if old.status in ('published','retired') then raise exception 'published event rule versions are immutable' using errcode='55000'; end if;
+  return case when tg_op='DELETE' then old else new end;
+end; $function$;
 --> statement-breakpoint
 CREATE TRIGGER event_rule_versions_published_immutable BEFORE UPDATE OR DELETE ON event_rule_versions FOR EACH ROW EXECUTE FUNCTION protect_published_event_rule_version();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION notify_aerosight_outbox() RETURNS trigger AS $$
-BEGIN
-	PERFORM pg_notify('aerosight_outbox', json_build_object('projectId', NEW.project_id, 'eventId', NEW.event_id)::text);
-	RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION public.notify_aerosight_outbox()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  perform pg_notify('aerosight_outbox', json_build_object(
+    'projectId', new.project_id,
+    'eventId', new.event_id
+  )::text);
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER outbox_events_notify AFTER INSERT ON outbox_events FOR EACH ROW EXECUTE FUNCTION notify_aerosight_outbox();
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION notify_aerosight_project_event() RETURNS trigger AS $$
-BEGIN
-	PERFORM pg_notify('aerosight_project_events', json_build_object('projectId', NEW.project_id, 'cursor', NEW.cursor)::text);
-	RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION public.notify_aerosight_project_event()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  perform pg_notify('aerosight_project_events', json_build_object(
+    'projectId', new.project_id,
+    'cursor', new.cursor
+  )::text);
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER project_events_notify AFTER INSERT ON project_events FOR EACH ROW EXECUTE FUNCTION notify_aerosight_project_event();
 --> statement-breakpoint
@@ -2124,19 +2153,21 @@ UPDATE "device_capabilities" capability
 SET "driver_definition_id" = device_type."driver_definition_id"
 FROM "device_types" device_type WHERE device_type."id" = capability."device_type_id";
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION populate_device_capability_type_driver()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF NEW.device_type_id IS NULL OR NEW.driver_definition_id IS NULL THEN
-		SELECT device.device_type_id, device_type.driver_definition_id
-		INTO NEW.device_type_id, NEW.driver_definition_id
-		FROM devices device
-		JOIN device_types device_type ON device_type.id = device.device_type_id
-		WHERE device.id = NEW.device_id AND device.project_id = NEW.project_id;
-	END IF;
-	RETURN NEW;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.populate_device_capability_type_driver()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.device_type_id is null or new.driver_definition_id is null then
+    select device.device_type_id, device_type.driver_definition_id
+      into new.device_type_id, new.driver_definition_id
+      from devices device
+      join device_types device_type on device_type.id = device.device_type_id
+     where device.id = new.device_id and device.project_id = new.project_id;
+  end if;
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER device_capabilities_populate_type_driver
 BEFORE INSERT OR UPDATE OF device_id, project_id, device_type_id, driver_definition_id
@@ -2212,15 +2243,17 @@ CREATE TABLE "device_stream_channels" (
 	CONSTRAINT "device_stream_channels_id_project_unique" UNIQUE("id", "project_id")
 );
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION populate_device_stream_channel_stable_id()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF NEW.stable_channel_id IS NULL OR length(trim(NEW.stable_channel_id)) = 0 THEN
-		NEW.stable_channel_id := 'device:' || NEW.project_id || ':' || NEW.device_id || ':' || NEW.channel_key;
-	END IF;
-	RETURN NEW;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.populate_device_stream_channel_stable_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.stable_channel_id is null or length(trim(new.stable_channel_id)) = 0 then
+    new.stable_channel_id := 'device:' || new.project_id || ':' || new.device_id || ':' || new.channel_key;
+  end if;
+  return new;
+end;
+$function$;
 --> statement-breakpoint
 CREATE TRIGGER device_stream_channels_populate_stable_id
 BEFORE INSERT OR UPDATE OF project_id, device_id, channel_key, stable_channel_id
@@ -2304,34 +2337,36 @@ ALTER TABLE "devices"
 ALTER TABLE "devices" ADD CONSTRAINT "devices_data_freshness_valid"
 CHECK ("data_freshness" in ('fresh', 'stale', 'expired', 'unknown'));
 --> statement-breakpoint
-CREATE OR REPLACE FUNCTION protect_published_algorithm_definition_version()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-	IF TG_OP = 'DELETE' AND OLD.status IN ('published','retired') THEN
-		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	IF TG_OP = 'UPDATE' AND OLD.status = 'published' THEN
-		IF NEW.status = 'retired'
-		   AND NEW.execution_mode = OLD.execution_mode
-		   AND NEW.model_or_process = OLD.model_or_process
-		   AND NEW.input_requirements_json = OLD.input_requirements_json
-		   AND NEW.parameters_schema_json = OLD.parameters_schema_json
-		   AND NEW.protocol_config_json = OLD.protocol_config_json
-		   AND NEW.output_mapping_json = OLD.output_mapping_json
-		   AND NEW.label_mapping_json = OLD.label_mapping_json
-		   AND NEW.output_schema_json = OLD.output_schema_json
-		   AND NEW.display_metadata_json = OLD.display_metadata_json
-		   AND NEW.publish_threshold = OLD.publish_threshold THEN
-			RETURN NEW;
-		END IF;
-		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	IF TG_OP = 'UPDATE' AND OLD.status = 'retired' THEN
-		RAISE EXCEPTION 'published algorithm definition versions are immutable' USING ERRCODE = '55000';
-	END IF;
-	RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
-END;
-$$;
+CREATE OR REPLACE FUNCTION public.protect_published_algorithm_definition_version()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if tg_op = 'DELETE' and old.status in ('published','retired') then
+    raise exception 'published algorithm definition versions are immutable' using errcode = '55000';
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'published' then
+    if new.status = 'retired'
+       and new.execution_mode = old.execution_mode
+       and new.model_or_process = old.model_or_process
+       and new.input_requirements_json = old.input_requirements_json
+       and new.parameters_schema_json = old.parameters_schema_json
+       and new.protocol_config_json = old.protocol_config_json
+       and new.output_mapping_json = old.output_mapping_json
+       and new.label_mapping_json = old.label_mapping_json
+       and new.output_schema_json = old.output_schema_json
+       and new.display_metadata_json = old.display_metadata_json
+       and new.publish_threshold = old.publish_threshold then
+      return new;
+    end if;
+    raise exception 'published algorithm definition versions are immutable' using errcode = '55000';
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'retired' then
+    raise exception 'published algorithm definition versions are immutable' using errcode = '55000';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$;
 --> statement-breakpoint
 create table connector_definitions (
   id bigserial primary key,
@@ -2701,3 +2736,4 @@ CREATE TABLE sessions (
     expiry timestamptz NOT NULL
 );
 CREATE INDEX sessions_expiry_idx ON sessions (expiry);
+ALTER TABLE device_types ADD CONSTRAINT device_types_driver_definition_id_fkey FOREIGN KEY (driver_definition_id) REFERENCES driver_definitions(id) ON DELETE RESTRICT;
