@@ -91,6 +91,9 @@ func (s *Server) requireUser(c *gin.Context) {
 		return
 	}
 	c.Set("user", userDTO(user))
+	if s.limitAuthenticatedRequest(c) {
+		return
+	}
 	c.Next()
 }
 func currentUser(c *gin.Context) User { return c.MustGet("user").(User) }

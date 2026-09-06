@@ -18,6 +18,7 @@ type HTTP struct {
 	HTTPPool, WorkerPool                                          int
 	SessionLifetime, SessionIdle, RequestTimeout, ShutdownTimeout time.Duration
 	LoginLimit, WriteLimit                                        int
+	SSELimit                                                      int
 	MetricsToken                                                  string
 	AlgorithmAllowedHosts                                         []string
 	MediaAdminUser, MediaAdminPassword                            string
@@ -27,6 +28,7 @@ type HTTP struct {
 func LoadHTTP(get func(string) string) (HTTP, error) {
 	cfg := HTTP{Address: get("HTTP_LISTEN_ADDRESS"), PublicOrigin: strings.TrimRight(get("PUBLIC_ORIGIN"), "/"), Development: get("AEROSIGHT_ENV") == "development", HTTPPool: 20, WorkerPool: 10, SessionLifetime: 7 * 24 * time.Hour, SessionIdle: 24 * time.Hour, RequestTimeout: 30 * time.Second, ShutdownTimeout: 30 * time.Second, LoginLimit: 10, WriteLimit: 120, MetricsToken: get("METRICS_TOKEN")}
 	cfg.AIRequestTimeout = 120 * time.Second
+	cfg.SSELimit = 30
 	if cfg.Address == "" {
 		cfg.Address = "127.0.0.1:8080"
 	}
@@ -51,7 +53,7 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 	if err != nil || len(cfg.CSRFKey) != 32 {
 		return cfg, fmt.Errorf("CSRF_AUTH_KEY must encode 32 bytes in base64")
 	}
-	for key, dest := range map[string]*int{"HTTP_DB_MAX_CONNECTIONS": &cfg.HTTPPool, "WORKER_DB_MAX_CONNECTIONS": &cfg.WorkerPool, "LOGIN_RATE_LIMIT": &cfg.LoginLimit, "WRITE_RATE_LIMIT": &cfg.WriteLimit} {
+	for key, dest := range map[string]*int{"HTTP_DB_MAX_CONNECTIONS": &cfg.HTTPPool, "WORKER_DB_MAX_CONNECTIONS": &cfg.WorkerPool, "LOGIN_RATE_LIMIT": &cfg.LoginLimit, "WRITE_RATE_LIMIT": &cfg.WriteLimit, "SSE_RATE_LIMIT": &cfg.SSELimit} {
 		if raw := get(key); raw != "" {
 			v, err := strconv.Atoi(raw)
 			if err != nil || v < 1 || v > 10000 {

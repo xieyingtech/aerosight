@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 4.2 限流接线第一批：发现 WRITE_RATE_LIMIT 原先只读取配置、未执行限制；现于 requireUser 完成认证后以用户 ID 使用 httprate 普通写桶，项目与频道 SSE 共用独立建连桶，新增 SSE_RATE_LIMIT 默认 30/min。读请求不消耗写额度，机器回调/媒体鉴权不进入浏览器用户桶。任务控制与设备命令在解析动作后使用同一写桶，emergency_stop 与 flight.return_home 不受普通写桶阻断，仍执行原权限、事务复查、安全和幂等逻辑。环境示例补齐三种额度与可信代理列表。定向测试验证默认不信任代理时轮换 X-Forwarded-For/X-Real-IP 仍命中相同登录额度，显式可信 loopback 按转发来源区分；429 JSON 与 Retry-After、跨用户隔离、读/写/SSE 桶隔离及项目/频道 SSE 共桶均通过。Go dev 全包通过，数据库测试未在本轮运行；额度耗尽后真实授权急停/拒绝越权的集成验收与安全头验证仍待，因此 4.2 不勾选。
+
 - 完成 4.1：在既有 Gin 分组、标准 handler、请求 ID、恢复与错误映射基础上补齐 HTTP 边界测试。检查已锁定 slog-gin 源码发现，即使关闭 body/header 仍输出 path/query/params/referer，并可将 Gin error 文本作为日志 message；新增仅用于该中间件的 slog 输出筛选器，保留请求 ID、模板路由、方法、时间、长度、状态与耗时，使用固定 message 和正确 4xx/5xx 日志级别。原请求不被改写。Gin CustomRecovery 使用 nil writer 避免无用地生成请求/堆栈 dump，只记录错误类别与请求 ID。测试覆盖路径/签名 query/Authorization/Cookie/Referer/User-Agent/正文/响应 Cookie/响应正文/Gin error 敏感值均不进入日志，合法关联 ID 保留、非法/过长 ID 替换；真实 httptest HTTP 服务验证普通 panic 的 500/请求 ID、已 Flush SSE 原数据保留且结束时不附加 JSON、panic 值不泄露。定向测试及 Go dev 全包通过（本轮不连接数据库，既有 DB 测试跳过）；不以本轮结果替代限流、期限、CSP 和生产端到端剩余验收。
 
 - 单应用镜像第一批：根 Dockerfile 分离 Node/pnpm 静态构建、Go 1.26.1 编译和 Debian/CA 运行阶段；运行层仅复制二进制，使用 UID/GID 10001、对象持久目录和单个 8080 端口，ENTRYPOINT 直接执行 Go。新增 .dockerignore 排除环境文件、源码工具缓存及本地生成物，README 给出环境/卷/迁移/停止预算说明。Docker web-build 实际通过 Linux frozen-lockfile 安装、Next 静态导出、333 个页面产物与 52 个迁移复制。完整构建在拉取 Go/Debian 基础镜像时因 auth.docker.io 网络连接失败，尚未验证运行镜像，7.5 保持未勾选。没有用前端阶段成功替代最终镜像验收。

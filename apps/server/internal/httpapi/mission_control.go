@@ -57,6 +57,9 @@ func (s *Server) controlMissionRun(c *gin.Context) {
 		return
 	}
 	reason, _ := body["reason"].(string)
+	if action != "emergency_stop" && s.limitUser(c, s.writeRate) {
+		return
+	}
 	version, ok := body["expectedVersion"].(float64)
 	if !ok || math.Trunc(version) != version || version < math.MinInt32 || version > math.MaxInt32 || strings.TrimSpace(reason) == "" {
 		bad()

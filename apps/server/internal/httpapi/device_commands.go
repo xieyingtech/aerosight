@@ -96,6 +96,9 @@ func (s *Server) submitDeviceCommand(c *gin.Context) {
 		s.failure(c, 400, "DEVICE_COMMAND_INPUT_INVALID")
 		return
 	}
+	if input.Capability != "flight.return_home" && s.limitUser(c, s.writeRate) {
+		return
+	}
 	if c.GetHeader("X-AeroSight-Mode") == "replay" || c.Query("mode") == "replay" {
 		s.deviceCommandFailure(c, errors.New("device control is forbidden in replay mode"))
 		return

@@ -42,6 +42,8 @@ type Server struct {
 	logger              *slog.Logger
 	cfg                 config.HTTP
 	loginRate           *httprate.RateLimiter
+	writeRate           *httprate.RateLimiter
+	streamRate          *httprate.RateLimiter
 }
 
 func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
@@ -60,6 +62,8 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	sessions.IdleTimeout = cfg.SessionIdle
 	s := &Server{router: r, sessions: sessions, store: store, queries: sqlcgen.New(db), db: db, logger: logger, cfg: cfg}
 	s.loginRate = httprate.NewRateLimiter(cfg.LoginLimit, time.Minute, httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) { writeError(w, 429, "RATE_LIMITED") }))
+	s.writeRate = userRateLimiter(cfg.WriteLimit, 120)
+	s.streamRate = userRateLimiter(cfg.SSELimit, 30)
 	r.Use(requestid.New())
 	r.Use(sloggin.NewWithConfig(slog.New(accessLogHandler{logger.Handler()}), sloggin.Config{WithRequestID: true, ClientErrorLevel: slog.LevelWarn, ServerErrorLevel: slog.LevelError, WithCustomMessage: func(*gin.Context) string { return "HTTP request" }}))
 	r.Use(gin.CustomRecoveryWithWriter(nil, func(c *gin.Context, recovered any) {
