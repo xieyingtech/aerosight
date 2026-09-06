@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.9 第三批迁移：会话创建 POST、用于替代 SSR 的会话列表 GET，以及聊天内部消息追加/最近历史查询迁入 Go/sqlc。列表在同一只读快照中校验 agent:use，仅返回当前用户最新 50 个会话和对应消息；追加在审计事务中锁定用户的 open 会话并重新授权；历史限定最新 20 条 user/assistant，再按 ID 正序。复用原最小留存规则：临时 URL/API key/Authorization 脱敏（含 JS Unicode 空白字符）、UTF-16 长度限制、最多 50 工具记录及每条 100 个证据引用，不保留原始参数/结果和临时引用 URL。真实 PostGIS 测试覆盖空数组/null/ID/时间、跨用户/跨项目、关闭/撤权拒绝、列表/历史上限及插入故障下消息和审计整体回滚；原 TS 2 项、Go 非数据库全包、追加脱敏单元测试、sqlc 和 OpenSpec strict 通过。消息追加是供下一批编排调用的内部方法，尚未把未完成的聊天 POST 暴露为成功；Responses 循环和六个工具仍待实现，5.9 保持未勾选。
+
 - 5.9 第二批迁移：AI provider test 使用固定的官方 openai-go/v3 Models.List，关闭自动重试，保留原 GET /models、10 秒上限和 HTTP 状态健康结果；只检查状态并关闭原正文，不缓存或泄露上游错误内容。自定义客户端固定已校验的公网 DNS 地址，禁用代理、保留原主机名 TLS 校验并拒绝重定向；provider 行锁、管理员角色锁与平台审计覆盖健康写入。修正创建缺密钥错误码为原 AI_PROVIDER_API_KEY_REQUIRED。SDK 假上游验证 200/204/401/429/500 单次请求、请求密钥/路径、deadline、取消和不读取正文；真实 TLS 验证固定地址连接、目标变化拒绝和重定向拒绝；真实 PostGIS 验证健康落库、审计、私网拒绝及管理员权限。全量 Go（真实 DB）、sqlc 和 OpenSpec strict 通过。SDK 文档经 Context7 /openai/openai-go 核对。聊天会话、Responses 循环和六个只读工具尚待实现，5.9 保持未勾选。
 
 - 5.9 第一批迁移：平台 AI provider 列表、创建、PATCH、DELETE 接入 Go/sqlc。保留 OpenAI 类型、默认项必须启用、空密钥保留原 envelope、替换密钥重置 untested、平台 AAD 和 write-only 凭据、bigint 字符串/null/时间格式；复用 HTTPS 与全部 DNS 地址校验。注册表事务锁序列化默认切换，用户角色行锁完成写入前再授权，业务和平台审计整体提交。真实 PostGIS 测试覆盖 4 并发默认创建、密文兼容解密、空白更新、加密失败时默认项/审计回滚、删除不存在项及 URL 校验期间撤权；相关算法 provider 回归、Go 非数据库全包测试、原 TS 2 项、sqlc 和 OpenSpec strict 通过。官方 SDK 测试端点、聊天会话和六个只读工具尚待实现，5.9 保持未勾选。

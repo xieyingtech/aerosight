@@ -16,6 +16,7 @@ import (
 type Querier interface {
 	AddIssueAssignee(ctx context.Context, arg AddIssueAssigneeParams) error
 	AdminOverview(ctx context.Context) (AdminOverviewRow, error)
+	AppendChatMessage(ctx context.Context, arg AppendChatMessageParams) (AppendChatMessageRow, error)
 	ApproveMissionControlRun(ctx context.Context, arg ApproveMissionControlRunParams) error
 	BindDiscoveredDevice(ctx context.Context, arg BindDiscoveredDeviceParams) error
 	CancelFlightHubSyncQueue(ctx context.Context, arg CancelFlightHubSyncQueueParams) error
@@ -30,6 +31,7 @@ type Querier interface {
 	CreateAIProvider(ctx context.Context, arg CreateAIProviderParams) (int64, error)
 	CreateAlgorithmDefinition(ctx context.Context, arg CreateAlgorithmDefinitionParams) (int64, error)
 	CreateAlgorithmProvider(ctx context.Context, arg CreateAlgorithmProviderParams) (int64, error)
+	CreateChatSession(ctx context.Context, arg CreateChatSessionParams) (int32, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
 	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
 	CreateIssueCopilotSession(ctx context.Context, arg CreateIssueCopilotSessionParams) (int32, error)
@@ -90,6 +92,8 @@ type Querier interface {
 	ListAlgorithmCatalog(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListAlgorithmProviders(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListAlgorithmRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ListChatMessagesRow, error)
+	ListChatSessions(ctx context.Context, arg ListChatSessionsParams) ([]ListChatSessionsRow, error)
 	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -109,6 +113,7 @@ type Querier interface {
 	LockAlgorithmDefinitionProvider(ctx context.Context, arg LockAlgorithmDefinitionProviderParams) (int32, error)
 	LockAlgorithmProviderCredential(ctx context.Context, arg LockAlgorithmProviderCredentialParams) (LockAlgorithmProviderCredentialRow, error)
 	LockAlgorithmRetrySource(ctx context.Context, arg LockAlgorithmRetrySourceParams) (LockAlgorithmRetrySourceRow, error)
+	LockChatSession(ctx context.Context, arg LockChatSessionParams) (int32, error)
 	LockDJIAdapterEnvelope(ctx context.Context, arg LockDJIAdapterEnvelopeParams) (pqtype.NullRawMessage, error)
 	LockDeviceCommandGrants(ctx context.Context, arg LockDeviceCommandGrantsParams) ([]LockDeviceCommandGrantsRow, error)
 	LockDeviceCommandTarget(ctx context.Context, arg LockDeviceCommandTargetParams) (LockDeviceCommandTargetRow, error)
@@ -160,6 +165,7 @@ type Querier interface {
 	ReadProjectEvents(ctx context.Context, arg ReadProjectEventsParams) ([]ReadProjectEventsRow, error)
 	ReadProjectIssue(ctx context.Context, arg ReadProjectIssueParams) (json.RawMessage, error)
 	ReadReportSources(ctx context.Context, arg ReadReportSourcesParams) (json.RawMessage, error)
+	RecentChatHistory(ctx context.Context, arg RecentChatHistoryParams) ([]RecentChatHistoryRow, error)
 	RecordAdapterHealth(ctx context.Context, arg RecordAdapterHealthParams) error
 	RecordNetworkValidation(ctx context.Context, arg RecordNetworkValidationParams) error
 	RemoveIssueAssignee(ctx context.Context, arg RemoveIssueAssigneeParams) error
