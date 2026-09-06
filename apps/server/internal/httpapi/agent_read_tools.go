@@ -66,7 +66,7 @@ func parseChatToolInput(name string, raw json.RawMessage) (chatToolInput, error)
 		return out, errors.New("AGENT_TOOL_NOT_READ_ONLY")
 	}
 	for k := range input {
-		if k != allowed {
+		if allowed == "" || k != allowed {
 			return out, bad
 		}
 	}

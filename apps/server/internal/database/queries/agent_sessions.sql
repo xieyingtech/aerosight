@@ -24,3 +24,6 @@ SELECT recent.role,recent.content FROM (
  WHERE session.id=$1 AND session.project_id=$2 AND session.started_by_user_id=$3 AND session.status='open'
  AND message.role IN ('user','assistant') ORDER BY message.id DESC LIMIT 20
 ) recent ORDER BY recent.id;
+
+-- name: ReadOpenChatSession :one
+SELECT id FROM agent_sessions WHERE id=$1 AND project_id=$2 AND started_by_user_id=$3 AND status='open';

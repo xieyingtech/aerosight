@@ -37,3 +37,6 @@ DELETE FROM ai_providers WHERE id=$1;
 
 -- name: SetAIProviderHealth :exec
 UPDATE ai_providers SET status=$2,health_json=$3,last_tested_at=now(),updated_by_user_id=$4,updated_at=now() WHERE id=$1;
+
+-- name: ReadDefaultChatProvider :many
+SELECT id,provider_type,base_url,model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_default LIMIT 2;

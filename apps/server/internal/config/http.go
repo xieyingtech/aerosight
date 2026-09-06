@@ -21,10 +21,12 @@ type HTTP struct {
 	MetricsToken                                                  string
 	AlgorithmAllowedHosts                                         []string
 	MediaAdminUser, MediaAdminPassword                            string
+	AIRequestTimeout                                              time.Duration
 }
 
 func LoadHTTP(get func(string) string) (HTTP, error) {
 	cfg := HTTP{Address: get("HTTP_LISTEN_ADDRESS"), PublicOrigin: strings.TrimRight(get("PUBLIC_ORIGIN"), "/"), Development: get("AEROSIGHT_ENV") == "development", HTTPPool: 20, WorkerPool: 10, SessionLifetime: 7 * 24 * time.Hour, SessionIdle: 24 * time.Hour, RequestTimeout: 30 * time.Second, ShutdownTimeout: 30 * time.Second, LoginLimit: 10, WriteLimit: 120, MetricsToken: get("METRICS_TOKEN")}
+	cfg.AIRequestTimeout = 120 * time.Second
 	if cfg.Address == "" {
 		cfg.Address = "127.0.0.1:8080"
 	}
@@ -58,7 +60,7 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 			*dest = v
 		}
 	}
-	for key, dest := range map[string]*time.Duration{"SESSION_LIFETIME": &cfg.SessionLifetime, "SESSION_IDLE_TIMEOUT": &cfg.SessionIdle, "HTTP_REQUEST_TIMEOUT": &cfg.RequestTimeout, "SHUTDOWN_TIMEOUT": &cfg.ShutdownTimeout} {
+	for key, dest := range map[string]*time.Duration{"SESSION_LIFETIME": &cfg.SessionLifetime, "SESSION_IDLE_TIMEOUT": &cfg.SessionIdle, "HTTP_REQUEST_TIMEOUT": &cfg.RequestTimeout, "AI_REQUEST_TIMEOUT": &cfg.AIRequestTimeout, "SHUTDOWN_TIMEOUT": &cfg.ShutdownTimeout} {
 		if raw := get(key); raw != "" {
 			v, err := time.ParseDuration(raw)
 			if err != nil || v <= 0 {

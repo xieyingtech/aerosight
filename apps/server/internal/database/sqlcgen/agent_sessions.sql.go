@@ -172,6 +172,23 @@ func (q *Queries) LockChatSession(ctx context.Context, arg LockChatSessionParams
 	return id, err
 }
 
+const readOpenChatSession = `-- name: ReadOpenChatSession :one
+SELECT id FROM agent_sessions WHERE id=$1 AND project_id=$2 AND started_by_user_id=$3 AND status='open'
+`
+
+type ReadOpenChatSessionParams struct {
+	ID              int32         `json:"id"`
+	ProjectID       int32         `json:"project_id"`
+	StartedByUserID sql.NullInt32 `json:"started_by_user_id"`
+}
+
+func (q *Queries) ReadOpenChatSession(ctx context.Context, arg ReadOpenChatSessionParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, readOpenChatSession, arg.ID, arg.ProjectID, arg.StartedByUserID)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
 const recentChatHistory = `-- name: RecentChatHistory :many
 SELECT recent.role,recent.content FROM (
  SELECT message.id,message.role,message.content FROM agent_messages message

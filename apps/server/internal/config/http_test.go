@@ -3,11 +3,24 @@ package config
 import (
 	"encoding/base64"
 	"testing"
+	"time"
 )
 
 func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
 	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	get := func(k string) string { return env[k] }
+	if cfg, err := LoadHTTP(get); err != nil || cfg.AIRequestTimeout != 120*time.Second {
+		t.Fatalf("AI default %v %v", cfg.AIRequestTimeout, err)
+	}
+	env["AI_REQUEST_TIMEOUT"] = "45s"
+	if cfg, err := LoadHTTP(get); err != nil || cfg.AIRequestTimeout != 45*time.Second {
+		t.Fatalf("AI override %v %v", cfg.AIRequestTimeout, err)
+	}
+	env["AI_REQUEST_TIMEOUT"] = "0s"
+	if _, err := LoadHTTP(get); err == nil {
+		t.Fatal("zero AI timeout accepted")
+	}
+	delete(env, "AI_REQUEST_TIMEOUT")
 	env["ALGORITHM_ALLOWED_HOSTS"] = " algorithm.example, , *.trusted.example "
 	if cfg, err := LoadHTTP(get); err != nil || len(cfg.AlgorithmAllowedHosts) != 2 || cfg.AlgorithmAllowedHosts[0] != "algorithm.example" || cfg.AlgorithmAllowedHosts[1] != "*.trusted.example" {
 		t.Fatalf("algorithm allowlist %+v %v", cfg.AlgorithmAllowedHosts, err)

@@ -149,6 +149,47 @@ func (q *Queries) ReadAIProviderPublic(ctx context.Context, id int64) (json.RawM
 	return to_jsonb, err
 }
 
+const readDefaultChatProvider = `-- name: ReadDefaultChatProvider :many
+SELECT id,provider_type,base_url,model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_default LIMIT 2
+`
+
+type ReadDefaultChatProviderRow struct {
+	ID                     int64           `json:"id"`
+	ProviderType           string          `json:"provider_type"`
+	BaseUrl                sql.NullString  `json:"base_url"`
+	ModelID                string          `json:"model_id"`
+	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
+}
+
+func (q *Queries) ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultChatProviderRow, error) {
+	rows, err := q.db.QueryContext(ctx, readDefaultChatProvider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReadDefaultChatProviderRow{}
+	for rows.Next() {
+		var i ReadDefaultChatProviderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProviderType,
+			&i.BaseUrl,
+			&i.ModelID,
+			&i.CredentialEnvelopeJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setAIProviderCredential = `-- name: SetAIProviderCredential :exec
 UPDATE ai_providers SET credential_envelope_json=$2,status='untested' WHERE id=$1
 `

@@ -13,6 +13,9 @@ import (
 )
 
 func TestChatToolInputAndFormatting(t *testing.T) {
+	if _, err := parseChatToolInput("query_assets", []byte(`{"":true}`)); err == nil {
+		t.Fatal("empty unknown property accepted")
+	}
 	for _, test := range []struct{ name, raw string }{{"query_devices", `{"deviceIds":[3]}`}, {"query_tasks", `{"limit":1}`}, {"query_issues", `{"limit":20}`}, {"query_assets", `{}`}, {"query_tracks", `{}`}, {"query_map_context", `{}`}} {
 		if _, err := parseChatToolInput(test.name, []byte(test.raw)); err != nil {
 			t.Fatalf("%s %v", test.name, err)
