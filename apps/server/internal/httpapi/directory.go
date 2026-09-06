@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -149,9 +151,9 @@ func (s *Server) directoryRoutes() {
 }
 func (s *Server) createTeam(c *gin.Context) {
 	var in struct {
-		Name string `json:"name" binding:"required,max=100"`
+		Name string `json:"name"`
 	}
-	if c.ShouldBindJSON(&in) != nil || strings.TrimSpace(in.Name) == "" {
+	if c.ShouldBindJSON(&in) != nil || strings.TrimSpace(in.Name) == "" || utf16Length(strings.TrimSpace(in.Name)) > 100 {
 		s.failure(c, 400, "TEAM_INPUT_INVALID")
 		return
 	}
@@ -172,20 +174,32 @@ func (s *Server) createTeam(c *gin.Context) {
 }
 func (s *Server) createProject(c *gin.Context) {
 	var in struct {
-		TeamID int32  `json:"teamId" binding:"required,gt=0"`
-		Name   string `json:"name" binding:"required,max=100"`
+		TeamID any    `json:"teamId"`
+		Name   string `json:"name"`
 	}
-	if c.ShouldBindJSON(&in) != nil || strings.TrimSpace(in.Name) == "" {
+	if c.ShouldBindJSON(&in) != nil || strings.TrimSpace(in.Name) == "" || utf16Length(strings.TrimSpace(in.Name)) > 100 {
 		s.failure(c, 400, "PROJECT_INPUT_INVALID")
 		return
 	}
+	var number float64
+	switch value := in.TeamID.(type) {
+	case float64:
+		number = value
+	case string:
+		number, _ = strconv.ParseFloat(strings.TrimSpace(value), 64)
+	}
+	if math.IsNaN(number) || number <= 0 || number > math.MaxInt32 || math.Trunc(number) != number {
+		s.failure(c, 400, "PROJECT_INPUT_INVALID")
+		return
+	}
+	teamID := int32(number)
 	var id int32
 	err := database.InTx(c.Request.Context(), s.db, func(_ *sql.Tx, q *sqlcgen.Queries) error {
-		if _, err := q.GetTeamManager(c.Request.Context(), sqlcgen.GetTeamManagerParams{TeamID: in.TeamID, UserID: currentUser(c).ID}); err != nil {
+		if _, err := q.GetTeamManager(c.Request.Context(), sqlcgen.GetTeamManagerParams{TeamID: teamID, UserID: currentUser(c).ID}); err != nil {
 			return err
 		}
 		var err error
-		id, err = q.CreateProject(c.Request.Context(), sqlcgen.CreateProjectParams{TeamID: in.TeamID, Name: strings.TrimSpace(in.Name), CreatedByUserID: sql.NullInt32{Int32: currentUser(c).ID, Valid: true}})
+		id, err = q.CreateProject(c.Request.Context(), sqlcgen.CreateProjectParams{TeamID: teamID, Name: strings.TrimSpace(in.Name), CreatedByUserID: sql.NullInt32{Int32: currentUser(c).ID, Valid: true}})
 		return err
 	})
 	if errors.Is(err, sql.ErrNoRows) {
