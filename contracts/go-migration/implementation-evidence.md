@@ -4,6 +4,8 @@
 
 ## 2026-09-06
 
+- 5.5 第二批迁移：任务 audit-trace 与 emergency-stop-drill 接入 Go/sqlc。审计查询在只读 Repeatable Read 事务内鉴权和读取请求/预检/审批/命令最新尝试，保留 bigint 字符串、null/空数组、缺失项顺序及最后一条高优先级命令的安全状态。演练只允许 dryRun，使用事务审计并保留 ACK/NACK/timeout/disconnected 结果；真实 DB 验证五次演练不生成设备命令/项目事件/outbox、不修改任务状态和版本，拒绝越权；审计集成测试覆盖空轨迹、agent 来源、最新尝试、策略 ID 类型与跨项目拒绝。Go 单元测试覆盖审批未完成、缺少尝试及缺少能力时不虚报确认；原 TS 六项审计演练测试通过。任务定义、工作台与报告仍待迁移，5.5 保持未勾选。
+
 - 5.5 第一批迁移：任务控制 POST 接入 Go/sqlc，保留 pause/resume/cancel/emergency_stop/approve、乐观版本、排队取消、取消中重复急停及原事件类型；写事务内复查独立的 mission:operate/mission:approve 权限。真实 DB 测试覆盖 4 并发同版本仅一次生效、跨项目、撤销操作权限、状态转换拒绝、outbox 故障回滚状态/版本/审计/事件、审批不推进任务版本、不产生队列副作用，以及数据库审批分离/过期/重复审批约束。任务定义、工作台、审计轨迹、急停演练和报告尚待迁移，5.5 保持未勾选。
 
 - 完成 5.3 剩余连接测试和 DJI 设置 API。Go 网络校验保留 LAN/public 策略、全 DNS 结果校验、五类协议、服务端验证与设备待验证区别；实际探测固定已校验 IP、HTTP HEAD 不跟随重定向、TLS 校验证书与主机、5 秒探测上限受请求取消控制。单元测试覆盖混合私网/环回 DNS、IPv6、脱敏、HTTP Host/IP 固定、重定向、503、无效证书及取消释放连接。真实 PostGIS 测试验证 DJI 网络/适配器/凭据原子创建、六个 MQTT topic、兼容 envelope、配置占位符、有效/失败健康状态、模拟器与无网络配置、写失败整体回滚及探测期间撤权。原 TS adapter-policy/network-profile/connection-check 共 16 项测试通过；全量 Go（真实 DB）、sqlc drift 与 OpenSpec strict 通过。设备 API 清单已覆盖；前端移除旧 Route Handler 属于 6.6，尚未执行。
