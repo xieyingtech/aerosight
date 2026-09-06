@@ -80,3 +80,50 @@ func TestMissionWorkbenchReadContract(t *testing.T) {
 		t.Fatalf("scope %d %+v", res.StatusCode, data)
 	}
 }
+
+func TestTaskDefinitionReadScope(t *testing.T) {
+	f := newAPIFixture(t)
+	team, pid := f.project(t)
+	path := fmt.Sprintf("/api/projects/%d/tasks", pid)
+	res := f.request(t, "GET", path, "")
+	var rows []map[string]any
+	if err := json.NewDecoder(res.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || rows == nil || len(rows) != 0 {
+		t.Fatalf("empty %d %+v", res.StatusCode, rows)
+	}
+	run := f.missionRun(t, pid, team, "queued")
+	var task int
+	if err := f.db.QueryRow("select task_id from task_runs where id=$1", run).Scan(&task); err != nil {
+		t.Fatal(err)
+	}
+	res = f.request(t, "GET", path, "")
+	if err := json.NewDecoder(res.Body).Decode(&rows); err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if len(rows) != 1 || rows[0]["id"] != float64(task) || rows[0]["description"] != nil || rows[0]["triggerType"] != "manual" {
+		t.Fatalf("list %+v", rows)
+	}
+	res = f.request(t, "GET", fmt.Sprintf("%s/%d", path, task), "")
+	data := decodedResponse(t, res)
+	if res.StatusCode != 200 || data["projectId"] != float64(pid) {
+		t.Fatalf("detail %d %+v", res.StatusCode, data)
+	}
+	_, other := f.project(t)
+	res = f.request(t, "GET", fmt.Sprintf("/api/projects/%d/tasks/%d", other, task), "")
+	data = decodedResponse(t, res)
+	if res.StatusCode != 404 {
+		t.Fatalf("scope %d %+v", res.StatusCode, data)
+	}
+	if _, err := f.db.Exec("delete from team_members where team_id=$1", team); err != nil {
+		t.Fatal(err)
+	}
+	res = f.request(t, "GET", path, "")
+	data = decodedResponse(t, res)
+	if res.StatusCode != 404 {
+		t.Fatalf("revoked %d %+v", res.StatusCode, data)
+	}
+}

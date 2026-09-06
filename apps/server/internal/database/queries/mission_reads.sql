@@ -7,6 +7,18 @@ SELECT to_jsonb(r) FROM (
  WHERE run.project_id=$1 ORDER BY run.created_at DESC
 ) r;
 
+-- name: ListTaskDefinitions :many
+SELECT to_jsonb(r) FROM (
+ SELECT id,name,description,trigger_type AS "triggerType",status,updated_at AS "updatedAt"
+ FROM tasks WHERE project_id=$1 ORDER BY updated_at DESC
+) r;
+
+-- name: GetTaskDefinition :one
+SELECT to_jsonb(r) FROM (
+ SELECT id,project_id AS "projectId",name,description,trigger_type AS "triggerType",status,updated_at AS "updatedAt"
+ FROM tasks WHERE project_id=$1 AND id=$2
+) r;
+
 -- name: GetMissionWorkbenchRun :one
 SELECT to_jsonb(r) FROM (
  SELECT run.id,run.status,run.state_version AS "stateVersion",run.state_reason AS "stateReason",

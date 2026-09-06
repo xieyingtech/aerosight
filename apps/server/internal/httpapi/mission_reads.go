@@ -4,6 +4,7 @@ import (
 	"aerosight/server/internal/database/sqlcgen"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
+	"strconv"
 )
 
 func availableMissionActions(status string, permissions map[string]bool) []string {
@@ -30,6 +31,34 @@ func availableMissionActions(status string, permissions map[string]bool) []strin
 	return actions
 }
 func (s *Server) missionReadRoutes() {
+	tasks := s.router.Group("/api/projects/:id/tasks", s.requireUser, s.timeout)
+	tasks.GET("", func(c *gin.Context) {
+		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
+			raw, err := q.ListTaskDefinitions(c.Request.Context(), a.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			return decodeSnapshotRows(raw)
+		})
+	})
+	tasks.GET("/:taskId", func(c *gin.Context) {
+		id, err := strconv.ParseInt(c.Param("taskId"), 10, 32)
+		if err != nil || id <= 0 {
+			s.failure(c, 404, "TASK_NOT_FOUND")
+			return
+		}
+		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
+			raw, err := q.GetTaskDefinition(c.Request.Context(), sqlcgen.GetTaskDefinitionParams{ProjectID: a.ProjectID, ID: int32(id)})
+			if err != nil {
+				return nil, err
+			}
+			rows, err := decodeSnapshotRows([]json.RawMessage{raw})
+			if err != nil {
+				return nil, err
+			}
+			return rows[0], nil
+		})
+	})
 	group := s.router.Group("/api/projects/:id/task-runs", s.requireUser, s.timeout)
 	group.GET("", func(c *gin.Context) {
 		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {

@@ -81,6 +81,25 @@ func (q *Queries) GetMissionWorkbenchSteps(ctx context.Context, arg GetMissionWo
 	return items, nil
 }
 
+const getTaskDefinition = `-- name: GetTaskDefinition :one
+SELECT to_jsonb(r) FROM (
+ SELECT id,project_id AS "projectId",name,description,trigger_type AS "triggerType",status,updated_at AS "updatedAt"
+ FROM tasks WHERE project_id=$1 AND id=$2
+) r
+`
+
+type GetTaskDefinitionParams struct {
+	ProjectID int32 `json:"project_id"`
+	ID        int32 `json:"id"`
+}
+
+func (q *Queries) GetTaskDefinition(ctx context.Context, arg GetTaskDefinitionParams) (json.RawMessage, error) {
+	row := q.db.QueryRowContext(ctx, getTaskDefinition, arg.ProjectID, arg.ID)
+	var to_jsonb json.RawMessage
+	err := row.Scan(&to_jsonb)
+	return to_jsonb, err
+}
+
 const listMissionRuns = `-- name: ListMissionRuns :many
 SELECT to_jsonb(r) FROM (
  SELECT run.id,run.status,run.state_version AS "stateVersion",run.created_at AS "createdAt",
@@ -93,6 +112,36 @@ SELECT to_jsonb(r) FROM (
 
 func (q *Queries) ListMissionRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
 	rows, err := q.db.QueryContext(ctx, listMissionRuns, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []json.RawMessage{}
+	for rows.Next() {
+		var to_jsonb json.RawMessage
+		if err := rows.Scan(&to_jsonb); err != nil {
+			return nil, err
+		}
+		items = append(items, to_jsonb)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTaskDefinitions = `-- name: ListTaskDefinitions :many
+SELECT to_jsonb(r) FROM (
+ SELECT id,name,description,trigger_type AS "triggerType",status,updated_at AS "updatedAt"
+ FROM tasks WHERE project_id=$1 ORDER BY updated_at DESC
+) r
+`
+
+func (q *Queries) ListTaskDefinitions(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
+	rows, err := q.db.QueryContext(ctx, listTaskDefinitions, projectID)
 	if err != nil {
 		return nil, err
 	}
