@@ -1,10 +1,65 @@
 package httpapi
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 )
+
+func TestSessionStoreDeadlineAndCancellation(t *testing.T) {
+	f := newAPIFixture(t)
+	store := f.server.sessions.Store.(*sessionStore)
+	store.timeout = 100 * time.Millisecond
+	tx, err := f.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("lock table sessions in access exclusive mode"); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	res := f.request(t, "GET", "/api/auth/session", "")
+	data := decodedResponse(t, res)
+	if res.StatusCode != 504 || data["error"] != "REQUEST_TIMEOUT" || time.Since(start) > 2*time.Second {
+		t.Fatalf("session load deadline %d %+v", res.StatusCode, data)
+	}
+	if err := store.CommitCtx(context.Background(), "blocked", []byte("test"), time.Now().Add(time.Hour)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("commit deadline %v", err)
+	}
+	if err := store.DeleteCtx(context.Background(), "blocked"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("delete deadline %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := store.FindCtx(ctx, "blocked"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("parent cancellation %v", err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	res = f.request(t, "GET", "/api/auth/session", "")
+	res.Body.Close()
+	if res.StatusCode != 200 {
+		t.Fatalf("existing session changed after timeout: %d", res.StatusCode)
+	}
+	userLock, err := f.db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer userLock.Rollback()
+	if _, err = userLock.Exec("lock table users in access exclusive mode"); err != nil {
+		t.Fatal(err)
+	}
+	f.server.cfg.RequestTimeout = 100 * time.Millisecond
+	res = f.request(t, "GET", "/api/auth/session", "")
+	data = decodedResponse(t, res)
+	if res.StatusCode != 504 || data["error"] != "REQUEST_TIMEOUT" {
+		t.Fatalf("user lookup deadline %d %+v", res.StatusCode, data)
+	}
+}
 
 func TestRequestDeadlineCancelsSQLAndRollsBack(t *testing.T) {
 	f := newAPIFixture(t)

@@ -29,6 +29,7 @@ type Querier interface {
 	ChatQueryTasks(ctx context.Context, arg ChatQueryTasksParams) ([]json.RawMessage, error)
 	ChatQueryTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ClearAIProviderDefault(ctx context.Context) error
+	CommitHTTPSession(ctx context.Context, arg CommitHTTPSessionParams) error
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) (int64, error)
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
 	CompleteProjectAudit(ctx context.Context, arg CompleteProjectAuditParams) (int64, error)
@@ -46,6 +47,7 @@ type Querier interface {
 	CreateTeamOwner(ctx context.Context, arg CreateTeamOwnerParams) error
 	DeclareDiscoveredCapability(ctx context.Context, arg DeclareDiscoveredCapabilityParams) error
 	DeleteAIProvider(ctx context.Context, id int64) (int64, error)
+	DeleteHTTPSession(ctx context.Context, token string) error
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
@@ -53,6 +55,7 @@ type Querier interface {
 	ExportPublishedReport(ctx context.Context, arg ExportPublishedReportParams) (json.RawMessage, error)
 	FindExistingDeviceCommand(ctx context.Context, arg FindExistingDeviceCommandParams) (FindExistingDeviceCommandRow, error)
 	FindFlightHubConnector(ctx context.Context, arg FindFlightHubConnectorParams) (FindFlightHubConnectorRow, error)
+	FindHTTPSession(ctx context.Context, token string) ([]byte, error)
 	FindLiveStartReplay(ctx context.Context, arg FindLiveStartReplayParams) (int64, error)
 	FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error)
 	FindQueuedFlightHubSync(ctx context.Context, arg FindQueuedFlightHubSyncParams) (string, error)

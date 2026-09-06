@@ -33,8 +33,8 @@ func userDTO(r sqlcgen.GetUserRow) User {
 }
 func (s *Server) authRoutes() {
 	s.router.GET("/api/auth/csrf", func(c *gin.Context) { c.JSON(200, gin.H{"csrfToken": csrf.Token(c.Request)}) })
-	s.router.POST("/api/auth/login", s.login)
-	s.router.POST("/api/auth/logout", func(c *gin.Context) {
+	s.router.POST("/api/auth/login", s.timeout, s.login)
+	s.router.POST("/api/auth/logout", s.timeout, func(c *gin.Context) {
 		if err := s.sessions.Destroy(c.Request.Context()); err != nil {
 			s.failure(c, 500, "SESSION_FAILED")
 			return
@@ -81,7 +81,13 @@ func (s *Server) requireUser(c *gin.Context) {
 		s.failure(c, 401, "UNAUTHENTICATED")
 		return
 	}
-	user, err := s.queries.GetUser(c.Request.Context(), int32(id))
+	ctx, cancel := context.WithTimeout(c.Request.Context(), s.cfg.RequestTimeout)
+	defer cancel()
+	user, err := s.queries.GetUser(ctx, int32(id))
+	if ctx.Err() == context.DeadlineExceeded {
+		s.failure(c, 504, "REQUEST_TIMEOUT")
+		return
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		s.failure(c, 401, "UNAUTHENTICATED")
 		return

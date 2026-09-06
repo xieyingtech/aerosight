@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
 	"github.com/gin-contrib/requestid"
@@ -53,7 +54,19 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	}
 	sessions := scs.New()
 	store := postgresstore.New(db)
-	sessions.Store = store
+	sessionTimeout := cfg.RequestTimeout
+	if sessionTimeout <= 0 {
+		sessionTimeout = 30 * time.Second
+	}
+	sessions.Store = &sessionStore{PostgresStore: store, queries: sqlcgen.New(db), timeout: sessionTimeout}
+	sessions.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
+		logger.Error("session operation failed", "request_id", r.Header.Get("X-Request-ID"))
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeError(w, 504, "REQUEST_TIMEOUT")
+			return
+		}
+		writeError(w, 500, "SESSION_FAILED")
+	}
 	sessions.Cookie.Name = "aerosight_session"
 	sessions.Cookie.HttpOnly = true
 	sessions.Cookie.SameSite = http.SameSiteLaxMode
