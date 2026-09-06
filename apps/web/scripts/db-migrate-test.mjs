@@ -300,7 +300,7 @@ async function assertConcurrentIdempotency(connectionString) {
 }
 
 function rotateCredentials(connectionString, oldSecret, newSecret, dryRun = false) {
-  const args = ["-C", "apps/worker", "run", "./cmd/rotate-credentials"];
+  const args = ["-C", "apps/server", "run", "./cmd/rotate-credentials"];
   if (dryRun) args.push("--dry-run");
   else args.push("--new-secret-stdin");
   return spawnSync("go", args, {

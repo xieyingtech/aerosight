@@ -2694,3 +2694,10 @@ select adapter.id,
        adapter.credential_envelope_json
   from device_adapters adapter
   join connector_definitions definition on definition.id = adapter.connector_definition_id;
+
+CREATE TABLE sessions (
+    token text PRIMARY KEY,
+    data bytea NOT NULL,
+    expiry timestamptz NOT NULL
+);
+CREATE INDEX sessions_expiry_idx ON sessions (expiry);

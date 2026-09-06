@@ -7,7 +7,7 @@ const envFile = resolve(workspaceRoot, ".env.local");
 if (existsSync(envFile)) process.loadEnvFile(envFile);
 
 const worker = spawn("go", ["run", "./cmd/worker"], {
-  cwd: resolve(workspaceRoot, "apps/worker"),
+  cwd: resolve(workspaceRoot, "apps/server"),
   env: process.env,
   stdio: "inherit"
 });

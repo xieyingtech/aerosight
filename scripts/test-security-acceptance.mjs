@@ -35,7 +35,7 @@ run("pnpm", ["--dir", "apps/web", "exec", "node", "--test",
 ]);
 
 run("go", ["test", "./internal/agent", "./internal/dji", "./internal/mission", "./internal/observability"], {
-  cwd: resolve(root, "apps/worker"),
+  cwd: resolve(root, "apps/server"),
   env: { ...process.env, GOPROXY: "off", GOSUMDB: "off" }
 });
 

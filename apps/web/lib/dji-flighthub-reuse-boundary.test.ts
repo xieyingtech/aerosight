@@ -35,12 +35,12 @@ test("FlightHub reuses the generic connector and device persistence boundary", a
 
 test("FlightHub can reuse connector runtime, encrypted credentials, outbox, and DJI product types", async () => {
   const [registry, synchronizer, credentials, outbox, dock2, dock3] = await Promise.all([
-    readRepoFile("apps/worker/internal/connector/registry.go"),
-    readRepoFile("apps/worker/internal/connector/sync.go"),
-    readRepoFile("apps/worker/internal/credentials/credentials.go"),
-    readRepoFile("apps/worker/internal/outbox/outbox.go"),
-    readRepoFile("apps/worker/internal/dji/products.go"),
-    readRepoFile("apps/worker/internal/dji/dock3_products.go"),
+    readRepoFile("apps/server/internal/connector/registry.go"),
+    readRepoFile("apps/server/internal/connector/sync.go"),
+    readRepoFile("apps/server/internal/credentials/credentials.go"),
+    readRepoFile("apps/server/internal/outbox/outbox.go"),
+    readRepoFile("apps/server/internal/dji/products.go"),
+    readRepoFile("apps/server/internal/dji/dock3_products.go"),
   ]);
 
   assert.match(registry, /type ExternalDevice struct/);

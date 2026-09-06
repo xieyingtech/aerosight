@@ -1,0 +1,11 @@
+import { readdir, readFile, mkdir, writeFile, unlink } from 'node:fs/promises';
+import { resolve } from 'node:path';
+const root = resolve(import.meta.dirname, '..');
+const source = resolve(root, 'db/migrations');
+const target = resolve(root, 'apps/server/internal/migrations/sql');
+await mkdir(target, { recursive: true });
+const names = (await readdir(source)).filter(n => /^\d{4}_[a-z0-9_]+\.sql$/.test(n)).sort();
+if (!names.length) throw new Error('No migrations found');
+for (const name of await readdir(target)) if (name.endsWith('.sql') && !names.includes(name)) await unlink(resolve(target, name));
+for (const name of names) await writeFile(resolve(target, name), await readFile(resolve(source, name)));
+console.log(`Prepared ${names.length} exact migration files`);
