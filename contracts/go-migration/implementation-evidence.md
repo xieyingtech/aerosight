@@ -1,8 +1,10 @@
 # 实施证据
 
-当前仍处于迁移阶段；默认前端启动入口尚未切换为静态导出。未勾选任务仍需实现和验证。
+当前仍处于迁移阶段；默认构建与启动已切换为静态导出和统一 Go 应用。未勾选任务仍需实现和验证，尚未完成发布验收。
 
 ## 2026-09-06
+
+- 统一命令第一批：pnpm build 顺序执行 Next 静态构建、迁移/页面产物校验复制和 Go 生产编译；start 启动已有统一二进制，db:migrate 使用 Go migrate，dev 协调 Next 与 Go dev 两个进程并在任一退出时停止另一进程。启动脚本读取根 .env.local，删除旧默认 worker 启动器，保留独立维护编译入口。README 与环境示例补齐 CSRF、HTTP、PUBLIC_ORIGIN 及开发代理配置。新 pnpm build 完整通过（333 个静态文件、52 个 SQL 迁移）；独立 PostGIS 中新 db:migrate 首次应用 52 项、重复应用 0 项，容器已停止。pnpm check 通过（292 项 Web 测试和 Go dev 全包；此轮未配置数据库测试变量，不能代替先前数据库证据）。三个 Node 脚本语法检查通过。运行镜像、真实默认启动及开发进程联调尚待，7.5 保持未勾选。
 
 
 - 完成 7.1：prepare:web 校验关键 HTML/chunks、拒绝 symlink/non-regular，再复制 333 个 out 文件到忽略目录；生产 all:dist embed 包含 Next 下划线元数据，New 在启动时检查页面并加载至内存，serve 接入 Gin 同一端口。dev 标签返回无静态 handler，测试命令使用 dev 标签，生产构建显式要求静态产物。静态响应含稳定 MIME、ETag/304、HEAD、Range、哈希目录 immutable、HTML/元数据 no-cache、页面 404；拒绝穿越/反斜杠/目录列出，API 与算法资产不回退 HTML。Gin HEAD 404 需显式提交 header，已由组合测试捕获并修正。真实嵌入页面（根、登录、项目及构建后 ID 详情壳）与 HTTP 边界测试通过；临时移走 dist 后生产编译按预期失败、dev 编译成功，恢复后生产 aerosight.exe 构建通过；临时移走 login/index.html 后复制在修改目标前拒绝，恢复后再次复制成功。迁移 SQL 嵌入沿用已验证 prepare:server。Go dev 全包（非数据库）、生产静态/Gin 测试和 OpenSpec strict 通过。7.2 CSP、4.3 gzip、7.5 默认构建启动入口及无 Node 镜像/完整数据库端到端仍待完成。

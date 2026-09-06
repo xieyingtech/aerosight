@@ -4,68 +4,47 @@
 
 ## Structure
 
-- `apps/web`: Next.js App Router, Auth.js, PostgreSQL data access and the application UI.
-- `apps/worker`: Minimal Go worker process. Queue consumers will be added with the first background task.
-- `db`: PostgreSQL schema.
-- Database: PostgreSQL. The development schema is in `db/schema.sql`.
+- `apps/web`: Next.js App Router UI, exported as static pages; browser requests use the Go API.
+- `apps/server`: Gin HTTP API, authentication, database access, embedded frontend and background workers in one application.
+- `db`: PostgreSQL/PostGIS migrations and the schema snapshot.
 
 ## Development
 
-1. Create a PostgreSQL database and apply all pending migrations:
+1. Install Node.js, pnpm and Go, then run `pnpm install`.
+2. Copy the root `.env.example` to `.env.local`. Set `DATABASE_URL`, an `AUTH_SECRET` of at least 32 characters, and `CSRF_AUTH_KEY` (32 random bytes encoded as base64).
+3. Start PostgreSQL with PostGIS enabled. `pnpm db:migrate` runs the Go migration command and is safe to repeat.
+4. Run `pnpm dev`. It builds Go with the `dev` tag, starts the API on `127.0.0.1:8080` and Next dev on port 3000. Next proxies `/api/*` and `/algorithm-assets/*` to Go. Set `PUBLIC_ORIGIN` to the browser's Next origin; `GO_API_ORIGIN` is the internal API target.
 
-```bash
-pnpm db:migrate
-```
-
-`db/schema.sql` remains the complete schema snapshot. Existing installations
-that already match this snapshot safely adopt the baseline migration on their
-first migration run.
-2. Copy `apps/web/.env.example` to `.env.local` at the repository root and fill
-   `DATABASE_URL` and `AUTH_SECRET`. Then either copy it to
-   `apps/web/.env.local` or symlink that path to the root `.env.local`.
-3. Install the web dependencies:
-
-```bash
-pnpm install
-```
-
-4. Start Next.js and the worker:
-
-```bash
-pnpm dev
-```
-
-They can also be started independently with `pnpm dev:web` and
-`pnpm dev:worker`.
-
-When Next.js starts with an empty `users` table, it creates the default
-administrator `admin@example.com` with password `admin`.
-
-Next.js owns authentication, authorization and synchronous database operations.
-The Go process is reserved for asynchronous work delivered through PostgreSQL
-and, when needed, Redis.
+For separate terminals, use `pnpm dev:server` and `pnpm dev:web`. The combined command loads the root `.env.local`; a standalone Next command needs `GO_API_ORIGIN` in its environment when the target differs from the default. Go owns migrations and administrator initialization. On an empty users table, the existing bootstrap creates `admin@example.com` with password `admin`.
 
 ## Checks
 
 ```bash
 pnpm check
 pnpm build
+pnpm db:check
 pnpm test:migrations
 ```
 
-## Production startup
+Go unit tests use the `dev` tag so a frontend export is not required. Production embed tests can be run after `pnpm build` with `go test ./internal/webassets` from `apps/server`.
 
-Build the Web application and worker, then start both processes from the
-workspace root:
+## Production startup
 
 ```bash
 pnpm build
 pnpm start
 ```
 
-`pnpm start` checks and applies pending database migrations before starting
-either process. Running `pnpm --dir apps/web start` directly performs the same
-migration check before starting Next.js.
+`pnpm build` exports Next, validates and copies frontend/migration assets, then compiles `.build/aerosight` (`aerosight.exe` on Windows). `pnpm start` launches only this Go application. Go applies pending migrations before serving HTTP and running background workers.
+
+The deployment executable embeds frontend pages and migrations; it can run without Node.js or the source checkout:
+
+```bash
+./aerosight migrate
+./aerosight serve
+```
+
+Supply environment variables directly when running the executable. Use `AEROSIGHT_ENV=production`, an HTTPS `PUBLIC_ORIGIN`, and an appropriate `HTTP_LISTEN_ADDRESS` behind the deployment TLS endpoint. Database, MQTT and MediaMTX remain external services. The separate callback listener belongs to the legacy worker maintenance command; unified `serve` handles callbacks on its HTTP port.
 
 ## Spec-driven development
 

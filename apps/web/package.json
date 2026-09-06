@@ -5,9 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "prestart": "pnpm db:migrate",
-    "start": "next start",
-    "db:migrate": "node scripts/db-migrate.mjs",
+    "start": "node ../../scripts/run-server.mjs serve",
+    "db:migrate": "node ../../scripts/run-server.mjs migrate",
     "test:migrations": "node scripts/db-migrate-test.mjs",
     "benchmark:load": "node scripts/benchmark-load.mjs",
     "drill:upgrade-rollback": "node scripts/upgrade-rollback-drill.mjs",

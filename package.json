@@ -3,20 +3,15 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "predev": "pnpm db:migrate",
-    "dev": "pnpm run \"/^dev:.*/\"",
-    "prestart": "pnpm db:migrate",
-    "start": "pnpm run \"/^start:.*/\"",
+    "dev": "node scripts/dev.mjs",
+    "start": "node scripts/run-server.mjs serve",
     "spec": "openspec",
     "dev:web": "pnpm --dir apps/web dev",
-    "dev:worker": "node scripts/dev-worker.mjs",
-    "start:web": "pnpm --dir apps/web exec next start",
-    "start:worker": "node scripts/start-worker.mjs",
-    "build": "pnpm build:web && pnpm build:worker",
+    "build": "pnpm build:web && pnpm build:server",
     "build:web": "pnpm --dir apps/web build",
     "build:worker": "cd apps/server && go build -o ../../.build/aerosight-worker ./cmd/worker",
     "test": "pnpm test:web && pnpm test:worker",
-    "db:migrate": "pnpm --dir apps/web db:migrate",
+    "db:migrate": "node scripts/run-server.mjs migrate",
     "test:migrations": "pnpm --dir apps/web test:migrations",
     "test:web": "pnpm --dir apps/web test:unit",
     "test:worker": "pnpm prepare:server && cd apps/server && go test -tags dev ./...",
@@ -30,7 +25,9 @@
     "db:generate": "node scripts/sqlc.mjs",
     "db:check": "node scripts/sqlc.mjs --check",
     "prepare:server": "node scripts/prepare-server.mjs",
-    "prepare:web": "node scripts/prepare-web.mjs"
+    "prepare:web": "node scripts/prepare-web.mjs",
+    "dev:server": "node scripts/run-server.mjs dev",
+    "build:server": "node scripts/build-server.mjs"
   },
   "devDependencies": {
     "@fission-ai/openspec": "1.10.0"
