@@ -32,7 +32,9 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 	if cfg.Address == "" {
 		cfg.Address = "127.0.0.1:8080"
 	}
-	if _, _, err := net.SplitHostPort(cfg.Address); err != nil {
+	_, port, addressErr := net.SplitHostPort(cfg.Address)
+	portNumber, portErr := strconv.Atoi(port)
+	if addressErr != nil || portErr != nil || portNumber < 0 || portNumber > 65535 {
 		return cfg, fmt.Errorf("HTTP_LISTEN_ADDRESS must be host:port")
 	}
 	if cfg.PublicOrigin == "" {

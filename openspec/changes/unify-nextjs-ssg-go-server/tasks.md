@@ -7,7 +7,7 @@
 ## 2. Go 应用与迁移骨架
 
 - [x] 2.1 将 Go 模块整合到 apps/server 和 cmd/aerosight，保留维护命令并分离运行组件；运行存量 Go 测试，确认包迁移未改变后台行为。
-- [ ] 2.2 建立 serve/migrate、配置校验、HTTP/worker 连接池预算和 dev 构建标签；用配置测试验证缺失密钥和无前端产物的开发启动边界。
+- [x] 2.2 建立 serve/migrate、配置校验、HTTP/worker 连接池预算和 dev 构建标签；用配置测试验证缺失密钥和无前端产物的开发启动边界。
 - [x] 2.3 把迁移执行器移入 Go 并嵌入历史 SQL，保留 ledger、锁、checksum、基线和 PostGIS 检查；运行空库、旧库、并发、重复和 checksum 失败集成测试。
 - [x] 2.4 添加 sessions 增量迁移和初始化流程，保持旧账号及凭据；验证首次启动、重复启动和旧库数据不被重置。
 
