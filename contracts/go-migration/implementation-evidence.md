@@ -4,6 +4,8 @@
 
 ## 2026-09-07
 
+- 7.3 调度取消边界：ReconcileOnce、OutboxHandler 和 executeLease 在取消后拒绝新工作，批次逐项检查取消。同步返回并等待续租循环结束后再次检查根 context，应用退出不将中断同步登记为成功/失败、不释放其未完成租约，由原有租约到期路径恢复。新增受控测试覆盖预先取消不 Claim、两项批次在首项取消后第二项不执行、runner 在取消时返回 nil 也不写成功、已取消回调不领取，以及真实 context 阻塞的 Renew 退出后 Scheduler.Run 才返回。go test -tags dev ./internal/connector ./internal/runtime -count=1 通过，包含既有并发单持有者、租约丢失和模拟重启恢复回归。本批为组件级取消验证，数据库和真实上游/整进程恢复仍需完成，7.3 保持未勾选。
+
 - 7.3 MQTT 租约丢失后的退出跟踪：续租返回 false 时不再立刻忘记旧连接，改为标记 stopping、取消会话并拒绝该连接的 Publish；监听器与 MQTT Done 均结束后才移除记录。若 Claim 在旧连接关闭前再次返回同一 adapter 的新 epoch，释放本次未使用的新租约，不覆盖旧连接的清理记录。受控测试验证租约丢失后禁止发布、旧记录保留、新 epoch 不覆盖、统一退出确实等待旧连接关闭，以及旧 worker 清理不能释放另一 worker 的新租约。go test -tags dev ./internal/dji ./internal/runtime ./cmd/aerosight -count=1 和 diff 检查通过；真实 broker/整进程与调度恢复验收仍待执行，7.3 未勾选。
 
 - 7.3 MQTT 退出顺序：AdapterManager 在根取消后不再启动新一轮 reconcile，取消全部活动会话后同时等待状态监听器和 ManagedSession.Done，确认实际会话结束才释放租约。清理使用共享五秒子预算（位于应用默认三十秒退出预算内），等待会话或 Release 超时返回错误并保留未释放租约供到期恢复；状态事件通道关闭时结束监听，避免空通道忙循环。Runtime 保留根取消后出现的实际清理错误，正常 context cancellation 仍返回成功。受控 ManagedSession/Repository 测试覆盖 MQTT 延迟关闭前不释放、关闭后释放、未关闭超时保留、Release 阻塞可取消、预先取消不再连接及监督器不吞清理错误；go test -tags dev ./internal/dji ./internal/runtime ./cmd/aerosight -count=1 通过。此批验证管理器生命周期契约，尚非真实 MQTT broker 断开/重启或整进程信号验收，7.3 保持未勾选。

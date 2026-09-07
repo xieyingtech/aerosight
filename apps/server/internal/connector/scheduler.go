@@ -220,6 +220,9 @@ func (scheduler *Scheduler) recordSync(duration time.Duration, err error) {
 }
 
 func (scheduler *Scheduler) executeLease(ctx context.Context, lease InstanceLease) (result SyncApplyResult, returnedErr error) {
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	startedAt := time.Now()
 	defer func() { scheduler.recordSync(time.Since(startedAt), returnedErr) }()
 	syncContext, cancel := context.WithCancel(ctx)
@@ -248,6 +251,11 @@ func (scheduler *Scheduler) executeLease(ctx context.Context, lease InstanceLeas
 	result, syncErr := scheduler.runner.Run(syncContext, lease.Instance, DiscoveryPoll)
 	cancel()
 	renewErr := <-renewed
+	if err := ctx.Err(); err != nil {
+		// Cancellation leaves the persisted lease for recovery. Do not turn
+		// an interrupted run into a successful or failed completed outcome.
+		return result, err
+	}
 	if renewErr != nil {
 		syncErr = renewErr
 	}
@@ -272,6 +280,9 @@ type syncRequest struct {
 }
 
 func (scheduler *Scheduler) OutboxHandler(ctx context.Context, _ *sql.Tx, event outbox.Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	var request syncRequest
 	if event.ProjectID <= 0 || event.TeamID <= 0 || json.Unmarshal(event.Payload, &request) != nil ||
 		request.ConnectorKey != scheduler.config.ConnectorKey || request.DiscoveryMode != string(DiscoveryPoll) ||
@@ -300,6 +311,9 @@ func (scheduler *Scheduler) OutboxHandler(ctx context.Context, _ *sql.Tx, event 
 }
 
 func (scheduler *Scheduler) ReconcileOnce(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	backlog, backlogErr := scheduler.leases.Backlog(ctx, scheduler.config.ConnectorKey, scheduler.config.Version)
 	if backlogErr != nil {
 		return 0, backlogErr
@@ -321,6 +335,9 @@ func (scheduler *Scheduler) ReconcileOnce(ctx context.Context) (int, error) {
 	}
 	var syncErrors []error
 	for _, lease := range leases {
+		if err := ctx.Err(); err != nil {
+			return len(leases), err
+		}
 		if _, syncErr := scheduler.executeLease(ctx, lease); syncErr != nil {
 			syncErrors = append(syncErrors, syncErr)
 		}
