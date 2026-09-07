@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { verifyPageStates } from './browser-page-states.mjs';
 import { verifyLegacyLinks } from './browser-legacy-links.mjs';
+import { verifyMap } from './browser-map.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -74,7 +75,7 @@ try {
   }
   assert(ready,'Go startup timed out');
   browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL ?? (process.platform==='win32'?'msedge':'chromium'),headless:true});
-  const context=await browser.newContext({ignoreHTTPSErrors:true});
+  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1280,height:1000}});
   await context.addInitScript(()=>{
     window.cspViolations=[];
     document.addEventListener('securitypolicyviolation',event=>window.cspViolations.push({directive:event.effectiveDirective,blocked:event.blockedURI}));
@@ -114,6 +115,10 @@ try {
   await page.reload();
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.screenshot({path:resolve(output,'created-project.png'),fullPage:true});
+  if(!development) {
+    const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
+    writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
+  }
   assert.deepEqual(errors,[],'new resource hydration/runtime errors');
   assert.deepEqual(await page.evaluate(()=>window.cspViolations),[],'new resource CSP violations');
   if (!development) {

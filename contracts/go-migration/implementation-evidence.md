@@ -2,6 +2,10 @@
 
 当前仍处于迁移阶段；默认构建与启动已切换为静态导出和统一 Go 应用。未勾选任务仍需实现和验证，尚未完成发布验收。
 
+## 2026-09-07
+
+- 7.2 地图浏览器验收：新增 browser-map，真实测试库插入 adapter/device/observation/PointZ pose，经 Go 快照 API 和当前 ProjectMap 处理，断言 MapLibre blob worker 启动、设备点渲染且点击后右侧显示对应设备。公共 demo style 请求保留原 HTTPS 来源但通过浏览器 route 提供确定性纯背景 style，验证来源 CSP 和实际 GeoJSON 渲染链，不把公共瓦片服务可用性作为通过依据。无 CSP violation，缩放前后保留截图和画布尺寸；使用完整容纳地图的 1280×1000 视口消除全页截取离屏 WebGL 区域的异常。最终证据 .build/production-browser-3bc820af-eb9d-42e1-aab2-0f93acd8ac62/map.json、map-selected.png、map-resized.png，已查看完整背景和居中设备选中效果。完整生产浏览器流程通过并清理；直播/媒体 CSP 验收仍待完成，7.2 保持未勾选。
+
 ## 2026-09-06
 
 - 完成 6.4：新增 browser-legacy-links，真实 Go 生产和 Next 开发入口均对 16 类旧路径逐项执行 GET/HEAD，断言 307、固定目标路径、路径 ID 覆盖重复冲突 ID、重复 layer 与中文特殊字符参数保留；五类非法 ID 返回 404。浏览器从项目列表进入新建项目的旧 URL，确认重定向详情数据，再后退/前进确认正确页面与筛选参数。生产证据 .build/production-browser-2b44ab7a-3b86-4dec-b20c-98e24ae7f48c/legacy-links.json，开发证据 .build/development-browser-a21db3e9-1377-4ee1-ba95-a61e736f7b5f/legacy-links.json；完整两套浏览器流程均通过并退出。复核 report_drafts 与 agent_read_tools 使用 projectPageURL；重跑 TestLegacyPageRedirects / TestProjectPageURLScopeAndEncoding 通过（含所有 16 类映射、尾斜线、方法、int32 边界、参数编码及 mutation 不重定向）。

@@ -42,6 +42,8 @@ The production browser run also checks loading, retry and API-denial UI states f
 
 Both browser modes verify all 16 legacy page mappings with GET/HEAD, conflicting IDs, repeated filters and invalid IDs, then exercise browser back/forward navigation through a redirected project detail. Results are recorded in `legacy-links.json`.
 
+The production run also verifies a real database device pose rendered and selected on the map under CSP, including a MapLibre blob worker. Its external map style response is a deterministic fixture; it does not depend on public demo tiles. Map evidence is stored in `map.json` and `map-*.png`; live media verification remains pending.
+
 ```bash
 pnpm build
 pnpm start
