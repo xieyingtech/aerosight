@@ -11,7 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 )
 
-// Preserve postgresstore's session format and cleanup while adding SCS's
+// Preserve postgresstore's session format while adding SCS's
 // optional cancellable operations. Each lookup is bounded even for SSE.
 type sessionStore struct {
 	*postgresstore.PostgresStore

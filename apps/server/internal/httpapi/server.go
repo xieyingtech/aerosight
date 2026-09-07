@@ -38,7 +38,7 @@ type Server struct {
 	ready               atomic.Bool
 	router              *gin.Engine
 	sessions            *scs.SessionManager
-	store               *postgresstore.PostgresStore
+	stopSessionCleanup  func()
 	queries             *sqlcgen.Queries
 	db                  *sql.DB
 	logger              *slog.Logger
@@ -54,7 +54,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 		return nil, err
 	}
 	sessions := scs.New()
-	store := postgresstore.New(db)
+	store := postgresstore.NewWithCleanupInterval(db, 0)
 	sessionTimeout := cfg.RequestTimeout
 	if sessionTimeout <= 0 {
 		sessionTimeout = 30 * time.Second
@@ -74,7 +74,8 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	sessions.Cookie.Secure = strings.HasPrefix(cfg.PublicOrigin, "https://")
 	sessions.Lifetime = cfg.SessionLifetime
 	sessions.IdleTimeout = cfg.SessionIdle
-	s := &Server{router: r, sessions: sessions, store: store, queries: sqlcgen.New(db), db: db, logger: logger, cfg: cfg}
+	s := &Server{router: r, sessions: sessions, queries: sqlcgen.New(db), db: db, logger: logger, cfg: cfg}
+	s.stopSessionCleanup = startSessionCleanup(5*time.Minute, sessionTimeout, s.queries.DeleteExpiredHTTPSessions, logger)
 	s.loginRate = httprate.NewRateLimiter(cfg.LoginLimit, time.Minute, httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) { writeError(w, 429, "RATE_LIMITED") }))
 	s.writeRate = userRateLimiter(cfg.WriteLimit, 120)
 	s.streamRate = userRateLimiter(cfg.SSELimit, 30)
@@ -129,7 +130,11 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.router.GET("/api/projects/:id/snapshot", s.requireUser, s.timeout, s.projectSnapshot)
 	return s, nil
 }
-func (s *Server) Close() { s.store.StopCleanup() }
+func (s *Server) Close() {
+	if s.stopSessionCleanup != nil {
+		s.stopSessionCleanup()
+	}
+}
 func (s *Server) Handler() http.Handler {
 	origin, _ := url.Parse(s.cfg.PublicOrigin)
 	protect := csrf.Protect(s.cfg.CSRFKey, csrf.TrustedOrigins([]string{origin.Host}), csrf.Secure(strings.HasPrefix(s.cfg.PublicOrigin, "https://")), csrf.Path("/"), csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeError(w, 403, "CSRF_FAILED") })))

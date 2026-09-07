@@ -26,6 +26,15 @@ func (q *Queries) CommitHTTPSession(ctx context.Context, arg CommitHTTPSessionPa
 	return err
 }
 
+const deleteExpiredHTTPSessions = `-- name: DeleteExpiredHTTPSessions :exec
+DELETE FROM sessions WHERE expiry < current_timestamp
+`
+
+func (q *Queries) DeleteExpiredHTTPSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteExpiredHTTPSessions)
+	return err
+}
+
 const deleteHTTPSession = `-- name: DeleteHTTPSession :exec
 DELETE FROM sessions WHERE token = $1
 `

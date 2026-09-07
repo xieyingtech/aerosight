@@ -7,3 +7,6 @@ ON CONFLICT (token) DO UPDATE SET data = EXCLUDED.data, expiry = EXCLUDED.expiry
 
 -- name: DeleteHTTPSession :exec
 DELETE FROM sessions WHERE token = $1;
+
+-- name: DeleteExpiredHTTPSessions :exec
+DELETE FROM sessions WHERE expiry < current_timestamp;

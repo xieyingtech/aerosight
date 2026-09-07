@@ -47,6 +47,7 @@ type Querier interface {
 	CreateTeamOwner(ctx context.Context, arg CreateTeamOwnerParams) error
 	DeclareDiscoveredCapability(ctx context.Context, arg DeclareDiscoveredCapabilityParams) error
 	DeleteAIProvider(ctx context.Context, id int64) (int64, error)
+	DeleteExpiredHTTPSessions(ctx context.Context) error
 	DeleteHTTPSession(ctx context.Context, token string) error
 	DisableFlightHubBindings(ctx context.Context, arg DisableFlightHubBindingsParams) error
 	DisableFlightHubConnector(ctx context.Context, arg DisableFlightHubConnectorParams) (int64, error)
