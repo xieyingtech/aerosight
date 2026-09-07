@@ -123,6 +123,94 @@ type managedSessionFixture struct {
 	done   chan struct{}
 }
 
+type publishingSessionFixture struct {
+	managedSessionFixture
+	called bool
+}
+
+func (session *publishingSessionFixture) Publish(context.Context, string, []byte) error {
+	session.called = true
+	return nil
+}
+
+func TestLostLeaseRemainsTrackedUntilSessionCloses(t *testing.T) {
+	repository := &leaseRepositoryFixture{owner: "new-worker", lease: AdapterLease{AdapterID: 1, Epoch: 2}}
+	manager := NewAdapterManager(repository, secretFixture{}, func(context.Context, MQTTConfig, MQTTMessageHandler) (ManagedSession, error) {
+		t.Error("unexpected connection")
+		return nil, errors.New("unexpected connection")
+	}, nil, "old-worker", nil)
+	closed := make(chan struct{})
+	close(closed)
+	sessionDone := make(chan struct{})
+	closeSession := sync.OnceFunc(func() { close(sessionDone) })
+	defer closeSession()
+	session := &publishingSessionFixture{managedSessionFixture: managedSessionFixture{done: sessionDone}}
+	manager.active[1] = activeAdapter{lease: AdapterLease{AdapterID: 1, Epoch: 1}, session: session, cancel: func() {}, allDone: closed}
+	if err := manager.reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(manager.active) != 1 || !manager.active[1].stopping {
+		t.Fatal("lost lease connection was forgotten")
+	}
+	if err := manager.Publish(context.Background(), 1, "topic", nil); err == nil || session.called {
+		t.Fatal("lost lease published a command")
+	}
+	// The old connection must remain tracked even if a later claim returns a
+	// fresh epoch for the same adapter before that connection closes.
+	repository.mu.Lock()
+	repository.owner = ""
+	repository.mu.Unlock()
+	if err := manager.reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if manager.active[1].lease.Epoch != 1 || !manager.active[1].stopping {
+		t.Fatal("new claim overwrote draining connection")
+	}
+	repository.mu.Lock()
+	if repository.owner != "" {
+		t.Error("unused fresh lease was not released")
+	}
+	repository.owner = "new-worker"
+	repository.lease.Epoch++
+	repository.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() { done <- manager.Run(ctx) }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		manager.mu.Lock()
+		count := len(manager.active)
+		manager.mu.Unlock()
+		if count == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("shutdown did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("shutdown skipped old MQTT session: %v", err)
+	default:
+	}
+	closeSession()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish")
+	}
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	if repository.owner != "new-worker" {
+		t.Fatal("old shutdown released new worker lease")
+	}
+}
+
 type blockedReleaseRepository struct{ *leaseRepositoryFixture }
 
 func (repository blockedReleaseRepository) Release(ctx context.Context, _ AdapterLease, _ string) error {

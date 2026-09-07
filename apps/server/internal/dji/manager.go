@@ -17,10 +17,11 @@ type SessionConnector func(context.Context, MQTTConfig, MQTTMessageHandler) (Man
 type MessageHandlerFactory func(AdapterLease) MQTTMessageHandler
 
 type activeAdapter struct {
-	lease   AdapterLease
-	session ManagedSession
-	cancel  context.CancelFunc
-	allDone chan struct{}
+	lease    AdapterLease
+	session  ManagedSession
+	cancel   context.CancelFunc
+	allDone  chan struct{}
+	stopping bool
 }
 
 type AdapterManager struct {
@@ -109,7 +110,7 @@ func (manager *AdapterManager) Publish(ctx context.Context, adapterID int64, top
 	manager.mu.Lock()
 	active, exists := manager.active[adapterID]
 	manager.mu.Unlock()
-	if !exists {
+	if !exists || active.stopping {
 		return errors.New("DJI_ADAPTER_SESSION_NOT_ACTIVE")
 	}
 	publisher, supportsPublish := active.session.(interface {
@@ -130,6 +131,10 @@ func (manager *AdapterManager) reconcile(ctx context.Context) error {
 	manager.mu.Unlock()
 	var problems []error
 	for _, adapter := range active {
+		if adapter.stopping {
+			manager.removeStopped(adapter)
+			continue
+		}
 		renewed, err := manager.repository.Renew(ctx, adapter.lease, manager.owner, manager.lease)
 		if err != nil {
 			problems = append(problems, err)
@@ -137,9 +142,11 @@ func (manager *AdapterManager) reconcile(ctx context.Context) error {
 		}
 		if !renewed {
 			adapter.cancel()
+			adapter.stopping = true
 			manager.mu.Lock()
-			delete(manager.active, adapter.lease.AdapterID)
+			manager.active[adapter.lease.AdapterID] = adapter
 			manager.mu.Unlock()
+			manager.removeStopped(adapter)
 		}
 	}
 	manager.mu.Lock()
@@ -153,11 +160,35 @@ func (manager *AdapterManager) reconcile(ctx context.Context) error {
 		return errors.Join(append(problems, err)...)
 	}
 	for _, lease := range leases {
+		manager.mu.Lock()
+		_, exists := manager.active[lease.AdapterID]
+		manager.mu.Unlock()
+		if exists {
+			// A previous MQTT connection is still draining. Do not overwrite
+			// its lifecycle record with a newly acquired epoch.
+			if err := manager.repository.Release(ctx, lease, manager.owner); err != nil {
+				problems = append(problems, err)
+			}
+			continue
+		}
 		if err := manager.start(ctx, lease); err != nil {
 			problems = append(problems, err)
 		}
 	}
 	return errors.Join(problems...)
+}
+
+func (manager *AdapterManager) removeStopped(adapter activeAdapter) {
+	for _, done := range []<-chan struct{}{adapter.allDone, adapter.session.Done()} {
+		select {
+		case <-done:
+		default:
+			return
+		}
+	}
+	manager.mu.Lock()
+	delete(manager.active, adapter.lease.AdapterID)
+	manager.mu.Unlock()
 }
 
 func (manager *AdapterManager) Run(ctx context.Context) error {
