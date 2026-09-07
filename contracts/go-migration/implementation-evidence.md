@@ -4,6 +4,8 @@
 
 ## 2026-09-07
 
+- 7.3 调度数据库恢复验收：新增 TestPostgresSchedulerCancellationAndRestartRecovery，在独立真实 PostGIS 完整迁移后创建 FlightHub adapter，使用 SQLLeaseRepository/SQLSyncOutcomeStore 启动并取消实际调度器，验证租约保留、状态仍 connecting、last_checked_at 未写且无同步结果。活租约不能被抢占；推进该测试租约到期后新 worker 获得更高 epoch，旧持有者 Renew/Succeeded/Failed 被拒绝且 Release 不能清除新租约。恢复阶段通过 SQLSyncStore.CurrentCursor/ApplyBatch 实际写入一条设备身份、同步游标及成功运行，再由调度器记录 connected 并释放租约；立即再次 Reconcile 不重复执行。真实数据库测试和 connector 组件回归通过；既有跨来源冲突集成测试因独立的 AEROSIGHT_TEST_DATABASE_URL 未设置而跳过，本轮不将其列为通过。初次新测试误用 discovery scope 作为 cursor，已修正为实际 CurrentCursor 后重跑通过。此证据覆盖持久租约、epoch 和结果写入，发现数据使用受控 batch，尚非 FlightHub 网络或整进程重启验收，7.3 保持未勾选。
+
 - 7.3 真实 MQTT 验收入口准备：新增 pnpm test:mqtt-lifecycle，复用仓库固定 eclipse-mosquitto:2.1.2-alpine，创建临时密码文件、认证 listener、随机 loopback 映射和独立容器；执行现有 MQTT 5 认证/非法认证/重连订阅测试及新增 TestMQTTManagerShutdownAndRestart，保存测试与 broker 日志、仅通过时写 result.json，并清理容器。新增管理器测试使用真实 StartMQTTSession 和租约 fixture，验证连接/发布、退出时 MQTT Done、释放租约及第二个 manager 接管。Context7 Mosquitto 官方认证文档已核对；Go MQTT 测试编译与脚本语法/diff 检查通过，但无 broker 环境时 Go 集成测试跳过。两次拉取固定镜像均因下载 6,136,992 字节层出现 unexpected EOF 失败，分别仅收到 2,108,272 和 3,499,205 字节；第二次其他层已下载完成，命令最终退出 1，没有仍在运行的下载进程。真实 broker 测试尚未运行，不据此勾选 7.3。
 
 - 7.3 调度取消边界：ReconcileOnce、OutboxHandler 和 executeLease 在取消后拒绝新工作，批次逐项检查取消。同步返回并等待续租循环结束后再次检查根 context，应用退出不将中断同步登记为成功/失败、不释放其未完成租约，由原有租约到期路径恢复。新增受控测试覆盖预先取消不 Claim、两项批次在首项取消后第二项不执行、runner 在取消时返回 nil 也不写成功、已取消回调不领取，以及真实 context 阻塞的 Renew 退出后 Scheduler.Run 才返回。go test -tags dev ./internal/connector ./internal/runtime -count=1 通过，包含既有并发单持有者、租约丢失和模拟重启恢复回归。本批为组件级取消验证，数据库和真实上游/整进程恢复仍需完成，7.3 保持未勾选。
