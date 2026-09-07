@@ -224,6 +224,12 @@ type Runtime struct {
 
 // Run cancels peer components on failure and waits for all of them to release resources.
 func (r *Runtime) Run(ctx context.Context) error {
+	return r.RunWithFailure(ctx, nil)
+}
+
+// RunWithFailure reports a component failure before waiting for peers to drain.
+// onFailure must not block; it can revoke readiness and cancel the application.
+func (r *Runtime) RunWithFailure(ctx context.Context, onFailure func(error)) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	results := make(chan error, len(r.tasks))
@@ -238,6 +244,9 @@ func (r *Runtime) Run(ctx context.Context) error {
 				err = errors.New("background component stopped unexpectedly")
 			}
 			first = err
+			if onFailure != nil {
+				onFailure(err)
+			}
 			cancel()
 		}
 	}

@@ -4,6 +4,8 @@
 
 ## 2026-09-07
 
+- 7.3 后台失败通知：Runtime 新增 RunWithFailure，在必要组件错误或意外正常返回时先报告失败，再取消并等待其余组件，避免等待资源排空期间 readiness 仍为成功。统一入口收到报告立即撤销 ready 并取消应用；HTTP 显式绑定端口成功后才设置 ready，退出开始即停止会话清理，退出路径关闭 HTTP server。新增单元测试覆盖错误/意外退出立即报告、同伴取消、等待同伴排空、保留原始错误、正常取消不误报；真实独立 PostgreSQL 与 HTTP 验证先 /readyz 200，组件失败且同伴仍阻塞退出时 /readyz 503、/healthz 200。go test -tags dev ./internal/runtime ./cmd/aerosight -count=1 -v 全部通过，测试容器已清理。此批以受控失败组件验证监督器，未代替真实 MQTT/outbox/调度租约与生产信号退出演练，7.3 保持未勾选。
+
 - 7.3 会话清理生命周期：根据 SCS postgresstore 官方文档关闭内置无 context 清理，保留五分钟周期、原 sessions 格式和过期条件；改由 sqlc DeleteExpiredHTTPSessions 执行有 deadline 的清理，Server.Close 取消正在运行的 SQL 并等待 goroutine 退出，重复及并发关闭安全。真实独立 PostGIS 验证仅删除过期会话、保留有效会话数据，并在 ACCESS EXCLUSIVE 表锁阻塞 DELETE 时关闭清理，确认无需释放表锁即可取消退出。单元测试覆盖周期操作超时、关闭取消及八个并发关闭调用；TestLoginCSRFRestartAndLogout 回归和 pnpm db:check 通过。HTTP/后台整体退出、必要组件 readiness 与租约恢复仍待验证，7.3 不提前勾选。再次构建完整镜像仍因 auth.docker.io 连接超时失败，记录于 .build/unified-image.log，7.5 未验收。
 
 - 7.2 地图浏览器验收：新增 browser-map，真实测试库插入 adapter/device/observation/PointZ pose，经 Go 快照 API 和当前 ProjectMap 处理，断言 MapLibre blob worker 启动、设备点渲染且点击后右侧显示对应设备。公共 demo style 请求保留原 HTTPS 来源但通过浏览器 route 提供确定性纯背景 style，验证来源 CSP 和实际 GeoJSON 渲染链，不把公共瓦片服务可用性作为通过依据。无 CSP violation，缩放前后保留截图和画布尺寸；使用完整容纳地图的 1280×1000 视口消除全页截取离屏 WebGL 区域的异常。最终证据 .build/production-browser-3bc820af-eb9d-42e1-aab2-0f93acd8ac62/map.json、map-selected.png、map-resized.png，已查看完整背景和居中设备选中效果。完整生产浏览器流程通过并清理；直播/媒体 CSP 验收仍待完成，7.2 保持未勾选。

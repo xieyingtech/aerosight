@@ -108,10 +108,20 @@ func run(logger *slog.Logger) error {
 	api.AttachDeviceCredentials(workerCfg.AuthSecret)
 	api.AttachMediaStorage(workerCfg.ObjectStorageLocalRoot)
 	server := newHTTPServer(ctx, httpCfg.Address, api.Handler())
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	defer server.Close()
 	results := make(chan error, 2)
-	go func() { results <- bg.Run(ctx) }()
-	go func() { results <- server.ListenAndServe() }()
+	go func() { results <- server.Serve(listener) }()
 	api.SetReady(true)
+	go func() {
+		results <- bg.RunWithFailure(ctx, func(error) {
+			api.SetReady(false)
+			stop()
+		})
+	}()
 	var first error
 	completed := 0
 	select {
@@ -123,6 +133,7 @@ func run(logger *slog.Logger) error {
 	stop()
 	shutdown, cancel := context.WithTimeout(context.Background(), httpCfg.ShutdownTimeout)
 	defer cancel()
+	api.Close()
 	shutdownErr := server.Shutdown(shutdown)
 	for completed < 2 {
 		select {
