@@ -24,16 +24,17 @@ type activeAdapter struct {
 }
 
 type AdapterManager struct {
-	repository LeaseRepository
-	resolver   SecretResolver
-	connect    SessionConnector
-	handler    MessageHandlerFactory
-	owner      string
-	logger     *slog.Logger
-	lease      time.Duration
-	maxActive  int
-	mu         sync.Mutex
-	active     map[int64]activeAdapter
+	repository      LeaseRepository
+	resolver        SecretResolver
+	connect         SessionConnector
+	handler         MessageHandlerFactory
+	owner           string
+	logger          *slog.Logger
+	lease           time.Duration
+	maxActive       int
+	shutdownTimeout time.Duration
+	mu              sync.Mutex
+	active          map[int64]activeAdapter
 }
 
 func NewAdapterManager(
@@ -46,7 +47,8 @@ func NewAdapterManager(
 	return &AdapterManager{
 		repository: repository, resolver: resolver, connect: connector, handler: handler,
 		owner: owner, logger: logger, lease: 30 * time.Second, maxActive: 32,
-		active: make(map[int64]activeAdapter),
+		shutdownTimeout: 5 * time.Second,
+		active:          make(map[int64]activeAdapter),
 	}
 }
 
@@ -54,7 +56,10 @@ func (manager *AdapterManager) watch(ctx context.Context, lease AdapterLease, se
 	defer close(done)
 	for {
 		select {
-		case event := <-session.Events():
+		case event, ok := <-session.Events():
+			if !ok {
+				return
+			}
 			status := event.State
 			if status != "connected" && status != "degraded" && status != "failed" {
 				status = "degraded"
@@ -162,8 +167,10 @@ func (manager *AdapterManager) Run(ctx context.Context) error {
 	ticker := time.NewTicker(manager.lease / 3)
 	defer ticker.Stop()
 	for {
-		if err := manager.reconcile(ctx); err != nil && ctx.Err() == nil {
-			manager.logger.Error("DJI adapter reconciliation failed", "error", err.Error())
+		if ctx.Err() == nil {
+			if err := manager.reconcile(ctx); err != nil && ctx.Err() == nil {
+				manager.logger.Error("DJI adapter reconciliation failed", "error", err.Error())
+			}
 		}
 		select {
 		case <-ctx.Done():
@@ -175,9 +182,21 @@ func (manager *AdapterManager) Run(ctx context.Context) error {
 			}
 			manager.active = make(map[int64]activeAdapter)
 			manager.mu.Unlock()
+			cleanup, stop := context.WithTimeout(context.Background(), manager.shutdownTimeout)
+			defer stop()
 			for _, adapter := range active {
-				<-adapter.allDone
-				_ = manager.repository.Release(context.Background(), adapter.lease, manager.owner)
+				// watch exits on cancellation; it is not proof that the MQTT
+				// connection has closed. Keep the lease until both have stopped.
+				for _, done := range []<-chan struct{}{adapter.allDone, adapter.session.Done()} {
+					select {
+					case <-done:
+					case <-cleanup.Done():
+						return cleanup.Err()
+					}
+				}
+				if err := manager.repository.Release(cleanup, adapter.lease, manager.owner); err != nil {
+					return err
+				}
 			}
 			return nil
 		case <-ticker.C:

@@ -3,6 +3,7 @@ package dji
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,73 @@ type leaseRepositoryFixture struct {
 	lease    AdapterLease
 	owner    string
 	statuses []string
+}
+
+func TestManagerShutdownWaitsForMQTTBeforeReleasingLease(t *testing.T) {
+	for _, timeout := range []bool{false, true} {
+		t.Run(map[bool]string{false: "session closes", true: "session exceeds cleanup budget"}[timeout], func(t *testing.T) {
+			repository := &leaseRepositoryFixture{lease: AdapterLease{
+				AdapterID: 1, ProjectID: 2, BrokerURL: "mqtt://broker.example.test:1883",
+				ConfigJSON: json.RawMessage(`{"topics":["dji/project-2/GW001/#"],"gatewaySerials":["GW001"]}`),
+			}}
+			sessionDone := make(chan struct{})
+			closeSession := sync.OnceFunc(func() { close(sessionDone) })
+			defer closeSession()
+			started := make(chan struct{})
+			cancelled := make(chan struct{})
+			connector := func(ctx context.Context, _ MQTTConfig, _ MQTTMessageHandler) (ManagedSession, error) {
+				close(started)
+				go func() { <-ctx.Done(); close(cancelled) }()
+				return &managedSessionFixture{events: make(chan SessionEvent), done: sessionDone}, nil
+			}
+			manager := NewAdapterManager(repository, secretFixture{credentials: MQTTCredentials{Username: "worker", Password: "password"}}, connector, nil, "worker-a", nil)
+			manager.shutdownTimeout = 100 * time.Millisecond
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() { done <- manager.Run(ctx) }()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("session did not start")
+			}
+			cancel()
+			select {
+			case <-cancelled:
+			case <-time.After(time.Second):
+				t.Fatal("session not cancelled")
+			}
+			repository.mu.Lock()
+			owner := repository.owner
+			repository.mu.Unlock()
+			if owner != "worker-a" {
+				t.Fatal("lease released before MQTT stopped")
+			}
+			if !timeout {
+				closeSession()
+			}
+			select {
+			case err := <-done:
+				if timeout && !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("cleanup timeout: %v", err)
+				}
+				if !timeout && err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("cleanup exceeded budget")
+			}
+			repository.mu.Lock()
+			owner = repository.owner
+			repository.mu.Unlock()
+			if timeout && owner != "worker-a" {
+				t.Fatal("unclosed session lost its lease")
+			}
+			if !timeout && owner != "" {
+				t.Fatal("closed session retained its lease")
+			}
+		})
+	}
 }
 
 func (fixture *leaseRepositoryFixture) Claim(_ context.Context, owner string, _ int, _ time.Duration) ([]AdapterLease, error) {
@@ -53,6 +121,37 @@ func (fixture *leaseRepositoryFixture) UpdateStatus(_ context.Context, _ Adapter
 type managedSessionFixture struct {
 	events chan SessionEvent
 	done   chan struct{}
+}
+
+type blockedReleaseRepository struct{ *leaseRepositoryFixture }
+
+func (repository blockedReleaseRepository) Release(ctx context.Context, _ AdapterLease, _ string) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+func TestManagerShutdownBoundsLeaseRelease(t *testing.T) {
+	repository := blockedReleaseRepository{&leaseRepositoryFixture{owner: "worker-a"}}
+	manager := NewAdapterManager(repository, secretFixture{}, func(context.Context, MQTTConfig, MQTTMessageHandler) (ManagedSession, error) {
+		t.Error("cancelled manager started a new session")
+		return nil, errors.New("unexpected connect")
+	}, nil, "worker-a", nil)
+	manager.shutdownTimeout = 20 * time.Millisecond
+	closed := make(chan struct{})
+	close(closed)
+	manager.active[1] = activeAdapter{session: &managedSessionFixture{done: closed}, cancel: func() {}, allDone: closed}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() { done <- manager.Run(ctx) }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("release deadline: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("lease release exceeded cleanup budget")
+	}
 }
 
 func (fixture *managedSessionFixture) Events() <-chan SessionEvent { return fixture.events }

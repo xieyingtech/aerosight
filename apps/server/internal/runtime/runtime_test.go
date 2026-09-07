@@ -171,3 +171,27 @@ func TestNormalCancellationDrainsWithoutFailureNotification(t *testing.T) {
 		t.Fatal("normal cancellation reported as failure")
 	}
 }
+
+func TestCancellationPreservesCleanupFailure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	failure := errors.New("MQTT cleanup budget exceeded")
+	r := &Runtime{tasks: []func(context.Context) error{func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		return failure
+	}}}
+	done := make(chan error, 1)
+	go func() { done <- r.Run(ctx) }()
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, failure) {
+			t.Fatalf("cleanup failure lost: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runtime failed to stop")
+	}
+}

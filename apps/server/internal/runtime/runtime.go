@@ -248,6 +248,10 @@ func (r *Runtime) RunWithFailure(ctx context.Context, onFailure func(error)) err
 				onFailure(err)
 			}
 			cancel()
+		} else if first == nil && err != nil && !errors.Is(err, ctx.Err()) {
+			// Preserve cleanup failures after cancellation; cancellation itself
+			// is normal, but a failed drain must not become a successful exit.
+			first = err
 		}
 	}
 	return first

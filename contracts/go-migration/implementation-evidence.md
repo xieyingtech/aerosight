@@ -4,6 +4,8 @@
 
 ## 2026-09-07
 
+- 7.3 MQTT 退出顺序：AdapterManager 在根取消后不再启动新一轮 reconcile，取消全部活动会话后同时等待状态监听器和 ManagedSession.Done，确认实际会话结束才释放租约。清理使用共享五秒子预算（位于应用默认三十秒退出预算内），等待会话或 Release 超时返回错误并保留未释放租约供到期恢复；状态事件通道关闭时结束监听，避免空通道忙循环。Runtime 保留根取消后出现的实际清理错误，正常 context cancellation 仍返回成功。受控 ManagedSession/Repository 测试覆盖 MQTT 延迟关闭前不释放、关闭后释放、未关闭超时保留、Release 阻塞可取消、预先取消不再连接及监督器不吞清理错误；go test -tags dev ./internal/dji ./internal/runtime ./cmd/aerosight -count=1 通过。此批验证管理器生命周期契约，尚非真实 MQTT broker 断开/重启或整进程信号验收，7.3 保持未勾选。
+
 - 7.3 outbox 重启与租约恢复：新增真实 PostGIS 集成测试，分别在 handler 写入后取消事务、事务已提交但未 Complete 的窗口更换 worker 并推进测试事件租约，验证最终事务副作用恰好一条、状态完成、旧 worker 确认被拒绝、再次消费不领取已完成事件。Process 现在先按事件 ID/事件键/租约持有者锁定行，整个 handler 事务保持行锁；过期租约的活动事务被其他 Claim 的 SKIP LOCKED 跳过，提交后可以恢复，旧持有者无法再次调用 handler。新增 RecoverExhausted 按注册事件类型和批次处理达到 max_attempts 的过期 processing 事件：有同 consumer 的已提交消费记录则补记 completed，否则进入既有 dead 状态并记录固定原因，不再永远 processing，不扩大尝试次数；选择加锁和读取消费记录使用两个 READ COMMITTED 语句快照，避免漏看获得锁前刚提交的消费。真实数据库测试覆盖完成/死信、作用域、锁清理、尝试次数和完成时间；outbox/runtime 数据库测试及 go test -tags dev ./... 非数据库回归通过。使用数据库租约时间推进和替换 worker 实例验证存储层恢复，尚未代替整进程信号退出、MQTT/调度恢复及外部副作用端到端演练；7.3 仍未勾选。
 
 - 7.3 outbox 必要消费者故障：RunWithWake 将领取、失败状态持久化或完成确认的存储错误返回监督器，不再仅记录日志后永久重试；普通 handler 错误仍由原 Fail/退避/死信流程处理。领取前、批次中和确认前检查取消，正常退出不把取消视为事件失败或提前确认成功。将上一批 readiness 集成测试的模拟故障替换为真实 outbox.Store/Consumer：测试数据库可 Ping 但缺少 outbox 表，实际领取 SQL 失败，验证 /readyz 从 200 变 503，等待同伴排空期间 /healthz 仍为 200。真实 DB 的 runtime 测试及 outbox/入口全部定向测试通过，覆盖领取前取消、处理中取消、重复投递、死信、退避上限；这些取消单元测试不代替完整重启租约恢复演练，7.3 仍未完成。
