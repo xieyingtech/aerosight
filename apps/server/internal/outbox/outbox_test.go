@@ -119,3 +119,50 @@ func TestUnknownEventIsNotClaimed(t *testing.T) {
 		t.Fatalf("unknown event was mutated: %#v", repository)
 	}
 }
+
+type unavailableRepository struct {
+	*fakeRepository
+	err error
+}
+
+func (r unavailableRepository) Claim(context.Context, string, []string, int, time.Duration) ([]Event, error) {
+	return nil, r.err
+}
+
+func TestRunReportsUnavailableRepository(t *testing.T) {
+	failure := errors.New("claim unavailable")
+	consumer := testConsumer(unavailableRepository{fakeRepository: &fakeRepository{}, err: failure})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := consumer.Run(ctx); !errors.Is(err, failure) {
+		t.Fatalf("lost repository failure: %v", err)
+	}
+}
+
+func TestCancellationLeavesClaimedEventForLeaseRecovery(t *testing.T) {
+	for _, beforeClaim := range []bool{true, false} {
+		t.Run(map[bool]string{true: "before claim", false: "during handler"}[beforeClaim], func(t *testing.T) {
+			repository := &fakeRepository{event: Event{ID: 1, EventID: "event-1", EventType: "known", MaxAttempts: 3}}
+			consumer := testConsumer(repository)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			consumer.Register("known", func(context.Context, *sql.Tx, Event) error {
+				cancel()
+				return context.Canceled
+			})
+			if beforeClaim {
+				cancel()
+			}
+			if err := consumer.Run(ctx); err != nil {
+				t.Fatal(err)
+			}
+			wantClaims := 1
+			if beforeClaim {
+				wantClaims = 0
+			}
+			if repository.claims != wantClaims || repository.completed != 0 || repository.lastFailure != nil || repository.consumed {
+				t.Fatalf("cancelled work changed state: %#v", repository)
+			}
+		})
+	}
+}

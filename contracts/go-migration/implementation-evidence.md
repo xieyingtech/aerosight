@@ -4,6 +4,8 @@
 
 ## 2026-09-07
 
+- 7.3 outbox 必要消费者故障：RunWithWake 将领取、失败状态持久化或完成确认的存储错误返回监督器，不再仅记录日志后永久重试；普通 handler 错误仍由原 Fail/退避/死信流程处理。领取前、批次中和确认前检查取消，正常退出不把取消视为事件失败或提前确认成功。将上一批 readiness 集成测试的模拟故障替换为真实 outbox.Store/Consumer：测试数据库可 Ping 但缺少 outbox 表，实际领取 SQL 失败，验证 /readyz 从 200 变 503，等待同伴排空期间 /healthz 仍为 200。真实 DB 的 runtime 测试及 outbox/入口全部定向测试通过，覆盖领取前取消、处理中取消、重复投递、死信、退避上限；这些取消单元测试不代替完整重启租约恢复演练，7.3 仍未完成。
+
 - 7.3 后台失败通知：Runtime 新增 RunWithFailure，在必要组件错误或意外正常返回时先报告失败，再取消并等待其余组件，避免等待资源排空期间 readiness 仍为成功。统一入口收到报告立即撤销 ready 并取消应用；HTTP 显式绑定端口成功后才设置 ready，退出开始即停止会话清理，退出路径关闭 HTTP server。新增单元测试覆盖错误/意外退出立即报告、同伴取消、等待同伴排空、保留原始错误、正常取消不误报；真实独立 PostgreSQL 与 HTTP 验证先 /readyz 200，组件失败且同伴仍阻塞退出时 /readyz 503、/healthz 200。go test -tags dev ./internal/runtime ./cmd/aerosight -count=1 -v 全部通过，测试容器已清理。此批以受控失败组件验证监督器，未代替真实 MQTT/outbox/调度租约与生产信号退出演练，7.3 保持未勾选。
 
 - 7.3 会话清理生命周期：根据 SCS postgresstore 官方文档关闭内置无 context 清理，保留五分钟周期、原 sessions 格式和过期条件；改由 sqlc DeleteExpiredHTTPSessions 执行有 deadline 的清理，Server.Close 取消正在运行的 SQL 并等待 goroutine 退出，重复及并发关闭安全。真实独立 PostGIS 验证仅删除过期会话、保留有效会话数据，并在 ACCESS EXCLUSIVE 表锁阻塞 DELETE 时关闭清理，确认无需释放表锁即可取消退出。单元测试覆盖周期操作超时、关闭取消及八个并发关闭调用；TestLoginCSRFRestartAndLogout 回归和 pnpm db:check 通过。HTTP/后台整体退出、必要组件 readiness 与租约恢复仍待验证，7.3 不提前勾选。再次构建完整镜像仍因 auth.docker.io 连接超时失败，记录于 .build/unified-image.log，7.5 未验收。

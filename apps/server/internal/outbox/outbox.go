@@ -176,6 +176,9 @@ func (consumer *Consumer) Register(eventType string, handler Handler) {
 }
 
 func (consumer *Consumer) ConsumeOnce(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	eventTypes := make([]string, 0, len(consumer.handlers))
 	for eventType := range consumer.handlers {
 		eventTypes = append(eventTypes, eventType)
@@ -186,11 +189,17 @@ func (consumer *Consumer) ConsumeOnce(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, event := range events {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
 		handler, ok := consumer.handlers[event.EventType]
 		if !ok {
 			return 0, fmt.Errorf("repository claimed unregistered event type %q", event.EventType)
 		}
 		if err := consumer.repository.Process(ctx, consumer.name, event, handler); err != nil {
+			if ctx.Err() != nil {
+				return 0, ctx.Err()
+			}
 			retryAfter := retryDelay(event.Attempts)
 			status, failErr := consumer.repository.Fail(ctx, consumer.workerID, event, err, retryAfter)
 			consumer.logger.Error("outbox event failed",
@@ -200,6 +209,9 @@ func (consumer *Consumer) ConsumeOnce(ctx context.Context) (int, error) {
 				return 0, errors.Join(err, failErr)
 			}
 			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return 0, err
 		}
 		if err := consumer.repository.Complete(ctx, consumer.workerID, event.ID); err != nil {
 			return 0, err
@@ -217,7 +229,10 @@ func (consumer *Consumer) RunWithWake(ctx context.Context, wake <-chan struct{})
 	defer ticker.Stop()
 	for {
 		if _, err := consumer.ConsumeOnce(ctx); err != nil {
-			consumer.logger.Error("outbox poll failed", "error", err.Error())
+			if ctx.Err() != nil {
+				return nil
+			}
+			return fmt.Errorf("outbox poll failed: %w", err)
 		}
 		select {
 		case <-ctx.Done():

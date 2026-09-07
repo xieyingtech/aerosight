@@ -3,6 +3,7 @@ package runtime
 import (
 	"aerosight/server/internal/config"
 	"aerosight/server/internal/httpapi"
+	"aerosight/server/internal/outbox"
 	"aerosight/server/internal/testdb"
 	"bytes"
 	"context"
@@ -108,8 +109,11 @@ func TestComponentFailureRevokesHTTPReadinessWhileDraining(t *testing.T) {
 	defer close(release)
 	notified := make(chan struct{})
 	done := make(chan error, 1)
+	// The test database deliberately has no outbox table: Ping succeeds while
+	// the real required consumer cannot claim work.
+	consumer := outbox.NewConsumer(outbox.NewStore(db), "test-worker", "test-consumer", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	r := &Runtime{tasks: []func(context.Context) error{
-		func(context.Context) error { return errors.New("consumer unavailable") },
+		consumer.Run,
 		func(ctx context.Context) error { <-ctx.Done(); <-release; return nil },
 	}}
 	go func() {
