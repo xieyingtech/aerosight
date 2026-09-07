@@ -21,11 +21,13 @@ type Event struct {
 	Payload     json.RawMessage
 	Attempts    int
 	MaxAttempts int
+	leaseOwner  string
 }
 
 type Handler func(context.Context, *sql.Tx, Event) error
 
 type Repository interface {
+	RecoverExhausted(context.Context, string, []string, int) error
 	Claim(context.Context, string, []string, int, time.Duration) ([]Event, error)
 	Process(context.Context, string, Event, Handler) error
 	Complete(context.Context, string, int64) error
@@ -38,6 +40,59 @@ type Store struct {
 
 func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
+}
+
+// Resolve leases which can no longer be claimed without exceeding the retry
+// budget. A committed consumption is acknowledged; other exhausted work enters
+// the existing dead-letter state rather than remaining processing forever.
+func (store *Store) RecoverExhausted(ctx context.Context, consumerName string, eventTypes []string, limit int) error {
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id FROM outbox_events
+		WHERE status='processing' AND locked_until < now()
+		AND attempts >= max_attempts AND event_type=ANY($1::text[])
+		ORDER BY locked_until, id FOR UPDATE SKIP LOCKED LIMIT $2`, eventTypes, limit)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return tx.Commit()
+	}
+	// A fresh statement snapshot sees any consumption committed just before we
+	// acquired the row lock, even if it was invisible to the selection snapshot.
+	_, err = tx.ExecContext(ctx, `WITH recoverable AS (
+		SELECT event.id, EXISTS(SELECT 1 FROM outbox_consumptions c
+			WHERE c.consumer_name=$1 AND c.event_id=event.event_id) AS consumed
+		FROM outbox_events event WHERE event.id=ANY($2::bigint[])
+	)
+	UPDATE outbox_events event
+	SET status=CASE WHEN r.consumed THEN 'completed' ELSE 'dead' END,
+		completed_at=CASE WHEN r.consumed THEN now() ELSE NULL END,
+		last_error=CASE WHEN r.consumed THEN NULL ELSE 'lease expired after maximum attempts' END,
+		locked_by=NULL, locked_until=NULL
+	FROM recoverable r WHERE event.id=r.id`, consumerName, ids)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (store *Store) Claim(ctx context.Context, workerID string, eventTypes []string, limit int, lease time.Duration) ([]Event, error) {
@@ -76,6 +131,7 @@ func (store *Store) Claim(ctx context.Context, workerID string, eventTypes []str
 		); err != nil {
 			return nil, err
 		}
+		event.leaseOwner = workerID
 		events = append(events, event)
 	}
 	return events, rows.Err()
@@ -87,6 +143,16 @@ func (store *Store) Process(ctx context.Context, consumerName string, event Even
 		return err
 	}
 	defer tx.Rollback()
+
+	// Hold the claimed row for the transaction so an expired lease cannot be
+	// reclaimed while its handler is still running. Reject a stale owner before
+	// invoking any handler, including handlers with external effects.
+	var owned bool
+	if err := tx.QueryRowContext(ctx, `SELECT true FROM outbox_events
+		WHERE id=$1 AND event_id=$2 AND status='processing' AND locked_by=$3
+		FOR UPDATE`, event.ID, event.EventID, event.leaseOwner).Scan(&owned); err != nil {
+		return fmt.Errorf("outbox processing lost its lease: %w", err)
+	}
 
 	var consumed bool
 	if err := tx.QueryRowContext(ctx,
@@ -184,6 +250,9 @@ func (consumer *Consumer) ConsumeOnce(ctx context.Context) (int, error) {
 		eventTypes = append(eventTypes, eventType)
 	}
 	slices.Sort(eventTypes)
+	if err := consumer.repository.RecoverExhausted(ctx, consumer.name, eventTypes, consumer.batchSize); err != nil {
+		return 0, err
+	}
 	events, err := consumer.repository.Claim(ctx, consumer.workerID, eventTypes, consumer.batchSize, consumer.lease)
 	if err != nil {
 		return 0, err

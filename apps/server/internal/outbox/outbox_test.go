@@ -20,6 +20,8 @@ type fakeRepository struct {
 	lastFailure error
 }
 
+func (*fakeRepository) RecoverExhausted(context.Context, string, []string, int) error { return nil }
+
 func (repository *fakeRepository) Claim(_ context.Context, _ string, eventTypes []string, _ int, _ time.Duration) ([]Event, error) {
 	if repository.dead {
 		return nil, nil
