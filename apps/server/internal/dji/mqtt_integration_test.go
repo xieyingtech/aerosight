@@ -2,6 +2,7 @@ package dji
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -104,5 +105,74 @@ func TestMQTT5RejectsInvalidAuthentication(t *testing.T) {
 	case <-session.Done():
 	case <-time.After(5 * time.Second):
 		t.Fatal("invalid-auth session did not stop")
+	}
+}
+
+func TestMQTTManagerShutdownAndRestart(t *testing.T) {
+	config := mqttIntegrationConfig(t, "manager-integration", nil)
+	topic := fmt.Sprintf("dji/demo/integration/%d", time.Now().UnixNano())
+	raw, err := json.Marshal(map[string]any{"topics": []string{topic}, "gatewaySerials": []string{"GW001"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &leaseRepositoryFixture{lease: AdapterLease{AdapterID: 1, ProjectID: 2, BrokerURL: config.BrokerURL, ConfigJSON: raw}}
+	for _, owner := range []string{"before-shutdown", "after-restart"} {
+		ctx, cancel := context.WithCancel(context.Background())
+		sessions := make(chan *MQTTSession, 1)
+		connector := func(ctx context.Context, cfg MQTTConfig, handler MQTTMessageHandler) (ManagedSession, error) {
+			session, err := StartMQTTSession(ctx, cfg, handler)
+			if err == nil {
+				sessions <- session
+			}
+			return session, err
+		}
+		manager := NewAdapterManager(repository, secretFixture{credentials: MQTTCredentials{Username: config.Username, Password: string(config.Password)}}, connector, nil, owner, nil)
+		done := make(chan error, 1)
+		go func() { done <- manager.Run(ctx) }()
+		func() {
+			defer cancel()
+			var session *MQTTSession
+			select {
+			case session = <-sessions:
+			case <-time.After(8 * time.Second):
+				t.Fatal("manager failed to create MQTT session")
+			}
+			deadline := time.Now().Add(8 * time.Second)
+			for {
+				repository.mu.Lock()
+				connected := len(repository.statuses) > 0 && repository.statuses[len(repository.statuses)-1] == "connected"
+				repository.mu.Unlock()
+				if connected {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("manager failed to connect to broker")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err := manager.Publish(ctx, 1, topic, []byte(owner)); err != nil {
+				t.Fatal(err)
+			}
+			cancel()
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(6 * time.Second):
+				t.Fatal("manager shutdown timed out")
+			}
+			select {
+			case <-session.Done():
+			default:
+				t.Fatal("manager returned before MQTT closed")
+			}
+			repository.mu.Lock()
+			defer repository.mu.Unlock()
+			if repository.owner != "" {
+				t.Fatal("manager did not release lease after MQTT closed")
+			}
+			repository.statuses = nil
+		}()
 	}
 }
