@@ -77,6 +77,8 @@ try {
   if (releaseImage) {
     const mounts = JSON.parse(docker('inspect', app))[0].Mounts;
     assert(!mounts.some(mount => mount.Type === 'bind'), 'release test must not mount a local binary or source tree');
+    docker('exec', app, 'sh', '-c', 'test -s /etc/ssl/certs/ca-certificates.crt && test -s /usr/share/zoneinfo/Asia/Shanghai');
+    assert.equal(docker('exec', '-e', 'TZ=Asia/Shanghai', app, 'date', '+%z'), '+0800', 'release image must contain working timezone data');
   }
   const descriptors = docker('exec', app, 'ls', '-l', '/proc/1/fd');
   const socketIDs = new Set([...descriptors.matchAll(/socket:\[(\d+)\]/g)].map(match => match[1]));

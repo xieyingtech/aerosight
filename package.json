@@ -7,7 +7,7 @@
     "start": "node scripts/run-server.mjs serve",
     "spec": "openspec",
     "dev:web": "pnpm --dir apps/web dev",
-    "build": "pnpm build:web && pnpm build:server",
+    "build": "pnpm typecheck && pnpm build:web && pnpm db:check && pnpm build:server",
     "build:web": "pnpm --dir apps/web build",
     "build:worker": "cd apps/server && go build -o ../../.build/aerosight-worker ./cmd/worker",
     "test": "pnpm test:web && pnpm test:worker",

@@ -48,14 +48,14 @@ The production browser run also checks loading, retry and API-denial UI states f
 
 Both browser modes verify all 16 legacy page mappings with GET/HEAD, conflicting IDs, repeated filters and invalid IDs, then exercise browser back/forward navigation through a redirected project detail. Results are recorded in `legacy-links.json`.
 
-The production run also verifies a real database device pose rendered and selected on the map under CSP, including a MapLibre blob worker. Its external map style response is a deterministic fixture; it does not depend on public demo tiles. Map evidence is stored in `map.json` and `map-*.png`; live media verification remains pending.
+The production run also verifies a real database device pose rendered and selected on the map under CSP, including a MapLibre blob worker. Its external map style response is a deterministic fixture; it does not depend on public demo tiles. Map evidence is stored in `map.json` and `map-*.png`; WebRTC and HLS playback evidence is stored in `media-frame.json` and the corresponding playback screenshots.
 
 ```bash
 pnpm build
 pnpm start
 ```
 
-`pnpm build` exports Next, validates and copies frontend/migration assets, then compiles `.build/aerosight` (`aerosight.exe` on Windows). `pnpm start` launches only this Go application. Go applies pending migrations before serving HTTP and running background workers.
+`pnpm build` runs TypeScript checks, exports Next, checks sqlc generation for drift, validates and copies frontend/migration assets, then compiles `.build/aerosight` (`aerosight.exe` on Windows). A failed check stops the build before the Go compilation. `pnpm start` launches only this Go application. Go applies pending migrations before serving HTTP and running background workers.
 
 The deployment executable embeds frontend pages and migrations; it can run without Node.js or the source checkout:
 
@@ -68,7 +68,7 @@ Supply environment variables directly when running the executable. Use `AEROSIGH
 
 Static HTML receives a page-specific CSP with build-verified inline script hashes. `CSP_MAP_ORIGINS` defaults to `https://demotiles.maplibre.org`; `CSP_MEDIA_ORIGINS` lists the browser-visible MediaMTX origins used for playback. Both accept comma-separated HTTPS origins without paths, credentials or wildcards (HTTP is allowed in development). Media origins allow connections, images, video and playback frames, but never external scripts. Map workers may use `blob:`; inline styles remain enabled for the UI. Go development mode serves no frontend pages, so Next continues to manage its own HMR resources.
 
-The root Dockerfile builds the Next export and Go executable in separate stages. Its final image contains the Go executable and CA certificates, runs as UID/GID 10001, and exposes application port 8080. Node.js and the source checkout are not copied into the runtime image. Build context rules exclude local environment files and generated artifacts.
+The root Dockerfile builds the Next export and Go executable in separate stages. Its final image contains the Go executable, CA certificates and IANA timezone data, runs as UID/GID 10001, and exposes application port 8080. Release acceptance checks the CA bundle and the `Asia/Shanghai` UTC offset. Node.js and the source checkout are not copied into the runtime image. Build context rules exclude local environment files and generated artifacts.
 
 ```bash
 docker build -t aerosight:local .
