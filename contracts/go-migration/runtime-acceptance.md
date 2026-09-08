@@ -26,3 +26,5 @@
 `pnpm test:release-image` 使用最终镜像内部二进制，无宿主源码或二进制挂载，保留镜像默认用户和入口。24 条 SSE 在 8 并发、共 80 次快照读取期间保持连接；超过 30 秒后全部收到新插入事件，数据库连接采样未超过默认合计预算 30。SIGTERM 后全部流结束、数据库连接归零，重启后会话和项目保留。
 
 `.build/container-lifecycle-55780be7-884a-4de8-b8e0-4b1bae4671e6/result.json` 同时记录真实签名算法回调：预置进行中 run，在停止前处理 processing；重启后等待状态与回执保留，旧回执重放去重，completed 成功且重复提交不改变结果元数据和回执数量。此测试覆盖接收端恢复，不包含上游执行发起；对象存储使用测试 tmpfs，未将元数据去重作为结果文件跨后续重启持久化的证明。
+
+后续 `.build/container-lifecycle-498a6675-9338-4395-ab6a-182e0df60df8/result.json` 将 run 改为真实 API 发起：API 创建定义/运行，outbox 发出 HTTPS 请求，Go 签发的资产 URL 能返回一致 PNG 字节，实际签发的 callback token 在重启前后有效。重启及完成重放后上游请求和成功 attempt 均只有一次，回执为两条。provider 和输入资产仍由 fixture 准备，运行服务未使用注入 handler 或替换 transport。结果文件跨后续重启的限制保持不变。

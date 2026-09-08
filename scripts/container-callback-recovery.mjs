@@ -1,29 +1,47 @@
 import assert from 'node:assert/strict';
-import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
-export function callbackRecoveryFixture({ docker, database, project, team }) {
+export async function callbackRecoveryFixture({ docker, database, app, project, team, request, upstream }) {
   assert(Number.isSafeInteger(project.id) && Number.isSafeInteger(team.id));
-  const token = randomBytes(32).toString('hex');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const run = randomUUID();
   const sql = statement => docker('exec', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-Atqc', statement);
-  const providerId = Number(sql(`WITH provider AS (
+  const assetBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=', 'base64');
+  const checksum = createHash('sha256').update(assetBytes).digest('hex');
+  const assetKey = `projects/${project.id}/callback.png`;
+  docker('exec', app, 'sh', '-c', 'mkdir -p "$1" && printf "%s" "$2" | base64 -d > "$1/callback.png"', 'sh', `/tmp/objects/projects/${project.id}`, assetBytes.toString('base64'));
+  const providerId = Number(sql(`
     INSERT INTO algorithm_providers(project_id,team_id,name,provider_type,base_url,status)
-    VALUES(${project.id},${team.id},'Restart callback','http-json','https://algorithm.example','active') RETURNING id
-  ), definition AS (
-    INSERT INTO algorithm_definitions(project_id,team_id,provider_id,name,capability_code)
-    SELECT ${project.id},${team.id},provider.id,'Restart callback','detection' FROM provider RETURNING id
-  ), version AS (
-    INSERT INTO algorithm_definition_versions(project_id,team_id,algorithm_definition_id,version,status,execution_mode,model_or_process,output_mapping_json)
-    SELECT ${project.id},${team.id},definition.id,1,'published','callback','test','{"detectionsPath":"results"}' FROM definition RETURNING id
-  ), asset AS (
-    INSERT INTO assets(project_id,team_id,kind,storage_key,logical_key,status,mime_type)
-    VALUES(${project.id},${team.id},'image','callback.jpg','callback.jpg','available','image/jpeg') RETURNING id
-  ), run AS (
-    INSERT INTO algorithm_runs(id,project_id,team_id,algorithm_definition_version_id,input_asset_id,idempotency_key,status,external_job_id,callback_token_hash)
-    SELECT '${run}',${project.id},${team.id},version.id,asset.id,'restart-callback','running','restart-job','${tokenHash}' FROM version,asset RETURNING id
-  ) SELECT provider.id FROM provider,run`));
+    VALUES(${project.id},${team.id},'Restart callback','http-json','${upstream.endpoint}','active') RETURNING id`));
+  const assetId = Number(sql(`
+    INSERT INTO assets(project_id,team_id,kind,storage_key,logical_key,status,mime_type,checksum_sha256)
+    VALUES(${project.id},${team.id},'image','${assetKey}','${assetKey}','available','image/png','${checksum}') RETURNING id`));
   assert(Number.isSafeInteger(providerId) && providerId > 0);
+  assert(Number.isSafeInteger(assetId) && assetId > 0);
+  const definition = await (await request(`/api/projects/${project.id}/algorithm-definitions`, 201, {
+    definition: { providerId, name: 'Restart callback', capabilityCode: 'detection' },
+    configuration: { executionMode: 'callback', modelOrProcess: 'test', inputSchema: {}, parametersSchema: {}, outputSchema: {},
+      protocolConfig: {}, outputMapping: { detectionsPath: 'results' } },
+  })).json();
+  const { runId: run } = await (await request(`/api/projects/${project.id}/algorithm-runs`, 202, {
+    configurationSnapshotId: definition.configurationSnapshotId, assetId, parameters: {},
+  })).json();
+  assert.match(run, /^[0-9a-f-]{36}$/);
+  let input;
+  for (let n = 0; n < 100; n++) {
+    const received = upstream.read();
+    if (received.length) { assert.equal(received.length, 1); input = received[0]; break; }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  assert(input, 'outbox did not dispatch the API-created run to the HTTPS upstream');
+  assert.equal(input.runId, run);
+  assert.equal(input.inputAsset.assetId, assetId);
+  assert.equal(input.callback.url, `https://aerosight.test/callbacks/algorithms/${run}`);
+  const token = input.callback.token;
+  assert(token.length >= 32);
+  for (let n = 0; ; n++) {
+    if (sql(`SELECT status FROM algorithm_runs WHERE id='${run}'`) === 'waiting_callback') break;
+    assert(n < 100, 'upstream acceptance was not committed');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
   const state = () => JSON.parse(sql(`SELECT json_build_object(
     'status',status,'objectKey',raw_result_object_key,'checksum',raw_result_checksum_sha256,
     'finishedAt',finished_at,'receipts',(SELECT count(*) FROM algorithm_callback_receipts WHERE algorithm_run_id='${run}')
@@ -44,7 +62,16 @@ export function callbackRecoveryFixture({ docker, database, project, team }) {
   }
   return {
     async beforeStop(origin) {
-      assert.equal((await callback(origin, 'processing-before-stop', 'processing')).duplicate, false);
+      const signed = new URL(input.inputAsset.accessUrl);
+      assert.equal(signed.origin, 'https://aerosight.test');
+      const asset = await fetch(origin + signed.pathname + signed.search, { signal: AbortSignal.timeout(5000) });
+      assert.equal(asset.status, 200);
+      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), assetBytes);
+      assert.equal(state().receipts, 0);
+      // The real upstream's 202 already moved the run to waiting_callback.
+      // A processing receipt is retained, while its redundant state change is a no-op.
+      assert.equal((await callback(origin, 'processing-before-stop', 'processing')).duplicate, true);
+      assert.equal(state().receipts, 1);
       assert.equal(state().status, 'waiting_callback');
     },
     async afterRestart(origin) {
@@ -57,8 +84,10 @@ export function callbackRecoveryFixture({ docker, database, project, team }) {
       assert(completed.objectKey && /^[a-f0-9]{64}$/.test(completed.checksum) && completed.finishedAt);
       assert.equal((await callback(origin, 'complete-after-restart', 'completed')).duplicate, true);
       assert.deepEqual(state(), completed);
-      return { runId: run, waitingStatePreserved: true, receiptReplayAfterRestart: true, completionAppliedOnce: true, result: completed,
-        scope: 'Seeded in-flight run; real signed HTTP callbacks before/after restart and receipt replay. Upstream execution and object survival across another restart are separate checks.' };
+      assert.equal(upstream.read().length, 1, 'restart dispatched the accepted run again');
+      assert.equal(sql(`SELECT count(*) FROM algorithm_run_attempts WHERE algorithm_run_id='${run}' AND status='succeeded'`), '1');
+      return { runId: run, createdThroughAPI: true, httpsUpstreamRequests: 1, signedAssetBytesVerified: true, waitingStatePreserved: true, receiptReplayAfterRestart: true, completionAppliedOnce: true, result: completed,
+        scope: 'Provider and input image are fixtures. Definition/run creation, outbox dispatch to a trusted HTTPS upstream, signed asset HTTP delivery, issued callback credentials, restart and replay are real. Result file survival across another restart is a separate check.' };
     },
   };
 }

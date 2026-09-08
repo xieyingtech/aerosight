@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { callbackRecoveryFixture } from './container-callback-recovery.mjs';
+import { startAlgorithmUpstream } from './container-algorithm-upstream.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
@@ -43,15 +44,18 @@ if (releaseImage) {
   });
 }
 let networkCreated = false, dbCreated = false, appCreated = false;
+let upstream;
 const streamAbort = new AbortController();
 try {
   docker('network', 'create', network); networkCreated = true;
+  upstream = await startAlgorithmUpstream({ docker, network, output });
   docker('run', '-d', '--name', database, '--network', network, '-e', 'POSTGRES_PASSWORD=lifecycle-test', 'postgis/postgis:17-3.5'); dbCreated = true;
   const env = {
     DATABASE_URL: `postgresql://postgres:lifecycle-test@${database}:5432/postgres`,
     AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HTTP_LISTEN_ADDRESS: '0.0.0.0:8080',
     AUTH_SECRET: randomBytes(32).toString('hex'), CSRF_AUTH_KEY: randomBytes(32).toString('base64'),
     OBJECT_STORAGE_LOCAL_ROOT: '/tmp/objects', GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
+    CALLBACK_PUBLIC_BASE_URL: 'https://aerosight.test', SSL_CERT_FILE: '/tmp/algorithm-ca.pem',
   };
   for (let i = 0; i < 100; i++) {
     if (spawnSync('docker', ['exec', database, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], { stdio: 'ignore' }).status === 0) break;
@@ -63,6 +67,7 @@ try {
     '-p', '127.0.0.1::8080', ...binaryOptions,
     ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]), image, 'serve'); appCreated = true;
   let origin = `http://127.0.0.1:${docker('port', app, '8080/tcp').split(':').at(-1)}`;
+  upstream.installTrust(app);
   async function ready() {
     for (let i = 0; i < 100; i++) {
       try { if ((await fetch(origin + '/readyz', { signal: AbortSignal.timeout(1000) })).status === 200) return; } catch {}
@@ -106,7 +111,7 @@ try {
   await request('/api/auth/login', 200, { username: 'admin@example.com', password: 'admin' });
   const team = await (await request('/api/teams', 201, { name: 'Lifecycle team' })).json();
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Lifecycle project' })).json();
-  const callbacks = callbackRecoveryFixture({ docker, database, project, team });
+  const callbacks = await callbackRecoveryFixture({ docker, database, app, project, team, request, upstream });
   await callbacks.beforeStop(origin);
   const streamCount = 24;
   const streamStart = Date.now();
@@ -158,6 +163,7 @@ try {
   const connections = docker('exec', database, 'psql', '-U', 'postgres', '-Atqc', "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'");
   assert.equal(connections, '0', 'application leaked database connections');
   docker('start', app);
+  upstream.installTrust(app);
   origin = `http://127.0.0.1:${docker('port', app, '8080/tcp').split(':').at(-1)}`;
   await ready();
   await request('/api/auth/session', 200);
@@ -171,5 +177,6 @@ try {
   streamAbort.abort();
   if (appCreated) { try { writeFileSync(resolve(output, 'application.log'), docker('logs', app)); } finally { docker('rm', '-f', app); } }
   if (dbCreated) docker('rm', '-f', database);
+  if (upstream) upstream.close();
   if (networkCreated) docker('network', 'rm', network);
 }
