@@ -1,8 +1,10 @@
 # 实施证据
 
-当前仍处于迁移阶段；默认构建与启动已切换为静态导出和统一 Go 应用。未勾选任务仍需实现和验证，尚未完成发布验收。
+迁移与验收已完成，45/45 任务通过。默认构建与启动为 Next 静态导出和统一 Go 应用，六个主 spec 已同步；最终场景与命令证据见 final-acceptance.md。下文为按时间记录的实施历史，旧条目中的“待完成”状态已由其后的验收覆盖。本变更保持未归档，不自动推送远端。
 
 ## 2026-09-08
+
+- 完成 8.5：final-acceptance.md 按六个 capability 核对全部 69 个 Scenario，覆盖已完成 45 项任务及命令/镜像/浏览器/迁移/恢复证据；脚本核对每个场景均在其对应章节、所有引用的 Go 测试名称实际存在。依据当前 OpenSpec status 的六个 existingOutputPaths 与 specs instructions，将新增能力合入 openspec/specs，保留 Purpose、使用单一 Requirements 标题；逐字核对主 spec 与 delta 的要求/场景一致，没有改其他活动变更。pnpm spec validate --specs --strict：6/6 pass；本 change strict pass。补充配置测试固定会话默认 7 天/闲置 24 小时及覆盖值，定向测试通过；之后再次完整 pnpm check、pnpm build 通过（final-check.log、final-build.log），go mod verify 报 all modules verified。更新 README 和组件表中的过期“待接入”说明。最后工作区仅有本次待提交内容和原用户 docs 未跟踪文件，无本次残留容器；45/45 勾选，完成实施与 spec 同步，归档留作独立操作。
 
 - 完成 8.1 最终回归：acceptance-matrix.md 将冻结清单全部 99 个方法/页面查询映射到 73 个具名 Go 测试及已有生产浏览器证据；check-migration-coverage.mjs 对清单、文件和真实回归结果逐项校验，不用未执行的测试名称冒充 pass。pnpm check、pnpm build（内含 db:check）通过，日志 .build/final-check.log、final-build.log；52 个 SQL、333 个静态资源嵌入成功。独立 PostGIS 完整迁移后设置两类测试数据库变量，go test -tags dev -p 4 ./... -count=1 -json：29 包、437 测试/子测试 pass、0 fail，日志 .build/final-go-postgis.jsonl；矩阵关联测试全部实际 pass。四项 MQTT/MediaMTX 环境型 skip 由同轮 pnpm test:mqtt-lifecycle 和 pnpm test:media-inspector 真实认证服务分别通过（.build/mqtt-lifecycle-8f3377ac-e0a6-4d3e-97b8-81fd37ff1c80、.build/media-inspector-66e82c77-e72d-4e8f-ab50-7ec4ca3f7116），没有计入 437 或当作数据库通过。pnpm test:migrations、pnpm test:security 再次通过，日志 final-migrations.log、final-security.log。全部测试容器清理完毕；剩余 8.5 六 capability 场景交付审计和主 spec 同步。
 

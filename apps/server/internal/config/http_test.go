@@ -75,6 +75,15 @@ func TestHTTPConfigBudgetsAndValidation(t *testing.T) {
 	if err != nil || cfg.PublicOrigin != "http://localhost:3000" || cfg.HTTPPool != 20 || cfg.WorkerPool != 10 || cfg.SSELimit != 30 || cfg.RequestTimeout != 30*time.Second || cfg.ShutdownTimeout != 30*time.Second || len(cfg.TrustedProxies) != 0 {
 		t.Fatalf("defaults %+v %v", cfg, err)
 	}
+	if cfg.SessionLifetime != 7*24*time.Hour || cfg.SessionIdle != 24*time.Hour {
+		t.Fatalf("session defaults %+v", cfg)
+	}
+	base["SESSION_LIFETIME"], base["SESSION_IDLE_TIMEOUT"] = "48h", "2h"
+	if cfg, err := LoadHTTP(get); err != nil || cfg.SessionLifetime != 48*time.Hour || cfg.SessionIdle != 2*time.Hour {
+		t.Fatalf("session overrides %+v %v", cfg, err)
+	}
+	delete(base, "SESSION_LIFETIME")
+	delete(base, "SESSION_IDLE_TIMEOUT")
 	for _, key := range []string{"HTTP_DB_MAX_CONNECTIONS", "WORKER_DB_MAX_CONNECTIONS", "LOGIN_RATE_LIMIT", "WRITE_RATE_LIMIT", "SSE_RATE_LIMIT"} {
 		for _, bad := range []string{"0", "-1", "10001", "1.5", "abc"} {
 			base[key] = bad
