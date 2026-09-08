@@ -52,6 +52,7 @@ try {
   }
   assert(dbReady,'PostGIS startup timed out');
   const apiPort = await freePort();
+  const mediaPort = development ? null : await freePort();
   const webPort = development ? await freePort() : null;
   if (!development) {
   tls = tlsServer({key:readFileSync(resolve(output,'key.pem')),cert:readFileSync(resolve(output,'cert.pem'))},(req,res)=>{
@@ -68,7 +69,7 @@ try {
   const executable=development ? process.execPath : resolve(root,'.build',process.platform==='win32'?'aerosight.exe':'aerosight');
   app=spawn(executable,development ? [resolve(root,'scripts/dev.mjs')] : ['serve'],{
     cwd:development ? root : output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:mode,PORT:String(webPort ?? ''),GO_API_ORIGIN:`http://127.0.0.1:${apiPort}`,DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
-      AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,CSP_MEDIA_ORIGINS:'https://media.example',
+      AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,CSP_MEDIA_ORIGINS:development ? '' : `https://media.example,https://127.0.0.1:${mediaPort}`,
       OBJECT_STORAGE_LOCAL_ROOT:resolve(output,'objects'),CALLBACK_PUBLIC_BASE_URL:'',MEDIA_API_BASE_URL:'',MEDIA_ADMIN_USER:'',MEDIA_ADMIN_PASSWORD:'',DJI_FLIGHTHUB_ENABLED:'false',GIN_MODE:'release'}
   });
   let ready=false;
@@ -125,7 +126,7 @@ try {
     writeFileSync(resolve(output,'project-details.json'),JSON.stringify(details,null,2));
     const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
     writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
-    const mediaFrame=await verifyMediaFrame(page,context,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
+    const mediaFrame=await verifyMediaFrame(page,context,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]),apiPort,mediaPort);
     writeFileSync(resolve(output,'media-frame.json'),JSON.stringify(mediaFrame,null,2));
   }
   assert.deepEqual(errors,[],'new resource hydration/runtime errors');
