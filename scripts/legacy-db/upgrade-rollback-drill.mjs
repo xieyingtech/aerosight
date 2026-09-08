@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readdir, readFile, mkdir, copyFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createRequire } from 'node:module';
+import { verifyLegacyServices } from './verify-legacy-services.mjs';
 
 import pg from "pg";
 
@@ -21,6 +23,12 @@ await mkdir(output, { recursive: true });
 const executable = resolve(output, process.platform === 'win32' ? 'aerosight.exe' : 'aerosight');
 await copyFile(resolve(root, '.build', process.platform === 'win32' ? 'aerosight.exe' : 'aerosight'), executable);
 const legacyBoundary = '0051_connector_external_scope_key.sql';
+const args = process.argv.slice(2);
+assert(args.length === 0 || (args.length === 2 && args[0] === '--legacy-release'), 'usage: upgrade-rollback-drill.mjs [--legacy-release path]');
+const release = args[1] ? resolve(args[1]) : null;
+const password = randomBytes(16).toString('hex');
+const secret = randomBytes(32).toString('hex');
+const passwordHash = release ? await createRequire(resolve(release, 'apps/web/package.json'))('bcryptjs').hash(password, 10) : null;
 
 async function migrateWithGo(url, label) {
   const result = spawnSync(executable, ['migrate'], {
@@ -180,6 +188,7 @@ const client = new Client({ connectionString: postgis.url });
 try {
   await client.connect();
   const scope = await seedLegacySnapshot(client);
+  if (passwordHash) await client.query('update users set password=$1 where id=$2', [passwordHash, scope.userId]);
   const beforeUpgrade = await readLegacyPageContract(client, scope);
   assert(beforeUpgrade.project?.name === "rollback-project", "legacy project page contract failed before upgrade");
   assert(beforeUpgrade.devices.length === 1 && beforeUpgrade.tasks.length === 1 &&
@@ -202,6 +211,9 @@ try {
   assert(JSON.stringify(afterUpgrade) === JSON.stringify(beforeUpgrade), "legacy page data changed during upgrade");
 
   const newAssetId = await writeNewEvidenceAndFutureEvent(client, scope);
+  const legacyServices = release ? await verifyLegacyServices({ release, output, databaseURL: postgis.url, scope, password, secret }) : null;
+  if (passwordHash) assert((await client.query('select password from users where id=$1', [scope.userId])).rows[0].password === passwordHash, 'upgrade or old application changed the password');
+  assert((await client.query("select to_regclass('public.sessions') as sessions")).rows[0].sessions === 'sessions', 'old application removed additive sessions table');
   await simulateRollbackWorkerClaim(client);
   const afterRollback = await readLegacyPageContract(client, scope);
   assert(afterRollback.project.name === beforeUpgrade.project.name, "rollback project page became unavailable");
@@ -228,9 +240,10 @@ try {
     futureEvent.consumptions === 0, "rollback worker mutated the unknown event");
 
   const result = { schemaVersion: 2, generatedAt: new Date().toISOString(), databaseImage,
-    scope: 'real TS-to-Go database upgrade and legacy SQL compatibility; old Web/worker processes are not started',
+    scope: legacyServices ? 'real TS-to-Go database upgrade followed by old Next production server and worker against the upgraded database' : 'real TS-to-Go database upgrade and legacy SQL compatibility; old Web/worker processes are not started',
     migration: { total: migrationCount, legacyBoundary, legacyApplied: migration.applied.length, goApplied, repeatedGoApplied: 0, historicalLedgerUnchanged: true, baselineAdopted: true },
     applicationRollbackVerified: false,
+    legacyServices,
     legacyPageContract: { beforeUpgrade: true, afterUpgrade: true, afterLegacyQueries: true,
       devices: afterRollback.devices.length, tasks: afterRollback.tasks.length,
       runs: afterRollback.runs.length, assetsVisibleToLegacyQuery: afterRollback.assets.length },
