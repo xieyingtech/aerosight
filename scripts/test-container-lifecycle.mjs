@@ -5,10 +5,12 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { callbackRecoveryFixture } from './container-callback-recovery.mjs';
 import { startAlgorithmUpstream } from './container-algorithm-upstream.mjs';
+import { verifyAIFlow } from './container-ai-flow.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
 const network = `aerosight-lifecycle-${id}`;
+const upstreamNetwork = `${network}-upstream`;
 const database = `${network}-db`, app = `${network}-app`;
 const output = resolve(root, '.build', `container-lifecycle-${id}`);
 mkdirSync(output, { recursive: true });
@@ -44,11 +46,14 @@ if (releaseImage) {
   });
 }
 let networkCreated = false, dbCreated = false, appCreated = false;
+let upstreamNetworkCreated = false;
 let upstream;
 const streamAbort = new AbortController();
 try {
   docker('network', 'create', network); networkCreated = true;
-  upstream = await startAlgorithmUpstream({ docker, network, output });
+  // TEST-NET-3 stays inside an isolated bridge; no production private-host bypass.
+  docker('network', 'create', '--internal', '--subnet', '203.0.113.0/24', upstreamNetwork); upstreamNetworkCreated = true;
+  upstream = await startAlgorithmUpstream({ docker, network: upstreamNetwork, output });
   docker('run', '-d', '--name', database, '--network', network, '-e', 'POSTGRES_PASSWORD=lifecycle-test', 'postgis/postgis:17-3.5'); dbCreated = true;
   const env = {
     DATABASE_URL: `postgresql://postgres:lifecycle-test@${database}:5432/postgres`,
@@ -66,6 +71,7 @@ try {
   docker('run', '-d', '--name', app, '--network', network, '--read-only', '--tmpfs', '/tmp:rw,mode=1777',
     '-p', '127.0.0.1::8080', ...binaryOptions,
     ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]), image, 'serve'); appCreated = true;
+  docker('network', 'connect', upstreamNetwork, app);
   let origin = `http://127.0.0.1:${docker('port', app, '8080/tcp').split(':').at(-1)}`;
   upstream.installTrust(app);
   async function ready() {
@@ -113,6 +119,7 @@ try {
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Lifecycle project' })).json();
   const callbacks = await callbackRecoveryFixture({ docker, database, app, project, team, request, upstream });
   await callbacks.beforeStop(origin);
+  const ai = await verifyAIFlow({ request, upstream, project });
   const streamCount = 24;
   const streamStart = Date.now();
   const setupTimeout = setTimeout(() => streamAbort.abort(new Error('SSE load setup timeout')), 10000);
@@ -169,6 +176,8 @@ try {
   await request('/api/auth/session', 200);
   await request(`/api/projects/${project.id}/snapshot`, 200);
   const callbackRecovery = await callbacks.afterRestart(origin);
+  const aiFlow = await ai.afterRestart();
+  writeFileSync(resolve(output, 'ai-flow.json'), JSON.stringify(aiFlow, null, 2));
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
   writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, load, callbackRecovery, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'concurrent SSE and snapshot load within pool budget', 'SSE survives ordinary API deadline and closes on SIGTERM', 'database connections released', 'restart preserves session and project', 'signed callback completion and replay after restart'], passed: true }, null, 2));
@@ -178,5 +187,6 @@ try {
   if (appCreated) { try { writeFileSync(resolve(output, 'application.log'), docker('logs', app)); } finally { docker('rm', '-f', app); } }
   if (dbCreated) docker('rm', '-f', database);
   if (upstream) upstream.close();
+  if (upstreamNetworkCreated) docker('network', 'rm', upstreamNetwork);
   if (networkCreated) docker('network', 'rm', network);
 }

@@ -13,10 +13,23 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
   assert.equal(generated.status, 0, generated.stderr);
   const program = `
     const https = require('node:https'), fs = require('node:fs');
-    const requests = [];
+    const requests = [], aiRequests = [];
     https.createServer({key:fs.readFileSync('/fixture/key.pem'),cert:fs.readFileSync('/fixture/cert.pem')}, async (req,res) => {
       res.setHeader('Content-Type','application/json');
       if(req.method==='GET' && req.url==='/received') return res.end(JSON.stringify(requests));
+      if(req.method==='GET' && req.url==='/ai-received') return res.end(JSON.stringify(aiRequests));
+      if(req.method==='POST' && req.url==='/v1/responses') {
+        let raw=''; for await(const chunk of req) raw+=chunk;
+        const body=JSON.parse(raw);
+        aiRequests.push({body,authenticated:req.headers.authorization==='Bearer lifecycle-ai-key'});
+        if(body.input.some(item=>item.role==='user' && item.content==='acceptance failure')) {
+          res.writeHead(503);return res.end(JSON.stringify({error:{message:'private-upstream-detail'}}));
+        }
+        const continuation=body.input.some(item=>item.type==='function_call_output');
+        const output=continuation ? [{type:'message',id:'msg_fixture',role:'assistant',status:'completed',content:[{type:'output_text',text:'项目查询已完成。',annotations:[]}]}]
+          : ['query_devices','query_tasks','query_issues','query_assets','query_tracks','query_map_context'].map((name,i)=>({type:'function_call',id:'fc_'+i,call_id:'call_'+i,name,arguments:'{}',status:'completed'}));
+        return res.end(JSON.stringify({id:'resp_fixture',object:'response',status:'completed',output}));
+      }
       if(req.method!=='POST' || req.url!=='/run') { res.writeHead(404); return res.end('{}'); }
       let body=''; for await(const chunk of req) { body+=chunk; if(body.length>1048576) { res.writeHead(413);return res.end('{}'); } }
       requests.push(JSON.parse(body)); res.writeHead(202);res.end(JSON.stringify({externalJobId:'restart-job'}));
@@ -25,15 +38,16 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
   docker('run', '-d', '--name', name, '--network', network, '--network-alias', 'algorithm.test', '--read-only',
     '--mount', `type=bind,src=${key},dst=/fixture/key.pem,readonly`, '--mount', `type=bind,src=${cert},dst=/fixture/cert.pem,readonly`,
     'node:22-bookworm-slim', 'node', '-e', program);
-  const read = () => JSON.parse(docker('exec', '-e', 'NODE_EXTRA_CA_CERTS=/fixture/cert.pem', name, 'node', '-e',
-    "require('node:https').get('https://algorithm.test:8443/received',r=>{let s='';r.on('data',c=>s+=c);r.on('end',()=>process.stdout.write(s));}).on('error',()=>process.exit(1));"));
+  const readPath = path => JSON.parse(docker('exec', '-e', 'NODE_EXTRA_CA_CERTS=/fixture/cert.pem', name, 'node', '-e',
+    `require('node:https').get('https://algorithm.test:8443${path}',r=>{let s='';r.on('data',c=>s+=c);r.on('end',()=>process.stdout.write(s));}).on('error',()=>process.exit(1));`));
+  const read = () => readPath('/received');
   try {
     for (let n = 0; ; n++) {
       try { read(); break; } catch (error) { if (n === 30) throw error; }
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   } catch (error) { docker('rm', '-f', name); throw error; }
-  return { read, endpoint: 'https://algorithm.test:8443/run',
+  return { read, readAI: () => readPath('/ai-received'), endpoint: 'https://algorithm.test:8443/run',
     installTrust: app => docker('exec', app, 'sh', '-c', 'printf "%s" "$1" > /tmp/algorithm-ca.pem', 'sh', readFileSync(cert, 'utf8')),
     close: () => docker('rm', '-f', name) };
 }
