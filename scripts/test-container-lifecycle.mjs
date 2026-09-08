@@ -105,16 +105,52 @@ try {
   await request('/api/auth/login', 200, { username: 'admin@example.com', password: 'admin' });
   const team = await (await request('/api/teams', 201, { name: 'Lifecycle team' })).json();
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Lifecycle project' })).json();
-  const stream = await fetch(origin + `/api/projects/${project.id}/events`, { headers: { Cookie: [...cookies].map(([k,v]) => `${k}=${v}`).join('; ') }, signal: streamAbort.signal });
-  assert.equal(stream.status, 200);
-  const reader = stream.body.getReader();
-  assert(new TextDecoder().decode((await reader.read()).value).includes(': heartbeat'));
+  const streamCount = 24;
+  const streamStart = Date.now();
+  const setupTimeout = setTimeout(() => streamAbort.abort(new Error('SSE load setup timeout')), 10000);
+  let readers;
+  try {
+    readers = await Promise.all(Array.from({ length: streamCount }, async () => {
+      const stream = await fetch(origin + `/api/projects/${project.id}/events`, { headers: { Cookie: [...cookies].map(([k,v]) => `${k}=${v}`).join('; ') }, signal: streamAbort.signal });
+      assert.equal(stream.status, 200);
+      const reader = stream.body.getReader();
+      assert(new TextDecoder().decode((await reader.read()).value).includes(': heartbeat'));
+      return reader;
+    }));
+  } finally { clearTimeout(setupTimeout); }
+  const samples = [];
+  for (let batch = 0; batch < 10; batch++) {
+    const pending = Promise.all(Array.from({ length: 8 }, async () => {
+      const response = await request(`/api/projects/${project.id}/snapshot`, 200);
+      assert.equal((await response.json()).project.id, project.id);
+    }));
+    samples.push(Number(docker('exec', database, 'psql', '-U', 'postgres', '-Atqc', "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'")));
+    await pending;
+  }
+  assert(samples.every(count => count <= 30), 'HTTP and worker pools exceeded their combined default budget');
+  // Keep all streams alive beyond the ordinary 30-second API deadline.
+  await sleep(Math.max(0, 32000 - (Date.now() - streamStart)));
+  assert(Number.isSafeInteger(project.id) && Number.isSafeInteger(team.id));
+  const marker = `load-${randomUUID()}`;
+  docker('exec', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', `INSERT INTO project_events(project_id,team_id,event_id,event_type) VALUES(${project.id},${team.id},'${marker}','acceptance.load')`);
+  await Promise.all(readers.map(async reader => {
+    const receive = async () => {
+      const decoder = new TextDecoder(); let text = '';
+      while (!text.includes(marker)) {
+        const result = await reader.read();
+        assert(!result.done, 'SSE ended before the post-deadline event');
+        text += decoder.decode(result.value, { stream: true });
+      }
+    };
+    await Promise.race([receive(), sleep(5000).then(() => { throw new Error('SSE did not receive the post-deadline event'); })]);
+  }));
+  const load = { streamCount, parallelSnapshotRequests: 8, snapshotRequests: 80, heldMs: Date.now() - streamStart, sampledConnections: samples, connectionBudget: 30, postDeadlineEventReceivedByAll: true };
   const started = Date.now();
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0', 'SIGTERM must exit successfully');
   const stopMs = Date.now() - started;
   assert(stopMs < 30000, 'shutdown exceeded default budget');
-  const streamEnded = (async () => { while (!(await reader.read()).done) {} return true; })();
+  const streamEnded = Promise.all(readers.map(async reader => { while (!(await reader.read()).done) {} return true; })).then(() => true);
   assert(await Promise.race([streamEnded, sleep(2000).then(() => false)]), 'SSE did not close');
   const connections = docker('exec', database, 'psql', '-U', 'postgres', '-Atqc', "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'");
   assert.equal(connections, '0', 'application leaked database connections');
@@ -125,7 +161,7 @@ try {
   await request(`/api/projects/${project.id}/snapshot`, 200);
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'SSE closes on SIGTERM', 'database connections released', 'restart preserves session and project'], passed: true }, null, 2));
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, load, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'concurrent SSE and snapshot load within pool budget', 'SSE survives ordinary API deadline and closes on SIGTERM', 'database connections released', 'restart preserves session and project'], passed: true }, null, 2));
   console.log(`Container lifecycle passed: ${output}`);
 } finally {
   streamAbort.abort();
