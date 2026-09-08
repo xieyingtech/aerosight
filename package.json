@@ -19,6 +19,7 @@
     "test:dev-proxy": "node scripts/test-dev-proxy.mjs",
     "test:mqtt-lifecycle": "node scripts/test-mqtt-lifecycle.mjs",
     "test:container-lifecycle": "node scripts/test-container-lifecycle.mjs",
+    "test:release-image": "node scripts/test-container-lifecycle.mjs --image aerosight:unified-acceptance",
     "test:production-browser": "node scripts/test-production-browser.mjs",
     "test:development-browser": "node scripts/test-production-browser.mjs --development",
     "test:all": "pnpm test && pnpm test:migrations && pnpm test:security",

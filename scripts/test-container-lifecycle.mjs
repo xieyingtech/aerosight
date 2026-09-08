@@ -17,19 +17,30 @@ function docker(...args) {
   if (result.status !== 0) throw new Error(`docker ${args[0]}: ${result.stderr || result.error}`);
   return result.stdout.trim();
 }
-const image = docker('image', 'inspect', 'nginx:alpine', '--format', '{{.Id}}');
-const arch = docker('image', 'inspect', image, '--format', '{{.Architecture}}');
-for (const script of ['prepare-server.mjs', 'prepare-web.mjs']) {
-  const result = spawnSync(process.execPath, [resolve(root, 'scripts', script)], { cwd: root, stdio: 'inherit' });
-  assert.equal(result.status, 0, `${script} failed; run pnpm build:web first`);
-}
-await new Promise((resolve, reject) => {
-  const child = spawn('go', ['build', '-trimpath', '-o', binary, './cmd/aerosight'], {
-    cwd: root + '/apps/server', stdio: 'inherit', env: { ...process.env, GOOS: 'linux', GOARCH: arch, CGO_ENABLED: '0' },
+const args = process.argv.slice(2);
+assert(args.length === 0 || (args.length === 2 && args[0] === '--image' && args[1]), 'usage: test-container-lifecycle.mjs [--image release-image]');
+const releaseImage = args[1];
+const metadata = JSON.parse(docker('image', 'inspect', releaseImage || 'nginx:alpine'))[0];
+const image = metadata.Id;
+const arch = metadata.Architecture;
+if (releaseImage) {
+  assert.equal(metadata.Config.User, '10001:10001', 'release image must define the unprivileged user');
+  assert.deepEqual(metadata.Config.Entrypoint, ['/usr/local/bin/aerosight'], 'release image must start its own Go binary');
+  assert.deepEqual(metadata.Config.Cmd, ['serve']);
+  assert.deepEqual(Object.keys(metadata.Config.ExposedPorts || {}), ['8080/tcp']);
+} else {
+  for (const script of ['prepare-server.mjs', 'prepare-web.mjs']) {
+    const result = spawnSync(process.execPath, [resolve(root, 'scripts', script)], { cwd: root, stdio: 'inherit' });
+    assert.equal(result.status, 0, `${script} failed; run pnpm build:web first`);
+  }
+  await new Promise((resolve, reject) => {
+    const child = spawn('go', ['build', '-trimpath', '-o', binary, './cmd/aerosight'], {
+      cwd: root + '/apps/server', stdio: 'inherit', env: { ...process.env, GOOS: 'linux', GOARCH: arch, CGO_ENABLED: '0' },
+    });
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Linux build failed: ${code}`)));
   });
-  child.once('error', reject);
-  child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Linux build failed: ${code}`)));
-});
+}
 let networkCreated = false, dbCreated = false, appCreated = false;
 const streamAbort = new AbortController();
 try {
@@ -46,9 +57,10 @@ try {
     if (i === 99) throw new Error('database startup timed out');
     await sleep(100);
   }
-  docker('run', '-d', '--name', app, '--network', network, '--user', '10001:10001', '--read-only', '--tmpfs', '/tmp:rw,mode=1777',
-    '-p', '127.0.0.1::8080', '--mount', `type=bind,src=${binary},dst=/app/aerosight,readonly`, '-w', '/app',
-    ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]), '--entrypoint', '/app/aerosight', image, 'serve'); appCreated = true;
+  const binaryOptions = releaseImage ? [] : ['--user', '10001:10001', '--mount', `type=bind,src=${binary},dst=/app/aerosight,readonly`, '-w', '/app', '--entrypoint', '/app/aerosight'];
+  docker('run', '-d', '--name', app, '--network', network, '--read-only', '--tmpfs', '/tmp:rw,mode=1777',
+    '-p', '127.0.0.1::8080', ...binaryOptions,
+    ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]), image, 'serve'); appCreated = true;
   let origin = `http://127.0.0.1:${docker('port', app, '8080/tcp').split(':').at(-1)}`;
   async function ready() {
     for (let i = 0; i < 100; i++) {
@@ -61,6 +73,11 @@ try {
   await ready();
   const runtime = docker('exec', app, 'sh', '-c', 'test -z "$(command -v node)" && test -z "$(command -v pnpm)" && cat /proc/1/comm');
   assert.equal(runtime, 'aerosight');
+  assert.equal(docker('exec', app, 'id', '-u'), '10001');
+  if (releaseImage) {
+    const mounts = JSON.parse(docker('inspect', app))[0].Mounts;
+    assert(!mounts.some(mount => mount.Type === 'bind'), 'release test must not mount a local binary or source tree');
+  }
   const descriptors = docker('exec', app, 'ls', '-l', '/proc/1/fd');
   const socketIDs = new Set([...descriptors.matchAll(/socket:\[(\d+)\]/g)].map(match => match[1]));
   const tcp = docker('exec', app, 'sh', '-c', 'cat /proc/1/net/tcp /proc/1/net/tcp6');
@@ -106,7 +123,7 @@ try {
   await request(`/api/projects/${project.id}/snapshot`, 200);
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, stopMs, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'SSE closes on SIGTERM', 'database connections released', 'restart preserves session and project'], passed: true }, null, 2));
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'SSE closes on SIGTERM', 'database connections released', 'restart preserves session and project'], passed: true }, null, 2));
   console.log(`Container lifecycle passed: ${output}`);
 } finally {
   streamAbort.abort();
