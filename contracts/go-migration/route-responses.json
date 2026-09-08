@@ -1,0 +1,2692 @@
+{
+  "version": 1,
+  "scope": "冻结旧 Route Handler 的响应包装、状态码、头和服务结果 JSON 序列化；服务依赖为 fixture，不证明数据库业务。Auth.js 两个入口按批准设计替换，由独立会话测试验收。服务 fixture 中的 ID/null/空数组故意保持不同类型。",
+  "fixtures": [
+    {
+      "target": "PATCH /api/admin/ai-providers/:providerId",
+      "mode": "success",
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "calls": [
+        "updateAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "PATCH /api/admin/ai-providers/:providerId",
+      "mode": "denied",
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "calls": [
+        "updateAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "DELETE /api/admin/ai-providers/:providerId",
+      "mode": "success",
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "calls": [
+        "deleteAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "DELETE /api/admin/ai-providers/:providerId",
+      "mode": "denied",
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "calls": [
+        "deleteAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/admin/ai-providers/:providerId/test",
+      "mode": "success",
+      "sourceHash": "500a4786a463c651270ecf3428dc8b66551a483dc0ccb5971d22651560c9d5a7",
+      "calls": [
+        "testAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/admin/ai-providers/:providerId/test",
+      "mode": "denied",
+      "sourceHash": "500a4786a463c651270ecf3428dc8b66551a483dc0ccb5971d22651560c9d5a7",
+      "calls": [
+        "testAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/admin/ai-providers",
+      "mode": "success",
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "calls": [
+        "listAIProviders"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "[]"
+    },
+    {
+      "target": "GET /api/admin/ai-providers",
+      "mode": "denied",
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "calls": [
+        "listAIProviders"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/admin/ai-providers",
+      "mode": "success",
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "calls": [
+        "createAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/admin/ai-providers",
+      "mode": "denied",
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "calls": [
+        "createAIProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/media-auth",
+      "mode": "success",
+      "sourceHash": "e951bd817bc62368f15dbbed291696acb2ba250d110e26bcf960a3e9811a41bd",
+      "calls": [],
+      "requestBody": {
+        "action": "api",
+        "user": "fixture",
+        "password": "fixture-password"
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 204,
+      "headers": {},
+      "body": ""
+    },
+    {
+      "target": "POST /api/media-auth",
+      "mode": "denied",
+      "sourceHash": "e951bd817bc62368f15dbbed291696acb2ba250d110e26bcf960a3e9811a41bd",
+      "calls": [],
+      "requestBody": {
+        "action": "api",
+        "user": "fixture",
+        "password": "wrong"
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"MEDIA_AUTH_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/agent-sessions/:sessionId/messages",
+      "mode": "success",
+      "sourceHash": "fd518d51b5391fcad83e53047219cba277a23091a61b5fec3ab1b8f913db0e6e",
+      "calls": [
+        "runAgentChatTurn"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/agent-sessions/:sessionId/messages",
+      "mode": "denied",
+      "sourceHash": "fd518d51b5391fcad83e53047219cba277a23091a61b5fec3ab1b8f913db0e6e",
+      "calls": [
+        "runAgentChatTurn"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/agent-sessions",
+      "mode": "success",
+      "sourceHash": "09b3d4b360560271746b4b8ea1df2b0d70f9d402e6459093d0b522137c61c951",
+      "calls": [
+        "createAgentSession"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/agent-sessions",
+      "mode": "denied",
+      "sourceHash": "09b3d4b360560271746b4b8ea1df2b0d70f9d402e6459093d0b522137c61c951",
+      "calls": [
+        "createAgentSession"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "PUT /api/projects/:id/algorithm-definitions/:definitionId",
+      "mode": "success",
+      "sourceHash": "7838b0d83b604c0989fbd8ba43703786d818c42a69a6f86641a413e1a256038b",
+      "calls": [
+        "saveAlgorithmDefinition"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "PUT /api/projects/:id/algorithm-definitions/:definitionId",
+      "mode": "denied",
+      "sourceHash": "7838b0d83b604c0989fbd8ba43703786d818c42a69a6f86641a413e1a256038b",
+      "calls": [
+        "saveAlgorithmDefinition"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/algorithm-definitions",
+      "mode": "success",
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "calls": [
+        "listAlgorithmCatalog"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"definitions\":[]}"
+    },
+    {
+      "target": "GET /api/projects/:id/algorithm-definitions",
+      "mode": "denied",
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "calls": [
+        "listAlgorithmCatalog"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-definitions",
+      "mode": "success",
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "calls": [
+        "createAlgorithmDefinition"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-definitions",
+      "mode": "denied",
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "calls": [
+        "createAlgorithmDefinition"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "PATCH /api/projects/:id/algorithm-providers/:providerId",
+      "mode": "success",
+      "sourceHash": "30264e4dbbb4affde733e0c00dfa5c5fae3c08a3ab391b228958aa7d30841de3",
+      "calls": [
+        "updateAlgorithmProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "PATCH /api/projects/:id/algorithm-providers/:providerId",
+      "mode": "denied",
+      "sourceHash": "30264e4dbbb4affde733e0c00dfa5c5fae3c08a3ab391b228958aa7d30841de3",
+      "calls": [
+        "updateAlgorithmProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-providers/:providerId/test",
+      "mode": "success",
+      "sourceHash": "f91a74a8ab5145db30a670343b7e8acd48ff3ba15bea418706c544c39ee198ee",
+      "calls": [
+        "testAlgorithmProviderEndpoint"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-providers/:providerId/test",
+      "mode": "denied",
+      "sourceHash": "f91a74a8ab5145db30a670343b7e8acd48ff3ba15bea418706c544c39ee198ee",
+      "calls": [
+        "testAlgorithmProviderEndpoint"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/algorithm-providers",
+      "mode": "success",
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "calls": [
+        "listAlgorithmProviders"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "[]"
+    },
+    {
+      "target": "GET /api/projects/:id/algorithm-providers",
+      "mode": "denied",
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "calls": [
+        "listAlgorithmProviders"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-providers",
+      "mode": "success",
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "calls": [
+        "createAlgorithmProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-providers",
+      "mode": "denied",
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "calls": [
+        "createAlgorithmProvider"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-runs/:runId/retry",
+      "mode": "success",
+      "sourceHash": "ca7dcbc5f9e975f4a1663fb6978e4ef927598942becae463d92c58f67aab8ab0",
+      "calls": [
+        "retryAlgorithmRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-runs/:runId/retry",
+      "mode": "denied",
+      "sourceHash": "ca7dcbc5f9e975f4a1663fb6978e4ef927598942becae463d92c58f67aab8ab0",
+      "calls": [
+        "retryAlgorithmRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-runs",
+      "mode": "success",
+      "sourceHash": "19a68ada5f7e1d9956db8e8ceed0718f88a8ffffea99e0acb117de5dfb55c2cb",
+      "calls": [
+        "startAlgorithmRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 202,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/algorithm-runs",
+      "mode": "denied",
+      "sourceHash": "19a68ada5f7e1d9956db8e8ceed0718f88a8ffffea99e0acb117de5dfb55c2cb",
+      "calls": [
+        "startAlgorithmRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/assets/:assetId/access",
+      "mode": "success",
+      "sourceHash": "eb4e231a91fa094a9dfb2a31b32454ae88496b9b67d9df231365b7b14368a9cd",
+      "calls": [
+        "parseMediaAccessAction",
+        "issueMediaAccess"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/assets/:assetId/access",
+      "mode": "denied",
+      "sourceHash": "eb4e231a91fa094a9dfb2a31b32454ae88496b9b67d9df231365b7b14368a9cd",
+      "calls": [
+        "parseMediaAccessAction",
+        "issueMediaAccess"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Unable to access media\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/assets/:assetId/content",
+      "mode": "success",
+      "sourceHash": "6d093b02870fe0a79d2328908b57360d10fd6a4434d265cb20d02d88ec066e37",
+      "calls": [
+        "parseMediaAccessAction",
+        "readAuthorizedMediaContent"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-disposition": "inline",
+        "content-type": "image/png",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "fixture-bytes"
+    },
+    {
+      "target": "GET /api/projects/:id/assets/:assetId/content",
+      "mode": "denied",
+      "sourceHash": "6d093b02870fe0a79d2328908b57360d10fd6a4434d265cb20d02d88ec066e37",
+      "calls": [
+        "parseMediaAccessAction",
+        "readAuthorizedMediaContent"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Media unavailable\"}"
+    },
+    {
+      "target": "DELETE /api/projects/:id/connectors/dji-flighthub/:connectorId",
+      "mode": "success",
+      "sourceHash": "4fe2882cd2c9b227fa4a4200a3d588938cdc58eb590bbc0bf572d20ea9e382c6",
+      "calls": [
+        "disconnectFlightHubConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "DELETE /api/projects/:id/connectors/dji-flighthub/:connectorId",
+      "mode": "denied",
+      "sourceHash": "4fe2882cd2c9b227fa4a4200a3d588938cdc58eb590bbc0bf572d20ea9e382c6",
+      "calls": [
+        "disconnectFlightHubConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 503,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/:connectorId/sync",
+      "mode": "success",
+      "sourceHash": "49222510c93b0af9e5abf61bdfcf07524bf2b1aeb1e4257f675babf247597080",
+      "calls": [
+        "requestFlightHubSync"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 202,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/:connectorId/sync",
+      "mode": "denied",
+      "sourceHash": "49222510c93b0af9e5abf61bdfcf07524bf2b1aeb1e4257f675babf247597080",
+      "calls": [
+        "requestFlightHubSync"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 503,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "PUT /api/projects/:id/connectors/dji-flighthub/:connectorId/token",
+      "mode": "success",
+      "sourceHash": "851b511c83bfd4c998c407b015451f421843b8f8d25525eb4baf974271da8d54",
+      "calls": [
+        "updateFlightHubToken"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "PUT /api/projects/:id/connectors/dji-flighthub/:connectorId/token",
+      "mode": "denied",
+      "sourceHash": "851b511c83bfd4c998c407b015451f421843b8f8d25525eb4baf974271da8d54",
+      "calls": [
+        "updateFlightHubToken"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/projects",
+      "mode": "success",
+      "sourceHash": "e71b61df5ab1699633dc7cac7a239e96df7d4d17118a42fe4998d16dd9ac1fb5",
+      "calls": [
+        "discoverFlightHubProjects"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"projects\":{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/projects",
+      "mode": "denied",
+      "sourceHash": "e71b61df5ab1699633dc7cac7a239e96df7d4d17118a42fe4998d16dd9ac1fb5",
+      "calls": [
+        "discoverFlightHubProjects"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "GET /api/projects/:id/connectors/dji-flighthub",
+      "mode": "success",
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "calls": [
+        "listFlightHubConnections",
+        "listFlightHubDiscoveryActivity"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"connectors\":[]}"
+    },
+    {
+      "target": "GET /api/projects/:id/connectors/dji-flighthub",
+      "mode": "denied",
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "calls": [
+        "listFlightHubConnections"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub",
+      "mode": "success",
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "calls": [
+        "createFlightHubConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/connectors/dji-flighthub",
+      "mode": "denied",
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "calls": [
+        "createFlightHubConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "cache-control": "no-store, max-age=0",
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":{\"code\":\"scope_forbidden\"}}"
+    },
+    {
+      "target": "PATCH /api/projects/:id/device-adapters/:adapterId",
+      "mode": "success",
+      "sourceHash": "ffd9c8b31ee5fe052a413704a1c0a67c6fe452f386b7ad179f3e00ff6cce346f",
+      "calls": [
+        "setDeviceAdapterEnabled"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "PATCH /api/projects/:id/device-adapters/:adapterId",
+      "mode": "denied",
+      "sourceHash": "ffd9c8b31ee5fe052a413704a1c0a67c6fe452f386b7ad179f3e00ff6cce346f",
+      "calls": [
+        "setDeviceAdapterEnabled"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Invalid or unauthorized adapter update\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/:adapterId/test",
+      "mode": "success",
+      "sourceHash": "1972db380ecbdcdb768b78c00e55496e191e31b59bcdd8a723bb950d59154e5c",
+      "calls": [
+        "testDeviceAdapterConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/:adapterId/test",
+      "mode": "denied",
+      "sourceHash": "1972db380ecbdcdb768b78c00e55496e191e31b59bcdd8a723bb950d59154e5c",
+      "calls": [
+        "testDeviceAdapterConnection"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/discoveries/:identityId/bind",
+      "mode": "success",
+      "sourceHash": "6cd73ba6b88cce72a21d34f550e0b24718e9989ecb11460fde400c87c440d08c",
+      "calls": [
+        "bindDiscoveredDevice"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/discoveries/:identityId/bind",
+      "mode": "denied",
+      "sourceHash": "6cd73ba6b88cce72a21d34f550e0b24718e9989ecb11460fde400c87c440d08c",
+      "calls": [
+        "bindDiscoveredDevice"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Invalid or unauthorized device binding\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/dji-setup",
+      "mode": "success",
+      "sourceHash": "d229e194ac074c96d0ac93759a00ff35dc733a5e5a0695052571adda09234414",
+      "calls": [
+        "createDjiAdapterSetup"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters/dji-setup",
+      "mode": "denied",
+      "sourceHash": "d229e194ac074c96d0ac93759a00ff35dc733a5e5a0695052571adda09234414",
+      "calls": [
+        "createDjiAdapterSetup"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/device-adapters",
+      "mode": "success",
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "calls": [
+        "listDeviceAdapters"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "[]"
+    },
+    {
+      "target": "GET /api/projects/:id/device-adapters",
+      "mode": "denied",
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "calls": [
+        "listDeviceAdapters"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Unable to access device adapters\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters",
+      "mode": "success",
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "calls": [
+        "createDeviceAdapter"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/device-adapters",
+      "mode": "denied",
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "calls": [
+        "createDeviceAdapter"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Invalid or unauthorized device adapter request\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/devices/:deviceId/commands",
+      "mode": "success",
+      "sourceHash": "5cfeb706657d820fce65a3ecfcfe61e783c282481e844041d857a5ce03a4da0f",
+      "calls": [
+        "assertLiveControlRequest",
+        "submitDeviceCommand"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/devices/:deviceId/commands",
+      "mode": "denied",
+      "sourceHash": "5cfeb706657d820fce65a3ecfcfe61e783c282481e844041d857a5ce03a4da0f",
+      "calls": [
+        "assertLiveControlRequest",
+        "submitDeviceCommand"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/devices/:deviceId/live-streams",
+      "mode": "success",
+      "sourceHash": "8de3be870c96b7ede0c142cc6550e267ae19d4d4de5a4083366389886c64fc42",
+      "calls": [
+        "assertLiveControlRequest",
+        "startLiveStream"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/devices/:deviceId/live-streams",
+      "mode": "denied",
+      "sourceHash": "8de3be870c96b7ede0c142cc6550e267ae19d4d4de5a4083366389886c64fc42",
+      "calls": [
+        "assertLiveControlRequest",
+        "startLiveStream"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 409,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/events/:eventId/actions",
+      "mode": "success",
+      "sourceHash": "29de82a5566808917fc4c3af0ede0939b01fd8286caf1d14effc9b3151003bb6",
+      "calls": [],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 410,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"LEGACY_EVENT_READ_ONLY\",\"issuesHref\":\"../issues\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/events/:eventId/actions",
+      "mode": "denied",
+      "sourceHash": "29de82a5566808917fc4c3af0ede0939b01fd8286caf1d14effc9b3151003bb6",
+      "calls": [],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 410,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"LEGACY_EVENT_READ_ONLY\",\"issuesHref\":\"../issues\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/events/:eventId/agent-drafts",
+      "mode": "success",
+      "sourceHash": "4097affaa3632341280cb5f4e64336648ad77296e0194fb6ca41f10d16c58481",
+      "calls": [],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 410,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"LEGACY_EVENT_READ_ONLY\",\"issuesHref\":\"../issues\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/events/:eventId/agent-drafts",
+      "mode": "denied",
+      "sourceHash": "4097affaa3632341280cb5f4e64336648ad77296e0194fb6ca41f10d16c58481",
+      "calls": [],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 410,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"LEGACY_EVENT_READ_ONLY\",\"issuesHref\":\"../issues\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/events",
+      "mode": "success",
+      "sourceHash": "e1ce09813272ba2962ee9ad22daa232bf14a4de53b5b1dad9a1198e729b4902a",
+      "calls": [
+        "requireUser",
+        "canAccessProjectStream",
+        "createProjectEventStream"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-cache, no-transform",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream; charset=utf-8",
+        "x-accel-buffering": "no"
+      },
+      "body": ": heartbeat\n\n"
+    },
+    {
+      "target": "GET /api/projects/:id/events",
+      "mode": "denied",
+      "sourceHash": "e1ce09813272ba2962ee9ad22daa232bf14a4de53b5b1dad9a1198e729b4902a",
+      "calls": [
+        "requireUser",
+        "canAccessProjectStream"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_NOT_FOUND\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/issues/:issueId/actions",
+      "mode": "success",
+      "sourceHash": "1fe788588679b0070263a02d7ba95e8a4fd2ad178bd79f906ce51b10a127ef0b",
+      "calls": [
+        "mutateIssue"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/issues/:issueId/actions",
+      "mode": "denied",
+      "sourceHash": "1fe788588679b0070263a02d7ba95e8a4fd2ad178bd79f906ce51b10a127ef0b",
+      "calls": [
+        "mutateIssue"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/live-streams/:streamId/playback",
+      "mode": "success",
+      "sourceHash": "d6abf5152eb11eb4ed783186779a12d978b19c0785aa49406c51d8010aa65ece",
+      "calls": [
+        "getLiveStreamPlayback"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/live-streams/:streamId/playback",
+      "mode": "denied",
+      "sourceHash": "d6abf5152eb11eb4ed783186779a12d978b19c0785aa49406c51d8010aa65ece",
+      "calls": [
+        "getLiveStreamPlayback"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Unable to access live stream\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/live-streams/:streamId/stop",
+      "mode": "success",
+      "sourceHash": "91fa8cb902da242b2f59a7c48be1fd2ed6c3a139fd5fdb4cb97c92a8aeebf168",
+      "calls": [
+        "assertLiveControlRequest",
+        "stopLiveStream"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/live-streams/:streamId/stop",
+      "mode": "denied",
+      "sourceHash": "91fa8cb902da242b2f59a7c48be1fd2ed6c3a139fd5fdb4cb97c92a8aeebf168",
+      "calls": [
+        "assertLiveControlRequest",
+        "stopLiveStream"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"Unable to stop live stream\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/realtime-channels/:channelId/events",
+      "mode": "success",
+      "sourceHash": "87f88ec64a1bdea15cc8de97b27f07ee8b0158f1e748f708987b9b407bd01988",
+      "calls": [
+        "requireUser",
+        "resolveRealtimeSubscription",
+        "createRealtimeSubscriptionStream"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-cache, no-transform",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream; charset=utf-8",
+        "x-accel-buffering": "no"
+      },
+      "body": ": heartbeat\n\n"
+    },
+    {
+      "target": "GET /api/projects/:id/realtime-channels/:channelId/events",
+      "mode": "denied",
+      "sourceHash": "87f88ec64a1bdea15cc8de97b27f07ee8b0158f1e748f708987b9b407bd01988",
+      "calls": [
+        "requireUser",
+        "resolveRealtimeSubscription"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"REALTIME_CHANNEL_NOT_FOUND\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/replay",
+      "mode": "success",
+      "sourceHash": "f3548d059573a0166b0087f0008337a7f7f67d0b4f0284d5b84e2e5adae03441",
+      "calls": [
+        "requireUser",
+        "parseReplayQuery",
+        "readProjectReplay"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "x-aerosight-mode": "replay"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/replay",
+      "mode": "denied",
+      "sourceHash": "f3548d059573a0166b0087f0008337a7f7f67d0b4f0284d5b84e2e5adae03441",
+      "calls": [
+        "requireUser",
+        "parseReplayQuery",
+        "readProjectReplay"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_NOT_FOUND\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/reports/:reportId/export",
+      "mode": "success",
+      "sourceHash": "15c09fa4917ff325726af22489e29f31a931b3caca70a3a7867fc484ba3ab39e",
+      "calls": [
+        "exportGeneratedReport"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-disposition": "attachment; filename=\"aerosight-report-17.json\"",
+        "content-type": "application/json; charset=utf-8"
+      },
+      "body": "{\n  \"id\": \"17\",\n  \"projectId\": 3,\n  \"description\": null,\n  \"items\": [],\n  \"runId\": \"11111111-1111-4111-8111-111111111111\"\n}"
+    },
+    {
+      "target": "GET /api/projects/:id/reports/:reportId/export",
+      "mode": "denied",
+      "sourceHash": "15c09fa4917ff325726af22489e29f31a931b3caca70a3a7867fc484ba3ab39e",
+      "calls": [
+        "exportGeneratedReport"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/reports/:reportId/publish",
+      "mode": "success",
+      "sourceHash": "bb0f0d0c6a998010ff11a270b545874f98d282d6481b38dc2f63f7787577502d",
+      "calls": [
+        "publishGeneratedReport"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/reports/:reportId/publish",
+      "mode": "denied",
+      "sourceHash": "bb0f0d0c6a998010ff11a270b545874f98d282d6481b38dc2f63f7787577502d",
+      "calls": [
+        "publishGeneratedReport"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/snapshot",
+      "mode": "success",
+      "sourceHash": "fa03d8bea869f99b2bbcf3506e00be3076dee9059774f3812303672e9410ff22",
+      "calls": [
+        "requireUser",
+        "readProjectSituationSnapshot"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "x-aerosight-snapshot": "repeatable-read"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/snapshot",
+      "mode": "denied",
+      "sourceHash": "fa03d8bea869f99b2bbcf3506e00be3076dee9059774f3812303672e9410ff22",
+      "calls": [
+        "requireUser",
+        "readProjectSituationSnapshot"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_NOT_FOUND\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/task-runs/:runId/audit-trace",
+      "mode": "success",
+      "sourceHash": "ec827d98ec3e1d51b7794ebfdd4b30a43a78f22a62e03c8ede761e37560c44e4",
+      "calls": [
+        "getMissionAuditTrace"
+      ],
+      "requestBody": null,
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "GET /api/projects/:id/task-runs/:runId/audit-trace",
+      "mode": "denied",
+      "sourceHash": "ec827d98ec3e1d51b7794ebfdd4b30a43a78f22a62e03c8ede761e37560c44e4",
+      "calls": [
+        "getMissionAuditTrace"
+      ],
+      "thrown": "PROJECT_ACCESS_DENIED"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/control",
+      "mode": "success",
+      "sourceHash": "be587e20490010fdcc5373098c63c9e574129dc30a046a2d91d092f36f89418f",
+      "calls": [
+        "controlMissionRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/control",
+      "mode": "denied",
+      "sourceHash": "be587e20490010fdcc5373098c63c9e574129dc30a046a2d91d092f36f89418f",
+      "calls": [
+        "controlMissionRun"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/emergency-stop-drill",
+      "mode": "success",
+      "sourceHash": "d503a0046d2a0bd5fbbb1e141b39e9bab2cf3f0dbc19876712a161e5ccfccf65",
+      "calls": [
+        "runEmergencyStopDrill"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/emergency-stop-drill",
+      "mode": "denied",
+      "sourceHash": "d503a0046d2a0bd5fbbb1e141b39e9bab2cf3f0dbc19876712a161e5ccfccf65",
+      "calls": [
+        "runEmergencyStopDrill"
+      ],
+      "thrown": "PROJECT_ACCESS_DENIED"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/reports",
+      "mode": "success",
+      "sourceHash": "446b189fdc52cbe02e7a3ace220794419b70b86a0da5755ce0b49597abcc4e22",
+      "calls": [
+        "createTaskRunReportDraft"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 201,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"id\":\"17\",\"projectId\":3,\"description\":null,\"items\":[],\"runId\":\"11111111-1111-4111-8111-111111111111\"}"
+    },
+    {
+      "target": "POST /api/projects/:id/task-runs/:runId/reports",
+      "mode": "denied",
+      "sourceHash": "446b189fdc52cbe02e7a3ace220794419b70b86a0da5755ce0b49597abcc4e22",
+      "calls": [
+        "createTaskRunReportDraft"
+      ],
+      "requestBody": {
+        "enabled": true,
+        "content": "查询项目",
+        "capabilityCode": "dock.debug.control",
+        "commandKey": "debug.open",
+        "parameters": {},
+        "idempotencyKey": "baseline-idempotency",
+        "reason": "baseline",
+        "action": "resume",
+        "expectedVersion": 1
+      },
+      "serviceResult": {
+        "id": "17",
+        "projectId": 3,
+        "description": null,
+        "items": [],
+        "runId": "11111111-1111-4111-8111-111111111111"
+      },
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": "{\"error\":\"PROJECT_ACCESS_DENIED\"}"
+    }
+  ]
+}

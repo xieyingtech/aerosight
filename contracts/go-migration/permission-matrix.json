@@ -1,0 +1,801 @@
+{
+  "commit": "bc314b3731ebc27b301ce0e15d0ffd50ab090a40",
+  "sources": [
+    {
+      "source": "apps/web/lib/project-permission-policy.ts",
+      "sha256": "a84c9b08fd27a1dad2e2cdab06977e48e503e17d35fe67f2dfc07f40cb60b556"
+    },
+    {
+      "source": "apps/web/lib/project-permission-policy.test.ts",
+      "sha256": "cdd3c7ae68838d22e7a33777f8d5c157cb8d5fff1155ba7670f9ea08f8a3ecf0"
+    },
+    {
+      "source": "apps/web/lib/credential-encryption.ts",
+      "sha256": "8ea20c3845db5e23274d2569fe9d25152d127261cfece0ab80ba99f89168dba9"
+    },
+    {
+      "source": "apps/web/lib/credential-encryption.test.ts",
+      "sha256": "0bbdd876f44f8721253edd1e2e690180fd7e9a44f300050eeb4d52fffec49b0d"
+    },
+    {
+      "source": "apps/web/lib/audit-boundary.ts",
+      "sha256": "360f481c2a5a8151153dda908fb3e2409d987dc3ed84b9484c49aba677ef6df2"
+    },
+    {
+      "source": "apps/web/lib/audit-boundary.test.ts",
+      "sha256": "d2272e0934510a14230c218fef2d25707b44d1e81a123266c7f903255c79bb27"
+    },
+    {
+      "source": "apps/web/lib/device-command-core.ts",
+      "sha256": "74b5421e9a2f2298f1307535422f1897cd43c4a3a1e0871adfb998530e33d1db"
+    },
+    {
+      "source": "apps/web/lib/device-command-core.test.ts",
+      "sha256": "55be23ce911f83f67a38970f616b3b55c390dbadb3182cdf595e33ec733ff4c3"
+    },
+    {
+      "source": "apps/web/lib/device-commands.ts",
+      "sha256": "3f14dfcd8acbb733570de68dae83afc9e17505d1a48d0089a52a4eb47febaffb"
+    }
+  ],
+  "cases": [
+    {
+      "role": "owner",
+      "grants": [],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "project:view"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "event:handle"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "issue:handle"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "issue:assign"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "mission:operate"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "mission:approve"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "device:configure"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "safety:manage"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "algorithm:manage"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "agent:use"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "report:export"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "unknown:permission"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "event:handle",
+        "event:handle",
+        "unknown:permission"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "owner",
+      "grants": [
+        "project:view",
+        "event:handle",
+        "issue:handle",
+        "issue:assign",
+        "mission:operate",
+        "mission:approve",
+        "device:configure",
+        "safety:manage",
+        "algorithm:manage",
+        "agent:use",
+        "report:export"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "project:view"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "event:handle"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "issue:handle"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "issue:assign"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "mission:operate"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "mission:approve"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "device:configure"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "safety:manage"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "algorithm:manage"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "agent:use"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "report:export"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "unknown:permission"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "event:handle",
+        "event:handle",
+        "unknown:permission"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "admin",
+      "grants": [
+        "project:view",
+        "event:handle",
+        "issue:handle",
+        "issue:assign",
+        "mission:operate",
+        "mission:approve",
+        "device:configure",
+        "safety:manage",
+        "algorithm:manage",
+        "agent:use",
+        "report:export"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [],
+      "permissions": [
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "project:view"
+      ],
+      "permissions": [
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "event:handle"
+      ],
+      "permissions": [
+        "event:handle",
+        "issue:handle",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "issue:handle"
+      ],
+      "permissions": [
+        "issue:handle",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "issue:assign"
+      ],
+      "permissions": [
+        "issue:assign",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "mission:operate"
+      ],
+      "permissions": [
+        "mission:operate",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "mission:approve"
+      ],
+      "permissions": [
+        "mission:approve",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "device:configure"
+      ],
+      "permissions": [
+        "device:configure",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "safety:manage"
+      ],
+      "permissions": [
+        "project:view",
+        "safety:manage"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "algorithm:manage"
+      ],
+      "permissions": [
+        "algorithm:manage",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "agent:use"
+      ],
+      "permissions": [
+        "agent:use",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "report:export"
+      ],
+      "permissions": [
+        "project:view",
+        "report:export"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "unknown:permission"
+      ],
+      "permissions": [
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "event:handle",
+        "event:handle",
+        "unknown:permission"
+      ],
+      "permissions": [
+        "event:handle",
+        "issue:handle",
+        "project:view"
+      ]
+    },
+    {
+      "role": "member",
+      "grants": [
+        "project:view",
+        "event:handle",
+        "issue:handle",
+        "issue:assign",
+        "mission:operate",
+        "mission:approve",
+        "device:configure",
+        "safety:manage",
+        "algorithm:manage",
+        "agent:use",
+        "report:export"
+      ],
+      "permissions": [
+        "agent:use",
+        "algorithm:manage",
+        "device:configure",
+        "event:handle",
+        "issue:assign",
+        "issue:handle",
+        "mission:approve",
+        "mission:operate",
+        "project:view",
+        "report:export",
+        "safety:manage"
+      ]
+    }
+  ]
+}
