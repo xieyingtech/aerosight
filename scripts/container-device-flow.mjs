@@ -13,7 +13,7 @@ export function startDeviceFixture({ docker, network, output, root, arch, image 
   });
   assert.equal(build.status, 0, build.stderr);
   const brokerImage = 'eclipse-mosquitto:2.1.2-alpine';
-  writeFileSync(resolve(output, 'mosquitto.conf'), 'listener 1883\nallow_anonymous false\npassword_file /fixture/passwords\nlog_dest stdout\npersistence false\n');
+  writeFileSync(resolve(output, 'mosquitto.conf'), 'listener 1883\nallow_anonymous false\npassword_file /fixture/passwords\nlog_dest stdout\nlog_type all\npersistence false\n');
   docker('run', '--rm', '--user', '0', '-v', `${output}:/fixture`, '--entrypoint', 'mosquitto_passwd', brokerImage, '-b', '-c', '/fixture/passwords', 'acceptance', password);
   docker('run', '--rm', '--user', '0', '-v', `${output}:/fixture`, '--entrypoint', 'chmod', brokerImage, '644', '/fixture/passwords');
   docker('run', '-d', '--name', broker, '--network', network, '--network-alias', 'mqtt.test', '-v', `${output}:/fixture:ro`, brokerImage, 'mosquitto', '-c', '/fixture/mosquitto.conf');
@@ -59,6 +59,9 @@ export function startDeviceFixture({ docker, network, output, root, arch, image 
       const snapshot = await (await request(`/api/projects/${project.id}/snapshot`, 200)).json();
       assert(JSON.stringify(snapshot).includes('AIRCRAFT-ACCEPTANCE'), 'project snapshot omitted the simulated aircraft');
       return {
+        aircraftID: aircraft.id,
+        gatewayID: observed.find(row => row.externalId === 'GW-ACCEPTANCE').id,
+        servicePublicationCount: () => docker('logs', broker).split('\n').filter(line => line.includes('Sending PUBLISH to aerosight-dji-simulator-GW-ACCEPTANCE ') && line.includes("'thing/product/GW-ACCEPTANCE/services'")).length,
         async afterRestart() {
           const cutoff = Date.now();
           const fresh = await wait(telemetry, value => value && Date.parse(value.capturedAt) > cutoff, 'new Go process did not receive fresh MQTT telemetry');

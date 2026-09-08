@@ -7,6 +7,7 @@ import { callbackRecoveryFixture } from './container-callback-recovery.mjs';
 import { startAlgorithmUpstream } from './container-algorithm-upstream.mjs';
 import { verifyAIFlow } from './container-ai-flow.mjs';
 import { startDeviceFixture } from './container-device-flow.mjs';
+import { verifyMissionFlow } from './container-mission-flow.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
@@ -124,6 +125,7 @@ try {
   await callbacks.beforeStop(origin);
   const ai = await verifyAIFlow({ request, upstream, project });
   const devices = await deviceFixture.verify({ request, database, project });
+  const mission = await verifyMissionFlow({ docker, database, request, project, team, devices });
   const streamCount = 24;
   const streamStart = Date.now();
   const setupTimeout = setTimeout(() => streamAbort.abort(new Error('SSE load setup timeout')), 10000);
@@ -184,6 +186,7 @@ try {
   const callbackRecovery = await callbacks.afterRestart(origin);
   const aiFlow = await ai.afterRestart();
   const deviceFlow = await devices.afterRestart();
+  writeFileSync(resolve(output, 'mission-flow.json'), JSON.stringify(await mission.afterRestart(), null, 2));
   writeFileSync(resolve(output, 'device-flow.json'), JSON.stringify(deviceFlow, null, 2));
   writeFileSync(resolve(output, 'ai-flow.json'), JSON.stringify(aiFlow, null, 2));
   docker('kill', '--signal=TERM', app);
