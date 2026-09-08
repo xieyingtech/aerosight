@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 8.1 演练命令修复：fresh-environment-drill 原先仍要求已移除的 AI_PROVIDER/AI_MODEL，且 Windows spawnSync 直接运行 pnpm 不兼容。现从脚本位置解析仓库根目录，核对 CSRF_AUTH_KEY/AEROSIGHT_ENV/HTTP_LISTEN_ADDRESS/PUBLIC_ORIGIN/GO_API_ORIGIN 等当前配置，拒绝旧 AI 环境入口，并使用固定参数的 Windows cmd 启动 pnpm。输出 schemaVersion=2 明确范围为配置、迁移和统一生产构建。pnpm drill:fresh-environment 实际退出 0，.build/fresh-environment-drill.log 记录配置测试、真实 PostGIS 迁移回归和完整 pnpm build 全通过（迁移约 9.2 秒，构建约 25.4 秒）。此修复使保留的演练入口可以执行，没有把它当作 8.2 的设备/任务/算法/AI 完整业务端到端，8.1/8.2 继续待最终收尾。
+
 - 完成 7.5 正式镜像验收：首轮 Dockerfile 的 Next/Go 编译通过但 Debian HTTP 软件包索引连接失败，构建以 100 退出。核对缓存官方 golang:1.26.1-bookworm 已包含 CA bundle 与 tzdata，运行阶段改为跨阶段复制 CA 文件和完整 zoneinfo 到 Debian Bookworm，不再重复 apt 下载；未引入 Node、编译器或另一应用进程。正式 docker build 退出 0，镜像 aerosight:unified-acceptance，ID sha256:f8f7858bb2d2a43a98ff7d0a1194e1dcd6793d4e9964b3f5cd075a7761651d44，报告大小 43,244,709 字节。pnpm test:release-image 通过，.build/container-lifecycle-5dee099b-d57f-4fe0-a397-ec27a5e1f8d7/result.json 明确 mode=release-image：使用镜像默认 user/entrypoint 和内部二进制，无宿主 bind mount；确认无 Node/pnpm、UID 10001、Go PID 1、唯一 8080 TCP listener、CA bundle 与 Asia/Shanghai +0800、嵌入页面/CSP、实际登录/写入/SSE。SIGTERM 512 ms、exit 0、SSE EOF、DB 连接归零；同容器重启后旧会话和项目保留，再次正常退出，容器/网络已清理。结合已通过的 pnpm 构建/开发代理/迁移入口与部署环境说明，7.5 完成；完整业务与负载验收仍由 8.1—8.3、8.5 覆盖。
 
 - 完成 7.3：重新核对 serve 入口和运行时监督代码，逐项读取本次全 Go PostGIS 日志中的消费者故障/readiness、outbox 恢复、调度恢复和会话清理 pass 事件，并核对真实 MQTT 与容器停止/重启 result.json。新增 runtime-acceptance.md 对应每项要求及证据边界；7.3 的统一启动/取消、必要故障、正常停止与租约恢复已完成。保留 7.5 正式镜像、8.2 完整业务端到端和 8.3 全负载/开发代理对照为未完成项，不以本次组件验收替代它们。
