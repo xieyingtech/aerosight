@@ -14,3 +14,5 @@
 | AI 假上游 | API 创建 provider/session/message，官方 SDK 通过真实 HTTPS 请求 Responses helper；六个只读工具实际查库，证据留存，上游错误脱敏，活动请求在 SIGTERM 取消且连接关闭。`ai-flow.json` 记录重启后历史不变、不重发、不产生虚假 assistant。 |
 
 PostGIS、MQTT、HTTPS helper 和协议模拟器是隔离测试依赖，不是应用生产进程。媒体/NTP 地址仅为配置连通 fixture，真实播放由独立媒体验收覆盖。本文不把暂停任务 fixture 描述成任务创建 API，也不证明相机拍照、飞行等未列出的设备动作。任务 8.1 的全入口兼容、8.3 的完整退出/恢复门槛和 8.5 的规格同步仍需独立收尾；尤其结果文件跨重启持久化及预算耗尽恢复不能从本次正常停止推导。
+
+后续 `.build/container-lifecycle-31a30e35-38e0-40a9-a3f8-8334ff987511/object-persistence.json` 已单独补齐文件持久化：实际 named volume、完成结果后的再次进程重启、结果 JSON/SHA-256、原签名输入下载与回调重放全部通过。预算耗尽恢复仍需单独核对。

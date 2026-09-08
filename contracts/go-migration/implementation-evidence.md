@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 8.3 对象文件跨重启补验：统一容器演练改用本次独占的 named volume 挂载 /var/lib/aerosight，对象根与生产默认位置一致，应用仍为非 root、只读 rootfs，无源码/二进制 bind mount。第一次重启接收完成回调写入真实结果文件，再次停止并第三次启动，核对结果路径、SHA-256 与 JSON 内容，使用原签名 URL 下载输入 PNG 并逐字节一致，再重放完成回调，元数据/回执保持不变且没有上游重发。pnpm test:release-image 通过，.build/container-lifecycle-31a30e35-38e0-40a9-a3f8-8334ff987511/object-persistence.json 保存证据；既有设备/任务/算法/AI/SSE 全链路同轮通过，测试卷与容器已清理，OpenSpec strict 通过。此结果补齐此前 tmpfs 演练不覆盖的对象持久化，不以正常停止替代退出预算耗尽的任务恢复门槛，8.3 继续待收尾。
+
 - 完成 8.2：正式镜像演练加入存量暂停任务，通过真实 resume API、后台调度、MQTT 服务与模拟器 ACK 完成任务。任务/版本/步骤为 fixture，迁移清单无创建任务入口，不另加业务 API。首次使用旧测试中的 camera.photo 被当前真实 DJI command mapping 拒绝，改用当前声明支持的 dock.debug.control/debug.open，未扩展生产命令目录。pnpm test:release-image 通过，.build/container-lifecycle-68eaa516-9640-4dcd-abfb-2bcc437f5d05/mission-flow.json 记录 succeeded/stateVersion=3、一条 command、一个 attempt、一次 resume 审计，broker.log 只有一次向模拟器投递 services；重启状态和命令 ID 保留且不重发。设备拓扑/遥测、算法回调、签名资产、AI 六工具及活动取消、24 SSE/80 快照均在同一次正式镜像执行通过，停机 592 ms。single-binary-e2e.md 逐项对应 8.2 要求与 fixture 边界；OpenSpec strict 通过、测试资源清理完成。完整兼容、预算耗尽恢复与最终规格同步仍待收尾。
 
 - 8.2/8.3 设备真实协议补验及订阅修复：新增 container-device-flow，通过 dji-setup/连接测试 API 创建启用适配器及加密凭据；独立认证 Mosquitto 与现有 Go Dock 2/M3TD 模拟器发出真实拓扑/OSD，不直接写入设备表。首次演练拓扑成功、飞机遥测缺失，发现标准网关配置只订阅网关序列号。BuildMQTTConfig 现在为标准网关 state/osd 补齐子设备 + 订阅并去重，保留存储配置和自定义命名空间；RouteMQTTMessage 仍验证归属网关，投影仍按项目/适配器解析设备身份。六个配置/主题路由/身份隔离/重复乱序测试通过。正式镜像重建为 sha256:7d1cc9e8ef0c68edc3e27ee2c5eeac93ce1311e876a2367a5c74a04fb6c4062a，pnpm test:release-image 通过，.build/container-lifecycle-cc850bf1-ff51-4c1e-8c6e-f007deb2193a/device-flow.json 记录六个自动投影设备、snapshot 含飞机、重启后的新遥测、租约 epoch 1→2、设备 ID 全部不变；SIGTERM 575 ms、SSE/算法/资产/AI 取消回归同轮通过。测试资源清理完成，OpenSpec strict 通过。媒体/NTP 为配置与连通 fixture，不替代既有媒体验收；任务执行端到端和最终全接口门槛仍待完成，8.2/8.3 保持未勾选。

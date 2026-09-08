@@ -13,6 +13,8 @@ const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
 const network = `aerosight-lifecycle-${id}`;
 const upstreamNetwork = `${network}-upstream`;
+const storageVolume = `${network}-objects`;
+const objectRoot = '/var/lib/aerosight/objects';
 const database = `${network}-db`, app = `${network}-app`;
 const output = resolve(root, '.build', `container-lifecycle-${id}`);
 mkdirSync(output, { recursive: true });
@@ -49,10 +51,14 @@ if (releaseImage) {
 }
 let networkCreated = false, dbCreated = false, appCreated = false;
 let upstreamNetworkCreated = false;
+let storageCreated = false;
 let upstream;
 let deviceFixture;
 const streamAbort = new AbortController();
 try {
+  docker('volume', 'create', storageVolume); storageCreated = true;
+  docker('run', '--rm', '--user', '0', '--read-only', '--mount', `type=volume,src=${storageVolume},dst=/var/lib/aerosight`,
+    '--entrypoint', 'chown', image, '10001:10001', '/var/lib/aerosight');
   docker('network', 'create', network); networkCreated = true;
   // TEST-NET-3 stays inside an isolated bridge; no production private-host bypass.
   docker('network', 'create', '--internal', '--subnet', '203.0.113.0/24', upstreamNetwork); upstreamNetworkCreated = true;
@@ -63,7 +69,7 @@ try {
     DATABASE_URL: `postgresql://postgres:lifecycle-test@${database}:5432/postgres`,
     AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HTTP_LISTEN_ADDRESS: '0.0.0.0:8080',
     AUTH_SECRET: randomBytes(32).toString('hex'), CSRF_AUTH_KEY: randomBytes(32).toString('base64'),
-    OBJECT_STORAGE_LOCAL_ROOT: '/tmp/objects', GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
+    OBJECT_STORAGE_LOCAL_ROOT: objectRoot, GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
     CALLBACK_PUBLIC_BASE_URL: 'https://aerosight.test', SSL_CERT_FILE: '/tmp/algorithm-ca.pem',
   };
   for (let i = 0; i < 100; i++) {
@@ -73,6 +79,7 @@ try {
   }
   const binaryOptions = releaseImage ? [] : ['--user', '10001:10001', '--mount', `type=bind,src=${binary},dst=/app/aerosight,readonly`, '-w', '/app', '--entrypoint', '/app/aerosight'];
   docker('run', '-d', '--name', app, '--network', network, '--read-only', '--tmpfs', '/tmp:rw,mode=1777',
+    '--mount', `type=volume,src=${storageVolume},dst=/var/lib/aerosight`,
     '-p', '127.0.0.1::8080', ...binaryOptions,
     ...Object.entries(env).flatMap(([key, value]) => ['-e', `${key}=${value}`]), image, 'serve'); appCreated = true;
   docker('network', 'connect', upstreamNetwork, app);
@@ -121,7 +128,7 @@ try {
   await request('/api/auth/login', 200, { username: 'admin@example.com', password: 'admin' });
   const team = await (await request('/api/teams', 201, { name: 'Lifecycle team' })).json();
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Lifecycle project' })).json();
-  const callbacks = await callbackRecoveryFixture({ docker, database, app, project, team, request, upstream });
+  const callbacks = await callbackRecoveryFixture({ docker, database, app, project, team, request, upstream, objectRoot });
   await callbacks.beforeStop(origin);
   const ai = await verifyAIFlow({ request, upstream, project });
   const devices = await deviceFixture.verify({ request, database, project });
@@ -191,6 +198,14 @@ try {
   writeFileSync(resolve(output, 'ai-flow.json'), JSON.stringify(aiFlow, null, 2));
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
+  docker('start', app);
+  upstream.installTrust(app);
+  origin = `http://127.0.0.1:${docker('port', app, '8080/tcp').split(':').at(-1)}`;
+  await ready();
+  const objectPersistence = await callbacks.verifyPersistedResult(origin, callbackRecovery.result);
+  writeFileSync(resolve(output, 'object-persistence.json'), JSON.stringify(objectPersistence, null, 2));
+  docker('kill', '--signal=TERM', app);
+  assert.equal(docker('wait', app), '0');
   writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, load, callbackRecovery, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'concurrent SSE and snapshot load within pool budget', 'SSE survives ordinary API deadline and closes on SIGTERM', 'database connections released', 'restart preserves session and project', 'signed callback completion and replay after restart'], passed: true }, null, 2));
   console.log(`Container lifecycle passed: ${output}`);
 } finally {
@@ -201,4 +216,5 @@ try {
   if (upstream) upstream.close();
   if (upstreamNetworkCreated) docker('network', 'rm', upstreamNetwork);
   if (networkCreated) docker('network', 'rm', network);
+  if (storageCreated) docker('volume', 'rm', storageVolume);
 }

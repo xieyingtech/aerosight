@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash, createHmac } from 'node:crypto';
 
-export async function callbackRecoveryFixture({ docker, database, app, project, team, request, upstream }) {
+export async function callbackRecoveryFixture({ docker, database, app, project, team, request, upstream, objectRoot }) {
   assert(Number.isSafeInteger(project.id) && Number.isSafeInteger(team.id));
   const sql = statement => docker('exec', database, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-Atqc', statement);
   const assetBytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=', 'base64');
   const checksum = createHash('sha256').update(assetBytes).digest('hex');
   const assetKey = `projects/${project.id}/callback.png`;
-  docker('exec', app, 'sh', '-c', 'mkdir -p "$1" && printf "%s" "$2" | base64 -d > "$1/callback.png"', 'sh', `/tmp/objects/projects/${project.id}`, assetBytes.toString('base64'));
+  docker('exec', app, 'sh', '-c', 'mkdir -p "$1" && printf "%s" "$2" | base64 -d > "$1/callback.png"', 'sh', `${objectRoot}/projects/${project.id}`, assetBytes.toString('base64'));
   const providerId = Number(sql(`
     INSERT INTO algorithm_providers(project_id,team_id,name,provider_type,base_url,status)
     VALUES(${project.id},${team.id},'Restart callback','http-json','${upstream.endpoint}','active') RETURNING id`));
@@ -87,7 +87,23 @@ export async function callbackRecoveryFixture({ docker, database, app, project, 
       assert.equal(upstream.read().length, 1, 'restart dispatched the accepted run again');
       assert.equal(sql(`SELECT count(*) FROM algorithm_run_attempts WHERE algorithm_run_id='${run}' AND status='succeeded'`), '1');
       return { runId: run, createdThroughAPI: true, httpsUpstreamRequests: 1, signedAssetBytesVerified: true, waitingStatePreserved: true, receiptReplayAfterRestart: true, completionAppliedOnce: true, result: completed,
-        scope: 'Provider and input image are fixtures. Definition/run creation, outbox dispatch to a trusted HTTPS upstream, signed asset HTTP delivery, issued callback credentials, restart and replay are real. Result file survival across another restart is a separate check.' };
+        scope: 'Provider and input image are fixtures. Definition/run creation, outbox dispatch to a trusted HTTPS upstream, signed asset HTTP delivery, issued callback credentials, restart and replay are real. Object persistence is checked after the next restart.' };
+    },
+    async verifyPersistedResult(origin, completed) {
+      assert.deepEqual(state(), completed);
+      assert.equal(completed.objectKey, `projects/${project.id}/algorithm-runs/${run}/raw-result.json`);
+      const resultPath = `${objectRoot}/${completed.objectKey}`;
+      assert.equal(docker('exec', app, 'sha256sum', resultPath).split(/\s+/)[0], completed.checksum);
+      assert.deepEqual(JSON.parse(docker('exec', app, 'cat', resultPath)), { results: [] });
+      const signed = new URL(input.inputAsset.accessUrl);
+      const response = await fetch(origin + signed.pathname + signed.search, { signal: AbortSignal.timeout(5000) });
+      assert.equal(response.status, 200);
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), assetBytes);
+      assert.equal((await callback(origin, 'complete-after-restart', 'completed')).duplicate, true);
+      assert.deepEqual(state(), completed);
+      assert.equal(upstream.read().length, 1);
+      return { storage: 'named-volume', rawResultChecksumVerified: true, rawResultJSONVerified: true,
+        inputAssetHTTPBytesPreserved: true, completedCallbackReplayPreserved: true, result: completed };
     },
   };
 }

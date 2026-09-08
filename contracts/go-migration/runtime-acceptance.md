@@ -30,3 +30,5 @@
 后续 `.build/container-lifecycle-498a6675-9338-4395-ab6a-182e0df60df8/result.json` 将 run 改为真实 API 发起：API 创建定义/运行，outbox 发出 HTTPS 请求，Go 签发的资产 URL 能返回一致 PNG 字节，实际签发的 callback token 在重启前后有效。重启及完成重放后上游请求和成功 attempt 均只有一次，回执为两条。provider 和输入资产仍由 fixture 准备，运行服务未使用注入 handler 或替换 transport。结果文件跨后续重启的限制保持不变。
 
 `.build/container-lifecycle-d0d7205e-b759-4a0c-9af0-1b9f5f073ba8/ai-flow.json` 补充活动 AI 请求：确认真实 HTTPS 上游尚未响应且连接开放后发送 SIGTERM，在 592 ms 整进程停止期间返回单一 REQUEST_CANCELLED、关闭上游连接；客户端期限 60 秒，排除客户端超时造成的假阳性。重启后该会话只有已提交的用户消息，没有虚假回复或自动重发。此过程同时验证 SCS 保存取消时不会向业务错误响应追加第二个 JSON。
+
+`.build/container-lifecycle-31a30e35-38e0-40a9-a3f8-8334ff987511/object-persistence.json` 使用独占持久卷保存真实输入与算法结果，在完成回调之后再次停止/启动进程，结果文件 JSON 和 SHA-256 与数据库记录一致，原签名 URL 返回一致输入字节，重放不改完成状态或重发上游。由此补齐前述 tmpfs 证据的对象文件持久化限制。
