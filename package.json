@@ -18,6 +18,7 @@
     "test:security": "node scripts/test-security-acceptance.mjs",
     "test:dev-proxy": "node scripts/test-dev-proxy.mjs",
     "test:mqtt-lifecycle": "node scripts/test-mqtt-lifecycle.mjs",
+    "test:media-inspector": "node scripts/test-media-inspector.mjs",
     "test:container-lifecycle": "node scripts/test-container-lifecycle.mjs",
     "test:release-image": "node scripts/test-container-lifecycle.mjs --image aerosight:unified-acceptance",
     "test:production-browser": "node scripts/test-production-browser.mjs",

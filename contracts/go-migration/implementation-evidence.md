@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 8.1 媒体 Inspector 补验：新增 pnpm test:media-inspector，用仓库固定 bluenviron/mediamtx:1.20.1、随机 loopback 端口及管理 API 测试凭据启动真实媒体服务，FFmpeg 合成 H264 RTSP 推流后确认实际 API 轨道出现、匿名管理访问返回 401，再执行既有 TestMediaMTXInspectorIntegration。真实集成测试 pass、未 skip，.build/media-inspector-9abb27ad-1b2d-4ca9-bba4-af252022cb0c 保存 result.json、paths.json、tests.log 和媒体日志，推流与容器已清理。指定合成发布路径为匿名 fixture，管理 API 始终认证；不把它当作设备凭据发布验收。结合此前三个 MQTT 用例的独立真实 broker 结果，上一批全 Go PostGIS 回归的四个具名 skip 均已有各自实际执行证据；接口逐项兼容清单和最终发布/全负载门槛仍未完成。
+
 - 8.1 当前完整回归：pnpm check 退出 0，Web 边界扫描 253 个源文件、类型检查、Web/契约测试及默认 Go 回归通过，日志 .build/final-check.log。随后使用独立 PostGIS 先由当前生产二进制 migrate，再同时设置 AEROSIGHT_MIGRATION_TEST_DATABASE_URL 与 AEROSIGHT_TEST_DATABASE_URL，执行 go test -tags dev -p 4 ./... -count=1 -json；29 个有测试包、431 个测试/子测试 pass，0 fail，HTTP API 包耗时 126.471 秒，.build/full-go-postgis.jsonl 保留完整事件。原 connector 跨来源序列号冲突、DJI 数据库投影和新增独立数据库用例实际执行；数据库容器已清理。此次仅有 4 个具名 skip：TestMediaMTXInspectorIntegration 及三个 MQTT 集成测试；MQTT 已有单独真实 broker 通过证据，浏览器 WebRTC 已单独通过，但没有把它们替代本次跳过的 MediaMTX Inspector API 用例。接口逐项兼容清单与最终发布门槛仍需收尾，8.1 不提前勾选。
 
 - 完成 8.4：在既有 --legacy-release 演练中加入新生产 Go serve 阶段。当前源码交叉编译为 Linux 二进制，仅挂载该文件到缓存 nginx:alpine fixture 并替换 entrypoint，以生产配置/非 root/只读根目录运行；实际旧账号登录、新建项目和 SSE 首帧通过。发送真实 SIGTERM 后 497 ms、exit 0、SSE EOF，查询确认除演练连接外数据库客户端为 0，随后才启动原 bc314b3 的 Next 生产服务及 worker。旧登录、原项目/快照、Go 新建项目均可访问，旧密码、历史账本、sessions、新证据及未知事件保留；没有执行 down 或恢复旧业务快照。完整流程退出 0，.build/upgrade-rollback-7e1a2d8e4c301333/result.json 的 applicationRollbackVerified=true，go-serve.log、旧服务日志和截图保留，测试容器/进程已清理。结合上批 README 的备份/切换/密钥/重登录/回退说明与 openspec/config.yaml 职责更新，8.4 完成。此为应用切换验收，fixture 不冒充最终 Dockerfile，旧 Windows 进程最终强制清理不冒充其优雅退出，也不覆盖全部业务负载或真实部署备份恢复；这些剩余发布/负载门槛不因此跳过。
