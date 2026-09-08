@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 完成 7.3：重新核对 serve 入口和运行时监督代码，逐项读取本次全 Go PostGIS 日志中的消费者故障/readiness、outbox 恢复、调度恢复和会话清理 pass 事件，并核对真实 MQTT 与容器停止/重启 result.json。新增 runtime-acceptance.md 对应每项要求及证据边界；7.3 的统一启动/取消、必要故障、正常停止与租约恢复已完成。保留 7.5 正式镜像、8.2 完整业务端到端和 8.3 全负载/开发代理对照为未完成项，不以本次组件验收替代它们。
+
 - 8.1 媒体 Inspector 补验：新增 pnpm test:media-inspector，用仓库固定 bluenviron/mediamtx:1.20.1、随机 loopback 端口及管理 API 测试凭据启动真实媒体服务，FFmpeg 合成 H264 RTSP 推流后确认实际 API 轨道出现、匿名管理访问返回 401，再执行既有 TestMediaMTXInspectorIntegration。真实集成测试 pass、未 skip，.build/media-inspector-9abb27ad-1b2d-4ca9-bba4-af252022cb0c 保存 result.json、paths.json、tests.log 和媒体日志，推流与容器已清理。指定合成发布路径为匿名 fixture，管理 API 始终认证；不把它当作设备凭据发布验收。结合此前三个 MQTT 用例的独立真实 broker 结果，上一批全 Go PostGIS 回归的四个具名 skip 均已有各自实际执行证据；接口逐项兼容清单和最终发布/全负载门槛仍未完成。
 
 - 8.1 当前完整回归：pnpm check 退出 0，Web 边界扫描 253 个源文件、类型检查、Web/契约测试及默认 Go 回归通过，日志 .build/final-check.log。随后使用独立 PostGIS 先由当前生产二进制 migrate，再同时设置 AEROSIGHT_MIGRATION_TEST_DATABASE_URL 与 AEROSIGHT_TEST_DATABASE_URL，执行 go test -tags dev -p 4 ./... -count=1 -json；29 个有测试包、431 个测试/子测试 pass，0 fail，HTTP API 包耗时 126.471 秒，.build/full-go-postgis.jsonl 保留完整事件。原 connector 跨来源序列号冲突、DJI 数据库投影和新增独立数据库用例实际执行；数据库容器已清理。此次仅有 4 个具名 skip：TestMediaMTXInspectorIntegration 及三个 MQTT 集成测试；MQTT 已有单独真实 broker 通过证据，浏览器 WebRTC 已单独通过，但没有把它们替代本次跳过的 MediaMTX Inspector API 用例。接口逐项兼容清单与最终发布门槛仍需收尾，8.1 不提前勾选。

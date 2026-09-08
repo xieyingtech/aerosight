@@ -55,7 +55,7 @@
 
 - [x] 7.1 实现 out/migrations 校验复制与 embed 构建，提供静态 HTML、资源、HEAD、缓存和 404；验证缺产物失败、MIME、路径穿越与 API 不回退首页。
 - [x] 7.2 从静态 HTML 生成 CSP 脚本哈希并配置地图/媒体资源来源；在生产页面验证 hydration、地图 worker、直播及未允许脚本被阻止。
-- [ ] 7.3 统一 HTTP、MQTT、outbox、调度和会话清理的启动/退出，更新健康和 readiness；验证必要组件失败、正常停止及租约恢复。
+- [x] 7.3 统一 HTTP、MQTT、outbox、调度和会话清理的启动/退出，更新健康和 readiness；验证必要组件失败、正常停止及租约恢复。
 - [x] 7.4 采用 Prometheus 官方客户端接管现有指标并限制 /metrics 访问；验证业务指标名称/标签兼容、HTTP 指标和未认证拒绝。
 - [ ] 7.5 更新 pnpm build/start/dev/db:migrate、单应用多阶段镜像和部署地址配置；在无 Node.js 运行镜像直接启动二进制，确认只有一个应用端口。
 
