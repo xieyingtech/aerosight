@@ -13,7 +13,7 @@ async function freePort() {
   return port;
 }
 
-export async function verifyLegacyServices({ release, output, databaseURL, scope, password, secret }) {
+export async function verifyLegacyServices({ release, output, databaseURL, scope, password, secret, goProjectId }) {
   const webPort = await freePort(), workerPort = await freePort();
   const origin = `http://127.0.0.1:${webPort}`;
   const env = { ...process.env, NODE_ENV: 'production', DATABASE_URL: databaseURL, AUTH_SECRET: secret,
@@ -60,8 +60,10 @@ export async function verifyLegacyServices({ release, output, databaseURL, scope
     assert.equal(snapshot.project.id, scope.projectId, 'legacy snapshot returned the wrong project');
     assert(JSON.stringify(snapshot).includes('legacy-drone'), 'legacy snapshot did not return the preserved device');
     await page.screenshot({ path: resolve(output, 'legacy-project.png'), fullPage: true });
+    await page.goto(`${origin}/projects/${goProjectId}`);
+    await page.getByRole('heading', { name: 'Go-created rollback project', exact: true }).waitFor();
     assert.equal(worker.exitCode, null, 'legacy worker failed during browser access');
-    return { login: true, accountId: session.user.userId, projectReload: true, snapshotAPI: true, workerReady: true,
+    return { login: true, accountId: session.user.userId, projectReload: true, snapshotAPI: true, goCreatedProjectVisible: true, workerReady: true,
       shutdownScope: 'test process cleanup; Windows forced cleanup is not graceful shutdown acceptance' };
   } finally {
     if (browser) await browser.close();

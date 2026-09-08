@@ -4,6 +4,7 @@ import { readdir, readFile, mkdir, copyFile, writeFile } from "node:fs/promises"
 import { resolve } from "node:path";
 import { createRequire } from 'node:module';
 import { verifyLegacyServices } from './verify-legacy-services.mjs';
+import { verifyGoCutover } from './verify-go-cutover.mjs';
 
 import pg from "pg";
 
@@ -211,7 +212,8 @@ try {
   assert(JSON.stringify(afterUpgrade) === JSON.stringify(beforeUpgrade), "legacy page data changed during upgrade");
 
   const newAssetId = await writeNewEvidenceAndFutureEvent(client, scope);
-  const legacyServices = release ? await verifyLegacyServices({ release, output, databaseURL: postgis.url, scope, password, secret }) : null;
+  const goService = release ? await verifyGoCutover({ output, databaseURL: postgis.url, client, scope, password, secret }) : null;
+  const legacyServices = release ? await verifyLegacyServices({ release, output, databaseURL: postgis.url, scope, password, secret, goProjectId: goService.createdProjectId }) : null;
   if (passwordHash) assert((await client.query('select password from users where id=$1', [scope.userId])).rows[0].password === passwordHash, 'upgrade or old application changed the password');
   assert((await client.query("select to_regclass('public.sessions') as sessions")).rows[0].sessions === 'sessions', 'old application removed additive sessions table');
   await simulateRollbackWorkerClaim(client);
@@ -242,7 +244,8 @@ try {
   const result = { schemaVersion: 2, generatedAt: new Date().toISOString(), databaseImage,
     scope: legacyServices ? 'real TS-to-Go database upgrade followed by old Next production server and worker against the upgraded database' : 'real TS-to-Go database upgrade and legacy SQL compatibility; old Web/worker processes are not started',
     migration: { total: migrationCount, legacyBoundary, legacyApplied: migration.applied.length, goApplied, repeatedGoApplied: 0, historicalLedgerUnchanged: true, baselineAdopted: true },
-    applicationRollbackVerified: false,
+    applicationRollbackVerified: Boolean(goService && legacyServices),
+    goService,
     legacyServices,
     legacyPageContract: { beforeUpgrade: true, afterUpgrade: true, afterLegacyQueries: true,
       devices: afterRollback.devices.length, tasks: afterRollback.tasks.length,
