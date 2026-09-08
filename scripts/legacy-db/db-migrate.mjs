@@ -68,13 +68,17 @@ export async function assertPostgisAvailable(client) {
   }
 }
 
-export async function migrateDatabase({ connectionString, logger = console } = {}) {
+export async function migrateDatabase({ connectionString, logger = console, through } = {}) {
   const databaseUrl = connectionString ?? process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error("DATABASE_URL is required to run database migrations");
   }
 
-  const migrations = await loadMigrations();
+  const available = await loadMigrations();
+  if (through && !available.some(migration => migration.name === through)) {
+    throw new Error(`Unknown migration boundary: ${through}`);
+  }
+  const migrations = through ? available.filter(migration => migration.name <= through) : available;
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   const client = await pool.connect();
   const appliedThisRun = [];

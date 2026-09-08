@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, mkdir, copyFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import pg from "pg";
@@ -15,6 +15,23 @@ const migrationCount = (await readdir(migrationsDirectory))
   .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name))
   .length;
 const silentLogger = { info() {} };
+const root = resolve(import.meta.dirname, '../..');
+const output = resolve(root, '.build', `upgrade-rollback-${randomBytes(8).toString('hex')}`);
+await mkdir(output, { recursive: true });
+const executable = resolve(output, process.platform === 'win32' ? 'aerosight.exe' : 'aerosight');
+await copyFile(resolve(root, '.build', process.platform === 'win32' ? 'aerosight.exe' : 'aerosight'), executable);
+const legacyBoundary = '0051_connector_external_scope_key.sql';
+
+async function migrateWithGo(url, label) {
+  const result = spawnSync(executable, ['migrate'], {
+    cwd: output, encoding: 'utf8', timeout: 60000, env: { ...process.env, DATABASE_URL: url },
+  });
+  await writeFile(resolve(output, `${label}.log`), `${result.stdout ?? ''}${result.stderr ?? ''}`);
+  assert(result.status === 0, `Go migration failed; inspect ${output}: ${result.error ?? result.stderr}`);
+  const completion = result.stdout.trim().split(/\r?\n/).map(line => JSON.parse(line)).find(line => line.msg === 'migrations complete');
+  assert(completion && Number.isInteger(completion.applied), 'Go migration completion missing');
+  return completion.applied;
+}
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -168,9 +185,19 @@ try {
   assert(beforeUpgrade.devices.length === 1 && beforeUpgrade.tasks.length === 1 &&
     beforeUpgrade.runs.length === 1 && beforeUpgrade.assets.length === 1, "legacy snapshot is incomplete");
 
-  const migration = await migrateDatabase({ connectionString: postgis.url, logger: silentLogger });
-  assert(migration.total === migrationCount && migration.applied.length === migrationCount && migration.applied[0].adopted,
-    "legacy snapshot was not adopted and upgraded through every migration");
+  const migration = await migrateDatabase({ connectionString: postgis.url, logger: silentLogger, through: legacyBoundary });
+  assert(migration.total === 51 && migration.applied.length === 51 && migration.applied[0].adopted,
+    'legacy TS migrator did not establish the frozen 51-entry ledger');
+  const ledgerQuery = 'select name,checksum,adopted,execution_ms,applied_at from schema_migrations order by name';
+  const oldLedger = (await client.query(ledgerQuery)).rows;
+  assert((await client.query("select to_regclass('public.sessions') as sessions")).rows[0].sessions === null, 'legacy database already has Go sessions');
+  const goApplied = await migrateWithGo(postgis.url, 'go-upgrade');
+  const newLedger = (await client.query(ledgerQuery)).rows;
+  assert(goApplied === migrationCount - 51 && newLedger.length === migrationCount, 'Go did not apply exactly the pending migrations');
+  assert(JSON.stringify(newLedger.slice(0, 51)) === JSON.stringify(oldLedger), 'Go changed historical ledger fields');
+  assert((await client.query("select to_regclass('public.sessions') as sessions")).rows[0].sessions === 'sessions', 'Go session migration missing');
+  assert(await migrateWithGo(postgis.url, 'go-repeat') === 0, 'repeated Go migration reapplied entries');
+  assert(JSON.stringify((await client.query(ledgerQuery)).rows) === JSON.stringify(newLedger), 'repeated Go migration changed ledger');
   const afterUpgrade = await readLegacyPageContract(client, scope);
   assert(JSON.stringify(afterUpgrade) === JSON.stringify(beforeUpgrade), "legacy page data changed during upgrade");
 
@@ -200,14 +227,18 @@ try {
   assert(futureEvent?.status === "pending" && futureEvent.attempts === 0 && futureEvent.locked_by === null &&
     futureEvent.consumptions === 0, "rollback worker mutated the unknown event");
 
-  process.stdout.write(`${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), databaseImage,
-    migration: { total: migration.total, applied: migration.applied.length, baselineAdopted: true },
-    legacyPageContract: { beforeUpgrade: true, afterUpgrade: true, afterApplicationRollback: true,
+  const result = { schemaVersion: 2, generatedAt: new Date().toISOString(), databaseImage,
+    scope: 'real TS-to-Go database upgrade and legacy SQL compatibility; old Web/worker processes are not started',
+    migration: { total: migrationCount, legacyBoundary, legacyApplied: migration.applied.length, goApplied, repeatedGoApplied: 0, historicalLedgerUnchanged: true, baselineAdopted: true },
+    applicationRollbackVerified: false,
+    legacyPageContract: { beforeUpgrade: true, afterUpgrade: true, afterLegacyQueries: true,
       devices: afterRollback.devices.length, tasks: afterRollback.tasks.length,
       runs: afterRollback.runs.length, assetsVisibleToLegacyQuery: afterRollback.assets.length },
     newEvidence: { assetId: newAssetId, status: evidence.status, legalHold: evidence.legal_hold,
       publishedLinks: evidence.links, activeHolds: evidence.holds },
-    unknownEvent: futureEvent, passed: true }, null, 2)}\n`);
+    unknownEvent: futureEvent, passed: true };
+  await writeFile(resolve(output, 'result.json'), JSON.stringify(result, null, 2));
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\nEvidence: ${output}\n`);
 } finally {
   await client.end().catch(() => {});
   postgis.cleanup();
