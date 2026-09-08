@@ -125,7 +125,7 @@ try {
     writeFileSync(resolve(output,'project-details.json'),JSON.stringify(details,null,2));
     const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
     writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
-    const mediaFrame=await verifyMediaFrame(page,context,detailURL,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
+    const mediaFrame=await verifyMediaFrame(page,context,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
     writeFileSync(resolve(output,'media-frame.json'),JSON.stringify(mediaFrame,null,2));
   }
   assert.deepEqual(errors,[],'new resource hydration/runtime errors');

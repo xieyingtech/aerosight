@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 7.2 HLS 播放补验：生产浏览器通过实际直播面板切换备用协议，获取受控 HLS 清单及六个 MPEG-TS 分片，并实际解码 320×180 视频，观测播放时间超过 0.5 秒且无媒体错误/CSP 违规。样本由 FFmpeg testsrc2/libx264 生成六秒 VOD，官方 HLS muxer 文档已通过 Context7 核对；不包含真实业务媒体。完整生产浏览器验收通过，证据 .build/production-browser-2831932b-02da-46f8-8071-2d76e3c40874/result.json、media-frame.json 与 hls-playback.png；截图确认直播面板显示解码画面。测试环境为 Windows Edge 原生 HLS，未据此声称其他浏览器支持；README 已补充 FFmpeg 和浏览器前提。真实 WebRTC 会话尚未验收，7.2 保持未勾选。
+
 - 7.2 媒体 frame 来源与播放鉴权：生产浏览器配置测试 CSP_MEDIA_ORIGINS=https://media.example，真实库为已有地图设备创建网络媒体 profile 与活动直播；通过 realtime 页面和实际 Go playback API 获取签名 WebRTC URL，允许来源的 iframe 成功加载受控 HTML。使用该实际 URL token 调用 /api/media-auth 返回 204；修改 iframe 为未允许来源后浏览器产生预期 frame-src 拦截，正常来源无违规。完整生产浏览器流程通过且清理完成，证据 .build/production-browser-541d5dcc-7f92-4f05-a803-7360046fe678/media-frame.json；未记录 token。fixture 明确只验证 iframe/CSP/Go 授权，没有建立实际 WebRTC 音视频会话，视频播放与协议切换仍待验收，7.2 不提前勾选。
 
 - 完成 6.3：新增 browser-project-details，在已构建生产包运行后的真实独立数据库中创建任务/运行、算法 provider/definition/version/asset/run、案件以及历史事件规则/版本/分组/事件，使用实际 Go API 和浏览器访问四类固定 query 详情路径并刷新，验证资源 ID、详情标题和任务名称/规则名称内容。团队详情直接访问、刷新及链接回 UI 创建的新项目也通过。生产测试全流程通过，证据 .build/production-browser-ec122ade-a366-41e1-b5c5-c3192ee68233/project-details.json 与 project-workspaces.json；无 pageerror/CSP violation，既有地图、权限、会话及注入拦截回归同时通过。结合十类项目工作台、项目详情、四类嵌套详情及 StaticAPIPage 公共 Suspense 边界，验证新增 ID 无需 generateStaticParams 或重新构建。嵌套数据由 SQL fixture 创建以验证静态交付/读取，未把该测试当作任务执行、算法上游或处置写入验收；这些业务契约由独立任务证据覆盖。
