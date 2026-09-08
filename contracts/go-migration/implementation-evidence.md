@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 7.3 真实 MQTT 补验通过：重新拉取仓库固定 eclipse-mosquitto:2.1.2-alpine 成功，镜像 digest 为 sha256:6f8d8a947c506f8a2290ec65cd4bd2bc7cb4d43fb5f6271f861cb013e2ef9797。pnpm test:mqtt-lifecycle 在实际认证 Mosquitto 上执行 TestMQTT5AuthenticationReconnectAndSubscriptionRecovery、TestMQTT5RejectsInvalidAuthentication、TestMQTTManagerShutdownAndRestart，三项均通过且没有跳过；结果 .build/mqtt-lifecycle-16b80e9a-5d6f-4820-889c-6fde0567fffd/result.json 与 tests.log，测试容器已清理。管理器使用实际 MQTT 会话但租约 repository 为受控 fixture，不把该结果当作持久数据库租约或全负载整进程恢复验收。正式 Dockerfile 同轮重试仍在获取 Debian/Go 镜像匿名 token 时连接 auth.docker.io:443 超时，.build/unified-image.log 记录失败；7.5 发布镜像正向验收仍未完成。
+
 - 7.2 HLS 播放补验：生产浏览器通过实际直播面板切换备用协议，获取受控 HLS 清单及六个 MPEG-TS 分片，并实际解码 320×180 视频，观测播放时间超过 0.5 秒且无媒体错误/CSP 违规。样本由 FFmpeg testsrc2/libx264 生成六秒 VOD，官方 HLS muxer 文档已通过 Context7 核对；不包含真实业务媒体。完整生产浏览器验收通过，证据 .build/production-browser-2831932b-02da-46f8-8071-2d76e3c40874/result.json、media-frame.json 与 hls-playback.png；截图确认直播面板显示解码画面。测试环境为 Windows Edge 原生 HLS，未据此声称其他浏览器支持；README 已补充 FFmpeg 和浏览器前提。真实 WebRTC 会话尚未验收，7.2 保持未勾选。
 
 - 7.2 媒体 frame 来源与播放鉴权：生产浏览器配置测试 CSP_MEDIA_ORIGINS=https://media.example，真实库为已有地图设备创建网络媒体 profile 与活动直播；通过 realtime 页面和实际 Go playback API 获取签名 WebRTC URL，允许来源的 iframe 成功加载受控 HTML。使用该实际 URL token 调用 /api/media-auth 返回 204；修改 iframe 为未允许来源后浏览器产生预期 frame-src 拦截，正常来源无违规。完整生产浏览器流程通过且清理完成，证据 .build/production-browser-541d5dcc-7f92-4f05-a803-7360046fe678/media-frame.json；未记录 token。fixture 明确只验证 iframe/CSP/Go 授权，没有建立实际 WebRTC 音视频会话，视频播放与协议切换仍待验收，7.2 不提前勾选。
