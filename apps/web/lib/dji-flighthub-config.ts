@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 export const DJI_FLIGHTHUB_CHINA_API_ORIGIN = "https://es-flight-api-cn.djigate.com";
 export const DJI_FLIGHTHUB_CONSOLE_URL = "https://fh.dji.com";

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 export const flightHubTokenUpdateSchema = z.object({
   token: z.string().trim().min(1).max(16_384),

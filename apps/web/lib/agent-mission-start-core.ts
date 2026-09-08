@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 import { assertAgentToolArgsDoNotContainScope, type AgentExecutionContext } from "./agent-execution-context-core.ts";
 
 export const agentMissionStartInputSchema = z.object({

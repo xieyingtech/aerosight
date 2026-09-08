@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const runtimeConfigSchema = z.object({
   DATABASE_URL: z.preprocess(

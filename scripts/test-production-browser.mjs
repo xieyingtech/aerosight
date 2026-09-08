@@ -10,6 +10,7 @@ import { chromium } from 'playwright';
 import { verifyPageStates } from './browser-page-states.mjs';
 import { verifyLegacyLinks } from './browser-legacy-links.mjs';
 import { verifyMap } from './browser-map.mjs';
+import { verifyProjectWorkspaces } from './browser-project-workspaces.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -116,6 +117,8 @@ try {
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.screenshot({path:resolve(output,'created-project.png'),fullPage:true});
   if(!development) {
+    const workspaces=await verifyProjectWorkspaces(page,detailURL);
+    writeFileSync(resolve(output,'project-workspaces.json'),JSON.stringify(workspaces,null,2));
     const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
     writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
   }

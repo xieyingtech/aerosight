@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const coordinateSchema = z.tuple([
   z.number().min(-180).max(180),

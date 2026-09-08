@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 import { inspectionMissionDefinitionSchema } from "./inspection-mission-schema.ts";
 import { taskConditionSchema } from "./task-condition-evaluator.ts";
 

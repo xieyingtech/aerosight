@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const jsonSchema = jsonObjectSchema.superRefine((schema, context) => {
