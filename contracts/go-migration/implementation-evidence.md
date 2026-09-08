@@ -2,6 +2,10 @@
 
 当前仍处于迁移阶段；默认构建与启动已切换为静态导出和统一 Go 应用。未勾选任务仍需实现和验证，尚未完成发布验收。
 
+## 2026-09-08
+
+- 7.3/7.5/8.3 整进程第一批验收：新增 pnpm test:container-lifecycle，将当前生产 Go 入口交叉编译为无 CGO Linux 二进制，仅挂载该文件到缓存 nginx:alpine 镜像（实际使用镜像 ID sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3，替换 entrypoint，nginx 未启动）。以非 root 用户、只读根文件系统及临时对象目录运行，断言无 node/pnpm、PID 1 是 aerosight，按该进程 socket inode 与 /proc TCP 表确认仅监听 8080。独立真实 PostGIS 上验证嵌入页面/CSP、登录、创建团队/项目、SSE 首帧，发送真实 SIGTERM 后 exit 0、SSE EOF 和数据库客户端连接归零；再次启动同一容器后原 session 和项目快照正常，再次 SIGTERM 退出 0。最终通过记录 .build/container-lifecycle-19a3162c-e779-451d-a8f0-82b12c64227a/result.json，首轮停止耗时 516 ms；application.log 保留，容器和网络均清理。首次运行修正测试 DB 就绪检查为 TCP，第二次修正容器重启后重新读取动态端口，最终完整两次流程通过。HTTP 测试客户端直接携带生产 Origin/安全 Cookie，不将其当作浏览器 HTTPS 验证；缓存运行镜像不替代正式 Dockerfile，且本批未包括活跃 MQTT/媒体/AI/任务负载，相关整项继续保持未勾选。
+
 ## 2026-09-07
 
 - 7.3 调度数据库恢复验收：新增 TestPostgresSchedulerCancellationAndRestartRecovery，在独立真实 PostGIS 完整迁移后创建 FlightHub adapter，使用 SQLLeaseRepository/SQLSyncOutcomeStore 启动并取消实际调度器，验证租约保留、状态仍 connecting、last_checked_at 未写且无同步结果。活租约不能被抢占；推进该测试租约到期后新 worker 获得更高 epoch，旧持有者 Renew/Succeeded/Failed 被拒绝且 Release 不能清除新租约。恢复阶段通过 SQLSyncStore.CurrentCursor/ApplyBatch 实际写入一条设备身份、同步游标及成功运行，再由调度器记录 connected 并释放租约；立即再次 Reconcile 不重复执行。真实数据库测试和 connector 组件回归通过；既有跨来源冲突集成测试因独立的 AEROSIGHT_TEST_DATABASE_URL 未设置而跳过，本轮不将其列为通过。初次新测试误用 discovery scope 作为 cursor，已修正为实际 CurrentCursor 后重跑通过。此证据覆盖持久租约、epoch 和结果写入，发现数据使用受控 batch，尚非 FlightHub 网络或整进程重启验收，7.3 保持未勾选。
