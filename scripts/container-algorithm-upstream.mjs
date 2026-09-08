@@ -15,11 +15,19 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
     const https = require('node:https'), fs = require('node:fs');
     const requests = [], aiRequests = [];
     const aiHold = {started:0,closed:0};
+    const runHold = {received:0,closed:0,applied:0,runIds:[]};
     https.createServer({key:fs.readFileSync('/fixture/key.pem'),cert:fs.readFileSync('/fixture/cert.pem')}, async (req,res) => {
       res.setHeader('Content-Type','application/json');
       if(req.method==='GET' && req.url==='/received') return res.end(JSON.stringify(requests));
       if(req.method==='GET' && req.url==='/ai-received') return res.end(JSON.stringify(aiRequests));
       if(req.method==='GET' && req.url==='/ai-hold') return res.end(JSON.stringify(aiHold));
+      if(req.method==='GET' && req.url==='/run-hold') return res.end(JSON.stringify(runHold));
+      if(req.method==='POST' && req.url==='/held-run') {
+        let raw=''; for await(const chunk of req) raw+=chunk;
+        const body=JSON.parse(raw); runHold.received++;runHold.runIds.push(body.runId);
+        if(runHold.received===1) {res.on('close',()=>runHold.closed++);return;}
+        runHold.applied++;return res.end(JSON.stringify({results:[]}));
+      }
       if(req.method==='POST' && req.url==='/v1/responses') {
         let raw=''; for await(const chunk of req) raw+=chunk;
         const body=JSON.parse(raw);
@@ -52,7 +60,7 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   } catch (error) { docker('rm', '-f', name); throw error; }
-  return { read, readAI: () => readPath('/ai-received'), readAIHold: () => readPath('/ai-hold'), endpoint: 'https://algorithm.test:8443/run',
+  return { read, readAI: () => readPath('/ai-received'), readAIHold: () => readPath('/ai-hold'), readRunHold: () => readPath('/run-hold'), endpoint: 'https://algorithm.test:8443/run',
     installTrust: app => docker('exec', app, 'sh', '-c', 'printf "%s" "$1" > /tmp/algorithm-ca.pem', 'sh', readFileSync(cert, 'utf8')),
     close: () => docker('rm', '-f', name) };
 }

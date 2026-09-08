@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 完成 8.3：新增 pnpm test:shutdown-recovery，在正式镜像内真实 API 发起同步算法，HTTPS 假上游保持首个请求未完成；不完整 HTTP 请求体使 1ns 退出预算实际耗尽，日志 context deadline exceeded、exit 1，未完成 run 保持 queued、outbox 保持 processing/claim 1，attempt/consumption/结果均未提交，数据库连接归零。新容器保留数据库、密钥与对象卷，等待未经 SQL 修改的原 30 秒租约到期后同一 run 成功，claim 2、成功 attempt 1、consumption 1，真实结果文件正确且后续轮询无重复。证据 .build/shutdown-recovery-7ce5d933-834b-4f2f-a2cb-4d8e5914abe3/result.json。上游收到两次、首次无效果、第二次应用一次；外部效果先于丢失响应的情形仍依赖协议幂等，不宣称无条件 exactly-once。pnpm test:dev-proxy 本轮再次通过（.build/dev-proxy-final.log）。结合已有 24 SSE/80 快照/连接预算、活动 AI 取消、MQTT 任务一次完成、算法回调/文件跨重启及事务已提交未确认恢复证据，8.3 全部完成。测试容器和临时网络/卷已清理。
+
 - 8.3 对象文件跨重启补验：统一容器演练改用本次独占的 named volume 挂载 /var/lib/aerosight，对象根与生产默认位置一致，应用仍为非 root、只读 rootfs，无源码/二进制 bind mount。第一次重启接收完成回调写入真实结果文件，再次停止并第三次启动，核对结果路径、SHA-256 与 JSON 内容，使用原签名 URL 下载输入 PNG 并逐字节一致，再重放完成回调，元数据/回执保持不变且没有上游重发。pnpm test:release-image 通过，.build/container-lifecycle-31a30e35-38e0-40a9-a3f8-8334ff987511/object-persistence.json 保存证据；既有设备/任务/算法/AI/SSE 全链路同轮通过，测试卷与容器已清理，OpenSpec strict 通过。此结果补齐此前 tmpfs 演练不覆盖的对象持久化，不以正常停止替代退出预算耗尽的任务恢复门槛，8.3 继续待收尾。
 
 - 完成 8.2：正式镜像演练加入存量暂停任务，通过真实 resume API、后台调度、MQTT 服务与模拟器 ACK 完成任务。任务/版本/步骤为 fixture，迁移清单无创建任务入口，不另加业务 API。首次使用旧测试中的 camera.photo 被当前真实 DJI command mapping 拒绝，改用当前声明支持的 dock.debug.control/debug.open，未扩展生产命令目录。pnpm test:release-image 通过，.build/container-lifecycle-68eaa516-9640-4dcd-abfb-2bcc437f5d05/mission-flow.json 记录 succeeded/stateVersion=3、一条 command、一个 attempt、一次 resume 审计，broker.log 只有一次向模拟器投递 services；重启状态和命令 ID 保留且不重发。设备拓扑/遥测、算法回调、签名资产、AI 六工具及活动取消、24 SSE/80 快照均在同一次正式镜像执行通过，停机 592 ms。single-binary-e2e.md 逐项对应 8.2 要求与 fixture 边界；OpenSpec strict 通过、测试资源清理完成。完整兼容、预算耗尽恢复与最终规格同步仍待收尾。

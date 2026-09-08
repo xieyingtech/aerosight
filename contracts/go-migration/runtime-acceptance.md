@@ -19,9 +19,11 @@
 - `.build/container-lifecycle-ef99f91b-6bad-43ad-adaa-f12986475143/result.json`：两次停止和中间重启，首轮停止 479 ms。
 - `.build/upgrade-rollback-7e1a2d8e4c301333/result.json`：生产 Go 服务 SIGTERM 497 ms、连接归零后回切旧应用。
 
-任务 7.3 的启动、必要故障、关闭和租约恢复契约已验证。后续正式镜像验收已完成任务 7.5，证据见 implementation-evidence.md。任务 8.2 的完整业务端到端和 8.3 的全部活动任务恢复仍是独立未完成门槛；本文不宣称外部设备命令具有无条件 exactly-once，也不以数据库事务幂等推导外部副作用永不重复。
+任务 7.3 的启动、必要故障、关闭和租约恢复契约已验证。后续正式镜像验收已完成任务 7.5；任务 8.2 的完整业务端到端见 single-binary-e2e.md，任务 8.3 的负载与恢复补验证据见下文。本文不宣称外部设备命令具有无条件 exactly-once，也不以数据库事务幂等推导外部副作用永不重复。
 
 ## 正式镜像负载与回调重启补验
+
+最终 8.3 补验：`pnpm test:shutdown-recovery` 在正式镜像保持实际同步算法 HTTPS 请求，并用不完整 HTTP 请求体稳定触发 1ns 退出预算耗尽。SIGTERM 后进程以 1 退出，日志明确 deadline exceeded，数据库连接归零，run/outbox 未提前成功。替换为默认 30 秒退出预算的新进程，保留原库、密钥和对象卷，原 30 秒租约未经修改且到期前不重领；到期后 run 成功，只有一条已提交 attempt 和 consumption、一个正确的原始结果文件。`.build/shutdown-recovery-7ce5d933-834b-4f2f-a2cb-4d8e5914abe3/result.json` 保存退出、前后状态及上游计数。首次上游请求未应用效果，第二次应用一次；协议层仍需处理已应用但响应丢失的幂等。`pnpm test:dev-proxy` 同轮再次通过，日志 `.build/dev-proxy-final.log`。结合下列正常退出负载及数据库组件恢复用例，8.3 完成。
 
 `pnpm test:release-image` 使用最终镜像内部二进制，无宿主源码或二进制挂载，保留镜像默认用户和入口。24 条 SSE 在 8 并发、共 80 次快照读取期间保持连接；超过 30 秒后全部收到新插入事件，数据库连接采样未超过默认合计预算 30。SIGTERM 后全部流结束、数据库连接归零，重启后会话和项目保留。
 
