@@ -20,8 +20,9 @@ COPY --from=web-build /src/apps/server/internal/migrations/sql ./internal/migrat
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/aerosight ./cmd/aerosight
 
 FROM debian:bookworm-slim AS runtime
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 aerosight && useradd --uid 10001 --gid aerosight --no-create-home aerosight \
+COPY --from=server-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=server-build /usr/share/zoneinfo /usr/share/zoneinfo
+RUN groupadd --gid 10001 aerosight && useradd --uid 10001 --gid aerosight --no-create-home aerosight \
     && mkdir -p /app /var/lib/aerosight/objects && chown -R aerosight:aerosight /var/lib/aerosight
 WORKDIR /app
 COPY --from=server-build /out/aerosight /usr/local/bin/aerosight

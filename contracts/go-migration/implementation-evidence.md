@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 完成 7.5 正式镜像验收：首轮 Dockerfile 的 Next/Go 编译通过但 Debian HTTP 软件包索引连接失败，构建以 100 退出。核对缓存官方 golang:1.26.1-bookworm 已包含 CA bundle 与 tzdata，运行阶段改为跨阶段复制 CA 文件和完整 zoneinfo 到 Debian Bookworm，不再重复 apt 下载；未引入 Node、编译器或另一应用进程。正式 docker build 退出 0，镜像 aerosight:unified-acceptance，ID sha256:f8f7858bb2d2a43a98ff7d0a1194e1dcd6793d4e9964b3f5cd075a7761651d44，报告大小 43,244,709 字节。pnpm test:release-image 通过，.build/container-lifecycle-5dee099b-d57f-4fe0-a397-ec27a5e1f8d7/result.json 明确 mode=release-image：使用镜像默认 user/entrypoint 和内部二进制，无宿主 bind mount；确认无 Node/pnpm、UID 10001、Go PID 1、唯一 8080 TCP listener、CA bundle 与 Asia/Shanghai +0800、嵌入页面/CSP、实际登录/写入/SSE。SIGTERM 512 ms、exit 0、SSE EOF、DB 连接归零；同容器重启后旧会话和项目保留，再次正常退出，容器/网络已清理。结合已通过的 pnpm 构建/开发代理/迁移入口与部署环境说明，7.5 完成；完整业务与负载验收仍由 8.1—8.3、8.5 覆盖。
+
 - 完成 7.3：重新核对 serve 入口和运行时监督代码，逐项读取本次全 Go PostGIS 日志中的消费者故障/readiness、outbox 恢复、调度恢复和会话清理 pass 事件，并核对真实 MQTT 与容器停止/重启 result.json。新增 runtime-acceptance.md 对应每项要求及证据边界；7.3 的统一启动/取消、必要故障、正常停止与租约恢复已完成。保留 7.5 正式镜像、8.2 完整业务端到端和 8.3 全负载/开发代理对照为未完成项，不以本次组件验收替代它们。
 
 - 8.1 媒体 Inspector 补验：新增 pnpm test:media-inspector，用仓库固定 bluenviron/mediamtx:1.20.1、随机 loopback 端口及管理 API 测试凭据启动真实媒体服务，FFmpeg 合成 H264 RTSP 推流后确认实际 API 轨道出现、匿名管理访问返回 401，再执行既有 TestMediaMTXInspectorIntegration。真实集成测试 pass、未 skip，.build/media-inspector-9abb27ad-1b2d-4ca9-bba4-af252022cb0c 保存 result.json、paths.json、tests.log 和媒体日志，推流与容器已清理。指定合成发布路径为匿名 fixture，管理 API 始终认证；不把它当作设备凭据发布验收。结合此前三个 MQTT 用例的独立真实 broker 结果，上一批全 Go PostGIS 回归的四个具名 skip 均已有各自实际执行证据；接口逐项兼容清单和最终发布/全负载门槛仍未完成。
