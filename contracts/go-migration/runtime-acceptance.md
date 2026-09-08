@@ -28,3 +28,5 @@
 `.build/container-lifecycle-55780be7-884a-4de8-b8e0-4b1bae4671e6/result.json` 同时记录真实签名算法回调：预置进行中 run，在停止前处理 processing；重启后等待状态与回执保留，旧回执重放去重，completed 成功且重复提交不改变结果元数据和回执数量。此测试覆盖接收端恢复，不包含上游执行发起；对象存储使用测试 tmpfs，未将元数据去重作为结果文件跨后续重启持久化的证明。
 
 后续 `.build/container-lifecycle-498a6675-9338-4395-ab6a-182e0df60df8/result.json` 将 run 改为真实 API 发起：API 创建定义/运行，outbox 发出 HTTPS 请求，Go 签发的资产 URL 能返回一致 PNG 字节，实际签发的 callback token 在重启前后有效。重启及完成重放后上游请求和成功 attempt 均只有一次，回执为两条。provider 和输入资产仍由 fixture 准备，运行服务未使用注入 handler 或替换 transport。结果文件跨后续重启的限制保持不变。
+
+`.build/container-lifecycle-d0d7205e-b759-4a0c-9af0-1b9f5f073ba8/ai-flow.json` 补充活动 AI 请求：确认真实 HTTPS 上游尚未响应且连接开放后发送 SIGTERM，在 592 ms 整进程停止期间返回单一 REQUEST_CANCELLED、关闭上游连接；客户端期限 60 秒，排除客户端超时造成的假阳性。重启后该会话只有已提交的用户消息，没有虚假回复或自动重发。此过程同时验证 SCS 保存取消时不会向业务错误响应追加第二个 JSON。

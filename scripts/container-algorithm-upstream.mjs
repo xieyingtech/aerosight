@@ -14,14 +14,19 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
   const program = `
     const https = require('node:https'), fs = require('node:fs');
     const requests = [], aiRequests = [];
+    const aiHold = {started:0,closed:0};
     https.createServer({key:fs.readFileSync('/fixture/key.pem'),cert:fs.readFileSync('/fixture/cert.pem')}, async (req,res) => {
       res.setHeader('Content-Type','application/json');
       if(req.method==='GET' && req.url==='/received') return res.end(JSON.stringify(requests));
       if(req.method==='GET' && req.url==='/ai-received') return res.end(JSON.stringify(aiRequests));
+      if(req.method==='GET' && req.url==='/ai-hold') return res.end(JSON.stringify(aiHold));
       if(req.method==='POST' && req.url==='/v1/responses') {
         let raw=''; for await(const chunk of req) raw+=chunk;
         const body=JSON.parse(raw);
         aiRequests.push({body,authenticated:req.headers.authorization==='Bearer lifecycle-ai-key'});
+        if(body.input.some(item=>item.role==='user' && item.content==='acceptance wait')) {
+          aiHold.started++;res.on('close',()=>aiHold.closed++);return;
+        }
         if(body.input.some(item=>item.role==='user' && item.content==='acceptance failure')) {
           res.writeHead(503);return res.end(JSON.stringify({error:{message:'private-upstream-detail'}}));
         }
@@ -47,7 +52,7 @@ export async function startAlgorithmUpstream({ docker, network, output }) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   } catch (error) { docker('rm', '-f', name); throw error; }
-  return { read, readAI: () => readPath('/ai-received'), endpoint: 'https://algorithm.test:8443/run',
+  return { read, readAI: () => readPath('/ai-received'), readAIHold: () => readPath('/ai-hold'), endpoint: 'https://algorithm.test:8443/run',
     installTrust: app => docker('exec', app, 'sh', '-c', 'printf "%s" "$1" > /tmp/algorithm-ca.pem', 'sh', readFileSync(cert, 'utf8')),
     close: () => docker('rm', '-f', name) };
 }

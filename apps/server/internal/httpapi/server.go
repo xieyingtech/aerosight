@@ -9,7 +9,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"github.com/alexedwards/scs/postgresstore"
 	"github.com/alexedwards/scs/v2"
 	"github.com/gin-contrib/requestid"
@@ -62,11 +61,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	sessions.Store = &sessionStore{PostgresStore: store, queries: sqlcgen.New(db), timeout: sessionTimeout}
 	sessions.ErrorFunc = func(w http.ResponseWriter, r *http.Request, err error) {
 		logger.Error("session operation failed", "request_id", r.Header.Get("X-Request-ID"))
-		if errors.Is(err, context.DeadlineExceeded) {
-			writeError(w, 504, "REQUEST_TIMEOUT")
-			return
-		}
-		writeError(w, 500, "SESSION_FAILED")
+		writeSessionFailure(w, err)
 	}
 	sessions.Cookie.Name = "aerosight_session"
 	sessions.Cookie.HttpOnly = true
@@ -138,7 +133,7 @@ func (s *Server) Close() {
 func (s *Server) Handler() http.Handler {
 	origin, _ := url.Parse(s.cfg.PublicOrigin)
 	protect := csrf.Protect(s.cfg.CSRFKey, csrf.TrustedOrigins([]string{origin.Host}), csrf.Secure(strings.HasPrefix(s.cfg.PublicOrigin, "https://")), csrf.Path("/"), csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeError(w, 403, "CSRF_FAILED") })))
-	browser := s.sessions.LoadAndSave(protect(s.router))
+	browser := sessionResponseBoundary(s.sessions.LoadAndSave(protect(s.router)))
 	dispatch := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = httptransport.WithConnectionController(r, w)
 		// Correlate even requests rejected before Gin routing.

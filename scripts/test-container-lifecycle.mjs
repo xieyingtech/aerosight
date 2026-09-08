@@ -103,9 +103,9 @@ try {
   assert(page.headers.get('content-security-policy'));
   assert((await page.text()).includes('<html'));
   const cookies = new Map(); let csrf;
-  async function request(path, expected, body) {
+  async function request(path, expected, body, { timeoutMs = 5000 } = {}) {
     const response = await fetch(origin + path, {
-      method: body === undefined ? 'GET' : 'POST', signal: AbortSignal.timeout(5000),
+      method: body === undefined ? 'GET' : 'POST', signal: AbortSignal.timeout(timeoutMs),
       headers: { Cookie: [...cookies].map(([k,v]) => `${k}=${v}`).join('; '), Origin: env.PUBLIC_ORIGIN, 'Content-Type': 'application/json', ...(csrf ? { 'X-CSRF-Token': csrf } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -160,11 +160,13 @@ try {
     await Promise.race([receive(), sleep(5000).then(() => { throw new Error('SSE did not receive the post-deadline event'); })]);
   }));
   const load = { streamCount, parallelSnapshotRequests: 8, snapshotRequests: 80, heldMs: Date.now() - streamStart, sampledConnections: samples, connectionBudget: 30, postDeadlineEventReceivedByAll: true };
+  await ai.beforeStop();
   const started = Date.now();
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0', 'SIGTERM must exit successfully');
   const stopMs = Date.now() - started;
   assert(stopMs < 30000, 'shutdown exceeded default budget');
+  await ai.afterStop();
   const streamEnded = Promise.all(readers.map(async reader => { while (!(await reader.read()).done) {} return true; })).then(() => true);
   assert(await Promise.race([streamEnded, sleep(2000).then(() => false)]), 'SSE did not close');
   const connections = docker('exec', database, 'psql', '-U', 'postgres', '-Atqc', "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND backend_type='client backend'");

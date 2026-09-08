@@ -40,12 +40,44 @@ export async function verifyAIFlow({ request, upstream, project }) {
   assert.equal(retained.length, 3);
   assert.equal(retained.filter(row => row.role === 'assistant').length, 1);
   assert.equal(upstream.readAI().length, 3, 'failed call was retried unexpectedly');
+  let pending, waitingSession, waitingHistory;
   return {
+    async beforeStop() {
+      waitingSession = await (await request(base, 201, {})).json();
+      assert(Number.isSafeInteger(waitingSession.id));
+      pending = request(`${base}/${waitingSession.id}/messages`, 400, { content: 'acceptance wait' }, { timeoutMs: 60000 })
+        .then(response => response.json()).then(value => ({ value }), error => ({ error }));
+      const deadline = Date.now() + 5000;
+      while (upstream.readAIHold().started !== 1) {
+        assert(Date.now() < deadline, 'AI request did not reach the held upstream');
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.deepEqual(upstream.readAIHold(), { started: 1, closed: 0 });
+      const rows = await (await request(base, 200)).json();
+      waitingHistory = rows.find(row => row.id === waitingSession.id).messages;
+      assert.equal(waitingHistory.length, 1);
+      assert.equal(waitingHistory[0].role, 'user');
+    },
+    async afterStop() {
+      let timer;
+      try {
+        const result = await Promise.race([pending, new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error('AI client did not finish after Go shutdown')), 2000);
+        })]);
+        if (result.error) throw result.error;
+        assert.equal(result.value.error, 'REQUEST_CANCELLED');
+      } finally { clearTimeout(timer); }
+      assert.deepEqual(upstream.readAIHold(), { started: 1, closed: 1 }, 'Go did not close the upstream request');
+    },
     async afterRestart() {
       assert.deepEqual(await history(), retained);
-      assert.equal(upstream.readAI().length, 3, 'restart replayed AI requests');
-      return { sessionId: session.id, responsesRequests: 3, readToolsExecuted: 6, authenticatedHTTPS: true,
-        scopedOutputs: true, evidenceRetained: true, upstreamFailureSanitized: true, historyPreservedAfterRestart: true };
+      const rows = await (await request(base, 200)).json();
+      assert.deepEqual(rows.find(row => row.id === waitingSession.id).messages, waitingHistory);
+      assert.equal(upstream.readAI().length, 4, 'restart replayed AI requests');
+      assert.deepEqual(upstream.readAIHold(), { started: 1, closed: 1 });
+      return { sessionId: session.id, responsesRequests: 4, readToolsExecuted: 6, authenticatedHTTPS: true,
+        scopedOutputs: true, evidenceRetained: true, upstreamFailureSanitized: true, historyPreservedAfterRestart: true,
+        activeRequestCancelledOnSIGTERM: true, upstreamConnectionClosed: true, cancelledTurnHasNoAssistant: true };
     },
   };
 }
