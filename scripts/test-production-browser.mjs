@@ -11,6 +11,7 @@ import { verifyPageStates } from './browser-page-states.mjs';
 import { verifyLegacyLinks } from './browser-legacy-links.mjs';
 import { verifyMap } from './browser-map.mjs';
 import { verifyProjectWorkspaces } from './browser-project-workspaces.mjs';
+import { verifyProjectDetails } from './browser-project-details.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -119,6 +120,8 @@ try {
   if(!development) {
     const workspaces=await verifyProjectWorkspaces(page,detailURL);
     writeFileSync(resolve(output,'project-workspaces.json'),JSON.stringify(workspaces,null,2));
+    const details=await verifyProjectDetails(page,detailURL,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
+    writeFileSync(resolve(output,'project-details.json'),JSON.stringify(details,null,2));
     const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
     writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
   }

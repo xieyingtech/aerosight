@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 完成 6.3：新增 browser-project-details，在已构建生产包运行后的真实独立数据库中创建任务/运行、算法 provider/definition/version/asset/run、案件以及历史事件规则/版本/分组/事件，使用实际 Go API 和浏览器访问四类固定 query 详情路径并刷新，验证资源 ID、详情标题和任务名称/规则名称内容。团队详情直接访问、刷新及链接回 UI 创建的新项目也通过。生产测试全流程通过，证据 .build/production-browser-ec122ade-a366-41e1-b5c5-c3192ee68233/project-details.json 与 project-workspaces.json；无 pageerror/CSP violation，既有地图、权限、会话及注入拦截回归同时通过。结合十类项目工作台、项目详情、四类嵌套详情及 StaticAPIPage 公共 Suspense 边界，验证新增 ID 无需 generateStaticParams 或重新构建。嵌套数据由 SQL fixture 创建以验证静态交付/读取，未把该测试当作任务执行、算法上游或处置写入验收；这些业务契约由独立任务证据覆盖。
+
 - 6.3 项目工作台浏览器验收：新增 browser-project-workspaces，在生产 Go 静态构建之后通过现有真实 UI 创建项目，逐一直接访问及刷新 tasks/settings/realtime/assets/issues/events/devices/algorithms/connectors/agents 十个固定路径，验证标题、projectId/中文查询参数保留、事件列表跳转到案件列表、任务运行子区完成加载及项目 API 无错误。实际浏览器首次发现算法页 Zod 探测 eval 导致 CSP violation；根据 Context7 官方 jitless 文档新增统一 lib/zod.ts，在创建 schema 前禁用动态编译/探测，17 个运行时 schema 模块改用该入口，未放宽 CSP。pnpm typecheck、pnpm test:web、pnpm build 与完整生产浏览器流程通过，成功证据 .build/production-browser-29baa9d8-c2a9-4bdc-82d0-55b3b1a355bd/project-workspaces.json；原地图/会话/注入脚本拦截回归同时通过。工作台地图 style 使用既有受控背景 fixture，避免公共瓦片服务波动；嵌套任务/算法/事件/案件详情仍待新资源验收，6.3 不提前勾选。
 
 - 7.5 发布镜像验收入口：test-container-lifecycle 新增 --image，pnpm test:release-image 默认读取 aerosight:unified-acceptance；发布模式直接使用镜像内二进制与默认 user/entrypoint，不编译/挂载宿主二进制，不覆盖用户和工作目录，启动前校验 user=10001:10001、Go entrypoint、serve 命令及唯一暴露 8080/tcp，启动后核对实际 UID 且无 bind mount。结果区分 release-image/mounted-binary。用普通 nginx 镜像验证发布配置不匹配时启动前拒绝；原 mounted-binary 完整生命周期回归通过，记录 .build/container-lifecycle-ef99f91b-6bad-43ad-adaa-f12986475143/result.json。正式 Dockerfile 再次构建仍因 auth.docker.io 拉取 Debian token 连接超时失败，.build/unified-image.log 已记录，构建进程退出 1；发布模式正向验收尚未执行，7.5 仍未勾选。
