@@ -3,6 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { callbackRecoveryFixture } from './container-callback-recovery.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
@@ -105,6 +106,8 @@ try {
   await request('/api/auth/login', 200, { username: 'admin@example.com', password: 'admin' });
   const team = await (await request('/api/teams', 201, { name: 'Lifecycle team' })).json();
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Lifecycle project' })).json();
+  const callbacks = callbackRecoveryFixture({ docker, database, project, team });
+  await callbacks.beforeStop(origin);
   const streamCount = 24;
   const streamStart = Date.now();
   const setupTimeout = setTimeout(() => streamAbort.abort(new Error('SSE load setup timeout')), 10000);
@@ -159,9 +162,10 @@ try {
   await ready();
   await request('/api/auth/session', 200);
   await request(`/api/projects/${project.id}/snapshot`, 200);
+  const callbackRecovery = await callbacks.afterRestart(origin);
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
-  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, load, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'concurrent SSE and snapshot load within pool budget', 'SSE survives ordinary API deadline and closes on SIGTERM', 'database connections released', 'restart preserves session and project'], passed: true }, null, 2));
+  writeFileSync(resolve(output, 'result.json'), JSON.stringify({ image, mode: releaseImage ? 'release-image' : 'mounted-binary', stopMs, load, callbackRecovery, checks: ['production embedded pages', 'no Node or pnpm', 'Go PID 1 and one TCP listener', 'login and writes', 'concurrent SSE and snapshot load within pool budget', 'SSE survives ordinary API deadline and closes on SIGTERM', 'database connections released', 'restart preserves session and project', 'signed callback completion and replay after restart'], passed: true }, null, 2));
   console.log(`Container lifecycle passed: ${output}`);
 } finally {
   streamAbort.abort();

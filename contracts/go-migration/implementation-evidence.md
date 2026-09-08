@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- 8.2/8.3 算法回调跨进程重启补验：正式镜像测试新增 container-callback-recovery，在独立 PostGIS 预置进行中 run，向真实统一端口发送 HMAC 签名 processing 回调；经过 24 条 SSE/80 次快照负载和 SIGTERM 后重启同容器，验证 waiting_callback 和原回执保留。重放旧 processing 返回 duplicate=true；新 completed 回调写入 succeeded、原始结果对象键/checksum/finished_at；重复 completed 后完整状态及两条回执数量均不变。pnpm test:release-image 通过，证据 .build/container-lifecycle-55780be7-884a-4de8-b8e0-4b1bae4671e6/result.json 的 callbackRecovery，容器和网络已清理。fixture 未执行最初上游调用，也未验证结果文件跨下一次重启持久化；完整业务链路和全部任务恢复仍待验证，8.2/8.3 不提前勾选。
+
 - 8.3 HTTP/SSE 并发退出补验：test-container-lifecycle 扩展为 24 条并发 SSE、8 并发分批共 80 次真实快照 API 读取，十次数据库客户端采样均为 14，低于默认 HTTP/worker 合计预算 30。等待超过普通 API 30 秒期限后才插入唯一测试 project_event，并要求全部连接读到该新事件，避免缓存心跳造成假阳性；实际等待/收取约 34.1 秒。pnpm test:release-image 在正式镜像 sha256:f8f7858bb2d2a43a98ff7d0a1194e1dcd6793d4e9964b3f5cd075a7761651d44 上通过，SIGTERM 506 ms、所有 SSE EOF、数据库连接归零、重启会话/项目保留，.build/container-lifecycle-68d13c00-1a3d-4e91-b44c-4f96badb8252/result.json 保存 load 详情。pnpm test:dev-proxy 同轮回归通过，.build/dev-proxy-93dd3ac4-7921-4808-b94b-830646ee0419 及 .build/dev-proxy-regression.log 记录真实 Next rewrites 的 Cookie/CSRF/写入/Range/HEAD/SSE 首帧和取消传递；测试容器/进程已清理。本批验证 HTTP/SSE 负载和连接预算采样，不替代活动任务/算法/AI 的退出恢复，8.3 保持未勾选。
 
 - 8.1 演练命令修复：fresh-environment-drill 原先仍要求已移除的 AI_PROVIDER/AI_MODEL，且 Windows spawnSync 直接运行 pnpm 不兼容。现从脚本位置解析仓库根目录，核对 CSRF_AUTH_KEY/AEROSIGHT_ENV/HTTP_LISTEN_ADDRESS/PUBLIC_ORIGIN/GO_API_ORIGIN 等当前配置，拒绝旧 AI 环境入口，并使用固定参数的 Windows cmd 启动 pnpm。输出 schemaVersion=2 明确范围为配置、迁移和统一生产构建。pnpm drill:fresh-environment 实际退出 0，.build/fresh-environment-drill.log 记录配置测试、真实 PostGIS 迁移回归和完整 pnpm build 全通过（迁移约 9.2 秒，构建约 25.4 秒）。此修复使保留的演练入口可以执行，没有把它当作 8.2 的设备/任务/算法/AI 完整业务端到端，8.1/8.2 继续待最终收尾。
