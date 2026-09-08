@@ -3,12 +3,27 @@ package dji
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"aerosight/server/internal/credentials"
 )
 
 type secretFixture struct{ credentials MQTTCredentials }
+
+func TestGatewaySubscriptionsIncludeChildTelemetry(t *testing.T) {
+	for _, tc := range []struct{ topics, want []string }{
+		{[]string{"thing/product/GW001/osd", "thing/product/GW001/state"}, []string{"thing/product/GW001/osd", "thing/product/GW001/state", "thing/product/+/state", "thing/product/+/osd"}},
+		{[]string{"thing/product/GW001/osd", "thing/product/+/osd"}, []string{"thing/product/GW001/osd", "thing/product/+/osd"}},
+		{[]string{"tenant/3/#"}, []string{"tenant/3/#"}},
+	} {
+		raw, _ := json.Marshal(map[string]any{"topics": tc.topics, "gatewaySerials": []string{"GW001"}})
+		config, err := BuildMQTTConfig(context.Background(), AdapterLease{ProjectID: 3, AdapterID: 7, ConfigJSON: raw}, secretFixture{})
+		if err != nil || !reflect.DeepEqual(config.Topics, tc.want) {
+			t.Fatalf("topics %v want %v: %v", config.Topics, tc.want, err)
+		}
+	}
+}
 
 func (fixture secretFixture) ResolveMQTT(context.Context, AdapterLease) (MQTTCredentials, error) {
 	return fixture.credentials, nil

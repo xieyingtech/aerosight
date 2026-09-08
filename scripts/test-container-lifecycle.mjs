@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { callbackRecoveryFixture } from './container-callback-recovery.mjs';
 import { startAlgorithmUpstream } from './container-algorithm-upstream.mjs';
 import { verifyAIFlow } from './container-ai-flow.mjs';
+import { startDeviceFixture } from './container-device-flow.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const id = randomUUID();
@@ -48,12 +49,14 @@ if (releaseImage) {
 let networkCreated = false, dbCreated = false, appCreated = false;
 let upstreamNetworkCreated = false;
 let upstream;
+let deviceFixture;
 const streamAbort = new AbortController();
 try {
   docker('network', 'create', network); networkCreated = true;
   // TEST-NET-3 stays inside an isolated bridge; no production private-host bypass.
   docker('network', 'create', '--internal', '--subnet', '203.0.113.0/24', upstreamNetwork); upstreamNetworkCreated = true;
   upstream = await startAlgorithmUpstream({ docker, network: upstreamNetwork, output });
+  deviceFixture = startDeviceFixture({ docker, network, output, root, arch, image });
   docker('run', '-d', '--name', database, '--network', network, '-e', 'POSTGRES_PASSWORD=lifecycle-test', 'postgis/postgis:17-3.5'); dbCreated = true;
   const env = {
     DATABASE_URL: `postgresql://postgres:lifecycle-test@${database}:5432/postgres`,
@@ -120,6 +123,7 @@ try {
   const callbacks = await callbackRecoveryFixture({ docker, database, app, project, team, request, upstream });
   await callbacks.beforeStop(origin);
   const ai = await verifyAIFlow({ request, upstream, project });
+  const devices = await deviceFixture.verify({ request, database, project });
   const streamCount = 24;
   const streamStart = Date.now();
   const setupTimeout = setTimeout(() => streamAbort.abort(new Error('SSE load setup timeout')), 10000);
@@ -179,6 +183,8 @@ try {
   await request(`/api/projects/${project.id}/snapshot`, 200);
   const callbackRecovery = await callbacks.afterRestart(origin);
   const aiFlow = await ai.afterRestart();
+  const deviceFlow = await devices.afterRestart();
+  writeFileSync(resolve(output, 'device-flow.json'), JSON.stringify(deviceFlow, null, 2));
   writeFileSync(resolve(output, 'ai-flow.json'), JSON.stringify(aiFlow, null, 2));
   docker('kill', '--signal=TERM', app);
   assert.equal(docker('wait', app), '0');
@@ -188,6 +194,7 @@ try {
   streamAbort.abort();
   if (appCreated) { try { writeFileSync(resolve(output, 'application.log'), docker('logs', app)); } finally { docker('rm', '-f', app); } }
   if (dbCreated) docker('rm', '-f', database);
+  if (deviceFixture) deviceFixture.close();
   if (upstream) upstream.close();
   if (upstreamNetworkCreated) docker('network', 'rm', upstreamNetwork);
   if (networkCreated) docker('network', 'rm', network);

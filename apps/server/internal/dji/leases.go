@@ -194,8 +194,25 @@ func BuildMQTTConfig(ctx context.Context, lease AdapterLease, resolver SecretRes
 	if err != nil {
 		return MQTTConfig{}, err
 	}
+	// Child aircraft publish state/OSD under their own serial numbers. The
+	// setup API only knows gateways; route validation still requires an owned
+	// gateway in every child envelope, and projection resolves its scoped identity.
+	topics := append([]string(nil), configured.Topics...)
+	seen := make(map[string]bool, len(topics))
+	for _, topic := range topics {
+		seen[topic] = true
+	}
+	for _, serial := range configured.GatewaySerials {
+		for _, suffix := range []string{"state", "osd"} {
+			child := "thing/product/+/" + suffix
+			if seen["thing/product/"+strings.TrimSpace(serial)+"/"+suffix] && !seen[child] {
+				topics = append(topics, child)
+				seen[child] = true
+			}
+		}
+	}
 	return MQTTConfig{
 		BrokerURL: lease.BrokerURL, ClientID: configured.ClientID,
-		Username: credentials.Username, Password: []byte(credentials.Password), Topics: configured.Topics,
+		Username: credentials.Username, Password: []byte(credentials.Password), Topics: topics,
 	}, nil
 }
