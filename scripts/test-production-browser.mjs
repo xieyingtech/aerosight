@@ -12,6 +12,7 @@ import { verifyLegacyLinks } from './browser-legacy-links.mjs';
 import { verifyMap } from './browser-map.mjs';
 import { verifyProjectWorkspaces } from './browser-project-workspaces.mjs';
 import { verifyProjectDetails } from './browser-project-details.mjs';
+import { verifyMediaFrame } from './browser-media-frame.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
@@ -67,7 +68,7 @@ try {
   const executable=development ? process.execPath : resolve(root,'.build',process.platform==='win32'?'aerosight.exe':'aerosight');
   app=spawn(executable,development ? [resolve(root,'scripts/dev.mjs')] : ['serve'],{
     cwd:development ? root : output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:mode,PORT:String(webPort ?? ''),GO_API_ORIGIN:`http://127.0.0.1:${apiPort}`,DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
-      AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,
+      AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,CSP_MEDIA_ORIGINS:'https://media.example',
       OBJECT_STORAGE_LOCAL_ROOT:resolve(output,'objects'),CALLBACK_PUBLIC_BASE_URL:'',MEDIA_API_BASE_URL:'',MEDIA_ADMIN_USER:'',MEDIA_ADMIN_PASSWORD:'',DJI_FLIGHTHUB_ENABLED:'false',GIN_MODE:'release'}
   });
   let ready=false;
@@ -124,6 +125,8 @@ try {
     writeFileSync(resolve(output,'project-details.json'),JSON.stringify(details,null,2));
     const map=await verifyMap(page,detailURL,output,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-c',sql]));
     writeFileSync(resolve(output,'map.json'),JSON.stringify(map,null,2));
+    const mediaFrame=await verifyMediaFrame(page,context,detailURL,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
+    writeFileSync(resolve(output,'media-frame.json'),JSON.stringify(mediaFrame,null,2));
   }
   assert.deepEqual(errors,[],'new resource hydration/runtime errors');
   assert.deepEqual(await page.evaluate(()=>window.cspViolations),[],'new resource CSP violations');
