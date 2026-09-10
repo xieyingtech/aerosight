@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "taskRunId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "flight-task-create"
+        },
+        "waylineResourceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "x-trim": true
+            },
+            "timeZone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "x-trim": true
+            },
+            "taskType": {
+              "type": "string",
+              "enum": [
+                "immediate",
+                "timed",
+                "recurring",
+                "continuous"
+              ]
+            },
+            "rthAltitude": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "rthMode": {
+              "type": "string",
+              "enum": [
+                "optimal",
+                "preset"
+              ]
+            },
+            "outOfControlActionInFlight": {
+              "type": "string",
+              "enum": [
+                "return_home",
+                "continue_task"
+              ]
+            },
+            "waylinePrecisionType": {
+              "type": "string",
+              "enum": [
+                "gps",
+                "rtk"
+              ]
+            },
+            "resumableStatus": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "manual"
+              ]
+            },
+            "repeatType": {
+              "type": "string",
+              "enum": [
+                "nonrepeating",
+                "daily",
+                "weekly",
+                "absolute_monthly",
+                "relative_monthly"
+              ]
+            },
+            "repeatOption": {
+              "type": "object",
+              "properties": {
+                "interval": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "daysOfWeek": {
+                  "maxItems": 7,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 6
+                  }
+                },
+                "daysOfMonth": {
+                  "maxItems": 31,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 31
+                  }
+                },
+                "weekOfMonth": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4
+                }
+              },
+              "additionalProperties": false
+            },
+            "landingDeviceId": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "beginAt": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "endAt": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "recurringTaskStartTimes": {
+              "maxItems": 24,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "continuousTaskPeriods": {
+              "maxItems": 24,
+              "type": "array",
+              "items": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                ]
+              }
+            },
+            "minimumBatteryCapacity": {
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "name",
+            "timeZone",
+            "taskType"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "taskRunId",
+        "approvalRequestId",
+        "idempotencyKey",
+        "action",
+        "waylineResourceId",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "taskRunId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "flight-task-status"
+        },
+        "targetResourceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "desiredStatus": {
+              "type": "string",
+              "enum": [
+                "suspended",
+                "restored"
+              ]
+            }
+          },
+          "required": [
+            "desiredStatus"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "taskRunId",
+        "approvalRequestId",
+        "idempotencyKey",
+        "action",
+        "targetResourceId",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "taskRunId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "flight-task-resumption"
+        },
+        "targetResourceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "taskRunId",
+        "approvalRequestId",
+        "idempotencyKey",
+        "action",
+        "targetResourceId",
+        "request"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

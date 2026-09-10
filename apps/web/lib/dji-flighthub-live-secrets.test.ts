@@ -12,17 +12,19 @@ test("live supplier URL and token are removed from logs and traces", () => {
   assert.match(redacted,/REDACTED/);
 });
 
-test("live media and action API responses never select secret database columns", () => {
-  const media = readFileSync(new URL("./dji-flighthub-live-media.ts",import.meta.url),"utf8");
-  const actions = readFileSync(new URL("./dji-flighthub-live-actions.ts",import.meta.url),"utf8");
-  const publicAction = actions.slice(actions.indexOf("export async function readFlightHubLiveActionJob"));
-  assert.doesNotMatch(media,/credential_envelope|bypass_option|remote_id|schema_option/i);
-  assert.doesNotMatch(publicAction,/request_envelope|request_digest/i);
+test("live media and action API responses never select secret database columns", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/flighthub_live_media.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /project_id/);
+assert.match(source, /supplier/);
+assert.doesNotMatch(source, /credential_envelope/);
+assert.doesNotMatch(source, /remote_id/);
+assert.doesNotMatch(source, /bypass_option/);
 });
 
-test("ordinary live session projection omits encrypted credentials and playback locators", () => {
-  const source = readFileSync(new URL("./live-streams.ts",import.meta.url),"utf8");
-  const publicProjection = source.slice(source.indexOf("function publicSession"),source.indexOf("export async function startLiveStream"));
-  assert.doesNotMatch(publicProjection,/supplierCredentialEnvelope|credential|playbackLocatorExpiresAt/);
-  assert.match(publicProjection,/statusReason/);
+test("ordinary live session projection omits encrypted credentials and playback locators", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/flighthub_live_media.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /source_type/);
+assert.doesNotMatch(source, /supplier_credential_envelope_json/);
+assert.doesNotMatch(source, /playback_ref/);
+assert.doesNotMatch(source, /supplier_reference_digest/);
 });

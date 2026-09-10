@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createProjectAction } from "@/app/actions";
+import { apiJSON, APIError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 type ManagedTeam = { id: number; name: string };
 
 export function NewProjectForm({ teams }: { teams: ManagedTeam[] }) {
-  const [state, action, pending] = useActionState(createProjectAction, {});
+  const [state, action, pending] = useActionState(async (_: { error?: string }, form: FormData): Promise<{ error?: string }> => {
+    const name = String(form.get("name") ?? "").trim();
+    const teamId = Number(form.get("teamId"));
+    if (!name || name.length > 100) return { error: "请输入 1–100 字符的项目名称" };
+    if (!Number.isSafeInteger(teamId) || teamId <= 0) return { error: "请选择团队" };
+    try { const project = await apiJSON<{ id: number }>("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamId, name }) }); window.location.assign(`/projects/detail/?projectId=${project.id}`); return {}; }
+    catch (error) { return { error: error instanceof APIError && error.status === 403 ? "你没有在此团队创建项目的权限。" : "创建项目失败，请重试。" }; }
+  }, {});
 
   return (
     <Card className="max-w-xl">

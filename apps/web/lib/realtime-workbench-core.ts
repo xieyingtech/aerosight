@@ -35,8 +35,10 @@ export function resolveWorkbenchSelection(
   return { deviceId: null, streamId: null };
 }
 
-export function workbenchQuery(selection: RealtimeWorkbenchSelection) {
-  const query = new URLSearchParams();
+export function workbenchQuery(selection: RealtimeWorkbenchSelection, currentQuery = "") {
+  const query = new URLSearchParams(currentQuery);
+  query.delete("deviceId");
+  query.delete("streamId");
   if (selection.deviceId) query.set("deviceId", String(selection.deviceId));
   if (selection.streamId) query.set("streamId", String(selection.streamId));
   return query.toString();

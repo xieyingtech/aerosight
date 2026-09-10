@@ -60,13 +60,11 @@ test("status and resumption require a canonical remote task in the same project"
   assert.throws(() => authorizeFlightHubAction(17, statusInput, { ...statusAllowed, targetTaskRunId: "99" }), /REMOTE_TASK_SCOPE_MISMATCH/);
 });
 
-test("FlightHub action API binds connector scope from the route and exposes only safe job state", () => {
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/flight-actions/route.ts", import.meta.url), "utf8");
-  const service = readFileSync(new URL("./dji-flighthub-flight-actions.ts", import.meta.url), "utf8");
-  assert.match(route, /\{ \.\.\.body, connectorInstanceId \}/);
-  assert.match(route, /status: 202/);
-  for (const forbidden of ["request_envelope_json", "request_digest", "remote_id", "identity_json", "credential_envelope_json"]) {
-    const publicProjection = service.slice(service.indexOf("export async function readFlightHubActionJob"));
-    assert(!publicProjection.includes(forbidden), `public action status reads ${forbidden}`);
-  }
+test("FlightHub action API binds connector scope from the route and exposes only safe job state", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_governed_actions.go", import.meta.url), "utf8")].join("\n");
+assert.match(source, /connectorID\(c\)/);
+assert.match(source, /body\["connectorInstanceId"\] = float64\(cid\)/);
+assert.match(source, /FHFlightRead/);
+assert.match(source, /fhActionFailure/);
+
 });

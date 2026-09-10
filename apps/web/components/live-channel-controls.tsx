@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { PlayIcon, RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -23,13 +25,15 @@ export function LiveChannelControls({ projectId, device, activeStreamKeys = [], 
     if (pendingKey) return;
     setPendingKey(streamKey);
     setError(null);
-    const response = await fetch(`/api/projects/${projectId}/devices/${Number(device.id)}/live-streams`, {
+    try {
+    const response = await apiFetch(`/api/projects/${projectId}/devices/${Number(device.id)}/live-streams`, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ streamKey })
     });
     const result = await response.json() as { error?: string; session?: Record<string, unknown> & { id: number; status: string } };
-    setPendingKey(null);
     if (!response.ok || !result.session) { setError(result.error ?? "启动直播失败"); return; }
     await onStarted(result.session);
+    } catch { setError("启动请求失败，请检查最新直播状态后重试。"); }
+    finally { setPendingKey(null); }
   };
 
   return <section className="space-y-2 rounded-xl border bg-card p-4" aria-label="视频频道控制">

@@ -48,12 +48,6 @@ test("stale preview and cross-tenant target fail closed", () => {
   "remote-delete-and-local-mark-missing");
 });
 
-test("model delete API never exposes encrypted payloads or remote identifiers", () => {
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/model-actions/route.ts", import.meta.url), "utf8");
-  const service = readFileSync(new URL("./dji-flighthub-model-actions.ts", import.meta.url), "utf8");
-  const publicProjection = service.slice(service.indexOf("export async function readFlightHubModelDeleteJob"));
-  assert.match(service, /withAuditedProjectWrite/);
-  assert.match(service, /flighthub\.model_delete\.requested/);
-  assert.doesNotMatch(route, /request_envelope|remote_id/i);
-  assert.doesNotMatch(publicProjection, /request_envelope|requestDigest|remote_id/i);
+test("model delete API never exposes encrypted payloads or remote identifiers", async () => {
+const handler=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_model_actions.go", import.meta.url), "utf8");const query=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_model_actions.sql", import.meta.url), "utf8");const projection=query.slice(query.indexOf("-- name: FHModelRead"));assert.match(handler,/database.AuditedWrite/);assert.match(handler,/credentials.EncryptJSON/);assert.doesNotMatch(projection,/request_envelope|requestDigest|remote_id/);assert.match(projection,/connector_instance_id/);
 });

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "expectedVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "clientKey": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "detectionId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "confirm",
+        "false_positive",
+        "category_correction",
+        "disposition"
+      ]
+    },
+    "correctedLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "x-trim": true
+    },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "resolved",
+        "monitoring",
+        "remediated",
+        "accepted_risk",
+        "not_applicable"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "x-trim": true
+    }
+  },
+  "required": [
+    "expectedVersion",
+    "clientKey",
+    "detectionId",
+    "action",
+    "reason"
+  ],
+  "additionalProperties": false
+}

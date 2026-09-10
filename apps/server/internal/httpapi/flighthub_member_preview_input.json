@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "members": {
+      "minItems": 1,
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "x-trim": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "project-member",
+              "project-admin"
+            ]
+          },
+          "nickname": {
+            "type": "string",
+            "maxLength": 128,
+            "x-trim": true
+          }
+        },
+        "required": [
+          "userId",
+          "role",
+          "nickname"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "members"
+  ],
+  "additionalProperties": false
+}

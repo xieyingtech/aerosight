@@ -1,19 +1,25 @@
+"use client";
+
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { listProjects } from "@/lib/data";
 import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export default async function ProjectsPage({
-  searchParams
-}: {
-  searchParams: Promise<{ search?: string }>;
-}) {
-  const params = await searchParams;
-  const projects = await listProjects("", params.search);
+export default function ProjectsPage() {
+  return <Suspense fallback={<p role="status">正在加载…</p>}><ProjectsContent /></Suspense>;
+}
+
+function ProjectsContent() {
+  const params = useSearchParams();
+  const search = params.get("search") ?? "";
+  const state = useAPI<Record<string, unknown>[]>(`/api/projects?search=${encodeURIComponent(search)}`);
+  return <APIStateView state={state}>{(projects) => <ProjectsView projects={projects} params={{ search }} />}</APIStateView>;
+}
+
+function ProjectsView({ projects, params }: { projects: Record<string, unknown>[]; params: { search: string } }) {
 
   return (
     <Page
@@ -41,7 +47,7 @@ export default async function ProjectsPage({
             label: "项目",
             render: (item) => (
               <div>
-                <Link className="font-medium text-primary hover:underline" href={`/projects/${String(item.id)}`}>
+                <Link className="font-medium text-primary hover:underline" href={`/projects/detail/?projectId=${String(item.id)}`}>
                   <span className="text-muted-foreground">{String(item.teamName)}/</span>
                   {String(item.name)}
                 </Link>
@@ -57,3 +63,8 @@ export default async function ProjectsPage({
     </Page>
   );
 }
+
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAPI } from "@/lib/use-api";
+import { APIStateView } from "@/components/api-state";

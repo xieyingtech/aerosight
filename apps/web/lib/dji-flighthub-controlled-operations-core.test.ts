@@ -46,9 +46,12 @@ test("old clients cannot forge connector scope or capability gates through the w
   assert.deepEqual(calls, []);
 });
 
-test("controlled operation result API omits encrypted requests and vendor result payloads", () => {
-  const service = readFileSync(new URL("./dji-flighthub-controlled-operations.ts", import.meta.url), "utf8");
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/controlled-operations/route.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(service, /request_envelope_json|result_envelope_json|credential_envelope_json|result_json/);
-  assert.match(route, /readFlightHubControlledOperations/);
+test("controlled operation result API omits encrypted requests and vendor result payloads", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_controlled_operations.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /connector_action_jobs/);
+assert.match(source, /connector_management_write_jobs/);
+assert.match(source, /limit 50/);
+assert.doesNotMatch(source, /request_envelope/);
+assert.doesNotMatch(source, /result_envelope/);
+assert.doesNotMatch(source, /credential_envelope/);
 });

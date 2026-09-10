@@ -49,10 +49,6 @@ test("each executable action resolves to an independent capability and feature f
   assert.equal(new Set(plans.map((plan) => plan.featureFlag)).size, plans.length);
 });
 
-test("live action API and public job projection never expose encrypted requests", () => {
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/live-actions/route.ts", import.meta.url), "utf8");
-  const service = readFileSync(new URL("./dji-flighthub-live-actions.ts", import.meta.url), "utf8");
-  const publicProjection = service.slice(service.indexOf("export async function readFlightHubLiveActionJob"));
-  assert.doesNotMatch(route, /request_envelope|credential_envelope|schemaOption/i);
-  assert.doesNotMatch(publicProjection, /request_envelope|requestDigest/i);
+test("live action API and public job projection never expose encrypted requests", async () => {
+const handler=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_actions.go", import.meta.url), "utf8");const query=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_live_actions.sql", import.meta.url), "utf8");const projection=query.slice(query.indexOf("-- name: FHLiveRead"));assert.match(handler,/database.AuditedWrite/);assert.match(handler,/credentials.EncryptJSON/);assert.doesNotMatch(projection,/request_envelope|requestDigest|remote_id/);assert.match(projection,/connector_instance_id/);
 });

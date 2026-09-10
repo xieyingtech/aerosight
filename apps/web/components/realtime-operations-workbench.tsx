@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, WrenchIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -63,7 +65,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const refresh = useCallback(async (selectStreamId?: number) => {
     setRefreshing(true);
     try {
-      const response = await fetch(`/api/projects/${snapshot.project.id}/snapshot`, { cache: "no-store" });
+      const response = await apiFetch(`/api/projects/${snapshot.project.id}/snapshot`, { cache: "no-store" });
       if (!response.ok) return null;
       const next = await response.json() as ProjectSituationSnapshot;
       setSnapshot(next);

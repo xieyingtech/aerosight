@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 export const startAlgorithmRunInputSchema = z.object({
   configurationSnapshotId: z.coerce.number().int().positive().optional(),

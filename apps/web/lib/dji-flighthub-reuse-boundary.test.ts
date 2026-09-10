@@ -9,12 +9,12 @@ async function readRepoFile(relativePath: string) {
 test("FlightHub reuses the generic connector and device persistence boundary", async () => {
   const schema = await readRepoFile("db/schema.sql");
   for (const [label, pattern] of [
-    ["connector definitions", /create table\s+"?connector_definitions"?/i],
-    ["connector instances", /create view\s+"?connector_instances"?/i],
-    ["connector sync runs", /create table\s+"?connector_sync_runs"?/i],
-    ["external device identities", /create table\s+"?device_external_identities"?/i],
-    ["device connector bindings", /create table\s+"?device_connector_bindings"?/i],
-    ["outbox events", /create table\s+"?outbox_events"?/i],
+    ["connector definitions", /create table\s+(?:public\.)?"?connector_definitions"?/i],
+    ["connector instances", /create view\s+(?:public\.)?"?connector_instances"?/i],
+    ["connector sync runs", /create table\s+(?:public\.)?"?connector_sync_runs"?/i],
+    ["external device identities", /create table\s+(?:public\.)?"?device_external_identities"?/i],
+    ["device connector bindings", /create table\s+(?:public\.)?"?device_connector_bindings"?/i],
+    ["outbox events", /create table\s+(?:public\.)?"?outbox_events"?/i],
     ["credential envelope", /"?credential_envelope_json"?\s+jsonb/i],
   ] as const) {
     assert(
@@ -35,12 +35,12 @@ test("FlightHub reuses the generic connector and device persistence boundary", a
 
 test("FlightHub can reuse connector runtime, encrypted credentials, outbox, and DJI product types", async () => {
   const [registry, synchronizer, credentials, outbox, dock2, dock3] = await Promise.all([
-    readRepoFile("apps/worker/internal/connector/registry.go"),
-    readRepoFile("apps/worker/internal/connector/sync.go"),
-    readRepoFile("apps/worker/internal/credentials/credentials.go"),
-    readRepoFile("apps/worker/internal/outbox/outbox.go"),
-    readRepoFile("apps/worker/internal/dji/products.go"),
-    readRepoFile("apps/worker/internal/dji/dock3_products.go"),
+    readRepoFile("apps/server/internal/connector/registry.go"),
+    readRepoFile("apps/server/internal/connector/sync.go"),
+    readRepoFile("apps/server/internal/credentials/credentials.go"),
+    readRepoFile("apps/server/internal/outbox/outbox.go"),
+    readRepoFile("apps/server/internal/dji/products.go"),
+    readRepoFile("apps/server/internal/dji/dock3_products.go"),
   ]);
 
   assert.match(registry, /type ExternalDevice struct/);

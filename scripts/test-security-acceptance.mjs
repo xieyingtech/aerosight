@@ -24,8 +24,6 @@ run("pnpm", ["--dir", "apps/web", "exec", "node", "--test",
   "lib/outbound-url-policy.test.ts",
   "lib/media-access-core.test.ts",
   "lib/media-ingestion-core.test.ts",
-  "lib/project-snapshot.test.ts",
-  "lib/project-replay-core.test.ts",
   "lib/replay-policy.test.ts",
   "lib/approval-core.test.ts",
   "lib/task-run-core.test.ts",
@@ -34,8 +32,10 @@ run("pnpm", ["--dir", "apps/web", "exec", "node", "--test",
   "lib/report-aggregation-core.test.ts"
 ]);
 
+run(process.execPath, ["--test", "contracts/go-migration/legacy-web/project-snapshot.test.ts", "contracts/go-migration/legacy-web/project-replay-core.test.ts"]);
+
 run("go", ["test", "./internal/agent", "./internal/dji", "./internal/mission", "./internal/observability"], {
-  cwd: resolve(root, "apps/worker"),
+  cwd: resolve(root, "apps/server"),
   env: { ...process.env, GOPROXY: "off", GOSUMDB: "off" }
 });
 

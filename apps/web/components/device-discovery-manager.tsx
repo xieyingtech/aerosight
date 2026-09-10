@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
 import { AlertTriangleIcon, CheckIcon, RefreshCwIcon, ScanSearchIcon, XIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ type Props = {
   deviceTypes: DeviceTypeOption[];
   connectors: DiscoveryConnector[];
   canManage: boolean;
+  onChanged: () => void;
 };
 
 const STATUS_ORDER: Array<DiscoveryStatus | "all"> = ["all", "discovered", "conflicted", "managed", "missing", "ignored"];
@@ -59,8 +60,8 @@ function DiscoveryRow({ item, projectId, deviceTypes, canManage, busy, act }: {
   </article>;
 }
 
-export function DeviceDiscoveryManager({ projectId, discoveries, deviceTypes, connectors, canManage }: Props) {
-  const router = useRouter();
+export function DeviceDiscoveryManager({ projectId, discoveries, deviceTypes, connectors, canManage, onChanged }: Props) {
+
   const [status, setStatus] = useState<DiscoveryStatus | "all">("all");
   const [connectorId, setConnectorId] = useState("all");
   const [query, setQuery] = useState("");
@@ -70,10 +71,10 @@ export function DeviceDiscoveryManager({ projectId, discoveries, deviceTypes, co
   async function act(url: string, body: unknown, method = "PATCH") {
     setBusyKey(url); setError("");
     try {
-      const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const response = await apiFetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error ?? "操作失败");
-      router.refresh();
+      onChanged();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "操作失败");
     } finally { setBusyKey(""); }

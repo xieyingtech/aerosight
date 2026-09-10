@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { CrosshairIcon, ImageIcon, InfoIcon, RadioTowerIcon } from "lucide-react";
 import { ProjectMap } from "@/components/project-map";
@@ -31,7 +33,7 @@ export function SituationExplorer({ snapshot, mapClassName }: { snapshot: Projec
     const controller = new AbortController();
     setReplayStatus("loading");
     const query = new URLSearchParams({ from: state.range.from, to: state.range.to });
-    fetch(`/api/projects/${snapshot.project.id}/replay?${query}`, { signal: controller.signal, cache: "no-store" })
+    apiFetch(`/api/projects/${snapshot.project.id}/replay?${query}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => { if (!response.ok) throw new Error("replay request failed"); return response.json() as Promise<ProjectReplay>; })
       .then((value) => { setReplay(value); setReplayStatus("idle"); })
       .catch((error) => { if (error?.name !== "AbortError") setReplayStatus("error"); });

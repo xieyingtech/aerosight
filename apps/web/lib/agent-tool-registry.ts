@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 import type { ProjectPermission } from "./project-permission-policy.ts";
 import { inspectionTaskDraftInputSchema, issueDraftInputSchema, reportDraftInputSchema } from "./agent-draft-tools-core.ts";
 import { agentMissionStartInputSchema } from "./agent-mission-start-core.ts";

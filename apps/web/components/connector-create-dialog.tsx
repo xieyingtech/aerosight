@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { ArrowLeftIcon, CheckIcon, CloudIcon, PlusIcon } from "lucide-react";
 
 import { DjiFlightHubSetup } from "@/components/dji-flighthub-wizard";
@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 
 type ConnectorType = "dji.flighthub2";
 
-export function ConnectorCreateDialog({ projectId }: { projectId: number }) {
-  const router = useRouter();
+export function ConnectorCreateDialog({ projectId, onChanged }: { projectId: number; onChanged: () => void }) {
+
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ConnectorType | null>(null);
 
@@ -22,7 +22,7 @@ export function ConnectorCreateDialog({ projectId }: { projectId: number }) {
 
   const handleCreated = () => {
     handleOpenChange(false);
-    router.refresh();
+    onChanged();
   };
 
   return <Dialog onOpenChange={handleOpenChange} open={open}>

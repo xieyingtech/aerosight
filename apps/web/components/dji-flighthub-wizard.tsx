@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { BoxesIcon, ExternalLinkIcon, KeyRoundIcon, Loader2Icon, MapIcon, PlaneTakeoffIcon, RefreshCwIcon, ShieldCheckIcon, UnplugIcon } from "lucide-react";
@@ -126,7 +128,7 @@ export function DjiFlightHubSetup({ projectId, onCreated }: { projectId: number;
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/projects`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/projects`, {
         method: "POST", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify({ token }),
       });
       const data = await response.json() as { projects?: FlightHubProject[] } & SafeErrorResponse;
@@ -148,7 +150,7 @@ export function DjiFlightHubSetup({ projectId, onCreated }: { projectId: number;
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub`, {
         method: "POST", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify({ token, projectUuid: selectedProject }),
       });
       const data = await response.json() as SafeErrorResponse;
@@ -226,7 +228,7 @@ export function DjiFlightHubConnections({
   }, [initialConnectors, initialIdentities, initialSyncRuns]);
 
   const refresh = async () => {
-    const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub`, { cache: "no-store" });
+    const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub`, { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json() as PageData;
     setConnectors(data.connectors);
@@ -237,7 +239,7 @@ export function DjiFlightHubConnections({
   const loadDiagnostics = async (connectorId: string) => {
     setDiagnosticsLoading(true);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, { cache: "no-store" });
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, { cache: "no-store" });
       if (!response.ok) return;
       const data = await response.json() as FlightHubDiagnosticsPayload;
       setDiagnostics((current) => ({ ...current, [connectorId]: data }));
@@ -256,7 +258,7 @@ export function DjiFlightHubConnections({
     if (action === "disconnect" && !window.confirm("断开后会停止新同步，但保留设备、身份和审计历史。确认断开？")) return;
     setBusyAction(`${action}:${connectorId}`); setError(null); setNotice(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}${action === "sync" ? "/sync" : ""}`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}${action === "sync" ? "/sync" : ""}`, {
         method: action === "sync" ? "POST" : action === "reconnect" ? "PUT" : "DELETE", cache: "no-store",
       });
       const data = await response.json() as SafeErrorResponse & { deduplicated?: boolean };
@@ -280,7 +282,7 @@ export function DjiFlightHubConnections({
     setBusyAction(`token:${connectorId}`); setError(null); setNotice(null);
     setUpdateTokens((current) => ({ ...current, [connectorId]: "" }));
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/token`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/token`, {
         method: "PUT", headers: { "content-type": "application/json" }, cache: "no-store", body: JSON.stringify({ token: replacement }),
       });
       const data = await response.json() as SafeErrorResponse;
@@ -298,7 +300,7 @@ export function DjiFlightHubConnections({
   const reprobeCapabilities = async (connectorId: string) => {
     setBusyAction(`probe:${connectorId}`); setError(null); setNotice(null);
     try {
-      const response = await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, {
+      const response = await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/diagnostics`, {
         method: "POST", cache: "no-store",
       });
       const data = await response.json() as SafeErrorResponse & { deduplicated?: boolean };

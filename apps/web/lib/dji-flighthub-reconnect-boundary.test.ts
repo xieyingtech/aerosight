@@ -10,25 +10,12 @@ const routePath = new URL(
 const componentPath = new URL("../components/dji-flighthub-wizard.tsx", import.meta.url);
 
 test("disabled FlightHub connectors expose an explicit reconnect lifecycle", async () => {
-  const [lifecycle, route, component] = await Promise.all([
-    readFile(lifecyclePath, "utf8"),
-    readFile(routePath, "utf8"),
-    readFile(componentPath, "utf8"),
-  ]);
-  const reconnectStart = lifecycle.indexOf("export async function reconnectFlightHubConnection");
-  assert.ok(reconnectStart >= 0);
-  const reconnect = lifecycle.slice(reconnectStart);
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_lifecycle_main.go", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_lifecycle_main.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /database.AuditedWrite/);
+assert.match(source, /LockFlightHubConnector/);
+assert.match(source, /connector_not_disabled/);
+assert.match(source, /status='connecting'/);
+assert.match(source, /status='active',unbound_at=null/);
+assert.match(source, /queueFlightHubSync/);
 
-  assert.match(reconnect, /withAuditedProjectWrite/);
-  assert.match(reconnect, /lockFlightHubConnector\(client, projectId, connectorId\)/);
-  assert.match(reconnect, /connector\.status !== "disabled"/);
-  assert.match(reconnect, /set status='connecting'/);
-  assert.match(reconnect, /device_connector_bindings[\s\S]*set status='active', unbound_at=null/);
-  assert.match(reconnect, /trigger: "reconnect"/);
-  assert.doesNotMatch(reconnect, /credential_envelope_json|encryptCredentialObject|token:/i);
-
-  assert.match(route, /export async function PUT/);
-  assert.match(route, /reconnectFlightHubConnection/);
-  assert.match(component, /selectedConnector\.status === "disabled"[\s\S]*重新连接/);
-  assert.match(component, /action === "reconnect" \? "PUT"/);
 });

@@ -1,6 +1,5 @@
-import { requireAdmin } from "@/lib/data";
+import { AdminGuard } from "@/components/session-provider";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  await requireAdmin();
-  return children;
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return <AdminGuard>{children}</AdminGuard>;
 }

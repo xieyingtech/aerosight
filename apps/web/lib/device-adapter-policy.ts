@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const sensitiveKey = /authorization|cookie|credential|password|secret|token|api[-_]?key/i;
 

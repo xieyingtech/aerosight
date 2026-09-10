@@ -1,12 +1,13 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
 import { useState } from "react";
 import { CheckCircle2Icon, Loader2Icon, NetworkIcon, ShieldCheckIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type AdapterSummary = {
+export type AdapterSummary = {
   id: string;
   name: string;
   adapterType: string;
@@ -31,8 +32,9 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
 
   const submit = async (form: HTMLFormElement) => {
     setBusy(true); setError(null); setIssues([]); setTestResult(null);
+    try {
     const values = new FormData(form);
-    const response = await fetch(`/api/projects/${projectId}/device-adapters/dji-setup`, {
+    const response = await apiFetch(`/api/projects/${projectId}/device-adapters/dji-setup`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -53,7 +55,6 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
       })
     });
     const result = await response.json() as AdapterSummary & { error?: string; issues?: SetupIssue[]; configurationSummary?: ConfigurationSummary };
-    setBusy(false);
     if (!response.ok) {
       setError(result.error === "NETWORK_PROFILE_INVALID" ? "网络配置未通过安全策略" : (result.error ?? "创建失败"));
       setIssues(result.issues ?? []);
@@ -62,30 +63,36 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     setAdapters((current) => [...current, result]);
     setConfigurationSummary(result.configurationSummary ?? null);
     form.reset(); setStep(1);
+    } catch { setError("请求失败，请稍后重试。"); }
+    finally { setBusy(false); }
   };
 
   const testConnection = async (adapter: AdapterSummary) => {
     setBusy(true); setError(null); setTestResult(null);
-    const response = await fetch(`/api/projects/${projectId}/device-adapters/${adapter.id}/test`, { method: "POST" });
+    try {
+    const response = await apiFetch(`/api/projects/${projectId}/device-adapters/${adapter.id}/test`, { method: "POST" });
     const result = await response.json() as Record<string, unknown> & { error?: string };
-    setBusy(false);
     if (!response.ok) { setError(result.error ?? "自检失败"); return; }
     setTestResult(result);
+    } catch { setError("请求失败，请稍后重试。"); }
+    finally { setBusy(false); }
   };
 
   const updateCredentials = async (adapter: AdapterSummary, form: HTMLFormElement) => {
     setBusy(true); setError(null);
+    try {
     const values = new FormData(form);
     const credentials = Object.fromEntries([
       "mqttUsername", "mqttPassword", "appId", "appKey", "appLicense", "mediaPublishUser", "mediaPublishPassword"
     ].map((name) => [name, String(values.get(name) ?? "")]));
-    const response = await fetch(`/api/projects/${projectId}/device-adapters/${adapter.id}`, {
+    const response = await apiFetch(`/api/projects/${projectId}/device-adapters/${adapter.id}`, {
       method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ credentials })
     });
     const result = await response.json() as { error?: string };
-    setBusy(false);
     if (!response.ok) { setError(result.error ?? "凭据更新失败"); return; }
     form.reset();
+    } catch { setError("请求失败，请稍后重试。"); }
+    finally { setBusy(false); }
   };
 
   return <section className="space-y-5 rounded-xl border p-4">

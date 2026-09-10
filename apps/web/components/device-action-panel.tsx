@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import Link from "next/link";
 import { useState } from "react";
 
@@ -25,13 +27,14 @@ export function DeviceActionPanel({ projectId, deviceId, actions, onChanged }: {
   const invoke = async (action: DeviceCapabilityAction) => {
     setPending(true);
     setStatus(null);
+    try {
     const dynamicParameters = Object.fromEntries(action.fields
       .filter((field) => parameters[`${action.capabilityCode}:${action.key}:${field.key}`] !== "")
       .map((field) => {
         const value = parameters[`${action.capabilityCode}:${action.key}:${field.key}`];
         return [field.key, field.type === "number" ? Number(value) : value];
       }));
-    const response = await fetch(action.kind === "live"
+    const response = await apiFetch(action.kind === "live"
       ? `/api/projects/${projectId}/devices/${deviceId}/live-streams`
       : `/api/projects/${projectId}/devices/${deviceId}/commands`, {
       method: "POST", headers: { "content-type": "application/json" },
@@ -43,18 +46,19 @@ export function DeviceActionPanel({ projectId, deviceId, actions, onChanged }: {
       })
     });
     const result = await response.json() as { error?: string; session?: { id: number; status: string }; id?: string; status?: string };
-    setPending(false);
     setStatus(response.ok
       ? action.kind === "live" ? `直播 #${result.session?.id}：${result.session?.status}` : `命令 ${result.id}：${result.status}`
       : result.error ?? "操作失败");
     if (response.ok) await onChanged?.();
+    } catch { setStatus("请求失败，请检查最新设备状态后重试。"); }
+    finally { setPending(false); }
   };
 
   const requiresConfirmation = actions.some((action) => ["high", "critical"].includes(action.risk));
   return <div className="mt-3 space-y-2 rounded-lg border bg-muted/20 p-3">
     <div className="flex flex-wrap gap-2">
       {actions.map((action) => action.kind === "workflow"
-        ? <Button asChild key={`${action.capabilityCode}:${action.key}`} size="sm" variant="outline"><Link href={`/projects/${projectId}/tasks`}>{action.label}</Link></Button>
+        ? <Button asChild key={`${action.capabilityCode}:${action.key}`} size="sm" variant="outline"><Link href={`/projects/tasks/?projectId=${projectId}`}>{action.label}</Link></Button>
         : <Button disabled={action.enabled === false || pending || !reason.trim() || (["high", "critical"].includes(action.risk) && confirmation !== `CONFIRM ${deviceId} ${action.capabilityCode}`)} key={`${action.capabilityCode}:${action.key}`} onClick={() => invoke(action)} size="sm" title={action.unavailableReason ?? undefined} variant={action.risk === "critical" ? "destructive" : "outline"}>{action.label}</Button>)}
     </div>
     {actions.some((action) => action.enabled === false && action.unavailableReason) && <div className="space-y-1 text-xs text-amber-700">

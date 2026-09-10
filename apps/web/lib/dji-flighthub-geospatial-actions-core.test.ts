@@ -50,14 +50,8 @@ test("map element delete requires owner/admin and its dedicated feature flag", (
   assert.equal(plan.featureFlag, "flighthub.geospatial.delete");
 });
 
-test("geospatial action API audits intent without exposing encrypted request payloads", () => {
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/geospatial-actions/route.ts", import.meta.url), "utf8");
-  const service = readFileSync(new URL("./dji-flighthub-geospatial-actions.ts", import.meta.url), "utf8");
-  const publicProjection = service.slice(service.indexOf("export async function readFlightHubGeospatialActionJob"));
-  assert.match(service, /withAuditedProjectWrite/);
-  assert.match(service, /flighthub\.geospatial_action\.requested/);
-  assert.doesNotMatch(route, /request_envelope|credential_envelope/i);
-  assert.doesNotMatch(publicProjection, /request_envelope|requestDigest/i);
+test("geospatial action API audits intent without exposing encrypted request payloads", async () => {
+const handler=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_actions.go", import.meta.url), "utf8");const query=await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_geospatial_actions.sql", import.meta.url), "utf8");const projection=query.slice(query.indexOf("-- name: FHGeospatialRead"));assert.match(handler,/database.AuditedWrite/);assert.match(handler,/credentials.EncryptJSON/);assert.doesNotMatch(projection,/request_envelope|requestDigest|remote_id/);assert.match(projection,/connector_instance_id/);
 });
 
 test("geospatial action schema requires explicit update fields and exact delete confirmation", () => {

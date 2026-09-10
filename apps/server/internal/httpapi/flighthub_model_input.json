@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "model-delete",
+        "model-resource-delete"
+      ]
+    },
+    "connectorInstanceId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "targetResourceId": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "approvalRequestId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+    },
+    "expectedRemoteVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "x-trim": true
+    },
+    "previewDigest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200,
+      "x-trim": true
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "confirmation": {
+          "type": "string",
+          "const": "DELETE"
+        }
+      },
+      "required": [
+        "confirmation"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "action",
+    "connectorInstanceId",
+    "targetResourceId",
+    "approvalRequestId",
+    "expectedRemoteVersion",
+    "previewDigest",
+    "idempotencyKey",
+    "request"
+  ],
+  "additionalProperties": false
+}

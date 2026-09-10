@@ -1,10 +1,13 @@
-import { getAdminOverview } from "@/lib/data";
+"use client";
+
+import { useAPI } from "@/lib/use-api";
+import { APIStateView } from "@/components/api-state";
 import { Page } from "@/components/page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default async function AdminPage() {
-  const overview = await getAdminOverview();
-  return (
+export default function AdminPage() {
+  const state = useAPI<{ users: number; teams: number; projects: number }>("/api/admin/overview");
+  return <APIStateView state={state}>{(overview) => (
     <Page title="管理总览">
       <div className="grid gap-4 sm:grid-cols-3">
         {[
@@ -19,5 +22,5 @@ export default async function AdminPage() {
         ))}
       </div>
     </Page>
-  );
+  )}</APIStateView>;
 }

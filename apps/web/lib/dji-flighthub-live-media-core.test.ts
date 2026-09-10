@@ -28,13 +28,11 @@ test("media catalog summary strips supplier destinations and credentials", () =>
     password: "hidden", serverIp: "10.0.0.1" }), { name: "relay", state: "running" });
 });
 
-test("realtime media API remains scoped while the generic realtime page stays connector-neutral", () => {
-  const service = readFileSync(new URL("./dji-flighthub-live-media.ts", import.meta.url), "utf8");
-  const route = readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/live-media/route.ts", import.meta.url), "utf8");
-  const page = readFileSync(new URL("../app/(app)/projects/[id]/realtime/page.tsx", import.meta.url), "utf8");
-  assert.match(service, /requireCurrentProjectPermission\(projectId, "project:view"\)/);
-  assert.doesNotMatch(service, /credential_envelope|bypass_option|remote_id/);
-  assert.match(route, /private, no-store/);
-  assert.doesNotMatch(page, /DJIFlightHubLiveMediaPanel|readFlightHubLiveMedia/);
-  assert.match(page, /RealtimeOperationsWorkbench/);
+test("realtime media API remains scoped while the generic realtime page stays connector-neutral", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_live_media.go", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/web/app/(app)/projects/realtime/page.tsx", import.meta.url), "utf8")].join("\n");
+assert.match(source, /scopedRead/);
+assert.match(source, /RealtimeOperationsWorkbench/);
+assert.doesNotMatch(source, /credential_envelope/);
+assert.doesNotMatch(source, /bypass_option/);
+assert.doesNotMatch(source, /remote_id/);
 });

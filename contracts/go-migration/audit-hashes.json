@@ -1,0 +1,78 @@
+[
+  {
+    "input": {
+      "z": 1,
+      "a": 2,
+      "nested": {
+        "input": null,
+        "list": [
+          true,
+          {},
+          [],
+          {
+            "b": 1,
+            "a": 2
+          }
+        ]
+      }
+    },
+    "locale": "zh-CN",
+    "hash": "7fdb9d83af3d64be23f88d94db00a80ecd3f3fc0da6ef50b557df4197cd6d6e4"
+  },
+  {
+    "input": {
+      "projectId": 3,
+      "deviceId": "9007199254740993",
+      "label": "中文<&>  ",
+      "literal": "\\u2028"
+    },
+    "locale": "zh-CN",
+    "hash": "7b149eff315e08caa51bbdb55e7d6fa6788abc2b19a45744d820627be47ed332"
+  },
+  {
+    "input": {
+      "2": "two",
+      "10": "ten",
+      "_z": 1,
+      "a_b": 2,
+      "aB": 3,
+      "Ab": 4,
+      "ab": 5
+    },
+    "locale": "zh-CN",
+    "hash": "9a72a4e3ce913f82acf807fca5db92a0a3568b8da4dd570286046fca1feda56e"
+  },
+  {
+    "input": {
+      "é": 1,
+      "e": 2,
+      "Z": 3,
+      "a": 4,
+      "A": 5
+    },
+    "locale": "zh-CN",
+    "hash": "d96cafa8163f9b6426edcd3d9c0ab3cf5dde2801f317d461e7ea4ebec3b01311"
+  },
+  {
+    "input": [
+      1e-7,
+      0.000001,
+      100000000000000000000,
+      1e+21,
+      0,
+      1e-8
+    ],
+    "locale": "zh-CN",
+    "hash": "525d144afe05b2796605d395ebccdf4b553fdaa7792c6d47945a87b7e3e22882"
+  },
+  {
+    "input": {
+      "tokenUpdated": true,
+      "syncQueued": true,
+      "id": "1",
+      "status": "connecting"
+    },
+    "locale": "zh-CN",
+    "hash": "f6f65b420cc62133c7932185eabf3d3b848a6298ec52b690a488caf718f3c78f"
+  }
+]

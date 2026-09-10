@@ -1,0 +1,1263 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/ai-providers/page.tsx",
+      "url": "/admin/ai-providers",
+      "queries": [
+        {
+          "name": "listAIProviders",
+          "from": "@/lib/ai-providers",
+          "target": "GET /api/admin/ai-providers"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/layout.tsx",
+      "url": "/admin",
+      "queries": [
+        {
+          "name": "requireAdmin",
+          "from": "@/lib/data",
+          "target": "GET /api/auth/session"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/page.tsx",
+      "url": "/admin",
+      "queries": [
+        {
+          "name": "getAdminOverview",
+          "from": "@/lib/data",
+          "target": "GET /api/admin/overview"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/projects/page.tsx",
+      "url": "/admin/projects",
+      "queries": [
+        {
+          "name": "listAdminProjects",
+          "from": "@/lib/data",
+          "target": "GET /api/admin/projects"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/teams/page.tsx",
+      "url": "/admin/teams",
+      "queries": [
+        {
+          "name": "listAdminTeams",
+          "from": "@/lib/data",
+          "target": "GET /api/admin/teams"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/admin/users/page.tsx",
+      "url": "/admin/users",
+      "queries": [
+        {
+          "name": "listAdminUsers",
+          "from": "@/lib/data",
+          "target": "GET /api/admin/users"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/layout.tsx",
+      "url": "/",
+      "queries": [
+        {
+          "name": "requireUser",
+          "from": "@/lib/data",
+          "target": "GET /api/auth/session"
+        },
+        {
+          "name": "listProjects",
+          "from": "@/lib/data",
+          "target": "GET /api/projects"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/profile/page.tsx",
+      "url": "/profile",
+      "queries": [
+        {
+          "name": "getProfileData",
+          "from": "@/lib/data",
+          "target": "GET /api/profile"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/agents/page.tsx",
+      "url": "/projects/:id/agents",
+      "queries": [
+        {
+          "name": "listAgentSessions",
+          "from": "@/lib/agent-sessions",
+          "target": "GET /api/projects/:id/agent-sessions"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/algorithms/page.tsx",
+      "url": "/projects/:id/algorithms",
+      "queries": [
+        {
+          "name": "requireCurrentProjectPermission",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id (permissions; enforcement remains in each protected API)"
+        },
+        {
+          "name": "listAlgorithmRuns",
+          "from": "@/lib/algorithm-runs",
+          "target": "GET /api/projects/:id/algorithm-runs"
+        },
+        {
+          "name": "listAlgorithmProviders",
+          "from": "@/lib/algorithm-providers",
+          "target": "GET /api/projects/:id/algorithm-providers"
+        },
+        {
+          "name": "listAlgorithmCatalog",
+          "from": "@/lib/algorithm-catalog",
+          "target": "GET /api/projects/:id/algorithm-definitions"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/algorithms/runs/[runId]/page.tsx",
+      "url": "/projects/:id/algorithms/runs/:runId",
+      "queries": [
+        {
+          "name": "readAlgorithmRun",
+          "from": "@/lib/algorithm-runs",
+          "target": "GET /api/projects/:id/algorithm-runs/:runId"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/assets/page.tsx",
+      "url": "/projects/:id/assets",
+      "queries": [
+        {
+          "name": "listProjectItems",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id/:kind"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/connectors/page.tsx",
+      "url": "/projects/:id/connectors",
+      "queries": [
+        {
+          "name": "getProject",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id"
+        },
+        {
+          "name": "listDeviceAdapters",
+          "from": "@/lib/device-adapters",
+          "target": "GET /api/projects/:id/device-adapters"
+        },
+        {
+          "name": "listFlightHubConnections",
+          "from": "@/lib/dji-flighthub-lifecycle",
+          "target": "GET /api/projects/:id/connectors/dji-flighthub"
+        },
+        {
+          "name": "listFlightHubDiscoveryActivity",
+          "from": "@/lib/dji-flighthub-lifecycle",
+          "target": "GET /api/projects/:id/connectors/dji-flighthub/activity"
+        },
+        {
+          "name": "parseFlightHubWebConfig",
+          "from": "@/lib/dji-flighthub-config",
+          "target": "GET /api/projects/:id/features"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/devices/page.tsx",
+      "url": "/projects/:id/devices",
+      "queries": [
+        {
+          "name": "readProjectDeviceTree",
+          "from": "@/lib/device-tree",
+          "target": "GET /api/projects/:id/device-tree"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/events/[eventId]/page.tsx",
+      "url": "/projects/:id/events/:eventId",
+      "queries": [
+        {
+          "name": "readPerceptionEvent",
+          "from": "@/lib/perception-events",
+          "target": "GET /api/projects/:id/events/:eventId"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/events/page.tsx",
+      "url": "/projects/:id/events",
+      "queries": [
+        {
+          "name": "legacyProjectEventListHref",
+          "from": "@/lib/project-navigation",
+          "target": "client-only helper"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/issues/[issueId]/page.tsx",
+      "url": "/projects/:id/issues/:issueId",
+      "queries": [
+        {
+          "name": "readIssue",
+          "from": "@/lib/issues",
+          "target": "GET /api/projects/:id/issues/:issueId"
+        },
+        {
+          "name": "issueEvidenceSummary",
+          "from": "@/lib/issue-view-core",
+          "target": "client-only helper"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/issues/page.tsx",
+      "url": "/projects/:id/issues",
+      "queries": [
+        {
+          "name": "listIssues",
+          "from": "@/lib/issues",
+          "target": "GET /api/projects/:id/issues"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/layout.tsx",
+      "url": "/projects/:id",
+      "queries": []
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/page.tsx",
+      "url": "/projects/:id",
+      "queries": [
+        {
+          "name": "getProject",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id"
+        },
+        {
+          "name": "requireUser",
+          "from": "@/lib/data",
+          "target": "GET /api/auth/session"
+        },
+        {
+          "name": "readProjectSituationSnapshot",
+          "from": "@/lib/project-snapshot",
+          "target": "GET /api/projects/:id/snapshot"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/realtime/page.tsx",
+      "url": "/projects/:id/realtime",
+      "queries": [
+        {
+          "name": "getProject",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id"
+        },
+        {
+          "name": "requireUser",
+          "from": "@/lib/data",
+          "target": "GET /api/auth/session"
+        },
+        {
+          "name": "readProjectSituationSnapshot",
+          "from": "@/lib/project-snapshot",
+          "target": "GET /api/projects/:id/snapshot"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/settings/page.tsx",
+      "url": "/projects/:id/settings",
+      "queries": [
+        {
+          "name": "getProject",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/tasks/page.tsx",
+      "url": "/projects/:id/tasks",
+      "queries": [
+        {
+          "name": "listProjectItems",
+          "from": "@/lib/data",
+          "target": "GET /api/projects/:id/:kind"
+        },
+        {
+          "name": "listMissionRuns",
+          "from": "@/lib/mission-workbench",
+          "target": "GET /api/projects/:id/task-runs"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/[id]/tasks/runs/[runId]/page.tsx",
+      "url": "/projects/:id/tasks/runs/:runId",
+      "queries": [
+        {
+          "name": "readMissionWorkbench",
+          "from": "@/lib/mission-workbench",
+          "target": "GET /api/projects/:id/task-runs/:runId"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/new/page.tsx",
+      "url": "/projects/new",
+      "queries": [
+        {
+          "name": "listManagedTeams",
+          "from": "@/lib/data",
+          "target": "GET /api/teams?scope=managed"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/projects/page.tsx",
+      "url": "/projects",
+      "queries": [
+        {
+          "name": "listProjects",
+          "from": "@/lib/data",
+          "target": "GET /api/projects"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/teams/[id]/page.tsx",
+      "url": "/teams/:id",
+      "queries": [
+        {
+          "name": "getTeam",
+          "from": "@/lib/data",
+          "target": "GET /api/teams/:id"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/(app)/teams/page.tsx",
+      "url": "/teams",
+      "queries": [
+        {
+          "name": "listTeams",
+          "from": "@/lib/data",
+          "target": "GET /api/teams"
+        }
+      ]
+    },
+    {
+      "kind": "action",
+      "source": "apps/web/app/actions.ts",
+      "name": "loginAction",
+      "target": "POST /api/auth/login",
+      "originalHandler": "export async function loginAction(_state: FormState, formData: FormData): Promise<FormState> {\r\n  try {\r\n    await signIn(\"credentials\", {\r\n      username: formData.get(\"username\"),\r\n      password: formData.get(\"password\"),\r\n      redirectTo: \"/projects\"\r\n    });\r\n    return {};\r\n  } catch (error) {\r\n    if (error instanceof AuthError) return { error: \"邮箱、手机号或密码错误\" };\r\n    throw error;\r\n  }\r\n}"
+    },
+    {
+      "kind": "action",
+      "source": "apps/web/app/actions.ts",
+      "name": "logoutAction",
+      "target": "POST /api/auth/logout",
+      "originalHandler": "export async function logoutAction() {\r\n  await signOut({ redirectTo: \"/login\" });\r\n}"
+    },
+    {
+      "kind": "action",
+      "source": "apps/web/app/actions.ts",
+      "name": "createTeamAction",
+      "target": "POST /api/teams",
+      "originalHandler": "export async function createTeamAction(_state: FormState, formData: FormData): Promise<FormState> {\r\n  const parsed = teamSchema.safeParse({ name: formData.get(\"name\") });\r\n  if (!parsed.success) return { error: parsed.error.issues[0]?.message };\r\n  await createTeam(parsed.data.name);\r\n  revalidatePath(\"/teams\");\r\n  redirect(\"/teams\");\r\n}"
+    },
+    {
+      "kind": "action",
+      "source": "apps/web/app/actions.ts",
+      "name": "createProjectAction",
+      "target": "POST /api/projects",
+      "originalHandler": "export async function createProjectAction(_state: FormState, formData: FormData): Promise<FormState> {\r\n  const parsed = projectSchema.safeParse({ teamId: formData.get(\"teamId\"), name: formData.get(\"name\") });\r\n  if (!parsed.success) return { error: parsed.error.issues[0]?.message };\r\n  const project = await createProject(parsed.data.teamId, parsed.data.name);\r\n  revalidatePath(\"/projects\");\r\n  redirect(`/projects/${project.id}`);\r\n}"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/admin/ai-providers/[providerId]/route.ts",
+      "method": "PATCH",
+      "target": "PATCH /api/admin/ai-providers/:providerId",
+      "dependencies": [
+        {
+          "name": "updateAIProvider",
+          "from": "@/lib/ai-providers"
+        },
+        {
+          "name": "deleteAIProvider",
+          "from": "@/lib/ai-providers"
+        }
+      ],
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { deleteAIProvider, updateAIProvider } from \"@/lib/ai-providers\";\r\n\r\nexport async function PATCH(request: Request, { params }: { params: Promise<{ providerId: string }> }) {\r\n  const { providerId } = await params;\r\n  try { return NextResponse.json(await updateAIProvider(Number(providerId), await request.json(), request.headers.get(\"x-request-id\"))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n\r\nexport async function DELETE(request: Request, { params }: { params: Promise<{ providerId: string }> }) {\r\n  const { providerId } = await params;\r\n  try { return NextResponse.json(await deleteAIProvider(Number(providerId), request.headers.get(\"x-request-id\"))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/admin/ai-providers/[providerId]/route.ts",
+      "method": "DELETE",
+      "target": "DELETE /api/admin/ai-providers/:providerId",
+      "dependencies": [
+        {
+          "name": "updateAIProvider",
+          "from": "@/lib/ai-providers"
+        },
+        {
+          "name": "deleteAIProvider",
+          "from": "@/lib/ai-providers"
+        }
+      ],
+      "sourceHash": "9c3eabf10634dfd5bead24cfeb9f1360d6c413d37ac2fe894f5b34bb5bc81b62",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { deleteAIProvider, updateAIProvider } from \"@/lib/ai-providers\";\r\n\r\nexport async function PATCH(request: Request, { params }: { params: Promise<{ providerId: string }> }) {\r\n  const { providerId } = await params;\r\n  try { return NextResponse.json(await updateAIProvider(Number(providerId), await request.json(), request.headers.get(\"x-request-id\"))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n\r\nexport async function DELETE(request: Request, { params }: { params: Promise<{ providerId: string }> }) {\r\n  const { providerId } = await params;\r\n  try { return NextResponse.json(await deleteAIProvider(Number(providerId), request.headers.get(\"x-request-id\"))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/admin/ai-providers/[providerId]/test/route.ts",
+      "method": "POST",
+      "target": "POST /api/admin/ai-providers/:providerId/test",
+      "dependencies": [
+        {
+          "name": "testAIProvider",
+          "from": "@/lib/ai-providers"
+        }
+      ],
+      "sourceHash": "500a4786a463c651270ecf3428dc8b66551a483dc0ccb5971d22651560c9d5a7",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { testAIProvider } from \"@/lib/ai-providers\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ providerId: string }> }) {\r\n  const { providerId } = await params;\r\n  try { return NextResponse.json(await testAIProvider(Number(providerId), request.headers.get(\"x-request-id\"))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_TEST_FAILED\" }, { status: 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/admin/ai-providers/route.ts",
+      "method": "GET",
+      "target": "GET /api/admin/ai-providers",
+      "dependencies": [
+        {
+          "name": "listAIProviders",
+          "from": "@/lib/ai-providers"
+        },
+        {
+          "name": "createAIProvider",
+          "from": "@/lib/ai-providers"
+        }
+      ],
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { createAIProvider, listAIProviders } from \"@/lib/ai-providers\";\r\n\r\nexport async function GET() {\r\n  try { return NextResponse.json(await listAIProviders()); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 403 }); }\r\n}\r\n\r\nexport async function POST(request: Request) {\r\n  try { return NextResponse.json(await createAIProvider(await request.json(), request.headers.get(\"x-request-id\")), { status: 201 }); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/admin/ai-providers/route.ts",
+      "method": "POST",
+      "target": "POST /api/admin/ai-providers",
+      "dependencies": [
+        {
+          "name": "listAIProviders",
+          "from": "@/lib/ai-providers"
+        },
+        {
+          "name": "createAIProvider",
+          "from": "@/lib/ai-providers"
+        }
+      ],
+      "sourceHash": "6cdf38b572dae9a049af616fe25b493a3e69bcf229676f06202c5c30f5764ce2",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { createAIProvider, listAIProviders } from \"@/lib/ai-providers\";\r\n\r\nexport async function GET() {\r\n  try { return NextResponse.json(await listAIProviders()); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 403 }); }\r\n}\r\n\r\nexport async function POST(request: Request) {\r\n  try { return NextResponse.json(await createAIProvider(await request.json(), request.headers.get(\"x-request-id\")), { status: 201 }); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"AI_PROVIDER_FAILED\" }, { status: 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/auth/[...nextauth]/route.ts",
+      "method": "GET",
+      "target": "GET /api/auth/* (replaced by explicit auth endpoints)",
+      "dependencies": [],
+      "sourceHash": "0c821abe0079c23f13637f9b1fee286252ef0a68e4206308373f6088a5f92e0f",
+      "originalHandler": "import { handlers } from \"@/auth\";\r\n\r\nexport const { GET, POST } = handlers;\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/auth/[...nextauth]/route.ts",
+      "method": "POST",
+      "target": "POST /api/auth/* (replaced by explicit auth endpoints)",
+      "dependencies": [],
+      "sourceHash": "0c821abe0079c23f13637f9b1fee286252ef0a68e4206308373f6088a5f92e0f",
+      "originalHandler": "import { handlers } from \"@/auth\";\r\n\r\nexport const { GET, POST } = handlers;\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/media-auth/route.ts",
+      "method": "POST",
+      "target": "POST /api/media-auth",
+      "dependencies": [
+        {
+          "name": "query",
+          "from": "@/lib/db"
+        },
+        {
+          "name": "decryptCredentialObject",
+          "from": "@/lib/credential-encryption"
+        },
+        {
+          "name": "getWebRuntimeConfig",
+          "from": "@/lib/runtime-config"
+        },
+        {
+          "name": "credentialAAD",
+          "from": "@/lib/credential-encryption"
+        }
+      ],
+      "sourceHash": "e951bd817bc62368f15dbbed291696acb2ba250d110e26bcf960a3e9811a41bd",
+      "originalHandler": "import { timingSafeEqual } from \"node:crypto\";\r\nimport { NextResponse } from \"next/server\";\r\n\r\nimport { credentialAAD, decryptCredentialObject, type CredentialEnvelope } from \"@/lib/credential-encryption\";\r\nimport { query } from \"@/lib/db\";\r\nimport { MediaPlaybackTokenIssuer, type BrowserPlaybackProtocol } from \"@/lib/live-stream-core\";\r\nimport { getWebRuntimeConfig } from \"@/lib/runtime-config\";\r\n\r\nfunction equalSecret(left: string, right: string | undefined) {\r\n  if (!right) return false;\r\n  const actual = Buffer.from(left);\r\n  const expected = Buffer.from(right);\r\n  return actual.length === expected.length && timingSafeEqual(actual, expected);\r\n}\r\n\r\nexport async function POST(request: Request) {\r\n  const body = await request.json().catch(() => null) as null | {\r\n    user?: string; password?: string; token?: string; action?: string; path?: string;\r\n    protocol?: string; query?: string;\r\n  };\r\n  if (!body?.action) return NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  if (body.action === \"api\") {\r\n    const allowed = equalSecret(body.user ?? \"\", process.env.MEDIA_ADMIN_USER)\r\n      && equalSecret(body.password ?? \"\", process.env.MEDIA_ADMIN_PASSWORD);\r\n    return allowed ? new NextResponse(null, { status: 204 })\r\n      : NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  }\r\n  if (!body.path) return NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  if (body.action === \"publish\") {\r\n    let row: { projectId: number; adapterId: string; envelope: CredentialEnvelope } | null = null;\r\n    try {\r\n      row = body.path.startsWith(\"demo/aerosight/\") ? (await query<{\r\n        projectId: number; adapterId: string; envelope: CredentialEnvelope;\r\n      }>(\r\n        `select stream.project_id as \"projectId\", adapter.id as \"adapterId\",\r\n                adapter.credential_envelope_json as envelope\r\n           from live_streams stream\r\n           join device_adapters adapter on adapter.id=stream.adapter_id and adapter.project_id=stream.project_id\r\n          where stream.ingest_ref=$1 and stream.status in ('requested','starting','live','degraded')\r\n          limit 1`, [body.path]\r\n      )).rows[0] ?? null : null;\r\n    } catch { row = null; }\r\n    let allowed = false;\r\n    if (row?.envelope) {\r\n      try {\r\n        const credentials = decryptCredentialObject<{ mediaPublishUser: string; mediaPublishPassword: string }>(\r\n          row.envelope, getWebRuntimeConfig().authSecret,\r\n          credentialAAD(\"device-adapter\", row.adapterId, row.projectId)\r\n        );\r\n        allowed = equalSecret(body.user ?? \"\", credentials.mediaPublishUser)\r\n          && equalSecret(body.password ?? \"\", credentials.mediaPublishPassword);\r\n      } catch { allowed = false; }\r\n    }\r\n    return allowed ? new NextResponse(null, { status: 204 })\r\n      : NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  }\r\n  if (body.action !== \"read\" && body.action !== \"playback\") {\r\n    return NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  }\r\n  if (body.protocol !== \"hls\" && body.protocol !== \"webrtc\") {\r\n    return NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n  }\r\n  const queryToken = new URLSearchParams(body.query ?? \"\").get(\"token\");\r\n  const token = body.token || queryToken;\r\n  const claims = token ? new MediaPlaybackTokenIssuer(getWebRuntimeConfig().authSecret)\r\n    .verify(token, { path: body.path, protocol: body.protocol as BrowserPlaybackProtocol }) : null;\r\n  return claims ? new NextResponse(null, { status: 204 })\r\n    : NextResponse.json({ error: \"MEDIA_AUTH_DENIED\" }, { status: 401 });\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/agent-sessions/[sessionId]/messages/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/agent-sessions/:sessionId/messages",
+      "dependencies": [
+        {
+          "name": "runAgentChatTurn",
+          "from": "@/lib/agent-chat"
+        }
+      ],
+      "sourceHash": "fd518d51b5391fcad83e53047219cba277a23091a61b5fec3ab1b8f913db0e6e",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { runAgentChatTurn } from \"@/lib/agent-chat\";\r\nexport async function POST(request:Request,{params}:{params:Promise<{id:string;sessionId:string}>}){const {id,sessionId}=await params;const body=await request.json() as {content?:string};if(!body.content?.trim())return NextResponse.json({error:\"AGENT_MESSAGE_INVALID\"},{status:400});try{return NextResponse.json(await runAgentChatTurn({projectId:Number(id),sessionId:Number(sessionId),content:body.content,requestId:request.headers.get(\"x-request-id\")}),{status:201})}catch(error){const code=error instanceof Error?error.message:\"AGENT_MESSAGE_FAILED\";return NextResponse.json({error:code},{status:code===\"PROJECT_ACCESS_DENIED\"?403:code===\"AGENT_SESSION_NOT_FOUND\"?404:400})}}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/agent-sessions/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/agent-sessions",
+      "dependencies": [
+        {
+          "name": "createAgentSession",
+          "from": "@/lib/agent-sessions"
+        }
+      ],
+      "sourceHash": "09b3d4b360560271746b4b8ea1df2b0d70f9d402e6459093d0b522137c61c951",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { createAgentSession } from \"@/lib/agent-sessions\";\r\nexport async function POST(request:Request,{params}:{params:Promise<{id:string}>}){const {id}=await params;try{return NextResponse.json(await createAgentSession(Number(id),request.headers.get(\"x-request-id\")),{status:201})}catch(error){const code=error instanceof Error?error.message:\"AGENT_SESSION_CREATE_FAILED\";return NextResponse.json({error:code},{status:code===\"PROJECT_ACCESS_DENIED\"?403:400})}}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-definitions/[definitionId]/route.ts",
+      "method": "PUT",
+      "target": "PUT /api/projects/:id/algorithm-definitions/:definitionId",
+      "dependencies": [
+        {
+          "name": "saveAlgorithmDefinition",
+          "from": "@/lib/algorithm-definitions"
+        }
+      ],
+      "sourceHash": "7838b0d83b604c0989fbd8ba43703786d818c42a69a6f86641a413e1a256038b",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { saveAlgorithmDefinition } from \"@/lib/algorithm-definitions\";\r\n\r\nexport async function PUT(\r\n  request: Request,\r\n  { params }: { params: Promise<{ id: string; definitionId: string }> }\r\n) {\r\n  const { id, definitionId } = await params;\r\n  try {\r\n    const body = await request.json() as { definition?: unknown; configuration?: unknown };\r\n    return NextResponse.json(await saveAlgorithmDefinition(\r\n      Number(id),\r\n      Number(definitionId),\r\n      body.definition,\r\n      body.configuration,\r\n      request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_DEFINITION_SAVE_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-definitions/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/algorithm-definitions",
+      "dependencies": [
+        {
+          "name": "listAlgorithmCatalog",
+          "from": "@/lib/algorithm-catalog"
+        },
+        {
+          "name": "createAlgorithmDefinition",
+          "from": "@/lib/algorithm-definitions"
+        }
+      ],
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { listAlgorithmCatalog } from \"@/lib/algorithm-catalog\";\r\nimport { createAlgorithmDefinition } from \"@/lib/algorithm-definitions\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try {\r\n    return NextResponse.json({ definitions: await listAlgorithmCatalog(Number(id)) });\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_CATALOG_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try {\r\n    const body = await request.json() as { definition?: unknown; configuration?: unknown; version?: unknown };\r\n    return NextResponse.json(\r\n      await createAlgorithmDefinition(\r\n        Number(id),\r\n        body.definition,\r\n        body.configuration ?? body.version,\r\n        request.headers.get(\"x-request-id\") ?? undefined\r\n      ),\r\n      { status: 201 }\r\n    );\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_DEFINITION_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-definitions/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/algorithm-definitions",
+      "dependencies": [
+        {
+          "name": "listAlgorithmCatalog",
+          "from": "@/lib/algorithm-catalog"
+        },
+        {
+          "name": "createAlgorithmDefinition",
+          "from": "@/lib/algorithm-definitions"
+        }
+      ],
+      "sourceHash": "ef045d1ecae416510034d2459e0fd414857755197a7abe70c33d22819c054ac2",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { listAlgorithmCatalog } from \"@/lib/algorithm-catalog\";\r\nimport { createAlgorithmDefinition } from \"@/lib/algorithm-definitions\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try {\r\n    return NextResponse.json({ definitions: await listAlgorithmCatalog(Number(id)) });\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_CATALOG_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try {\r\n    const body = await request.json() as { definition?: unknown; configuration?: unknown; version?: unknown };\r\n    return NextResponse.json(\r\n      await createAlgorithmDefinition(\r\n        Number(id),\r\n        body.definition,\r\n        body.configuration ?? body.version,\r\n        request.headers.get(\"x-request-id\") ?? undefined\r\n      ),\r\n      { status: 201 }\r\n    );\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_DEFINITION_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-providers/[providerId]/route.ts",
+      "method": "PATCH",
+      "target": "PATCH /api/projects/:id/algorithm-providers/:providerId",
+      "dependencies": [
+        {
+          "name": "updateAlgorithmProvider",
+          "from": "@/lib/algorithm-providers"
+        }
+      ],
+      "sourceHash": "30264e4dbbb4affde733e0c00dfa5c5fae3c08a3ab391b228958aa7d30841de3",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { updateAlgorithmProvider } from \"@/lib/algorithm-providers\";\r\n\r\nexport async function PATCH(request: Request, { params }: { params: Promise<{ id: string; providerId: string }> }) {\r\n  const { id, providerId } = await params;\r\n  try { return NextResponse.json(await updateAlgorithmProvider(Number(id), Number(providerId), await request.json())); }\r\n  catch (error) { const code = error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_FAILED\"; return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-providers/[providerId]/test/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/algorithm-providers/:providerId/test",
+      "dependencies": [
+        {
+          "name": "testAlgorithmProviderEndpoint",
+          "from": "@/lib/algorithm-providers"
+        }
+      ],
+      "sourceHash": "f91a74a8ab5145db30a670343b7e8acd48ff3ba15bea418706c544c39ee198ee",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { testAlgorithmProviderEndpoint } from \"@/lib/algorithm-providers\";\r\n\r\nexport async function POST(_request: Request, { params }: { params: Promise<{ id: string; providerId: string }> }) {\r\n  const { id, providerId } = await params;\r\n  try { return NextResponse.json(await testAlgorithmProviderEndpoint(Number(id), Number(providerId))); }\r\n  catch (error) { const code = error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_TEST_FAILED\"; return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-providers/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/algorithm-providers",
+      "dependencies": [
+        {
+          "name": "listAlgorithmProviders",
+          "from": "@/lib/algorithm-providers"
+        },
+        {
+          "name": "createAlgorithmProvider",
+          "from": "@/lib/algorithm-providers"
+        }
+      ],
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { createAlgorithmProvider, listAlgorithmProviders } from \"@/lib/algorithm-providers\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try { return NextResponse.json(await listAlgorithmProviders(Number(id))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_FAILED\" }, { status: 403 }); }\r\n}\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try { return NextResponse.json(await createAlgorithmProvider(Number(id), await request.json()), { status: 201 }); }\r\n  catch (error) { const code = error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_FAILED\"; return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-providers/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/algorithm-providers",
+      "dependencies": [
+        {
+          "name": "listAlgorithmProviders",
+          "from": "@/lib/algorithm-providers"
+        },
+        {
+          "name": "createAlgorithmProvider",
+          "from": "@/lib/algorithm-providers"
+        }
+      ],
+      "sourceHash": "6f5a17673b4b63369279389f93942887c92349e0998fe1122f4f14b9238b867d",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { createAlgorithmProvider, listAlgorithmProviders } from \"@/lib/algorithm-providers\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try { return NextResponse.json(await listAlgorithmProviders(Number(id))); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_FAILED\" }, { status: 403 }); }\r\n}\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try { return NextResponse.json(await createAlgorithmProvider(Number(id), await request.json()), { status: 201 }); }\r\n  catch (error) { const code = error instanceof Error ? error.message : \"ALGORITHM_PROVIDER_FAILED\"; return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 }); }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-runs/[runId]/retry/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/algorithm-runs/:runId/retry",
+      "dependencies": [
+        {
+          "name": "retryAlgorithmRun",
+          "from": "@/lib/algorithm-runs"
+        }
+      ],
+      "sourceHash": "ca7dcbc5f9e975f4a1663fb6978e4ef927598942becae463d92c58f67aab8ab0",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { retryAlgorithmRun } from \"@/lib/algorithm-runs\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {\r\n  const { id, runId } = await params;\r\n  try {\r\n    return NextResponse.json(await retryAlgorithmRun(Number(id), runId, request.headers.get(\"x-request-id\")));\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_RUN_RETRY_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 409 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/algorithm-runs/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/algorithm-runs",
+      "dependencies": [
+        {
+          "name": "startAlgorithmRun",
+          "from": "@/lib/algorithm-runs"
+        }
+      ],
+      "sourceHash": "19a68ada5f7e1d9956db8e8ceed0718f88a8ffffea99e0acb117de5dfb55c2cb",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { startAlgorithmRun } from \"@/lib/algorithm-runs\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const { id } = await params;\r\n  try {\r\n    return NextResponse.json(await startAlgorithmRun(Number(id), await request.json(), request.headers.get(\"x-request-id\")), { status: 202 });\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"ALGORITHM_RUN_CREATE_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/assets/[assetId]/access/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/assets/:assetId/access",
+      "dependencies": [
+        {
+          "name": "parseMediaAccessAction",
+          "from": "@/lib/media-access-core"
+        },
+        {
+          "name": "issueMediaAccess",
+          "from": "@/lib/media-access"
+        }
+      ],
+      "sourceHash": "eb4e231a91fa094a9dfb2a31b32454ae88496b9b67d9df231365b7b14368a9cd",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { issueMediaAccess } from \"@/lib/media-access\";\r\nimport { parseMediaAccessAction } from \"@/lib/media-access-core\";\r\n\r\nexport async function GET(\r\n  request: Request,\r\n  { params }: { params: Promise<{ id: string; assetId: string }> }\r\n) {\r\n  try {\r\n    const { id, assetId } = await params;\r\n    const action = parseMediaAccessAction(new URL(request.url).searchParams.get(\"action\"));\r\n    return NextResponse.json(await issueMediaAccess(\r\n      Number(id), Number(assetId), action, request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Unable to access media\" }, { status: 403 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/assets/[assetId]/content/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/assets/:assetId/content",
+      "dependencies": [
+        {
+          "name": "readAuthorizedMediaContent",
+          "from": "@/lib/media-access"
+        },
+        {
+          "name": "parseMediaAccessAction",
+          "from": "@/lib/media-access-core"
+        }
+      ],
+      "sourceHash": "6d093b02870fe0a79d2328908b57360d10fd6a4434d265cb20d02d88ec066e37",
+      "originalHandler": "import { parseMediaAccessAction } from \"@/lib/media-access-core\";\r\nimport { readAuthorizedMediaContent } from \"@/lib/media-access\";\r\n\r\nexport async function GET(\r\n  request: Request,\r\n  { params }: { params: Promise<{ id: string; assetId: string }> }\r\n) {\r\n  try {\r\n    const { id, assetId } = await params;\r\n    const url = new URL(request.url);\r\n    const content = await readAuthorizedMediaContent({\r\n      projectId: Number(id), assetId: Number(assetId),\r\n      action: parseMediaAccessAction(url.searchParams.get(\"action\")),\r\n      expires: url.searchParams.get(\"expires\") ?? \"\",\r\n      signature: url.searchParams.get(\"signature\") ?? \"\"\r\n    });\r\n    return new Response(content.body, {\r\n      headers: {\r\n        \"Content-Type\": content.contentType,\r\n        \"Content-Disposition\": content.disposition,\r\n        \"Cache-Control\": \"private, no-store\",\r\n        \"X-Content-Type-Options\": \"nosniff\"\r\n      }\r\n    });\r\n  } catch {\r\n    return Response.json({ error: \"Media unavailable\" }, { status: 403 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/route.ts",
+      "method": "DELETE",
+      "target": "DELETE /api/projects/:id/connectors/dji-flighthub/:connectorId",
+      "dependencies": [
+        {
+          "name": "disconnectFlightHubConnection",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        }
+      ],
+      "sourceHash": "4fe2882cd2c9b227fa4a4200a3d588938cdc58eb590bbc0bf572d20ea9e382c6",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\n\nimport { FlightHubConnectionError } from \"@/lib/dji-flighthub-connection-core\";\nimport { disconnectFlightHubConnection } from \"@/lib/dji-flighthub-lifecycle\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nexport async function DELETE(\n  request: NextRequest,\n  context: { params: Promise<{ id: string; connectorId: string }> }\n) {\n  try {\n    const { id, connectorId } = await context.params;\n    return NextResponse.json(\n      await disconnectFlightHubConnection(Number(id), connectorId, request.headers.get(\"x-request-id\")),\n      { headers: noStoreHeaders }\n    );\n  } catch (error) {\n    const code = error instanceof FlightHubConnectionError ? error.safeCode : \"access_denied\";\n    const status = code === \"access_denied\" ? 403 : code === \"connector_not_found\" ? 404 : 503;\n    return NextResponse.json({ error: { code } }, { status, headers: noStoreHeaders });\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/sync/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/:connectorId/sync",
+      "dependencies": [
+        {
+          "name": "requestFlightHubSync",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        }
+      ],
+      "sourceHash": "49222510c93b0af9e5abf61bdfcf07524bf2b1aeb1e4257f675babf247597080",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\n\nimport { FlightHubConnectionError } from \"@/lib/dji-flighthub-connection-core\";\nimport { requestFlightHubSync } from \"@/lib/dji-flighthub-lifecycle\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nexport async function POST(\n  request: NextRequest,\n  context: { params: Promise<{ id: string; connectorId: string }> }\n) {\n  try {\n    const { id, connectorId } = await context.params;\n    return NextResponse.json(\n      await requestFlightHubSync(Number(id), connectorId, request.headers.get(\"x-request-id\")),\n      { status: 202, headers: noStoreHeaders }\n    );\n  } catch (error) {\n    const code = error instanceof FlightHubConnectionError ? error.safeCode : \"access_denied\";\n    const status = code === \"access_denied\" ? 403 : code === \"connector_not_found\" ? 404\n      : code === \"connector_disabled\" ? 409 : 503;\n    return NextResponse.json({ error: { code } }, { status, headers: noStoreHeaders });\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/token/route.ts",
+      "method": "PUT",
+      "target": "PUT /api/projects/:id/connectors/dji-flighthub/:connectorId/token",
+      "dependencies": [
+        {
+          "name": "updateFlightHubToken",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        }
+      ],
+      "sourceHash": "851b511c83bfd4c998c407b015451f421843b8f8d25525eb4baf974271da8d54",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\nimport { ZodError } from \"zod\";\n\nimport { FlightHubConnectionError } from \"@/lib/dji-flighthub-connection-core\";\nimport { updateFlightHubToken } from \"@/lib/dji-flighthub-lifecycle\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nexport async function PUT(\n  request: NextRequest,\n  context: { params: Promise<{ id: string; connectorId: string }> }\n) {\n  try {\n    const { id, connectorId } = await context.params;\n    return NextResponse.json(await updateFlightHubToken(\n      Number(id), connectorId, await request.json(), request.headers.get(\"x-request-id\")\n    ), { headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof ZodError || error instanceof SyntaxError) {\n      return NextResponse.json({ error: { code: \"invalid_request\" } }, { status: 400, headers: noStoreHeaders });\n    }\n    const code = error instanceof FlightHubConnectionError ? error.safeCode : \"access_denied\";\n    const status = code === \"access_denied\" || code === \"scope_forbidden\" ? 403\n      : code === \"credential_invalid\" ? 401\n      : code === \"connector_not_found\" ? 404\n      : code === \"rate_limited\" ? 429\n      : code === \"request_timeout\" ? 504\n      : code === \"project_access_changed\" ? 409 : 503;\n    return NextResponse.json({ error: { code } }, { status, headers: noStoreHeaders });\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/projects/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/connectors/dji-flighthub/projects",
+      "dependencies": [
+        {
+          "name": "discoverFlightHubProjects",
+          "from": "@/lib/dji-flighthub-discovery"
+        }
+      ],
+      "sourceHash": "e71b61df5ab1699633dc7cac7a239e96df7d4d17118a42fe4998d16dd9ac1fb5",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\nimport { ZodError } from \"zod\";\n\nimport { discoverFlightHubProjects } from \"@/lib/dji-flighthub-discovery\";\nimport { FlightHubDiscoveryError } from \"@/lib/dji-flighthub-discovery-core\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nfunction errorStatus(error: FlightHubDiscoveryError) {\n  if (error.safeCode === \"access_denied\" || error.safeCode === \"scope_forbidden\") return 403;\n  if (error.safeCode === \"credential_invalid\") return 401;\n  if (error.safeCode === \"rate_limited\") return 429;\n  if (error.safeCode === \"request_timeout\") return 504;\n  if (error.safeCode === \"scope_not_found\") return 404;\n  return 502;\n}\n\nexport async function POST(\n  request: NextRequest,\n  context: { params: Promise<{ id: string }> }\n) {\n  try {\n    const { id } = await context.params;\n    const projects = await discoverFlightHubProjects(\n      Number(id),\n      await request.json(),\n      request.headers.get(\"x-request-id\")\n    );\n    return NextResponse.json({ projects }, { headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof FlightHubDiscoveryError) {\n      const headers: Record<string, string> = { ...noStoreHeaders };\n      if (error.retryAfterSeconds !== undefined) {\n        headers[\"Retry-After\"] = String(error.retryAfterSeconds);\n      }\n      return NextResponse.json(\n        { error: { code: error.safeCode } },\n        { status: errorStatus(error), headers }\n      );\n    }\n    if (error instanceof ZodError || error instanceof SyntaxError) {\n      return NextResponse.json(\n        { error: { code: \"invalid_request\" } },\n        { status: 400, headers: noStoreHeaders }\n      );\n    }\n    return NextResponse.json(\n      { error: { code: \"access_denied\" } },\n      { status: 403, headers: noStoreHeaders }\n    );\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/connectors/dji-flighthub",
+      "dependencies": [
+        {
+          "name": "listFlightHubConnections",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        },
+        {
+          "name": "listFlightHubDiscoveryActivity",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        },
+        {
+          "name": "createFlightHubConnection",
+          "from": "@/lib/dji-flighthub-connections"
+        }
+      ],
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\nimport { ZodError } from \"zod\";\n\nimport { FlightHubConnectionError } from \"@/lib/dji-flighthub-connection-core\";\nimport { createFlightHubConnection } from \"@/lib/dji-flighthub-connections\";\nimport { listFlightHubConnections, listFlightHubDiscoveryActivity } from \"@/lib/dji-flighthub-lifecycle\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nfunction errorStatus(error: FlightHubConnectionError) {\n  if (error.safeCode === \"access_denied\" || error.safeCode === \"scope_forbidden\") return 403;\n  if (error.safeCode === \"credential_invalid\") return 401;\n  if (error.safeCode === \"scope_not_found\" || error.safeCode === \"project_access_changed\") return 409;\n  if (error.safeCode === \"duplicate_connection\") return 409;\n  if (error.safeCode === \"connector_not_found\") return 404;\n  if (error.safeCode === \"connector_disabled\") return 409;\n  if (error.safeCode === \"rate_limited\") return 429;\n  if (error.safeCode === \"request_timeout\") return 504;\n  return 503;\n}\n\nexport async function GET(\n  _request: NextRequest,\n  context: { params: Promise<{ id: string }> }\n) {\n  try {\n    const { id } = await context.params;\n    const projectId = Number(id);\n    const [connectors, activity] = await Promise.all([\n      listFlightHubConnections(projectId),\n      listFlightHubDiscoveryActivity(projectId),\n    ]);\n    return NextResponse.json({ connectors, ...activity }, { headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof FlightHubConnectionError) {\n      return NextResponse.json(\n        { error: { code: error.safeCode } },\n        { status: errorStatus(error), headers: noStoreHeaders }\n      );\n    }\n    return NextResponse.json(\n      { error: { code: \"access_denied\" } },\n      { status: 403, headers: noStoreHeaders }\n    );\n  }\n}\n\nexport async function POST(\n  request: NextRequest,\n  context: { params: Promise<{ id: string }> }\n) {\n  try {\n    const { id } = await context.params;\n    const connector = await createFlightHubConnection(\n      Number(id),\n      await request.json(),\n      request.headers.get(\"x-request-id\")\n    );\n    return NextResponse.json(connector, { status: 201, headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof FlightHubConnectionError) {\n      const headers: Record<string, string> = { ...noStoreHeaders };\n      if (error.retryAfterSeconds !== undefined) headers[\"Retry-After\"] = String(error.retryAfterSeconds);\n      return NextResponse.json(\n        { error: { code: error.safeCode } },\n        { status: errorStatus(error), headers }\n      );\n    }\n    if (error instanceof ZodError || error instanceof SyntaxError) {\n      return NextResponse.json(\n        { error: { code: \"invalid_request\" } },\n        { status: 400, headers: noStoreHeaders }\n      );\n    }\n    return NextResponse.json(\n      { error: { code: \"access_denied\" } },\n      { status: 403, headers: noStoreHeaders }\n    );\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/connectors/dji-flighthub",
+      "dependencies": [
+        {
+          "name": "listFlightHubConnections",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        },
+        {
+          "name": "listFlightHubDiscoveryActivity",
+          "from": "@/lib/dji-flighthub-lifecycle"
+        },
+        {
+          "name": "createFlightHubConnection",
+          "from": "@/lib/dji-flighthub-connections"
+        }
+      ],
+      "sourceHash": "35e54b0e3ea9dc8245d1cca990939daed602565819e13af475beac034ba603ed",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\nimport { ZodError } from \"zod\";\n\nimport { FlightHubConnectionError } from \"@/lib/dji-flighthub-connection-core\";\nimport { createFlightHubConnection } from \"@/lib/dji-flighthub-connections\";\nimport { listFlightHubConnections, listFlightHubDiscoveryActivity } from \"@/lib/dji-flighthub-lifecycle\";\n\nexport const runtime = \"nodejs\";\nexport const dynamic = \"force-dynamic\";\n\nconst noStoreHeaders = { \"Cache-Control\": \"no-store, max-age=0\" };\n\nfunction errorStatus(error: FlightHubConnectionError) {\n  if (error.safeCode === \"access_denied\" || error.safeCode === \"scope_forbidden\") return 403;\n  if (error.safeCode === \"credential_invalid\") return 401;\n  if (error.safeCode === \"scope_not_found\" || error.safeCode === \"project_access_changed\") return 409;\n  if (error.safeCode === \"duplicate_connection\") return 409;\n  if (error.safeCode === \"connector_not_found\") return 404;\n  if (error.safeCode === \"connector_disabled\") return 409;\n  if (error.safeCode === \"rate_limited\") return 429;\n  if (error.safeCode === \"request_timeout\") return 504;\n  return 503;\n}\n\nexport async function GET(\n  _request: NextRequest,\n  context: { params: Promise<{ id: string }> }\n) {\n  try {\n    const { id } = await context.params;\n    const projectId = Number(id);\n    const [connectors, activity] = await Promise.all([\n      listFlightHubConnections(projectId),\n      listFlightHubDiscoveryActivity(projectId),\n    ]);\n    return NextResponse.json({ connectors, ...activity }, { headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof FlightHubConnectionError) {\n      return NextResponse.json(\n        { error: { code: error.safeCode } },\n        { status: errorStatus(error), headers: noStoreHeaders }\n      );\n    }\n    return NextResponse.json(\n      { error: { code: \"access_denied\" } },\n      { status: 403, headers: noStoreHeaders }\n    );\n  }\n}\n\nexport async function POST(\n  request: NextRequest,\n  context: { params: Promise<{ id: string }> }\n) {\n  try {\n    const { id } = await context.params;\n    const connector = await createFlightHubConnection(\n      Number(id),\n      await request.json(),\n      request.headers.get(\"x-request-id\")\n    );\n    return NextResponse.json(connector, { status: 201, headers: noStoreHeaders });\n  } catch (error) {\n    if (error instanceof FlightHubConnectionError) {\n      const headers: Record<string, string> = { ...noStoreHeaders };\n      if (error.retryAfterSeconds !== undefined) headers[\"Retry-After\"] = String(error.retryAfterSeconds);\n      return NextResponse.json(\n        { error: { code: error.safeCode } },\n        { status: errorStatus(error), headers }\n      );\n    }\n    if (error instanceof ZodError || error instanceof SyntaxError) {\n      return NextResponse.json(\n        { error: { code: \"invalid_request\" } },\n        { status: 400, headers: noStoreHeaders }\n      );\n    }\n    return NextResponse.json(\n      { error: { code: \"access_denied\" } },\n      { status: 403, headers: noStoreHeaders }\n    );\n  }\n}\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/[adapterId]/route.ts",
+      "method": "PATCH",
+      "target": "PATCH /api/projects/:id/device-adapters/:adapterId",
+      "dependencies": [
+        {
+          "name": "updateDjiAdapterCredentials",
+          "from": "@/lib/device-adapters"
+        },
+        {
+          "name": "setDeviceAdapterEnabled",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "ffd9c8b31ee5fe052a413704a1c0a67c6fe452f386b7ad179f3e00ff6cce346f",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { setDeviceAdapterEnabled, updateDjiAdapterCredentials } from \"@/lib/device-adapters\";\r\n\r\nexport async function PATCH(\r\n  request: NextRequest,\r\n  context: { params: Promise<{ id: string; adapterId: string }> }\r\n) {\r\n  try {\r\n    const { id, adapterId } = await context.params;\r\n    const body = await request.json() as { enabled?: unknown; credentials?: unknown };\r\n    if (body.credentials !== undefined) return NextResponse.json(await updateDjiAdapterCredentials(\r\n      Number(id), Number(adapterId), body.credentials, request.headers.get(\"x-request-id\")\r\n    ));\r\n    if (typeof body.enabled !== \"boolean\") throw new Error(\"enabled or credentials is required\");\r\n    return NextResponse.json(await setDeviceAdapterEnabled(\r\n      Number(id), Number(adapterId), body.enabled, request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Invalid or unauthorized adapter update\" }, { status: 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/[adapterId]/test/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/device-adapters/:adapterId/test",
+      "dependencies": [
+        {
+          "name": "testDeviceAdapterConnection",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "1972db380ecbdcdb768b78c00e55496e191e31b59bcdd8a723bb950d59154e5c",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { testDeviceAdapterConnection } from \"@/lib/device-adapters\";\r\n\r\nexport async function POST(\r\n  request: NextRequest,\r\n  context: { params: Promise<{ id: string; adapterId: string }> }\r\n) {\r\n  try {\r\n    const { id, adapterId } = await context.params;\r\n    return NextResponse.json(await testDeviceAdapterConnection(\r\n      Number(id), Number(adapterId), request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"DEVICE_ADAPTER_TEST_FAILED\";\r\n    const safeCode = new Set([\"PROJECT_ACCESS_DENIED\", \"DEVICE_ADAPTER_NOT_FOUND\"]).has(code)\r\n      ? code\r\n      : \"DEVICE_ADAPTER_TEST_FAILED\";\r\n    return NextResponse.json({ error: safeCode }, { status: safeCode === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/discoveries/[identityId]/bind/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/device-adapters/discoveries/:identityId/bind",
+      "dependencies": [
+        {
+          "name": "bindDiscoveredDevice",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "6cd73ba6b88cce72a21d34f550e0b24718e9989ecb11460fde400c87c440d08c",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { bindDiscoveredDevice } from \"@/lib/device-adapters\";\r\n\r\nexport async function POST(\r\n  request: NextRequest,\r\n  context: { params: Promise<{ id: string; identityId: string }> }\r\n) {\r\n  try {\r\n    const { id, identityId } = await context.params;\r\n    return NextResponse.json(await bindDiscoveredDevice(\r\n      Number(id), Number(identityId), await request.json(), request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Invalid or unauthorized device binding\" }, { status: 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/dji-setup/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/device-adapters/dji-setup",
+      "dependencies": [
+        {
+          "name": "createDjiAdapterSetup",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "d229e194ac074c96d0ac93759a00ff35dc733a5e5a0695052571adda09234414",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { createDjiAdapterSetup } from \"@/lib/device-adapters\";\r\n\r\nexport async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {\r\n  try {\r\n    const { id } = await context.params;\r\n    const adapter = await createDjiAdapterSetup(\r\n      Number(id),\r\n      await request.json(),\r\n      request.headers.get(\"x-request-id\")\r\n    );\r\n    return NextResponse.json(adapter, { status: 201 });\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"DJI_ADAPTER_SETUP_FAILED\";\r\n    const issues = error instanceof Error && \"issues\" in error\r\n      ? (error as Error & { issues: unknown }).issues\r\n      : undefined;\r\n    const safeCode = code === \"NETWORK_PROFILE_INVALID\" || code === \"PROJECT_ACCESS_DENIED\"\r\n      ? code\r\n      : \"DJI_ADAPTER_SETUP_INVALID\";\r\n    return NextResponse.json(\r\n      { error: safeCode, issues },\r\n      { status: safeCode === \"PROJECT_ACCESS_DENIED\" ? 403 : 400 }\r\n    );\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/device-adapters",
+      "dependencies": [
+        {
+          "name": "listDeviceAdapters",
+          "from": "@/lib/device-adapters"
+        },
+        {
+          "name": "createDeviceAdapter",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { createDeviceAdapter, listDeviceAdapters } from \"@/lib/device-adapters\";\r\n\r\nexport async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {\r\n  try {\r\n    const { id } = await context.params;\r\n    return NextResponse.json(await listDeviceAdapters(Number(id)));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Unable to access device adapters\" }, { status: 403 });\r\n  }\r\n}\r\n\r\nexport async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {\r\n  try {\r\n    const { id } = await context.params;\r\n    const adapter = await createDeviceAdapter(\r\n      Number(id),\r\n      await request.json(),\r\n      request.headers.get(\"x-request-id\")\r\n    );\r\n    return NextResponse.json(adapter, { status: 201 });\r\n  } catch {\r\n    return NextResponse.json({ error: \"Invalid or unauthorized device adapter request\" }, { status: 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/device-adapters",
+      "dependencies": [
+        {
+          "name": "listDeviceAdapters",
+          "from": "@/lib/device-adapters"
+        },
+        {
+          "name": "createDeviceAdapter",
+          "from": "@/lib/device-adapters"
+        }
+      ],
+      "sourceHash": "45bf1c2f7f305532967c065bc591229e20c2599139bc18b9a088416d89a2aa2d",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\n\r\nimport { createDeviceAdapter, listDeviceAdapters } from \"@/lib/device-adapters\";\r\n\r\nexport async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {\r\n  try {\r\n    const { id } = await context.params;\r\n    return NextResponse.json(await listDeviceAdapters(Number(id)));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Unable to access device adapters\" }, { status: 403 });\r\n  }\r\n}\r\n\r\nexport async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {\r\n  try {\r\n    const { id } = await context.params;\r\n    const adapter = await createDeviceAdapter(\r\n      Number(id),\r\n      await request.json(),\r\n      request.headers.get(\"x-request-id\")\r\n    );\r\n    return NextResponse.json(adapter, { status: 201 });\r\n  } catch {\r\n    return NextResponse.json({ error: \"Invalid or unauthorized device adapter request\" }, { status: 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/devices/[deviceId]/commands/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/devices/:deviceId/commands",
+      "dependencies": [
+        {
+          "name": "assertLiveControlRequest",
+          "from": "@/lib/replay-policy"
+        },
+        {
+          "name": "submitDeviceCommand",
+          "from": "@/lib/device-commands"
+        }
+      ],
+      "sourceHash": "5cfeb706657d820fce65a3ecfcfe61e783c282481e844041d857a5ce03a4da0f",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { submitDeviceCommand } from \"@/lib/device-commands\";\r\nimport { assertLiveControlRequest } from \"@/lib/replay-policy\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string; deviceId: string }> }) {\r\n  const { id, deviceId } = await params;\r\n  const projectId = Number(id);\r\n  const parsedDeviceId = Number(deviceId);\r\n  const body = await request.json() as Record<string, unknown>;\r\n  if (!Number.isInteger(projectId) || projectId <= 0 || !Number.isInteger(parsedDeviceId) || parsedDeviceId <= 0\r\n      || typeof body.capabilityCode !== \"string\" || !body.capabilityCode.trim()\r\n      || typeof body.commandKey !== \"string\" || !body.commandKey.trim()\r\n      || !body.parameters || typeof body.parameters !== \"object\" || Array.isArray(body.parameters)\r\n      || typeof body.idempotencyKey !== \"string\" || body.idempotencyKey.length < 8 || body.idempotencyKey.length > 128\r\n      || typeof body.reason !== \"string\" || !body.reason.trim()\r\n      || (body.deadlineSeconds !== undefined && (typeof body.deadlineSeconds !== \"number\" || !Number.isFinite(body.deadlineSeconds)))) {\r\n    return NextResponse.json({ error: \"DEVICE_COMMAND_INPUT_INVALID\" }, { status: 400 });\r\n  }\r\n  try {\r\n    assertLiveControlRequest(request);\r\n    const result = await submitDeviceCommand({\r\n      projectId, deviceId: parsedDeviceId, capabilityCode: body.capabilityCode,\r\n      commandKey: body.commandKey, parameters: body.parameters as Record<string, unknown>,\r\n      idempotencyKey: body.idempotencyKey, confirmation: typeof body.confirmation === \"string\" ? body.confirmation : null,\r\n      reason: body.reason, deadlineSeconds: typeof body.deadlineSeconds === \"number\" ? body.deadlineSeconds : undefined,\r\n      requestId: request.headers.get(\"x-request-id\")\r\n    });\r\n    return NextResponse.json(result);\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"DEVICE_COMMAND_FAILED\";\r\n    const forbidden = code.includes(\"DENIED\") || code.includes(\"NOT_GRANTED\");\r\n    return NextResponse.json({ error: code }, { status: forbidden ? 403 : 409 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/devices/[deviceId]/live-streams/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/devices/:deviceId/live-streams",
+      "dependencies": [
+        {
+          "name": "assertLiveControlRequest",
+          "from": "@/lib/replay-policy"
+        },
+        {
+          "name": "startLiveStream",
+          "from": "@/lib/live-streams"
+        }
+      ],
+      "sourceHash": "8de3be870c96b7ede0c142cc6550e267ae19d4d4de5a4083366389886c64fc42",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { startLiveStream } from \"@/lib/live-streams\";\r\nimport { assertLiveControlRequest } from \"@/lib/replay-policy\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string; deviceId: string }> }) {\r\n  try {\r\n    assertLiveControlRequest(request);\r\n    const { id, deviceId } = await params;\r\n    const body = await request.json().catch(() => ({})) as { streamKey?: string };\r\n    return NextResponse.json(await startLiveStream(Number(id), Number(deviceId), { streamKey: body.streamKey }, request.headers.get(\"x-request-id\")));\r\n  } catch (error) {\r\n    return NextResponse.json({ error: error instanceof Error ? error.message : \"LIVE_STREAM_START_FAILED\" }, { status: 409 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/events/[eventId]/actions/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/events/:eventId/actions",
+      "dependencies": [],
+      "sourceHash": "29de82a5566808917fc4c3af0ede0939b01fd8286caf1d14effc9b3151003bb6",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nexport async function POST(){\r\n  return NextResponse.json({error:\"LEGACY_EVENT_READ_ONLY\",issuesHref:\"../issues\"},{status:410});\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/events/[eventId]/agent-drafts/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/events/:eventId/agent-drafts",
+      "dependencies": [],
+      "sourceHash": "4097affaa3632341280cb5f4e64336648ad77296e0194fb6ca41f10d16c58481",
+      "originalHandler": "import {NextResponse} from \"next/server\";\r\nexport async function POST(){return NextResponse.json({error:\"LEGACY_EVENT_READ_ONLY\",issuesHref:\"../issues\"},{status:410})}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/events/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/events",
+      "dependencies": [
+        {
+          "name": "requireUser",
+          "from": "@/lib/data"
+        },
+        {
+          "name": "canAccessProjectStream",
+          "from": "@/lib/project-stream"
+        },
+        {
+          "name": "createProjectEventStream",
+          "from": "@/lib/project-stream"
+        }
+      ],
+      "sourceHash": "e1ce09813272ba2962ee9ad22daa232bf14a4de53b5b1dad9a1198e729b4902a",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { db } from \"@/lib/db\";\r\nimport { requireUser } from \"@/lib/data\";\r\nimport { canAccessProjectStream, createProjectEventStream } from \"@/lib/project-stream\";\r\n\r\nexport const dynamic = \"force-dynamic\";\r\n\r\nexport async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const user = await requireUser();\r\n  const { id } = await params;\r\n  const projectId = Number(id);\r\n  if (!Number.isSafeInteger(projectId) || projectId <= 0) {\r\n    return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  }\r\n  const client = await db.connect();\r\n  const allowed = await canAccessProjectStream(client, user.id, projectId).finally(() => client.release());\r\n  if (!allowed) return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  const url = new URL(request.url);\r\n  const afterCursor = request.headers.get(\"Last-Event-ID\") ?? url.searchParams.get(\"cursor\");\r\n  return new Response(createProjectEventStream({ userId: user.id, projectId, afterCursor, signal: request.signal }), {\r\n    headers: {\r\n      \"Content-Type\": \"text/event-stream; charset=utf-8\",\r\n      \"Cache-Control\": \"private, no-cache, no-transform\",\r\n      \"Connection\": \"keep-alive\",\r\n      \"X-Accel-Buffering\": \"no\"\r\n    }\r\n  });\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/issues/[issueId]/actions/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/issues/:issueId/actions",
+      "dependencies": [
+        {
+          "name": "mutateIssue",
+          "from": "@/lib/issue-collaboration"
+        }
+      ],
+      "sourceHash": "1fe788588679b0070263a02d7ba95e8a4fd2ad178bd79f906ce51b10a127ef0b",
+      "originalHandler": "import { NextRequest, NextResponse } from \"next/server\";\r\nimport { issueMutationInputSchema, mutateIssue } from \"@/lib/issue-collaboration\";\r\n\r\nfunction statusFor(error: unknown) {\r\n  const message = error instanceof Error ? error.message : \"ISSUE_UPDATE_FAILED\";\r\n  if (message === \"PROJECT_ACCESS_DENIED\") return 403;\r\n  if (message === \"ISSUE_NOT_FOUND\") return 404;\r\n  if (message === \"ISSUE_VERSION_CONFLICT\") return 409;\r\n  return 400;\r\n}\r\n\r\nexport async function POST(request: NextRequest, { params }: { params: Promise<{ id: string; issueId: string }> }) {\r\n  try {\r\n    const { id, issueId } = await params;\r\n    const parsed = issueMutationInputSchema.parse(await request.json());\r\n    const result = await mutateIssue(Number(id), Number(issueId), parsed, request.headers.get(\"x-request-id\"));\r\n    return NextResponse.json(result);\r\n  } catch (error) {\r\n    return NextResponse.json({ error: error instanceof Error ? error.message : \"ISSUE_UPDATE_FAILED\" }, { status: statusFor(error) });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/live-streams/[streamId]/playback/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/live-streams/:streamId/playback",
+      "dependencies": [
+        {
+          "name": "getLiveStreamPlayback",
+          "from": "@/lib/live-streams"
+        }
+      ],
+      "sourceHash": "d6abf5152eb11eb4ed783186779a12d978b19c0785aa49406c51d8010aa65ece",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { getLiveStreamPlayback } from \"@/lib/live-streams\";\r\n\r\nexport async function GET(\r\n  _request: Request,\r\n  { params }: { params: Promise<{ id: string; streamId: string }> }\r\n) {\r\n  try {\r\n    const { id, streamId } = await params;\r\n    return NextResponse.json(await getLiveStreamPlayback(Number(id), Number(streamId)));\r\n  } catch {\r\n    return NextResponse.json({ error: \"Unable to access live stream\" }, { status: 403 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/live-streams/[streamId]/stop/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/live-streams/:streamId/stop",
+      "dependencies": [
+        {
+          "name": "assertLiveControlRequest",
+          "from": "@/lib/replay-policy"
+        },
+        {
+          "name": "stopLiveStream",
+          "from": "@/lib/live-streams"
+        }
+      ],
+      "sourceHash": "91fa8cb902da242b2f59a7c48be1fd2ed6c3a139fd5fdb4cb97c92a8aeebf168",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { stopLiveStream } from \"@/lib/live-streams\";\r\nimport { assertLiveControlRequest, ReplayControlForbiddenError } from \"@/lib/replay-policy\";\r\n\r\nexport async function POST(\r\n  request: Request,\r\n  { params }: { params: Promise<{ id: string; streamId: string }> }\r\n) {\r\n  try {\r\n    assertLiveControlRequest(request);\r\n    const { id, streamId } = await params;\r\n    return NextResponse.json(await stopLiveStream(\r\n      Number(id), Number(streamId), request.headers.get(\"x-request-id\")\r\n    ));\r\n  } catch (error) {\r\n    if (error instanceof ReplayControlForbiddenError) {\r\n      return NextResponse.json({ error: error.code }, { status: 409 });\r\n    }\r\n    return NextResponse.json({ error: \"Unable to stop live stream\" }, { status: 400 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/realtime-channels/[channelId]/events/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/realtime-channels/:channelId/events",
+      "dependencies": [
+        {
+          "name": "requireUser",
+          "from": "@/lib/data"
+        },
+        {
+          "name": "resolveRealtimeSubscription",
+          "from": "@/lib/realtime-subscriptions"
+        },
+        {
+          "name": "createRealtimeSubscriptionStream",
+          "from": "@/lib/realtime-subscriptions"
+        }
+      ],
+      "sourceHash": "87f88ec64a1bdea15cc8de97b27f07ee8b0158f1e748f708987b9b407bd01988",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\n\r\nimport { requireUser } from \"@/lib/data\";\r\nimport { db } from \"@/lib/db\";\r\nimport { createRealtimeSubscriptionStream, resolveRealtimeSubscription } from \"@/lib/realtime-subscriptions\";\r\n\r\nexport const dynamic = \"force-dynamic\";\r\n\r\nexport async function GET(request: Request, { params }: {\r\n  params: Promise<{ id: string; channelId: string }>;\r\n}) {\r\n  const user = await requireUser();\r\n  const { id, channelId } = await params;\r\n  const projectId = Number(id);\r\n  if (!Number.isSafeInteger(projectId) || projectId <= 0 || !channelId || channelId.length > 512) {\r\n    return NextResponse.json({ error: \"REALTIME_CHANNEL_NOT_FOUND\" }, { status: 404 });\r\n  }\r\n  const client = await db.connect();\r\n  try {\r\n    await resolveRealtimeSubscription(client, user.id, projectId, channelId);\r\n  } catch {\r\n    return NextResponse.json({ error: \"REALTIME_CHANNEL_NOT_FOUND\" }, { status: 404 });\r\n  } finally {\r\n    client.release();\r\n  }\r\n  const url = new URL(request.url);\r\n  const afterCursor = request.headers.get(\"Last-Event-ID\") ?? url.searchParams.get(\"cursor\");\r\n  return new Response(createRealtimeSubscriptionStream({\r\n    userId: user.id, projectId, stableChannelId: channelId, afterCursor, signal: request.signal\r\n  }), {\r\n    headers: {\r\n      \"Content-Type\": \"text/event-stream; charset=utf-8\",\r\n      \"Cache-Control\": \"private, no-cache, no-transform\",\r\n      \"Connection\": \"keep-alive\",\r\n      \"X-Accel-Buffering\": \"no\"\r\n    }\r\n  });\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/replay/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/replay",
+      "dependencies": [
+        {
+          "name": "requireUser",
+          "from": "@/lib/data"
+        },
+        {
+          "name": "parseReplayQuery",
+          "from": "@/lib/project-replay-core"
+        },
+        {
+          "name": "readProjectReplay",
+          "from": "@/lib/project-replay"
+        }
+      ],
+      "sourceHash": "f3548d059573a0166b0087f0008337a7f7f67d0b4f0284d5b84e2e5adae03441",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { requireUser } from \"@/lib/data\";\r\nimport { parseReplayQuery } from \"@/lib/project-replay-core\";\r\nimport { readProjectReplay } from \"@/lib/project-replay\";\r\n\r\nexport async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const user = await requireUser();\r\n  const { id } = await params;\r\n  const projectId = Number(id);\r\n  if (!Number.isSafeInteger(projectId) || projectId <= 0) return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  let input;\r\n  try { input = parseReplayQuery(new URL(request.url)); }\r\n  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : \"INVALID_REPLAY_QUERY\" }, { status: 400 }); }\r\n  const replay = await readProjectReplay(user.id, projectId, input);\r\n  if (!replay) return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  return NextResponse.json(replay, { headers: { \"Cache-Control\": \"private, no-store\", \"X-AeroSight-Mode\": \"replay\" } });\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/reports/[reportId]/export/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/reports/:reportId/export",
+      "dependencies": [
+        {
+          "name": "exportGeneratedReport",
+          "from": "@/lib/generated-reports"
+        }
+      ],
+      "sourceHash": "15c09fa4917ff325726af22489e29f31a931b3caca70a3a7867fc484ba3ab39e",
+      "originalHandler": "import {exportGeneratedReport} from \"@/lib/generated-reports\";export async function GET(_request:Request,{params}:{params:Promise<{id:string;reportId:string}>}){const {id,reportId}=await params;try{const report=await exportGeneratedReport(Number(id),reportId);return new Response(JSON.stringify(report,null,2),{headers:{\"content-type\":\"application/json; charset=utf-8\",\"content-disposition\":`attachment; filename=\"aerosight-report-${reportId}.json\"`,\"cache-control\":\"private, no-store\"}})}catch(error){return Response.json({error:error instanceof Error?error.message:\"REPORT_EXPORT_FAILED\"},{status:403})}}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/reports/[reportId]/publish/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/reports/:reportId/publish",
+      "dependencies": [
+        {
+          "name": "publishGeneratedReport",
+          "from": "@/lib/generated-reports"
+        }
+      ],
+      "sourceHash": "bb0f0d0c6a998010ff11a270b545874f98d282d6481b38dc2f63f7787577502d",
+      "originalHandler": "import {NextResponse} from \"next/server\";import {publishGeneratedReport} from \"@/lib/generated-reports\";export async function POST(request:Request,{params}:{params:Promise<{id:string;reportId:string}>}){const {id,reportId}=await params;const body=await request.json() as {allowIncomplete?:boolean};try{return NextResponse.json(await publishGeneratedReport(Number(id),reportId,body.allowIncomplete===true,request.headers.get(\"x-request-id\")))}catch(error){const code=error instanceof Error?error.message:\"REPORT_PUBLISH_FAILED\";return NextResponse.json({error:code},{status:code===\"PROJECT_ACCESS_DENIED\"?403:409})}}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/snapshot/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/snapshot",
+      "dependencies": [
+        {
+          "name": "requireUser",
+          "from": "@/lib/data"
+        },
+        {
+          "name": "readProjectSituationSnapshot",
+          "from": "@/lib/project-snapshot"
+        }
+      ],
+      "sourceHash": "fa03d8bea869f99b2bbcf3506e00be3076dee9059774f3812303672e9410ff22",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { requireUser } from \"@/lib/data\";\r\nimport { readProjectSituationSnapshot } from \"@/lib/project-snapshot\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {\r\n  const user = await requireUser();\r\n  const { id } = await params;\r\n  const projectId = Number(id);\r\n  if (!Number.isSafeInteger(projectId) || projectId <= 0) {\r\n    return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  }\r\n  const snapshot = await readProjectSituationSnapshot(user.id, projectId);\r\n  if (!snapshot) return NextResponse.json({ error: \"PROJECT_NOT_FOUND\" }, { status: 404 });\r\n  return NextResponse.json(snapshot, {\r\n    headers: { \"Cache-Control\": \"private, no-store\", \"X-AeroSight-Snapshot\": \"repeatable-read\" }\r\n  });\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/task-runs/[runId]/audit-trace/route.ts",
+      "method": "GET",
+      "target": "GET /api/projects/:id/task-runs/:runId/audit-trace",
+      "dependencies": [
+        {
+          "name": "getMissionAuditTrace",
+          "from": "@/lib/mission-audit-traces"
+        }
+      ],
+      "sourceHash": "ec827d98ec3e1d51b7794ebfdd4b30a43a78f22a62e03c8ede761e37560c44e4",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { getMissionAuditTrace } from \"@/lib/mission-audit-traces\";\r\n\r\nexport async function GET(_request: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {\r\n  const { id, runId } = await params;\r\n  return NextResponse.json(await getMissionAuditTrace(Number(id), Number(runId)));\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/task-runs/[runId]/control/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/task-runs/:runId/control",
+      "dependencies": [
+        {
+          "name": "controlMissionRun",
+          "from": "@/lib/task-runs"
+        }
+      ],
+      "sourceHash": "be587e20490010fdcc5373098c63c9e574129dc30a046a2d91d092f36f89418f",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport type { MissionAction } from \"@/lib/mission-workbench-core\";\r\nimport { controlMissionRun } from \"@/lib/task-runs\";\r\n\r\nconst supported = new Set<MissionAction>([\"pause\", \"resume\", \"cancel\", \"emergency_stop\", \"approve\"]);\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {\r\n  const { id, runId } = await params;\r\n  const body = await request.json() as { action?: MissionAction; expectedVersion?: number; reason?: string };\r\n  if (!body.action || !supported.has(body.action) || !Number.isInteger(body.expectedVersion) || !body.reason?.trim()) {\r\n    return NextResponse.json({ error: \"MISSION_CONTROL_INPUT_INVALID\" }, { status: 400 });\r\n  }\r\n  try {\r\n    const result = await controlMissionRun({ projectId: Number(id), taskRunId: Number(runId),\r\n      action: body.action, expectedVersion: body.expectedVersion!, reason: body.reason });\r\n    return NextResponse.json(result);\r\n  } catch (error) {\r\n    const code = error instanceof Error ? error.message : \"MISSION_CONTROL_FAILED\";\r\n    return NextResponse.json({ error: code }, { status: code === \"PROJECT_ACCESS_DENIED\" ? 403 : 409 });\r\n  }\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/task-runs/[runId]/emergency-stop-drill/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/task-runs/:runId/emergency-stop-drill",
+      "dependencies": [
+        {
+          "name": "runEmergencyStopDrill",
+          "from": "@/lib/mission-audit-traces"
+        }
+      ],
+      "sourceHash": "d503a0046d2a0bd5fbbb1e141b39e9bab2cf3f0dbc19876712a161e5ccfccf65",
+      "originalHandler": "import { NextResponse } from \"next/server\";\r\nimport { runEmergencyStopDrill } from \"@/lib/mission-audit-traces\";\r\n\r\nexport async function POST(request: Request, { params }: { params: Promise<{ id: string; runId: string }> }) {\r\n  const { id, runId } = await params;\r\n  const body = await request.json();\r\n  return NextResponse.json(await runEmergencyStopDrill({\r\n    projectId: Number(id), taskRunId: Number(runId), dryRun: body.dryRun === true,\r\n    outcome: body.outcome, requestId: request.headers.get(\"x-request-id\")\r\n  }));\r\n}\r\n"
+    },
+    {
+      "kind": "route",
+      "source": "apps/web/app/api/projects/[id]/task-runs/[runId]/reports/route.ts",
+      "method": "POST",
+      "target": "POST /api/projects/:id/task-runs/:runId/reports",
+      "dependencies": [
+        {
+          "name": "createTaskRunReportDraft",
+          "from": "@/lib/generated-reports"
+        }
+      ],
+      "sourceHash": "446b189fdc52cbe02e7a3ace220794419b70b86a0da5755ce0b49597abcc4e22",
+      "originalHandler": "import {NextResponse} from \"next/server\";import {createTaskRunReportDraft} from \"@/lib/generated-reports\";export async function POST(request:Request,{params}:{params:Promise<{id:string;runId:string}>}){const {id,runId}=await params;try{return NextResponse.json(await createTaskRunReportDraft(Number(id),Number(runId),request.headers.get(\"x-request-id\")),{status:201})}catch(error){const code=error instanceof Error?error.message:\"REPORT_CREATE_FAILED\";return NextResponse.json({error:code},{status:code===\"PROJECT_ACCESS_DENIED\"?403:409})}}\r\n"
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/layout.tsx",
+      "url": "/",
+      "queries": [
+        {
+          "name": "cn",
+          "from": "@/lib/utils",
+          "target": "client-only helper"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/login/page.tsx",
+      "url": "/login",
+      "queries": [
+        {
+          "name": "auth",
+          "from": "@/auth",
+          "target": "GET /api/auth/session"
+        }
+      ]
+    },
+    {
+      "kind": "page",
+      "source": "apps/web/app/page.tsx",
+      "url": "/",
+      "queries": []
+    }
+  ]
+}

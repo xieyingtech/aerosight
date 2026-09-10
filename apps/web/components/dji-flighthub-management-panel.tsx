@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCwIcon, SearchIcon, ShieldCheckIcon } from "lucide-react";
@@ -24,14 +25,14 @@ export function DjiFlightHubManagementPanel({projectId,connectorId}:{projectId:n
   const [payload,setPayload]=useState<Payload|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null);
   const [projectCode,setProjectCode]=useState(""),[joinCode,setJoinCode]=useState(""),[droneSN,setDroneSN]=useState("");
   const [joinResult,setJoinResult]=useState<JoinResult|null>(null),[joinLoading,setJoinLoading]=useState(false);
-  const load=async()=>{setLoading(true);setError(null);try{const response=await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/management`,{cache:"no-store"});
+  const load=async()=>{setLoading(true);setError(null);try{const response=await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/management`,{cache:"no-store"});
     const data=await response.json() as Payload&{error?:string};if(!response.ok)throw new Error(data.error??"读取失败");setPayload(data);}catch(cause){setError(cause instanceof Error?cause.message:"读取失败");}finally{setLoading(false);}};
   useEffect(()=>{void load();},[projectId,connectorId]); // eslint-disable-line react-hooks/exhaustive-deps
   const groups=useMemo(()=>Object.entries((payload?.resources??[]).reduce<Record<string,Resource[]>>((result,item)=>{
     (result[item.kind]??=[]).push(item);return result;
   },{})),[payload]);
   const lookup=async()=>{if(!projectCode.trim()||!joinCode.trim())return;setJoinLoading(true);setJoinResult(null);setError(null);
-    try{const response=await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/management`,{method:"POST",headers:{"content-type":"application/json"},cache:"no-store",
+    try{const response=await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/management`,{method:"POST",headers:{"content-type":"application/json"},cache:"no-store",
       body:JSON.stringify({projectCode:projectCode.trim(),fastJoinCode:joinCode.trim(),...(droneSN.trim()?{associationDroneSN:droneSN.trim()}:{})})});
       const data=await response.json() as JoinResult&{error?:string};if(!response.ok)throw new Error(data.error??"加入码查询失败");setJoinResult(data);
     }catch(cause){setError(cause instanceof Error?cause.message:"加入码查询失败");}finally{setJoinCode("");setDroneSN("");setJoinLoading(false);}};

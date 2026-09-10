@@ -1,4 +1,5 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -17,7 +18,7 @@ function date(value: string | null) { return value ? new Date(value).toLocaleStr
 
 export function DjiFlightHubControlledOperationsPanel({ projectId, connectorId }: { projectId: number; connectorId: string }) {
   const [payload,setPayload]=useState<Payload|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null);
-  const load=async()=>{setLoading(true);setError(null);try{const response=await fetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/controlled-operations`,{cache:"no-store"});
+  const load=async()=>{setLoading(true);setError(null);try{const response=await apiFetch(`/api/projects/${projectId}/connectors/dji-flighthub/${connectorId}/controlled-operations`,{cache:"no-store"});
     const data=await response.json() as Payload&{error?:string};if(!response.ok)throw new Error(data.error??"受控操作读取失败");setPayload(data);
   }catch(cause){setError(cause instanceof Error?cause.message:"受控操作读取失败");}finally{setLoading(false);}};
   useEffect(()=>{void load();},[projectId,connectorId]); // eslint-disable-line react-hooks/exhaustive-deps

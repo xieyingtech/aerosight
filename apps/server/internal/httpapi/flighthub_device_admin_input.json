@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "action": {
+          "type": "string",
+          "const": "rtk-calibrate"
+        },
+        "deviceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "confirmation": {
+          "type": "string",
+          "const": "CALIBRATE RTK"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "x-trim": true
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "account": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "password": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "mountPoint": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "host",
+            "port",
+            "account",
+            "password",
+            "mountPoint"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "approvalRequestId",
+        "action",
+        "deviceId",
+        "confirmation",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "action": {
+          "type": "string",
+          "const": "relay-pair"
+        },
+        "deviceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "confirmation": {
+          "type": "string",
+          "const": "PAIR RELAY"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "pairEnable": {
+              "type": "boolean"
+            },
+            "pairType": {
+              "type": "string",
+              "enum": [
+                "drone",
+                "relay"
+              ]
+            }
+          },
+          "required": [
+            "pairEnable",
+            "pairType"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "approvalRequestId",
+        "action",
+        "deviceId",
+        "confirmation",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "action": {
+          "type": "string",
+          "const": "active-project-update"
+        },
+        "deviceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "confirmation": {
+          "type": "string",
+          "const": "MOVE DEVICE"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "activeProjectUuid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "x-trim": true
+            }
+          },
+          "required": [
+            "activeProjectUuid"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "approvalRequestId",
+        "action",
+        "deviceId",
+        "confirmation",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "approvalRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "action": {
+          "type": "string",
+          "const": "sn-decrypt"
+        },
+        "confirmation": {
+          "type": "string",
+          "const": "DECRYPT SN"
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "encryptedSNs": {
+              "minItems": 1,
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "x-trim": true
+              }
+            }
+          },
+          "required": [
+            "encryptedSNs"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "approvalRequestId",
+        "action",
+        "confirmation",
+        "request"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

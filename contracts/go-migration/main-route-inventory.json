@@ -1,0 +1,170 @@
+{
+  "commit": "3b19aebc5156ea440c107f900e3d92b994ad5c16",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/controlled-operations",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/controlled-operations/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/device-admin-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/device-admin-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/device-admin-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/device-admin-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/diagnostics",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/diagnostics/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/diagnostics",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/diagnostics/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/flight-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/flight-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/flight-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/flight-actions/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/geospatial-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/geospatial-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/geospatial-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/geospatial-actions/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/live-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/live-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/live-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/live-actions/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/management-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/management-actions/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/management-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/management-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/management-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/management-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/management",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/management/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/management",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/management/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/model-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/model-actions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId/model-actions",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/model-actions/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/route.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/:id/connectors/dji-flighthub/:connectorId",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/connectors/dji-flighthub/live-media",
+      "source": "apps/web/app/api/projects/[id]/connectors/dji-flighthub/live-media/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/device-adapters/:adapterId/scan",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/[adapterId]/scan/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/device-adapters/discoveries/:identityId/bind",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/discoveries/[identityId]/bind/route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id/device-adapters/discoveries/:identityId",
+      "source": "apps/web/app/api/projects/[id]/device-adapters/discoveries/[identityId]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/devices/:deviceId/commands",
+      "source": "apps/web/app/api/projects/[id]/devices/[deviceId]/commands/route.ts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id/devices/:deviceId/flighthub-control-sessions/:sessionId",
+      "source": "apps/web/app/api/projects/[id]/devices/[deviceId]/flighthub-control-sessions/[sessionId]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/devices/:deviceId/flighthub-control-sessions",
+      "source": "apps/web/app/api/projects/[id]/devices/[deviceId]/flighthub-control-sessions/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/flight-operations",
+      "source": "apps/web/app/api/projects/[id]/flight-operations/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/geospatial",
+      "source": "apps/web/app/api/projects/[id]/geospatial/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/issues/:issueId/feedback",
+      "source": "apps/web/app/api/projects/[id]/issues/[issueId]/feedback/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/models",
+      "source": "apps/web/app/api/projects/[id]/models/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/tasks/:taskId/runs",
+      "source": "apps/web/app/api/projects/[id]/tasks/[taskId]/runs/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/tasks/:taskId/versions",
+      "source": "apps/web/app/api/projects/[id]/tasks/[taskId]/versions/route.ts"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const assetReferenceSchema = z.object({
   assetId: z.number().int().positive(),

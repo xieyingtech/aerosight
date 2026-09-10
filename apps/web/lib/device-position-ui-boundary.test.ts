@@ -12,7 +12,7 @@ test("device details render position, freshness, source, and unavailable reason"
 });
 
 test("project map exposes original unverified poses without claiming calibration", () => {
-  const snapshot = read("apps/web/lib/project-snapshot-core.ts");
+  const snapshot = read("apps/server/internal/database/queries/snapshot.sql");
   const map = read("apps/web/components/project-map.tsx");
   assert.match(snapshot, /coalesce\(pose\.standard_position,pose\.original_position\)/);
   assert.match(snapshot, /coordinate_reference_unverified/);

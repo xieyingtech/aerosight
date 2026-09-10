@@ -6,10 +6,17 @@ context: |
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
   AeroSight is an air-ground integrated intelligent sensing platform.
-  It is a pnpm monorepo with a Next.js App Router web application in apps/web,
-  a Go asynchronous worker in apps/worker, and a PostgreSQL schema in db/schema.sql.
-  Next.js owns authentication, authorization, and synchronous database access.
-  The Go worker owns background processing.
+  It is a pnpm monorepo with a statically exported Next.js App Router frontend
+  in apps/web, a unified Go application in apps/server, and PostgreSQL/PostGIS
+  migrations plus the schema snapshot in db. The Go serve command embeds and
+  serves the frontend, owns authentication, authorization, business APIs,
+  callbacks, and background processing on one application HTTP port.
+  Browser data access uses same-origin APIs. Next development rewrites proxy
+  API and signed asset requests to Go; production needs no Node.js runtime.
+  Migrated database queries use sqlc with database/sql and pgx stdlib.
+  Production migrations run through the Go executable and preserve the
+  historical migration ledger. Scripts in scripts/legacy-db are test and
+  maintenance tools, not production service dependencies.
 
   The primary ownership hierarchy is User -> Team membership -> Project ->
   project resources. Project access must be authorized through team membership;

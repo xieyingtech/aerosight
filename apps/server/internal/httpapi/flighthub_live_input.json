@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "live-quality-set"
+        },
+        "deviceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "cameraIndex": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-trim": true
+            },
+            "qualityType": {
+              "type": "string",
+              "enum": [
+                "adaptive",
+                "smooth",
+                "ultra_high_definition"
+              ]
+            }
+          },
+          "required": [
+            "cameraIndex",
+            "qualityType"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "action",
+        "deviceId",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "live-converter-create"
+        },
+        "deviceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "cameraIndex": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "schema": {
+                  "type": "string",
+                  "const": "rtmp"
+                },
+                "schemaOption": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "name",
+                "cameraIndex",
+                "schema",
+                "schemaOption"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "cameraIndex": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "schema": {
+                  "type": "string",
+                  "const": "gb28181"
+                },
+                "schemaOption": {
+                  "type": "object",
+                  "properties": {
+                    "serverIp": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "serverPort": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "devicePassword": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "localPort": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "deviceId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "localChannel": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    }
+                  },
+                  "required": [
+                    "serverIp",
+                    "serverPort",
+                    "devicePassword",
+                    "localPort",
+                    "deviceId",
+                    "localChannel"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "name",
+                "cameraIndex",
+                "schema",
+                "schemaOption"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "cameraIndex": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "x-trim": true
+                },
+                "schema": {
+                  "type": "string",
+                  "const": "rtsp"
+                },
+                "schemaOption": {
+                  "type": "object",
+                  "properties": {
+                    "username": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "password": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096,
+                      "x-trim": true
+                    },
+                    "enableTs": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "username",
+                    "password",
+                    "enableTs"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "name",
+                "cameraIndex",
+                "schema",
+                "schemaOption"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "action",
+        "deviceId",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "live-converter-toggle"
+        },
+        "targetResourceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "action",
+        "targetResourceId",
+        "request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "connectorInstanceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200,
+          "x-trim": true
+        },
+        "action": {
+          "type": "string",
+          "const": "live-converter-delete"
+        },
+        "targetResourceId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "request": {
+          "type": "object",
+          "properties": {
+            "confirmation": {
+              "type": "string",
+              "const": "DELETE"
+            }
+          },
+          "required": [
+            "confirmation"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "connectorInstanceId",
+        "idempotencyKey",
+        "action",
+        "targetResourceId",
+        "request"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 const referencePattern = /^(?:inputs(?:\.[A-Za-z][A-Za-z0-9_-]*)*|steps\.[A-Za-z][A-Za-z0-9_-]*\.outputs(?:\.[A-Za-z][A-Za-z0-9_-]*)*)$/;
 const forbiddenSegments = new Set(["__proto__", "prototype", "constructor"]);

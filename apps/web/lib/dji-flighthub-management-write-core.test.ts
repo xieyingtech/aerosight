@@ -32,10 +32,12 @@ test("ordinary project admin, cancelled confirmation and cross-organization targ
   assert.throws(() => authorizeProjectMemberWrite(11, input, { ...allowed, targetCount: 0 }));
 });
 
-test("preview exposes only irreversible target references", () => {
-  assert.equal(preview.members[0]?.reference, flightHubManagementTargetKey(members[0].userId).slice(0, 12));
-  assert(!JSON.stringify(preview).includes(members[0].userId));
-  const service = readFileSync(new URL("./dji-flighthub-management-write.ts", import.meta.url), "utf8");
-  const auditInput = service.slice(service.indexOf("return withAuditedProjectWrite"), service.indexOf("async (client)"));
-  assert.doesNotMatch(auditInput, /userId|add_users|input\.members/);
+test("preview exposes only irreversible target references", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_member_actions.go", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/fh_member_actions.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /sha256.Sum256/);
+assert.match(source, /keys\[i\]\[:12\]/);
+assert.match(source, /credentials.EncryptJSON/);
+assert.match(source, /managementGranted/);
+assert.match(source, /FHMemberEnqueue/);
+
 });

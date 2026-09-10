@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { apiFetch } from "@/lib/api-client";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function TaskTemplateWorkbench({ projectId,taskId,model }: { projectId: number; taskId: number; model: {
+export function TaskTemplateWorkbench({ projectId,taskId,model,onChanged }: { projectId: number; taskId: number; onChanged:()=>void; model: {
   versions: Array<Record<string,unknown>>; selectedVersion: Record<string,unknown> | null; steps: Array<Record<string,unknown>>;
   definition: Record<string,unknown>; canEdit: boolean;
 } }) {
@@ -21,13 +22,13 @@ export function TaskTemplateWorkbench({ projectId,taskId,model }: { projectId: n
     try {
       const payload: Record<string,unknown> = { action,versionId: selected?.id };
       if (action === "save") payload.definition = JSON.parse(definition);
-      const response = await fetch(`/api/projects/${projectId}/tasks/${taskId}/versions`, {
+      const response = await apiFetch(`/api/projects/${projectId}/tasks/${taskId}/versions`, {
         method: "POST",headers: { "content-type": "application/json" },body: JSON.stringify(payload)
       });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "TASK_VERSION_UPDATE_FAILED"));
       setMessage(action === "publish" ? "版本已发布" : action === "save" ? "草稿已保存" : "草稿已创建");
-      router.refresh();
+      onChanged();
     } catch (error) { setMessage(error instanceof Error ? error.message : "操作失败"); }
     finally { setPending(false); }
   }
@@ -35,12 +36,12 @@ export function TaskTemplateWorkbench({ projectId,taskId,model }: { projectId: n
     setPending(true); setMessage("");
     try {
       const inputs = JSON.parse(runInputs);
-      const response = await fetch(`/api/projects/${projectId}/tasks/${taskId}/runs`, { method: "POST",
+      const response = await apiFetch(`/api/projects/${projectId}/tasks/${taskId}/runs`, { method: "POST",
         headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "manual",idempotencyKey: crypto.randomUUID(),
           occurredAt: new Date().toISOString(),inputs }) });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "TASK_TRIGGER_FAILED"));
-      router.push(`/projects/${projectId}/tasks/runs/${String(result.taskRunId)}`);
+      router.push(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(result.taskRunId)}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "触发失败"); }
     finally { setPending(false); }
   }

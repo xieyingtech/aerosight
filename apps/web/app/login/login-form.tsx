@@ -1,13 +1,23 @@
 "use client";
 
-import { useActionState } from "react";
-import { loginAction } from "@/app/actions";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { APIError, getSession, login } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
-  const [state, action, pending] = useActionState(loginAction, {});
+  const router = useRouter();
+  useEffect(() => {
+    const controller = new AbortController();
+    getSession(controller.signal).then(() => { if (!controller.signal.aborted) router.replace("/projects"); }).catch(() => {});
+    return () => controller.abort();
+  }, [router]);
+  const [state, action, pending] = useActionState(async (_: { error?: string }, form: FormData): Promise<{ error?: string }> => {
+    try { await login(String(form.get("username") ?? ""), String(form.get("password") ?? "")); router.replace("/projects"); return {}; }
+    catch (error) { return { error: error instanceof APIError && error.status === 401 ? "邮箱、手机号或密码错误" : "登录失败，请稍后重试。" }; }
+  }, {});
 
   return (
     <form action={action} className="space-y-4">

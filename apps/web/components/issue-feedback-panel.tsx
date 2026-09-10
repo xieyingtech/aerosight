@@ -1,12 +1,13 @@
 "use client";
+import { apiFetch } from "@/lib/api-client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-export function IssueFeedbackPanel({ projectId,issueId,stateVersion,detections }: { projectId: number;issueId: number;stateVersion: number;detections: Array<Record<string,unknown>> }) {
-  const router = useRouter();
+export function IssueFeedbackPanel({ projectId,issueId,stateVersion,detections,onChanged }: { onChanged:()=>void; projectId: number;issueId: number;stateVersion: number;detections: Array<Record<string,unknown>> }) {
+
   const [detectionId,setDetectionId] = useState(String(detections[0]?.id ?? ""));
   const [reason,setReason] = useState("");
   const [correctedLabel,setCorrectedLabel] = useState("");
@@ -15,13 +16,15 @@ export function IssueFeedbackPanel({ projectId,issueId,stateVersion,detections }
   const [error,setError] = useState("");
   async function submit(action: "confirm"|"false_positive"|"category_correction"|"disposition") {
     setPending(true);setError("");
-    const response = await fetch(`/api/projects/${projectId}/issues/${issueId}/feedback`,{ method: "POST",
+    try {
+    const response = await apiFetch(`/api/projects/${projectId}/issues/${issueId}/feedback`,{ method: "POST",
       headers: { "content-type": "application/json" },body: JSON.stringify({ expectedVersion: stateVersion,clientKey: crypto.randomUUID(),
         detectionId: Number(detectionId),action,reason,correctedLabel: action === "category_correction" ? correctedLabel : undefined,
         disposition: action === "disposition" ? disposition : undefined }) });
     const result = await response.json();setPending(false);
     if (!response.ok) { setError(String(result.error || "反馈保存失败"));return; }
-    setReason("");router.refresh();
+    setReason("");onChanged();
+    } catch(error) {setError(error instanceof Error?error.message:"反馈保存失败");} finally {setPending(false);}
   }
   return <div className="space-y-3"><div className="grid gap-2 md:grid-cols-4">
     <select className="h-9 rounded-md border bg-background px-2 text-sm" value={detectionId} onChange={(event) => setDetectionId(event.target.value)}>{detections.map((item) => <option value={String(item.id)} key={String(item.id)}>检测 #{String(item.id)} · {String(item.label)}</option>)}</select>

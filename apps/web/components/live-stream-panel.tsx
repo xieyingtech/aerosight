@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-client";
+
 import { useEffect, useMemo, useState } from "react";
 import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
@@ -21,7 +23,7 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
   useEffect(() => {
     const controller = new AbortController();
     setFailed(false);
-    fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=${action}`, {
+    apiFetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=${action}`, {
       signal: controller.signal, cache: "no-store"
     }).then(async (response) => {
       if (!response.ok) throw new Error("media access failed");
@@ -31,7 +33,7 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
     return () => controller.abort();
   }, [action, media.id, projectId]);
   const download = async () => {
-    const response = await fetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=download`, { cache: "no-store" });
+    const response = await apiFetch(`/api/projects/${projectId}/assets/${String(media.id)}/access?action=download`, { cache: "no-store" });
     if (!response.ok) { setFailed(true); return; }
     const result = await response.json() as { url: string };
     window.location.assign(result.url);
@@ -101,7 +103,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     setPlayback({ status: "loading" });
     const loadPlayback = async () => {
       try {
-        const response = await fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
+        const response = await apiFetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/playback`, {
           signal: controller.signal, cache: "no-store"
         });
         if (!response.ok) throw new Error("playback request failed");
@@ -167,7 +169,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   const stopStream = async () => {
     if (!streamId || stopState === "stopping") return;
     setStopState("stopping");
-    const response = await fetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/stop`, {
+    const response = await apiFetch(`/api/projects/${snapshot.project.id}/live-streams/${streamId}/stop`, {
       method: "POST"
     });
     if (!response.ok) { setStopState("error"); return; }

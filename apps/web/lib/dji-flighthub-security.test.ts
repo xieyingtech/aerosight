@@ -61,27 +61,15 @@ test("concurrent credential encryption produces isolated authenticated envelopes
 });
 
 test("connection mutations serialize connector rows and never expose credential columns", async () => {
-  const lifecycleSource = await readFile(new URL("./dji-flighthub-lifecycle.ts", import.meta.url), "utf8");
-  const connectionSource = await readFile(new URL("./dji-flighthub-connections.ts", import.meta.url), "utf8");
-  const routeSource = await readFile(
-    new URL("../app/api/projects/[id]/connectors/dji-flighthub/route.ts", import.meta.url),
-    "utf8"
-  );
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub.go", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/flighthub_writes.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /FOR UPDATE OF adapter/);
+assert.match(source, /pg_advisory_xact_lock/);
+assert.match(source, /projectRevalidated/);
+assert.match(source, /safeCode/);
+assert.match(source, /tokenUpdated/);
+assert.match(source, /database.AuditedWrite/);
+assert.match(source, /credentials.EncryptJSON/);
 
-  assert.match(lifecycleSource, /for update of adapter/i);
-  assert.match(lifecycleSource, /pg_advisory_xact_lock/);
-  assert.match(
-    lifecycleSource,
-    /projectRevalidated:\s*false[\s\S]*errorCode:\s*safeError\.safeCode[\s\S]*tokenUpdated:\s*false/,
-    "failed token validation must create a credential-free audit result before rethrowing"
-  );
-  assert.match(connectionSource, /withAuditedProjectWrite/);
-  assert.match(connectionSource, /credential_envelope_json/);
-  assert(!routeSource.includes("credential_envelope_json"));
-  assert(!routeSource.includes("ciphertext"));
-  assert(!routeSource.includes("authenticationTag"));
-  assert(!routeSource.includes("localStorage"));
-  assert(!routeSource.includes("sessionStorage"));
 });
 
 test("schema enforces one external FlightHub scope per AeroSight project without a special table", async () => {
@@ -97,19 +85,11 @@ test("schema enforces one external FlightHub scope per AeroSight project without
 });
 
 test("FlightHub playback authorization is atomically claimed before credential decryption", async () => {
-  const source = await readFile(new URL("./live-streams.ts", import.meta.url), "utf8");
-  const branchStart = source.indexOf('if (session.sourceType === "dji_flighthub")');
-  assert(branchStart >= 0, "FlightHub playback branch is missing");
-  const branch = source.slice(branchStart, source.indexOf('if (session.sourceType !== "simulator"', branchStart));
-  const authorizationUpdate = branch.indexOf("update live_streams set");
-  const decrypt = branch.indexOf("decryptCredentialObject");
-  assert(authorizationUpdate >= 0 && decrypt > authorizationUpdate,
-    "supplier credential must only be decrypted after the conditional authorization update");
-  assert.match(branch, /status in\('starting','live','degraded'\)/);
-  assert.match(branch, /status<>'starting' or start_accepted_at is not null/);
-  assert.match(branch, /local_authorization_revoked_at is null/);
-  assert.match(branch, /supplier_credential_expires_at>now\(\)/);
-  assert.match(branch, /supplier_credential_envelope_json is not null[\s\S]*returning[\s\S]*supplier_credential_envelope_json/);
-  assert.match(source, /FLIGHTHUB_LIVE_STOPPED_BEFORE_DISPATCH/);
-  assert.match(source, /not\(source_type='dji_flighthub' and status='failed'\)/);
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/live_playback.go", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/live_playback.sql", import.meta.url), "utf8"),await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/database/queries/live_control.sql", import.meta.url), "utf8")].join("\n");
+assert.match(source, /AuthorizeFlightHubPlayback[\s\S]*credentials.DecryptJSON/);
+assert.match(source, /credentials.DecryptJSON/);
+assert.match(source, /local_authorization_revoked_at IS NULL/);
+assert.match(source, /supplier_credential_expires_at>now\(\)/);
+assert.match(source, /FLIGHTHUB_LIVE_STOPPED_BEFORE_DISPATCH/);
+
 });

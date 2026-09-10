@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { apiJSON, APIError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -11,19 +11,21 @@ type Provider = {
   allowedHeaders: string[]; timeoutSeconds: number; concurrencyLimit: number; rateLimitPerMinute: number;
 };
 
-export function AlgorithmProviderForm({ projectId, provider }: { projectId: number; provider?: Provider }) {
-  const router = useRouter();
+export function AlgorithmProviderForm({ projectId, provider, onChanged }: { projectId: number; provider?: Provider; onChanged:()=>void }) {
+  const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function submit(formData: FormData) {
-    setError(null);
-    const response = await fetch(provider ? `/api/projects/${projectId}/algorithm-providers/${provider.id}` : `/api/projects/${projectId}/algorithm-providers`, { method: provider ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+    setError(null); setPending(true);
+    try { await apiJSON(provider ? `/api/projects/${projectId}/algorithm-providers/${provider.id}` : `/api/projects/${projectId}/algorithm-providers`, { method: provider ? "PATCH" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       name: formData.get("name"), providerType: formData.get("providerType"), baseUrl: formData.get("baseUrl"),
       credential: formData.get("credential") || "", username: formData.get("username") || "", authType: formData.get("authType"),
       allowedHeaders: String(formData.get("allowedHeaders") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
       timeoutSeconds: Number(formData.get("timeoutSeconds")), concurrencyLimit: Number(formData.get("concurrencyLimit")),
       rateLimitPerMinute: Number(formData.get("rateLimitPerMinute"))
     }) });
-    if (!response.ok) setError((await response.json()).error ?? "保存失败"); else router.refresh();
+    onChanged();
+    } catch (error) { setError(error instanceof APIError ? error.code : "保存失败，请稍后重试。"); }
+    finally { setPending(false); }
   }
   return <form action={submit} className="grid gap-3 rounded-xl border p-4 md:grid-cols-2">
     <Input defaultValue={provider?.name} name="name" placeholder="服务名称" required /><Input defaultValue={provider?.baseUrl} name="baseUrl" placeholder="https://algorithm.example.test" required />
@@ -35,6 +37,6 @@ export function AlgorithmProviderForm({ projectId, provider }: { projectId: numb
     <Input defaultValue={provider?.timeoutSeconds ?? 30} min="1" name="timeoutSeconds" placeholder="超时（秒）" type="number" />
     <Input defaultValue={provider?.concurrencyLimit ?? 1} min="1" name="concurrencyLimit" placeholder="并发限制" type="number" />
     <Input className="md:col-span-2" defaultValue={provider?.rateLimitPerMinute ?? 60} min="1" name="rateLimitPerMinute" placeholder="每分钟速率限制" type="number" />
-    {error ? <p className="text-sm text-destructive md:col-span-2">{error}</p> : null}<Button className="md:col-span-2" type="submit">{provider ? "保存算法服务" : "添加算法服务"}</Button>
+    {error ? <p className="text-sm text-destructive md:col-span-2">{error}</p> : null}<Button disabled={pending} className="md:col-span-2" type="submit">{provider ? "保存算法服务" : "添加算法服务"}</Button>
   </form>;
 }

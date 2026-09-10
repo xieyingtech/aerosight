@@ -42,13 +42,11 @@ test("each device admin action has an independent confirmation and capability", 
   }
 });
 
-test("device admin audit and API responses omit plaintext administrative secrets", () => {
-  const route=readFileSync(new URL("../app/api/projects/[id]/connectors/dji-flighthub/[connectorId]/device-admin-actions/route.ts",import.meta.url),"utf8");
-  const service=readFileSync(new URL("./dji-flighthub-device-admin.ts",import.meta.url),"utf8");
-  const auditInput=service.slice(service.indexOf("return withAuditedProjectWrite"),service.indexOf("}, async (client)"));
-  const publicReturn=service.slice(service.lastIndexOf("return {action:"));
-  assert.match(auditInput,/request:\{digest:requestDigest\}/);
-  assert.doesNotMatch(auditInput,/password|encryptedSNs|input\.request/);
-  assert.doesNotMatch(route,/request_envelope|result_envelope|password|encryptedSNs/i);
-  assert.doesNotMatch(publicReturn,/resultEnvelope|requestEnvelope|requestDigest/);
+test("device admin audit and API responses omit plaintext administrative secrets", async () => {
+const source=[await (await import("node:fs/promises")).readFile(new URL("../../../apps/server/internal/httpapi/flighthub_governed_actions.go", import.meta.url), "utf8")].join("\n");
+assert.match(source, /auditInput\["request"\] = gin.H\{"digest": digest\}/);
+assert.match(source, /delete\(row, "resultEnvelope"\)/);
+assert.match(source, /sensitiveResult/);
+assert.match(source, /credentials.DecryptJSON/);
+
 });

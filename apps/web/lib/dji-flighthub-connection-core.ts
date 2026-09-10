@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { z } from "zod";
+import { z } from "./zod.ts";
 
 import {
   FlightHubClientError,
