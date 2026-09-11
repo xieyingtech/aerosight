@@ -97,6 +97,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.installMetrics()
 	s.authRoutes()
 	s.directoryRoutes()
+	s.projectFeatureRoutes()
 	s.streamRoutes()
 	s.projectReadRoutes()
 	s.flightHubRoutes()

@@ -72,6 +72,7 @@ type Querier interface {
 	DiscoveryUpdateAdapter(ctx context.Context, arg DiscoveryUpdateAdapterParams) error
 	EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEventParams) error
 	EnsureIssueCopilot(ctx context.Context, projectID int32) (int32, error)
+	EnsureProjectFeatures(ctx context.Context, projectID int32) error
 	ExportPublishedReport(ctx context.Context, arg ExportPublishedReportParams) (json.RawMessage, error)
 	FHCommandGovernance(ctx context.Context, arg FHCommandGovernanceParams) ([]json.RawMessage, error)
 	FHCommandRoutes(ctx context.Context, arg FHCommandRoutesParams) ([]json.RawMessage, error)
@@ -219,6 +220,7 @@ type Querier interface {
 	LockLiveStartDevice(ctx context.Context, arg LockLiveStartDeviceParams) (LockLiveStartDeviceRow, error)
 	LockMissionControlRun(ctx context.Context, arg LockMissionControlRunParams) (LockMissionControlRunRow, error)
 	LockPlatformUserRole(ctx context.Context, id int32) (string, error)
+	LockProjectFeatures(ctx context.Context, projectID int32) (ProjectFeatureFlag, error)
 	LockProjectMembership(ctx context.Context, arg LockProjectMembershipParams) (LockProjectMembershipRow, error)
 	LockProjectPermissions(ctx context.Context, arg LockProjectPermissionsParams) ([]string, error)
 	LockReportDraft(ctx context.Context, arg LockReportDraftParams) (LockReportDraftRow, error)
@@ -286,6 +288,7 @@ type Querier interface {
 	ReadMediaPublishCredential(ctx context.Context, ingestRef sql.NullString) (ReadMediaPublishCredentialRow, error)
 	ReadOpenChatSession(ctx context.Context, arg ReadOpenChatSessionParams) (int32, error)
 	ReadProjectEvents(ctx context.Context, arg ReadProjectEventsParams) ([]ReadProjectEventsRow, error)
+	ReadProjectFeatures(ctx context.Context, id int32) (json.RawMessage, error)
 	ReadProjectIssue(ctx context.Context, arg ReadProjectIssueParams) (json.RawMessage, error)
 	ReadReportSources(ctx context.Context, arg ReadReportSourcesParams) (json.RawMessage, error)
 	ReadTaskTriggerVersion(ctx context.Context, arg ReadTaskTriggerVersionParams) (ReadTaskTriggerVersionRow, error)
@@ -303,6 +306,7 @@ type Querier interface {
 	RetireAlgorithmConfigurations(ctx context.Context, arg RetireAlgorithmConfigurationsParams) error
 	RetirePublishedReport(ctx context.Context, arg RetirePublishedReportParams) error
 	RetireReportDrafts(ctx context.Context, arg RetireReportDraftsParams) error
+	SaveProjectFeatures(ctx context.Context, arg SaveProjectFeaturesParams) error
 	SetAIProviderCredential(ctx context.Context, arg SetAIProviderCredentialParams) error
 	SetAIProviderHealth(ctx context.Context, arg SetAIProviderHealthParams) error
 	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
