@@ -152,7 +152,8 @@ func (projector *SQLDeviceHealthProjector) ApplyDeviceStreamChannels(ctx context
 
 func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance connector.Instance, deviceID int) (string, string, error) {
 	var featureEnabled, fieldAccepted bool
-	err := tx.QueryRowContext(ctx, `select
+	var deviceType string
+	err := tx.QueryRowContext(ctx, `select device.type,
 		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false),
 		exists(select 1 from connector_capability_snapshots capability
 			where capability.project_id=adapter.project_id and capability.connector_instance_id=adapter.id
@@ -166,14 +167,14 @@ func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance 
 	join devices device on device.adapter_id=adapter.id and device.project_id=adapter.project_id
 	left join project_feature_flags flags on flags.project_id=adapter.project_id
 	where adapter.id=$1 and adapter.project_id=$2 and device.id=$3`,
-		instance.ID, instance.ProjectID, deviceID).Scan(&featureEnabled, &fieldAccepted)
+		instance.ID, instance.ProjectID, deviceID).Scan(&deviceType, &featureEnabled, &fieldAccepted)
 	if err != nil {
 		return "", "", err
 	}
 	if !featureEnabled {
 		return "unavailable", flightHubLiveActionDisabledReason, nil
 	}
-	if !fieldAccepted {
+	if deviceType != "dock" && !fieldAccepted {
 		return "unavailable", flightHubLiveFieldAcceptanceRequiredReason, nil
 	}
 	return "available", "", nil

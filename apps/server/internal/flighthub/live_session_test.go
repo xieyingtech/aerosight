@@ -105,6 +105,8 @@ func TestFlightHubLiveStartEncryptsCredentialAndNeverRepeatsWrite(t *testing.T) 
 	now := time.Date(2026, 9, 2, 1, 0, 0, 0, time.UTC)
 	expiresAt := now.Add(time.Hour)
 	store := &memoryFlightHubLiveStore{session: flightHubLiveSessionFixture(now)}
+	store.session.DeviceType = "dock"
+	store.session.CapabilityVerified = false
 	client := &flightHubLiveClientFixture{value: LiveStreamAuthorization{ExpireTimestamp: expiresAt.Unix(), URL: "supplier-secret", URLType: "volc", ExpiresAt: expiresAt}}
 	playback := NormalizedLivePlayback{Description: LivePlaybackDescription{
 		Supplier: "volc", Protocol: "volc-rtc", CredentialKind: "sdk-query", AdapterVersion: liveSupplierAdapterVersion,
@@ -362,5 +364,33 @@ func TestFlightHubLiveStartEventRejectsWrongScope(t *testing.T) {
 	_, err := parseFlightHubLiveStartEvent(outbox.Event{ProjectID: 41, TeamID: 7, Payload: json.RawMessage(`{"streamId":0}`)})
 	if err == nil || !IsSafeCode(err, "request_invalid") {
 		t.Fatalf("invalid event error=%v", err)
+	}
+}
+
+func TestFlightHubLiveStartKeepsFeatureAndAircraftAcceptanceGates(t *testing.T) {
+	for _, tc := range []struct {
+		name, deviceType string
+		enabled          bool
+	}{
+		{"dock feature disabled", "dock", false}, {"aircraft without acceptance", "drone", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now().UTC()
+			store := &memoryFlightHubLiveStore{session: flightHubLiveSessionFixture(now)}
+			store.session.DeviceType = tc.deviceType
+			store.session.ActionEnabled = tc.enabled
+			store.session.CapabilityVerified = false
+			client := &flightHubLiveClientFixture{}
+			handler, err := NewFlightHubLiveStartHandler(store, client, flightHubLiveNormalizerFixture{}, flightHubLiveResolverFixture{}, flightHubLiveTestSecret, func() time.Time { return now })
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = handler.Handler(context.Background(), nil, flightHubLiveEvent()); err != nil {
+				t.Fatal(err)
+			}
+			if client.calls != 0 || store.session.Status != "failed" {
+				t.Fatalf("blocked session reached upstream: calls=%d status=%s", client.calls, store.session.Status)
+			}
+		})
 	}
 }

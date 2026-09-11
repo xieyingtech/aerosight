@@ -35,6 +35,7 @@ type FlightHubLiveSession struct {
 	ConnectorStatus     string
 	ActionEnabled       bool
 	CapabilityVerified  bool
+	DeviceType          string
 	StartAttemptedAt    sql.NullTime
 	StartAcceptedAt     sql.NullTime
 	CredentialExpiresAt sql.NullTime
@@ -63,7 +64,7 @@ func (store *SQLFlightHubLiveSessionStore) Load(ctx context.Context, projectID i
 	var credentialRaw, scopeRaw []byte
 	err := store.db.QueryRowContext(ctx, `select stream.id,stream.project_id,stream.team_id,stream.device_id,
 		stream.adapter_id,stream.stream_key,coalesce(identity.identity_json->'attributes'->>'serialNumber',''),
-		stream.status,adapter.status,stream.start_attempted_at,stream.start_accepted_at,
+		stream.status,adapter.status,device.type,stream.start_attempted_at,stream.start_accepted_at,
 		stream.supplier_credential_expires_at,definition.connector_key,definition.version,
 		adapter.config_json,adapter.credential_envelope_json,adapter.discovery_scope_json,
 		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false),
@@ -86,7 +87,7 @@ func (store *SQLFlightHubLiveSessionStore) Load(ctx context.Context, projectID i
 		projectID, streamID, FlightHubLiveSourceType).Scan(
 		&session.ID, &session.ProjectID, &session.TeamID, &session.DeviceID,
 		&session.ConnectorInstanceID, &session.CameraIndex, &session.DeviceSerial,
-		&session.Status, &session.ConnectorStatus, &session.StartAttemptedAt, &session.StartAcceptedAt,
+		&session.Status, &session.ConnectorStatus, &session.DeviceType, &session.StartAttemptedAt, &session.StartAcceptedAt,
 		&session.CredentialExpiresAt, &session.Instance.ConnectorKey, &session.Instance.Version,
 		&session.Instance.Config, &credentialRaw, &scopeRaw, &session.ActionEnabled, &session.CapabilityVerified,
 	)
@@ -221,7 +222,7 @@ func (handler *FlightHubLiveStartHandler) Handler(ctx context.Context, _ *sql.Tx
 	if session.TeamID != event.TeamID || session.Instance.ConnectorKey != ConnectorKey || session.Instance.Version != ConnectorVersion || !isActiveConnectorStatus(session.ConnectorStatus) {
 		return handler.store.Fail(ctx, session, "FLIGHTHUB_LIVE_CONNECTOR_UNAVAILABLE", false, handler.now().UTC())
 	}
-	if !session.ActionEnabled || !session.CapabilityVerified {
+	if !session.ActionEnabled || (session.DeviceType != "dock" && !session.CapabilityVerified) {
 		return handler.store.Fail(ctx, session, "FLIGHTHUB_LIVE_ACTION_DISABLED", false, handler.now().UTC())
 	}
 	if session.Status == "failed" || session.Status == "stopped" || session.Status == "stopping" || session.StartAttemptedAt.Valid {

@@ -133,3 +133,5 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 - Next.js 生产构建、TypeScript 检查、静态页面生成和 Go Worker 二进制构建通过。
 
 该记录只证明当前候选工作区的全新环境契约。每个后续候选版本仍必须重新执行 `pnpm drill:fresh-environment`、`pnpm test:migrations`、`pnpm check` 和生产构建，并保存实际输出；不得沿用旧迁移数量或旧 AI 环境变量检查结果。
+
+普通 Dock 直播在 `live.control` 开启且成员权限、连接器和设备状态满足要求时可直接尝试启动，不依赖历史 `field-write` 验收记录。是否启动成功由司空接口和后续直播状态确认；其他设备类型及飞行控制沿用原有验收与审批要求。

@@ -94,7 +94,7 @@ func (s *Server) startLiveStream(c *gin.Context) {
 			return nil, errors.New("LIVE_STREAM_DEVICE_OFFLINE")
 		}
 		isFlightHub := target.ConnectorKey.String == "dji.flighthub2" && target.AdapterType.String == "dji-flighthub2"
-		if isFlightHub && (!target.LiveActionEnabled || !target.LiveCapabilityVerified) {
+		if isFlightHub && (!target.LiveActionEnabled || (target.DeviceType != "dock" && !target.LiveCapabilityVerified)) {
 			return nil, errors.New("FLIGHTHUB_LIVE_ACTION_DISABLED")
 		}
 		control := slices.Contains(target.Capabilities, "stream.video.control") || isFlightHub

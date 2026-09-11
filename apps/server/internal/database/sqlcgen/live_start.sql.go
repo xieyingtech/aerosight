@@ -90,7 +90,7 @@ func (q *Queries) InsertLiveStartSession(ctx context.Context, arg InsertLiveStar
 }
 
 const lockLiveStartDevice = `-- name: LockLiveStartDevice :one
-SELECT device.status,device.adapter_id,adapter.adapter_type,device.device_type_id,
+SELECT device.status,device.type AS device_type,device.adapter_id,adapter.adapter_type,device.device_type_id,
  coalesce((SELECT array_agg(c.capability_code) FROM device_capabilities c WHERE c.device_id=device.id AND c.project_id=device.project_id AND c.availability='available'),'{}')::text[] AS capabilities,
  coalesce((SELECT greatest(1,least(16,coalesce((c.constraints_json->>'maxConcurrentSessions')::int,1))) FROM device_capabilities c
  WHERE c.device_id=device.id AND c.project_id=device.project_id AND c.capability_code IN ('stream.video.control','camera.live') AND c.availability='available'
@@ -117,6 +117,7 @@ type LockLiveStartDeviceParams struct {
 
 type LockLiveStartDeviceRow struct {
 	Status                 string                `json:"status"`
+	DeviceType             string                `json:"device_type"`
 	AdapterID              sql.NullInt64         `json:"adapter_id"`
 	AdapterType            sql.NullString        `json:"adapter_type"`
 	DeviceTypeID           int64                 `json:"device_type_id"`
@@ -134,6 +135,7 @@ func (q *Queries) LockLiveStartDevice(ctx context.Context, arg LockLiveStartDevi
 	var i LockLiveStartDeviceRow
 	err := row.Scan(
 		&i.Status,
+		&i.DeviceType,
 		&i.AdapterID,
 		&i.AdapterType,
 		&i.DeviceTypeID,

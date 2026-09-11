@@ -218,3 +218,40 @@ func TestLiveStartDJIAtomicDispatch(t *testing.T) {
 		t.Fatalf("scope %+v", denied)
 	}
 }
+
+func TestDockLiveFirstStartWithoutAcceptance(t *testing.T) {
+	f := newAPIFixture(t)
+	team, pid := f.project(t)
+	adapter, did := f.device(t, team, pid)
+	exec := func(query string, args ...any) {
+		t.Helper()
+		if _, err := f.db.Exec(query, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`update device_adapters set adapter_type='dji-flighthub2',status='connected',connector_definition_id=(select id from connector_definitions where connector_key='dji.flighthub2' and version='1.0.0') where id=$1`, adapter)
+	exec(`update devices set type='dock' where id=$1`, did)
+	path := fmt.Sprintf("/api/projects/%d/devices/%d/live-streams", pid, did)
+	call := func(want int) map[string]any {
+		t.Helper()
+		res := f.request(t, "POST", path, `{"streamKey":"165-0-7"}`)
+		data := decodedResponse(t, res)
+		if res.StatusCode != want {
+			t.Fatalf("status %d want %d: %+v", res.StatusCode, want, data)
+		}
+		return data
+	}
+	call(409)
+	exec(`insert into project_feature_flags(project_id,flighthub_action_flags_json) values($1,'{"live.control":true}') on conflict(project_id) do update set flighthub_action_flags_json=excluded.flighthub_action_flags_json`, pid)
+	exec(`update devices set type='drone' where id=$1`, did)
+	call(409)
+	exec(`update devices set type='dock',status='offline' where id=$1`, did)
+	call(409)
+	exec(`update devices set status='online' where id=$1`, did)
+	data := call(200)
+	if data["session"].(map[string]any)["status"] != "requested" {
+		t.Fatalf("unexpected response %+v", data)
+	}
+	exec(`update team_members set role='member' where team_id=$1`, team)
+	call(409)
+}

@@ -78,7 +78,7 @@ export function ProjectFeatureSettings({ data }: { data: FeatureSettings }) {
     <div className="rounded-lg border bg-card p-5">
       <div className="flex items-center gap-2"><FolderTree className="size-5" /><h2 className="font-semibold">项目功能</h2></div>
       <p className="mt-2 text-sm text-muted-foreground">勾选分组可批量调整其下功能，保存后对整个项目生效。成员按预设角色使用功能，这里不分配个人权限。</p>
-      <p className="mt-2 text-sm text-muted-foreground">启用开关不会直接执行操作。直播等功能仍需完成能力验证；开启开关不代表设备已就绪。</p>
+      <p className="mt-2 text-sm text-muted-foreground">启用开关不会直接执行操作。飞行控制等功能仍需完成能力验证；开启开关不代表设备已就绪。</p>
     </div>
     <div className="rounded-lg border bg-card p-2 sm:p-4"><ul className="space-y-3">{data.tree.map(node => <FeatureBranch key={node.id} node={node} values={draft} disabled={busy} onToggle={toggle} />)}</ul></div>
     <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">

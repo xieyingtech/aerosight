@@ -121,7 +121,7 @@ func TestSQLDeviceStreamChannelProjectorCreatesIdempotentDockChannel(t *testing.
 	if err := projector.ApplyDeviceStreamChannels(ctx, instance, poll); err != nil {
 		t.Fatal(err)
 	}
-	assertControlAvailability("unavailable", flightHubLiveFieldAcceptanceRequiredReason)
+	assertControlAvailability("available", "")
 
 	if _, err := database.ExecContext(ctx, `insert into connector_capability_snapshots(
 		project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,
