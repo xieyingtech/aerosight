@@ -14,6 +14,21 @@ func TestLoadRequiresDatabaseURL(t *testing.T) {
 	}
 }
 
+func TestLoadDataDirectory(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgresql://database.example/aerosight")
+	directory := t.TempDir()
+	t.Setenv("DATA_DIR", directory)
+	cfg, err := Load()
+	if err != nil || cfg.ObjectStorageLocalRoot != directory {
+		t.Fatalf("DATA_DIR must preserve the storage root: %q %v", cfg.ObjectStorageLocalRoot, err)
+	}
+	t.Setenv("DATA_DIR", "")
+	cfg, err = Load()
+	if err != nil || cfg.ObjectStorageLocalRoot != "" {
+		t.Fatalf("missing DATA_DIR must leave storage unconfigured: %q %v", cfg.ObjectStorageLocalRoot, err)
+	}
+}
+
 func TestLoadDefaults(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgresql://database.example/aerosight")
 	t.Setenv("LOG_LEVEL", "")

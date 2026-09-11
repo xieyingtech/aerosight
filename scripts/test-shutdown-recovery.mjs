@@ -24,9 +24,9 @@ async function until(predicate, message, timeout = 15000) {
 }
 const env = {
   DATABASE_URL: `postgresql://postgres:shutdown-test@${database}:5432/postgres`,
-  AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HTTP_LISTEN_ADDRESS: '0.0.0.0:8080',
-  AUTH_SECRET: randomBytes(32).toString('hex'), CSRF_AUTH_KEY: randomBytes(32).toString('base64'),
-  OBJECT_STORAGE_LOCAL_ROOT: '/var/lib/aerosight/objects', GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
+  AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HOST: '0.0.0.0', PORT: '8080',
+  APP_SECRET: randomBytes(32).toString('hex'), CSRF_SECRET: randomBytes(32).toString('base64'),
+  DATA_DIR: '/var/lib/aerosight/objects', GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
   CALLBACK_PUBLIC_BASE_URL: 'https://aerosight.test', SSL_CERT_FILE: '/tmp/algorithm-ca.pem',
 };
 let upstream, origin, slowClient;
@@ -64,7 +64,7 @@ try {
   assert(Number.isSafeInteger(team.id) && Number.isSafeInteger(project.id));
   const assetKey = `projects/${project.id}/input.png`;
   const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=', 'base64');
-  docker('exec', app, 'sh', '-c', 'mkdir -p "$1" && printf "%s" "$2" | base64 -d > "$1/input.png"', 'sh', `${env.OBJECT_STORAGE_LOCAL_ROOT}/projects/${project.id}`, bytes.toString('base64'));
+  docker('exec', app, 'sh', '-c', 'mkdir -p "$1" && printf "%s" "$2" | base64 -d > "$1/input.png"', 'sh', `${env.DATA_DIR}/projects/${project.id}`, bytes.toString('base64'));
   const providerId = Number(sql(`INSERT INTO algorithm_providers(project_id,team_id,name,provider_type,base_url,status,timeout_seconds)
     VALUES(${project.id},${team.id},'Shutdown upstream','http-json','https://algorithm.test:8443/held-run','active',60) RETURNING id`));
   const assetId = Number(sql(`INSERT INTO assets(project_id,team_id,kind,storage_key,logical_key,status,mime_type,checksum_sha256)
@@ -114,7 +114,7 @@ try {
   assert.equal(completed.outboxStatus, 'completed'); assert.equal(completed.claims, 2);
   assert.equal(completed.attempts, 1); assert.equal(completed.consumptions, 1); assert(completed.finishedAt);
   assert.equal(completed.objectKey, `projects/${project.id}/algorithm-runs/${run}/raw-result.json`);
-  assert.deepEqual(JSON.parse(docker('exec', app, 'cat', `${env.OBJECT_STORAGE_LOCAL_ROOT}/${completed.objectKey}`)), { results: [] });
+  assert.deepEqual(JSON.parse(docker('exec', app, 'cat', `${env.DATA_DIR}/${completed.objectKey}`)), { results: [] });
   await sleep(1500);
   assert.deepEqual(state(), completed);
   assert.deepEqual(upstream.readRunHold(), { received: 2, closed: 1, applied: 1, runIds: [run, run] });

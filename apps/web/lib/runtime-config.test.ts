@@ -7,14 +7,14 @@ import { parseWebRuntimeConfig } from "./runtime-config.ts";
 test("runtime configuration reports all required values", () => {
   assert.throws(
     () => parseWebRuntimeConfig({}),
-    /DATABASE_URL is required; AUTH_SECRET must contain at least 16 characters/
+    /DATABASE_URL is required; APP_SECRET must contain at least 16 characters/
   );
 });
 
 test("runtime configuration accepts valid values and defaults log level", () => {
   const config = parseWebRuntimeConfig({
     DATABASE_URL: "postgresql://database.example/aerosight",
-    AUTH_SECRET: "0123456789abcdef"
+    APP_SECRET: "0123456789abcdef"
   });
   assert.equal(config.logLevel, "info");
 });

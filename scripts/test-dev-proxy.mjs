@@ -41,7 +41,7 @@ try {
   const webPort = await freePort();
   const apiOrigin = `http://127.0.0.1:${apiPort}`;
   const origin = `http://127.0.0.1:${webPort}`;
-  const env = { ...process.env, DATABASE_URL: `postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`, AUTH_SECRET: randomBytes(32).toString('hex'), CSRF_AUTH_KEY: randomBytes(32).toString('base64'), HTTP_LISTEN_ADDRESS: `127.0.0.1:${apiPort}`, PUBLIC_ORIGIN: origin, GO_API_ORIGIN: apiOrigin, PORT: String(webPort), GIN_MODE: 'release', OBJECT_STORAGE_LOCAL_ROOT: resolve(output, 'objects'), CALLBACK_PUBLIC_BASE_URL: '', MEDIA_API_BASE_URL: '', MEDIA_ADMIN_USER: '', MEDIA_ADMIN_PASSWORD: '', DJI_FLIGHTHUB_ENABLED: 'false' };
+  const env = { ...process.env, DATABASE_URL: `postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`, APP_SECRET: randomBytes(32).toString('hex'), CSRF_SECRET: randomBytes(32).toString('base64'), HOST: '127.0.0.1', PUBLIC_ORIGIN: origin, GO_API_ORIGIN: apiOrigin, PORT: String(apiPort), GIN_MODE: 'release', DATA_DIR: resolve(output, 'objects'), CALLBACK_PUBLIC_BASE_URL: '', MEDIA_API_BASE_URL: '', MEDIA_ADMIN_USER: '', MEDIA_ADMIN_PASSWORD: '', DJI_FLIGHTHUB_ENABLED: 'false' };
   app = spawn(process.execPath, [resolve(root, 'scripts/dev.mjs')], { cwd: root, env, stdio: ['ignore', log, log] });
   app.on('error', error => { console.error(error.message); });
   let ready = false;
@@ -76,7 +76,7 @@ try {
   assert(Number.isInteger(team.id) && team.id > 0);
   const project = await (await request('/api/projects', 201, { teamId: team.id, name: 'Proxy project' })).json();
   assert(Number.isInteger(project.id) && project.id > 0);
-  const directory = resolve(env.OBJECT_STORAGE_LOCAL_ROOT, 'projects', String(project.id));
+  const directory = resolve(env.DATA_DIR, 'projects', String(project.id));
   mkdirSync(directory, { recursive: true });
   writeFileSync(resolve(directory, 'fixture.bin'), '0123456789');
   const asset = docker('exec', container, 'psql', '-U', 'postgres', '-Atq', '-c', `insert into assets(project_id,team_id,kind,storage_key,logical_key,mime_type) values(${project.id},${team.id},'video','projects/${project.id}/fixture.bin','fixture.bin','application/octet-stream') returning id`);
@@ -89,7 +89,7 @@ try {
   const head = await request(access.url, 200, undefined, { method: 'HEAD' });
   assert.equal(head.headers.get('content-length'), '10');
   const expires = Math.floor(Date.now() / 1000) + 60;
-  const signature = createHmac('sha256', env.AUTH_SECRET).update(`${project.id}.${asset}.1.${expires}`).digest('hex');
+  const signature = createHmac('sha256', env.APP_SECRET).update(`${project.id}.${asset}.1.${expires}`).digest('hex');
   const signedAsset = `/algorithm-assets/${asset}?${new URLSearchParams({ projectId: String(project.id), version: '1', expires: String(expires), signature })}`;
   const algorithmRange = await request(signedAsset, 206, undefined, { headers: { Cookie: '', Range: 'bytes=2-5', 'Accept-Encoding': 'gzip' } });
   assert.equal(await algorithmRange.text(), '2345');

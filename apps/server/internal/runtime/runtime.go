@@ -267,9 +267,9 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	var waylineSource flighthub.WaylineSourceReader
 	if workerConfig.ObjectStorageLocalRoot == "" {
 		assetHandler = func(context.Context, *sql.Tx, outbox.Event) error {
-			return errors.New("OBJECT_STORAGE_LOCAL_ROOT is not configured")
+			return errors.New("DATA_DIR is not configured")
 		}
-		logger.Warn("media derivative processing unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
+		logger.Warn("media derivative processing unavailable", "reason", "DATA_DIR is not configured")
 	} else {
 		storage, err := media.NewLocalObjectStorage(workerConfig.ObjectStorageLocalRoot)
 		if err != nil {
@@ -293,7 +293,7 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 		}
 		consumer.Register(flighthub.WaylineUploadEventType, waylineUploadHandler.Handler)
 	} else {
-		logger.Warn("FlightHub wayline upload unavailable", "reason", "OBJECT_STORAGE_LOCAL_ROOT is not configured")
+		logger.Warn("FlightHub wayline upload unavailable", "reason", "DATA_DIR is not configured")
 	}
 	if flightHubClient != nil {
 		modelJobHandler, modelJobErr := flighthub.NewModelJobHandler(

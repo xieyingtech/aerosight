@@ -42,15 +42,15 @@ type storedCredential struct {
 
 func main() {
 	dryRun := flag.Bool("dry-run", false, "validate every credential without writing")
-	newSecretStdin := flag.Bool("new-secret-stdin", false, "read the new AUTH_SECRET from standard input")
+	newSecretStdin := flag.Bool("new-secret-stdin", false, "read the new APP_SECRET from standard input")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fatal(errors.New("unexpected positional arguments; secrets must not be passed as arguments"))
 	}
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	oldSecret := os.Getenv("AUTH_SECRET")
+	oldSecret := os.Getenv("APP_SECRET")
 	if databaseURL == "" || len(oldSecret) < 16 {
-		fatal(errors.New("DATABASE_URL and the current AUTH_SECRET (at least 16 characters) are required"))
+		fatal(errors.New("DATABASE_URL and the current APP_SECRET (at least 16 characters) are required"))
 	}
 	newSecret := ""
 	if !*dryRun {
@@ -60,7 +60,7 @@ func main() {
 			fatal(err)
 		}
 		if newSecret == oldSecret {
-			fatal(errors.New("new AUTH_SECRET must differ from the current value"))
+			fatal(errors.New("new APP_SECRET must differ from the current value"))
 		}
 	}
 	database, err := sql.Open("pgx", databaseURL)
@@ -79,7 +79,7 @@ func main() {
 	}
 	fmt.Printf("Credential rotation succeeded: device_adapters=%d algorithm_providers=%d ai_providers=%d connector_asset_access_refs=%d key_fingerprint=%s\n",
 		counts["device_adapters"], counts["algorithm_providers"], counts["ai_providers"], counts["connector_asset_access_refs"], fingerprint)
-	fmt.Println("Update the deployment AUTH_SECRET to the new value and restart Web and worker before leaving maintenance mode.")
+	fmt.Println("Update the deployment APP_SECRET to the new value and restart Web and worker before leaving maintenance mode.")
 }
 
 func readNewSecret(fromStdin bool) (string, error) {
@@ -90,25 +90,25 @@ func readNewSecret(fromStdin bool) (string, error) {
 		}
 		secret := strings.TrimRight(line, "\r\n")
 		if len(secret) < 16 {
-			return "", errors.New("new AUTH_SECRET must contain at least 16 characters")
+			return "", errors.New("new APP_SECRET must contain at least 16 characters")
 		}
 		return secret, nil
 	}
-	first, err := readHiddenLine("New AUTH_SECRET: ")
+	first, err := readHiddenLine("New APP_SECRET: ")
 	if err != nil {
 		return "", err
 	}
 	defer clear(first)
-	second, err := readHiddenLine("Confirm new AUTH_SECRET: ")
+	second, err := readHiddenLine("Confirm new APP_SECRET: ")
 	if err != nil {
 		return "", err
 	}
 	defer clear(second)
 	if string(first) != string(second) {
-		return "", errors.New("new AUTH_SECRET confirmation does not match")
+		return "", errors.New("new APP_SECRET confirmation does not match")
 	}
 	if len(first) < 16 {
-		return "", errors.New("new AUTH_SECRET must contain at least 16 characters")
+		return "", errors.New("new APP_SECRET must contain at least 16 characters")
 	}
 	return string(first), nil
 }

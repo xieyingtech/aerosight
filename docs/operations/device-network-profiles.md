@@ -60,7 +60,7 @@ docker compose up -d mqtt media
 - MQTT/RTMPS 入口启用速率限制和连接数限制；能取得稳定出口网段时增加来源 allowlist。
 - API/WebSocket 只暴露需要的 callback 与协商路径，管理后台和 MediaMTX API 走独立内网。
 - HLS/WebRTC 播放需要短期授权；禁止公开目录枚举和永久播放 URL。
-- 证书续期后重新执行 Adapter 自检；单个连接器凭据通过空白敏感表单更新，平台 `AUTH_SECRET` 按统一原子轮换手册执行。
+- 证书续期后重新执行 Adapter 自检；单个连接器凭据通过空白敏感表单更新，平台 `APP_SECRET` 按统一原子轮换手册执行。
 
 ## MQTT Topic ACL
 

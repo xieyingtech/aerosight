@@ -18,7 +18,7 @@ set +a
 : "${POSTGRES_USER:=aerosight}"
 : "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/demo/.env}"
 : "${POSTGRES_DB:=aerosight}"
-: "${AUTH_SECRET:?set AUTH_SECRET in infra/demo/.env}"
+: "${APP_SECRET:?set APP_SECRET in infra/demo/.env}"
 : "${WEB_PORT:=3100}"
 : "${ALGORITHM_DEMO_PORT:=8090}"
 : "${MQTT_PORT:=1883}"
@@ -34,9 +34,9 @@ set +a
 : "${MEDIA_ADMIN_USER:?set MEDIA_ADMIN_USER in infra/demo/.env}"
 : "${MEDIA_ADMIN_PASSWORD:?set MEDIA_ADMIN_PASSWORD in infra/demo/.env}"
 
-case "$POSTGRES_PASSWORD$AUTH_SECRET" in
+case "$POSTGRES_PASSWORD$APP_SECRET" in
   *replace-with*)
-    echo "Replace the demo database password and AUTH_SECRET placeholders before starting." >&2
+    echo "Replace the demo database password and APP_SECRET placeholders before starting." >&2
     exit 2
     ;;
 esac
@@ -97,7 +97,7 @@ until DATABASE_URL="$database_url" pnpm --dir apps/web db:migrate; do
   sleep 2
 done
 
-DATABASE_URL="$database_url" AUTH_SECRET="$AUTH_SECRET" \
+DATABASE_URL="$database_url" APP_SECRET="$APP_SECRET" \
 MEDIA_PUBLISH_USER="$MEDIA_PUBLISH_USER" MEDIA_PUBLISH_PASSWORD="$MEDIA_PUBLISH_PASSWORD" \
 MEDIA_ADMIN_USER="$MEDIA_ADMIN_USER" MEDIA_ADMIN_PASSWORD="$MEDIA_ADMIN_PASSWORD" \
 pnpm --dir apps/web dev --port "$WEB_PORT" &
@@ -131,11 +131,11 @@ project_id=$(psql "$database_url" -X -qAt \
   -f "$demo_dir/bootstrap.sql" | tail -n 1)
 
 cd "$workspace_dir/apps/worker"
-DATABASE_URL="$database_url" AUTH_SECRET="$AUTH_SECRET" \
+DATABASE_URL="$database_url" APP_SECRET="$APP_SECRET" \
 DJI_DEMO_MQTT_CREDENTIALS="$device_credentials" \
 MEDIA_API_BASE_URL="http://127.0.0.1:${MEDIA_API_PORT:-9997}" \
 MEDIA_ADMIN_USER="$MEDIA_ADMIN_USER" MEDIA_ADMIN_PASSWORD="$MEDIA_ADMIN_PASSWORD" \
-OBJECT_STORAGE_LOCAL_ROOT="$workspace_dir/.aerosight-objects" \
+DATA_DIR="$workspace_dir/.aerosight-objects" \
 CALLBACK_LISTEN_ADDRESS="127.0.0.1:8081" \
 CALLBACK_PUBLIC_BASE_URL="https://127.0.0.1:8081" \
 go run ./cmd/worker &

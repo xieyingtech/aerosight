@@ -13,7 +13,7 @@ import { flightHubDiscoveryInputSchema } from "./dji-flighthub-discovery-core.ts
 
 const TOKEN = "security-regression-token-value";
 const PROJECT_UUID = "00000000-0000-4000-8000-000000000001";
-const AUTH_SECRET = "0123456789abcdef0123456789abcdef";
+const APP_SECRET = "0123456789abcdef0123456789abcdef";
 
 test("forged and stale project selections are rejected after a fresh upstream lookup", async () => {
   let currentProjects = [{
@@ -52,11 +52,11 @@ test("concurrent credential encryption produces isolated authenticated envelopes
   const aad = credentialAAD("device-adapter", 42, 7);
   const credentials = Array.from({ length: 32 }, (_, index) => ({ token: `${TOKEN}-${index}` }));
   const envelopes = await Promise.all(credentials.map(async (credential) =>
-    encryptCredentialObject(credential, AUTH_SECRET, aad)
+    encryptCredentialObject(credential, APP_SECRET, aad)
   ));
   assert.equal(new Set(envelopes.map((envelope) => envelope.nonce)).size, envelopes.length);
   envelopes.forEach((envelope, index) => {
-    assert.deepEqual(decryptCredentialObject(envelope, AUTH_SECRET, aad), credentials[index]);
+    assert.deepEqual(decryptCredentialObject(envelope, APP_SECRET, aad), credentials[index]);
   });
 });
 

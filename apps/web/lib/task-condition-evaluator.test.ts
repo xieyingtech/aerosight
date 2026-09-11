@@ -39,7 +39,7 @@ test("missing outputs and type errors fail explicitly", () => {
 });
 
 test("condition schema rejects code injection and arbitrary object traversal", () => {
-  for (const ref of ["process.env.AUTH_SECRET", "steps.detect.outputs.constructor", "steps.detect.result", "inputs.x;globalThis.pwned=true"]) {
+  for (const ref of ["process.env.APP_SECRET", "steps.detect.outputs.constructor", "steps.detect.result", "inputs.x;globalThis.pwned=true"]) {
     assert.equal(taskConditionSchema.safeParse({ op: "exists", target: { ref } }).success, false, ref);
   }
   assert.equal(taskConditionSchema.safeParse({ op: "script", source: "return true" }).success, false);

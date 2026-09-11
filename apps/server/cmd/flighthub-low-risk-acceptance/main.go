@@ -31,7 +31,7 @@ func main() {
 		exitWithSafeResult("opt_in_required")
 	}
 	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	authSecret := os.Getenv("AUTH_SECRET")
+	authSecret := os.Getenv("APP_SECRET")
 	if databaseURL == "" || len(authSecret) < 16 {
 		exitWithSafeResult("configuration_unavailable")
 	}

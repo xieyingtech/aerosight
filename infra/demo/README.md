@@ -8,7 +8,7 @@ LAN and public endpoint examples, firewall rules, TLS requirements, Topic ACLs a
 
 Requirements: Docker with Compose, Node.js/pnpm, Go, `psql`, `curl`, and `jq`.
 
-1. Copy `.env.example` to `.env` and replace every placeholder password and `AUTH_SECRET`. Credentials are used only to generate files inside a Docker volume and are not committed.
+1. Copy `.env.example` to `.env` and replace every placeholder password and `APP_SECRET`. Credentials are used only to generate files inside a Docker volume and are not committed.
 2. Keep `MEDIA_WEBRTC_ADDITIONAL_HOSTS=127.0.0.1` for a browser on the same machine, or set it to the LAN address used by remote browsers.
 3. From the repository root, run:
 

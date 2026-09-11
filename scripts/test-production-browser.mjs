@@ -68,9 +68,9 @@ try {
   const origin=development ? `http://127.0.0.1:${webPort}` : `https://127.0.0.1:${tls.address().port}`;
   const executable=development ? process.execPath : resolve(root,'.build',process.platform==='win32'?'aerosight.exe':'aerosight');
   app=spawn(executable,development ? [resolve(root,'scripts/dev.mjs')] : ['serve'],{
-    cwd:development ? root : output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:mode,PORT:String(webPort ?? ''),GO_API_ORIGIN:`http://127.0.0.1:${apiPort}`,DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
-      AUTH_SECRET:randomBytes(32).toString('hex'),CSRF_AUTH_KEY:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HTTP_LISTEN_ADDRESS:`127.0.0.1:${apiPort}`,CSP_MEDIA_ORIGINS:development ? '' : `https://media.example,https://127.0.0.1:${mediaPort}`,
-      OBJECT_STORAGE_LOCAL_ROOT:resolve(output,'objects'),CALLBACK_PUBLIC_BASE_URL:'',MEDIA_API_BASE_URL:'',MEDIA_ADMIN_USER:'',MEDIA_ADMIN_PASSWORD:'',DJI_FLIGHTHUB_ENABLED:'false',GIN_MODE:'release'}
+    cwd:development ? root : output,stdio:['ignore',log,log],env:{...process.env,AEROSIGHT_ENV:mode,PORT:String(apiPort),GO_API_ORIGIN:`http://127.0.0.1:${apiPort}`,DATABASE_URL:`postgresql://postgres:aerosight-test@127.0.0.1:${dbPort}/postgres`,
+      APP_SECRET:randomBytes(32).toString('hex'),CSRF_SECRET:randomBytes(32).toString('base64'),PUBLIC_ORIGIN:origin,HOST:'127.0.0.1',CSP_MEDIA_ORIGINS:development ? '' : `https://media.example,https://127.0.0.1:${mediaPort}`,
+      DATA_DIR:resolve(output,'objects'),CALLBACK_PUBLIC_BASE_URL:'',MEDIA_API_BASE_URL:'',MEDIA_ADMIN_USER:'',MEDIA_ADMIN_PASSWORD:'',DJI_FLIGHTHUB_ENABLED:'false',GIN_MODE:'release'}
   });
   let ready=false;
   for(let n=0;n<120;n++) {

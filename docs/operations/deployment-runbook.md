@@ -7,7 +7,7 @@
 - Web：Node.js 24+、pnpm 10.33，提供 UI、API、认证和同步事务。
 - Worker：Go 1.24+ 编译出的 `.build/aerosight-worker`，消费 PostgreSQL outbox/任务并提供 `/healthz`、`/readyz`、`/metrics`。
 - 数据库：PostgreSQL 17 + PostGIS 3.5；数据库必须支持扩展、事务、advisory lock 和 `FOR UPDATE SKIP LOCKED`。
-- 对象存储：MVP 运行时使用 `OBJECT_STORAGE_LOCAL_ROOT` 指向持久卷；Web 与 Worker 必须挂载同一路径。不要使用容器临时层。S3-compatible 接口已有领域契约，但当前部署入口尚未配置远端 S3 client。
+- 对象存储：MVP 运行时使用 `DATA_DIR` 指向持久卷；Web 与 Worker 必须挂载同一路径。不要使用容器临时层。S3-compatible 接口已有领域契约，但当前部署入口尚未配置远端 S3 client。
 - TLS 入口：Web、callback 和媒体访问都应由受控 HTTPS 入口暴露；数据库、指标与 worker callback 监听不直接暴露公网。
 
 建议为 Web、Worker 和迁移任务使用同一不可变构建版本，为数据库和对象目录分别配置加密备份。
@@ -19,10 +19,13 @@
 | 变量 | 用途 | 要求 |
 | --- | --- | --- |
 | `DATABASE_URL` | Web/Worker 共用数据库 | 使用专用最小权限账号；生产启用 TLS |
-| `AUTH_SECRET` | 登录、短时令牌签名及数据库凭据加密主材料 | 至少 32 随机字节；Web、Worker 与轮换命令保持一致 |
+| `HOST` / `PORT` | Go HTTP 服务监听地址与端口 | 默认 `127.0.0.1` / `8080`；容器使用 `0.0.0.0` / `8080` |
+| `PUBLIC_ORIGIN` | 应用公开访问 origin | 生产使用 HTTPS，仅协议、主机和可选端口，不含路径 |
+| `CSRF_SECRET` | 防跨站请求伪造 Cookie 的签名密钥 | Base64 编码的 32 字节随机密钥，重启保持稳定 |
+| `APP_SECRET` | 登录、短时令牌签名及数据库凭据加密主材料 | 至少 32 随机字节；Web、Worker 与轮换命令保持一致 |
 | `LOG_LEVEL` | 日志级别 | `info`/`warn`/`error`，排障时短时使用 `debug` |
 | `WORKER_NAME` | worker 实例名 | 每实例唯一，便于日志和指标定位 |
-| `OBJECT_STORAGE_LOCAL_ROOT` | 媒体与算法原始结果目录 | 持久卷绝对路径；留空会明确降级且媒体内容不可读 |
+| `DATA_DIR` | 媒体与算法原始结果目录 | 持久卷绝对路径；留空会明确降级且媒体内容不可读 |
 | `ALGORITHM_ALLOWED_HOSTS` | 算法出站 allowlist | 逗号分隔主机名；不放 URL、IP、通配符或凭据 |
 | `CALLBACK_LISTEN_ADDRESS` | worker callback/健康监听 | 内网 `host:port`，默认 `127.0.0.1:8081` |
 | `CALLBACK_PUBLIC_BASE_URL` | 外部算法 callback 根地址 | 必须 HTTPS；经入口转发到 worker |
@@ -34,7 +37,7 @@
 | `DJI_FLIGHTHUB_POLL_INTERVAL_SECONDS` | Worker 周期目录同步 | 默认 300 秒；仅 Worker 使用并附加抖动 |
 | `DJI_FLIGHTHUB_RECONCILE_INTERVAL_SECONDS` | Worker 调度扫描间隔 | 默认 15 秒；仅 Worker 使用 |
 
-DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AES-256-GCM envelope 加密后存入数据库。密钥通过 HKDF-SHA-256 从 `AUTH_SECRET` 派生；普通读取、审计摘要、日志和智能体上下文都不能得到原文或“是否已配置”标记。编辑表单的敏感 input 始终为空，留空保留旧值，填写非空值才覆盖。
+DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AES-256-GCM envelope 加密后存入数据库。密钥通过 HKDF-SHA-256 从 `APP_SECRET` 派生；普通读取、审计摘要、日志和智能体上下文都不能得到原文或“是否已配置”标记。编辑表单的敏感 input 始终为空，留空保留旧值，填写非空值才覆盖。
 
 ### DJI 司空 2 公有云连接器
 
@@ -61,7 +64,7 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 
 ### 对象存储
 
-为 Web/Worker 挂载同一持久卷，设置 `OBJECT_STORAGE_LOCAL_ROOT`，再开启项目 `object_storage_enabled`。使用一条非敏感测试图片验证上传、checksum、版本、短时读取 URL 和重启后读取。目录不可用时先关闭该开关；不得清空数据库资产记录或把缺失媒体伪装为成功。
+为 Web/Worker 挂载同一持久卷，设置 `DATA_DIR`，再开启项目 `object_storage_enabled`。使用一条非敏感测试图片验证上传、checksum、版本、短时读取 URL 和重启后读取。目录不可用时先关闭该开关；不得清空数据库资产记录或把缺失媒体伪装为成功。
 
 ### 算法 provider
 

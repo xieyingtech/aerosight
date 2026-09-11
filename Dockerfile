@@ -26,7 +26,7 @@ RUN groupadd --gid 10001 aerosight && useradd --uid 10001 --gid aerosight --no-c
     && mkdir -p /app /var/lib/aerosight/objects && chown -R aerosight:aerosight /var/lib/aerosight
 WORKDIR /app
 COPY --from=server-build /out/aerosight /usr/local/bin/aerosight
-ENV AEROSIGHT_ENV=production HTTP_LISTEN_ADDRESS=0.0.0.0:8080 OBJECT_STORAGE_LOCAL_ROOT=/var/lib/aerosight/objects
+ENV AEROSIGHT_ENV=production HOST=0.0.0.0 PORT=8080 DATA_DIR=/var/lib/aerosight/objects
 USER 10001:10001
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/aerosight"]

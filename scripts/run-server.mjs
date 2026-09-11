@@ -10,7 +10,8 @@ if (existsSync(envFile)) process.loadEnvFile(envFile);
 const development = mode !== 'serve';
 if (mode==='dev') {
   process.env.AEROSIGHT_ENV='development';
-  process.env.HTTP_LISTEN_ADDRESS ??= '127.0.0.1:8080';
+  process.env.HOST ??= '127.0.0.1';
+  process.env.PORT ??= '8080';
   process.env.PUBLIC_ORIGIN ??= 'http://localhost:3000';
 }
 if (development) {

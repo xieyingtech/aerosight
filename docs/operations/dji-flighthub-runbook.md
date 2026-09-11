@@ -65,7 +65,7 @@
 3. 验证成功后原子替换 envelope、排队同步；确认连接器恢复、只读水位推进且无秘密输出。
 4. 在司空撤销旧 Token。若权限也发生变化，重新运行只读 probe；旧的 `field-write` 证据不得自动扩张到新账号指纹。
 
-### `AUTH_SECRET`
+### `APP_SECRET`
 
 按[凭据轮换手册](./credential-rotation.md)执行 dry-run 和事务性 re-encrypt。Web/Worker 必须原子切换同一新值；命令行不得携带密钥参数。轮换失败时保持旧值，成功后若部署切换失败应修复并使用新值，不能让新旧 Worker 混跑。
 

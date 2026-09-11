@@ -68,7 +68,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	if len(workerCfg.AuthSecret) < 32 {
-		return errors.New("AUTH_SECRET must contain at least 32 characters")
+		return errors.New("APP_SECRET must contain at least 32 characters")
 	}
 	if workerCfg.CallbackPublicBaseURL == "" {
 		workerCfg.CallbackPublicBaseURL = httpCfg.PublicOrigin

@@ -67,9 +67,9 @@ try {
   docker('run', '-d', '--name', database, '--network', network, '-e', 'POSTGRES_PASSWORD=lifecycle-test', 'postgis/postgis:17-3.5'); dbCreated = true;
   const env = {
     DATABASE_URL: `postgresql://postgres:lifecycle-test@${database}:5432/postgres`,
-    AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HTTP_LISTEN_ADDRESS: '0.0.0.0:8080',
-    AUTH_SECRET: randomBytes(32).toString('hex'), CSRF_AUTH_KEY: randomBytes(32).toString('base64'),
-    OBJECT_STORAGE_LOCAL_ROOT: objectRoot, GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
+    AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: 'https://aerosight.test', HOST: '0.0.0.0', PORT: '8080',
+    APP_SECRET: randomBytes(32).toString('hex'), CSRF_SECRET: randomBytes(32).toString('base64'),
+    DATA_DIR: objectRoot, GIN_MODE: 'release', DJI_FLIGHTHUB_ENABLED: 'false',
     CALLBACK_PUBLIC_BASE_URL: 'https://aerosight.test', SSL_CERT_FILE: '/tmp/algorithm-ca.pem',
   };
   for (let i = 0; i < 100; i++) {

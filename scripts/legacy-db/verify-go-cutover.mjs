@@ -21,9 +21,9 @@ export async function verifyGoCutover({ output, databaseURL, client, scope, pass
   });
   const database = new URL(databaseURL); database.hostname = 'host.docker.internal';
   const publicOrigin = 'https://rollback.test';
-  const env = { DATABASE_URL: database.href, AUTH_SECRET: secret, CSRF_AUTH_KEY: randomBytes(32).toString('base64'),
-    AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: publicOrigin, HTTP_LISTEN_ADDRESS: '0.0.0.0:8080',
-    OBJECT_STORAGE_LOCAL_ROOT: '/tmp/objects', DJI_FLIGHTHUB_ENABLED: 'false', GIN_MODE: 'release' };
+  const env = { DATABASE_URL: database.href, APP_SECRET: secret, CSRF_SECRET: randomBytes(32).toString('base64'),
+    AEROSIGHT_ENV: 'production', PUBLIC_ORIGIN: publicOrigin, HOST: '0.0.0.0', PORT: '8080',
+    DATA_DIR: '/tmp/objects', DJI_FLIGHTHUB_ENABLED: 'false', GIN_MODE: 'release' };
   let started = false;
   const abort = new AbortController();
   try {

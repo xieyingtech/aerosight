@@ -20,7 +20,7 @@ func TestCSPOriginConfiguration(t *testing.T) {
 	if _, err := cspOrigins("http://localhost:8889", true); err != nil {
 		t.Fatal(err)
 	}
-	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_SECRET": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	cfg, err := LoadHTTP(func(k string) string { return env[k] })
 	if err != nil || len(cfg.CSPMapOrigins) != 2 || cfg.CSPMapOrigins[0] != "https://tiles.openfreemap.org" || cfg.CSPMapOrigins[1] != "https://demotiles.maplibre.org" || len(cfg.CSPMediaOrigins) != 0 {
 		t.Fatalf("default CSP: %+v %v", cfg.CSPMapOrigins, err)
@@ -28,7 +28,7 @@ func TestCSPOriginConfiguration(t *testing.T) {
 }
 
 func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
-	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	env := map[string]string{"PUBLIC_ORIGIN": "https://aerosight.example", "CSRF_SECRET": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	get := func(k string) string { return env[k] }
 	if cfg, err := LoadHTTP(get); err != nil || cfg.AIRequestTimeout != 120*time.Second {
 		t.Fatalf("AI default %v %v", cfg.AIRequestTimeout, err)
@@ -49,7 +49,7 @@ func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
 	if _, err := LoadHTTP(get); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"CSRF_AUTH_KEY", "PUBLIC_ORIGIN"} {
+	for _, key := range []string{"CSRF_SECRET", "PUBLIC_ORIGIN"} {
 		old := env[key]
 		delete(env, key)
 		if _, err := LoadHTTP(get); err == nil {
@@ -69,7 +69,7 @@ func TestHTTPConfigRequiresKeysAndOrigin(t *testing.T) {
 }
 
 func TestHTTPConfigBudgetsAndValidation(t *testing.T) {
-	base := map[string]string{"AEROSIGHT_ENV": "development", "CSRF_AUTH_KEY": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	base := map[string]string{"AEROSIGHT_ENV": "development", "CSRF_SECRET": base64.StdEncoding.EncodeToString(make([]byte, 32))}
 	get := func(k string) string { return base[k] }
 	cfg, err := LoadHTTP(get)
 	if err != nil || cfg.PublicOrigin != "http://localhost:3000" || cfg.HTTPPool != 20 || cfg.WorkerPool != 10 || cfg.SSELimit != 30 || cfg.RequestTimeout != 30*time.Second || cfg.ShutdownTimeout != 30*time.Second || len(cfg.TrustedProxies) != 0 {
@@ -99,15 +99,34 @@ func TestHTTPConfigBudgetsAndValidation(t *testing.T) {
 	if cfg, err := LoadHTTP(get); err != nil || cfg.HTTPPool != 7 || cfg.WorkerPool != 3 || cfg.SSELimit != 9 {
 		t.Fatalf("budgets %+v %v", cfg, err)
 	}
-	for _, bad := range []string{"localhost", "localhost:", "localhost:nope", "localhost:65536", "localhost:-1"} {
-		base["HTTP_LISTEN_ADDRESS"] = bad
+	for _, bad := range []string{"nope", "65536", "-1", "+80", " 80"} {
+		base["PORT"] = bad
 		if _, err := LoadHTTP(get); err == nil {
-			t.Fatalf("invalid address accepted: %s", bad)
+			t.Fatalf("invalid port accepted: %s", bad)
 		}
 	}
-	delete(base, "HTTP_LISTEN_ADDRESS")
+	delete(base, "PORT")
+	for _, tc := range []struct{ host, port, want string }{
+		{"", "", "127.0.0.1:8080"},
+		{"0.0.0.0", "9090", "0.0.0.0:9090"},
+		{"::1", "8081", "[::1]:8081"},
+		{"localhost", "0", "localhost:0"},
+	} {
+		base["HOST"], base["PORT"] = tc.host, tc.port
+		if cfg, err := LoadHTTP(get); err != nil || cfg.Address != tc.want {
+			t.Fatalf("HOST=%q PORT=%q: address=%q error=%v", tc.host, tc.port, cfg.Address, err)
+		}
+	}
+	delete(base, "PORT")
+	for _, bad := range []string{"http://localhost", "localhost:8080", "[::1]", "host name"} {
+		base["HOST"] = bad
+		if _, err := LoadHTTP(get); err == nil || !strings.Contains(err.Error(), "HOST") {
+			t.Fatalf("invalid host accepted: %s (%v)", bad, err)
+		}
+	}
+	delete(base, "HOST")
 	for _, bad := range []string{"not-base64", base64.StdEncoding.EncodeToString(make([]byte, 31)), base64.StdEncoding.EncodeToString(make([]byte, 33))} {
-		base["CSRF_AUTH_KEY"] = bad
+		base["CSRF_SECRET"] = bad
 		if _, err := LoadHTTP(get); err == nil {
 			t.Fatal("invalid CSRF key accepted")
 		}

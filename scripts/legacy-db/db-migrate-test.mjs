@@ -306,7 +306,7 @@ function rotateCredentials(connectionString, oldSecret, newSecret, dryRun = fals
   return spawnSync("go", args, {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: { ...process.env, DATABASE_URL: connectionString, AUTH_SECRET: oldSecret },
+    env: { ...process.env, DATABASE_URL: connectionString, APP_SECRET: oldSecret },
     input: dryRun ? undefined : `${newSecret}\n`
   });
 }

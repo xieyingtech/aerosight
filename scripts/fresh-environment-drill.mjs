@@ -5,9 +5,9 @@ import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 
 const requiredEnvironmentKeys = [
-  "DATABASE_URL", "AUTH_SECRET", "LOG_LEVEL", "WORKER_NAME", "OBJECT_STORAGE_LOCAL_ROOT",
+  "DATABASE_URL", "APP_SECRET", "LOG_LEVEL", "WORKER_NAME", "DATA_DIR",
   "ALGORITHM_ALLOWED_HOSTS", "CALLBACK_LISTEN_ADDRESS", "CALLBACK_PUBLIC_BASE_URL",
-  "CSRF_AUTH_KEY", "AEROSIGHT_ENV", "HTTP_LISTEN_ADDRESS", "PUBLIC_ORIGIN", "GO_API_ORIGIN"
+  "CSRF_SECRET", "AEROSIGHT_ENV", "HOST", "PORT", "PUBLIC_ORIGIN", "GO_API_ORIGIN"
 ];
 const example = readFileSync(resolve(root, '.env.example'), "utf8");
 for (const key of requiredEnvironmentKeys) {

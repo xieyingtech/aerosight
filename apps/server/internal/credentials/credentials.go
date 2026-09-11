@@ -35,7 +35,7 @@ type Envelope struct {
 
 func deriveKey(authSecret string) ([]byte, error) {
 	if authSecret == "" {
-		return nil, errors.New("AUTH_SECRET_REQUIRED_FOR_CREDENTIALS")
+		return nil, errors.New("APP_SECRET_REQUIRED_FOR_CREDENTIALS")
 	}
 	extract := hmac.New(sha256.New, hkdfSalt)
 	_, _ = extract.Write([]byte(authSecret))

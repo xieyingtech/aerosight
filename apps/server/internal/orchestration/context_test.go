@@ -23,7 +23,7 @@ func TestResolveReferencesOnlyUsesInputsAndStepOutputs(t *testing.T) {
 	if !reflect.DeepEqual(resolved, want) {
 		t.Fatalf("resolved = %#v, want %#v", resolved, want)
 	}
-	if _, err := fixtureContext().Read("process.env.AUTH_SECRET"); err == nil || !strings.Contains(err.Error(), "FORBIDDEN") {
+	if _, err := fixtureContext().Read("process.env.APP_SECRET"); err == nil || !strings.Contains(err.Error(), "FORBIDDEN") {
 		t.Fatalf("arbitrary reference accepted: %v", err)
 	}
 }

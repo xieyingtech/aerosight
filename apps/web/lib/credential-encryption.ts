@@ -34,7 +34,7 @@ function fromBase64Url(value: string, field: string) {
 }
 
 export function deriveCredentialKey(authSecret: string) {
-  if (!authSecret) throw new Error("AUTH_SECRET_REQUIRED_FOR_CREDENTIALS");
+  if (!authSecret) throw new Error("APP_SECRET_REQUIRED_FOR_CREDENTIALS");
   const pseudorandomKey = createHmac("sha256", HKDF_SALT).update(authSecret, "utf8").digest();
   return createHmac("sha256", pseudorandomKey)
     .update(Buffer.concat([HKDF_INFO, Buffer.from([1])]))

@@ -27,17 +27,24 @@ type HTTP struct {
 }
 
 func LoadHTTP(get func(string) string) (HTTP, error) {
-	cfg := HTTP{Address: get("HTTP_LISTEN_ADDRESS"), PublicOrigin: strings.TrimRight(get("PUBLIC_ORIGIN"), "/"), Development: get("AEROSIGHT_ENV") == "development", HTTPPool: 20, WorkerPool: 10, SessionLifetime: 7 * 24 * time.Hour, SessionIdle: 24 * time.Hour, RequestTimeout: 30 * time.Second, ShutdownTimeout: 30 * time.Second, LoginLimit: 10, WriteLimit: 120, MetricsToken: get("METRICS_TOKEN")}
+	cfg := HTTP{PublicOrigin: strings.TrimRight(get("PUBLIC_ORIGIN"), "/"), Development: get("AEROSIGHT_ENV") == "development", HTTPPool: 20, WorkerPool: 10, SessionLifetime: 7 * 24 * time.Hour, SessionIdle: 24 * time.Hour, RequestTimeout: 30 * time.Second, ShutdownTimeout: 30 * time.Second, LoginLimit: 10, WriteLimit: 120, MetricsToken: get("METRICS_TOKEN")}
 	cfg.AIRequestTimeout = 120 * time.Second
 	cfg.SSELimit = 30
-	if cfg.Address == "" {
-		cfg.Address = "127.0.0.1:8080"
+	host, port := get("HOST"), get("PORT")
+	if host == "" {
+		host = "127.0.0.1"
 	}
-	_, port, addressErr := net.SplitHostPort(cfg.Address)
+	if port == "" {
+		port = "8080"
+	}
+	if strings.ContainsAny(host, "/[] \t\r\n") || (strings.Contains(host, ":") && net.ParseIP(host) == nil) {
+		return cfg, fmt.Errorf("HOST must be a hostname or an unbracketed IP address")
+	}
 	portNumber, portErr := strconv.Atoi(port)
-	if addressErr != nil || portErr != nil || portNumber < 0 || portNumber > 65535 {
-		return cfg, fmt.Errorf("HTTP_LISTEN_ADDRESS must be host:port")
+	if portErr != nil || portNumber < 0 || portNumber > 65535 || strings.Trim(port, "0123456789") != "" {
+		return cfg, fmt.Errorf("PORT must be an integer between 0 and 65535")
 	}
+	cfg.Address = net.JoinHostPort(host, port)
 	if cfg.PublicOrigin == "" {
 		if cfg.Development {
 			cfg.PublicOrigin = "http://localhost:3000"
@@ -52,9 +59,9 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 	if !cfg.Development && origin.Scheme != "https" {
 		return cfg, fmt.Errorf("production PUBLIC_ORIGIN must use HTTPS")
 	}
-	cfg.CSRFKey, err = base64.StdEncoding.DecodeString(get("CSRF_AUTH_KEY"))
+	cfg.CSRFKey, err = base64.StdEncoding.DecodeString(get("CSRF_SECRET"))
 	if err != nil || len(cfg.CSRFKey) != 32 {
-		return cfg, fmt.Errorf("CSRF_AUTH_KEY must encode 32 bytes in base64")
+		return cfg, fmt.Errorf("CSRF_SECRET must encode 32 bytes in base64")
 	}
 	for key, dest := range map[string]*int{"HTTP_DB_MAX_CONNECTIONS": &cfg.HTTPPool, "WORKER_DB_MAX_CONNECTIONS": &cfg.WorkerPool, "LOGIN_RATE_LIMIT": &cfg.LoginLimit, "WRITE_RATE_LIMIT": &cfg.WriteLimit, "SSE_RATE_LIMIT": &cfg.SSELimit} {
 		if raw := get(key); raw != "" {
