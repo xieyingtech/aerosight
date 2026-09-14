@@ -39,7 +39,19 @@ export default function DetailPage() {
   const issue = model.issue;
   const summary = issueEvidenceSummary({ detections: model.detections, assets: model.assets });
   const labels = Array.isArray(issue.labels) ? issue.labels : [];
+  const inspectionLinks = model.links.flatMap(link => {
+    const target = encodeURIComponent(String(link.targetId));
+    const routes: Record<string, [string, string]> = {
+      inspection_observation: ["观察范围与原图", `/projects/inspection/observation/?projectId=${projectId}&observationId=${target}`],
+      inspection_evidence_set: ["巡检检测证据", `/projects/inspection/evidence/?projectId=${projectId}&evidenceSetId=${target}`],
+      inspection_assessment: ["模型研判与复核", `/projects/inspection/assessment/?projectId=${projectId}&assessmentId=${target}`],
+      algorithm_run: ["算法运行与模型版本", `/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${target}`]
+    };
+    const route = routes[String(link.linkType)];
+    return route ? [{ label: route[0], href: route[1] }] : [];
+  });
   return <Page title={`案件 #${String(issue.number)} · ${String(issue.title)}`} description="案件是可协作处置的业务记录；算法结果和原始证据保持不可变。">
+    {inspectionLinks.length > 0 && <Card className="mb-4"><CardHeader><CardTitle>巡检证据链</CardTitle><CardDescription>巡检检测保存在关联算法运行与证据集中，可追溯到原图和复核理由。</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-4">{inspectionLinks.map(link => <Link className="text-sm underline" key={link.href} href={link.href}>{link.label}</Link>)}</CardContent></Card>}
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader><CardDescription>状态</CardDescription><CardTitle><Badge variant="outline">{String(issue.status)}</Badge></CardTitle></CardHeader><CardContent className="text-sm">优先级 {String(issue.priority)}</CardContent></Card>

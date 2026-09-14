@@ -44,6 +44,9 @@ func validateTaskConditionRefs(v any) error {
 	return nil
 }
 func parseTaskDefinition(v any) (map[string]any, error) {
+	if object, ok := v.(map[string]any); ok && object["apiVersion"] != nil {
+		return parseTaskV2(object)
+	}
 	raw, e := json.Marshal(v)
 	if e != nil {
 		return nil, e

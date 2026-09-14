@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"aerosight/server/internal/connector"
+	"aerosight/server/internal/inspection"
 	"aerosight/server/internal/observability"
 )
 
@@ -361,7 +362,7 @@ func insertPerceptionCreatedEvent(ctx context.Context, tx *sql.Tx, projectID, te
 	return err
 }
 
-func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, tx *sql.Tx, instance connector.Instance, teamID int, ruleVersionID int64, alert AIAlertRecord) error {
+func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, tx *sql.Tx, instance connector.Instance, teamID int, alert AIAlertRecord) error {
 	scope, err := parseScope(instance.DiscoveryScope)
 	if err != nil || alert.ProjectID != scope.ProjectUUID {
 		return errors.New("FlightHub AI alert project scope is invalid")
@@ -405,6 +406,20 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 	}
 	confidence := alertConfidence(alert)
 	canonical, err := upsertAIAlertResource(ctx, tx, instance, teamID, alert, runID, droneID, assetID, capturedAt, confidence)
+	if err != nil {
+		return err
+	}
+	ownership, err := inspection.ClassifyAlertFlight(ctx, tx, instance.ProjectID, instance.ID, alert.FlightID)
+	if err != nil {
+		return err
+	}
+	if err = retainInspectionAlert(ctx, tx, instance, canonical.ResourceID, alert, ownership); err != nil {
+		return err
+	}
+	if ownership != "legacy" {
+		return nil
+	}
+	ruleVersionID, err := ensureFlightAlertRule(ctx, tx, instance.ProjectID, teamID, instance.ID)
 	if err != nil {
 		return err
 	}
@@ -497,26 +512,34 @@ func resolveMissingAIAlerts(ctx context.Context, tx *sql.Tx, instance connector.
 	if err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `select resource.id,resource.canonical_target_id,event.detection_group_id,link.issue_id
-		from connector_remote_resources resource
-		join perception_events event on event.project_id=resource.project_id and resource.canonical_target_type='perception_event' and resource.canonical_target_id=event.id::text
-		join issue_links link on link.project_id=resource.project_id and link.link_type='perception_event' and link.target_id=event.id::text
-		where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.resource_kind='ai-alert' and resource.status='active'
-		and not exists(select 1 from jsonb_array_elements_text($3::jsonb) seen(id) where seen.id=resource.remote_id)
-		for update of resource,event`, instance.ProjectID, instance.ID, seenJSON)
+	rows, err := tx.QueryContext(ctx, `select resource.id,resource.canonical_target_id,event.detection_group_id,link.issue_id,
+ coalesce(ownership.ownership<>'legacy',policy.task_managed_alerts,false) as protected
+ from connector_remote_resources resource
+ left join inspection_alert_sources source on source.project_id=resource.project_id and source.remote_resource_id=resource.id
+ left join connector_remote_resources flight on flight.project_id=resource.project_id and flight.connector_instance_id=resource.connector_instance_id
+  and flight.resource_kind='flight-task' and flight.canonical_target_type='task_run' and flight.canonical_target_id=resource.summary_json->>'taskRunId'
+ left join inspection_flight_ownership ownership on ownership.project_id=resource.project_id and ownership.connector_instance_id=resource.connector_instance_id
+  and ownership.remote_flight_id=coalesce(source.remote_flight_id,flight.remote_id)
+ left join inspection_connector_policies policy on policy.project_id=resource.project_id and policy.connector_instance_id=resource.connector_instance_id
+ left join perception_events event on event.project_id=resource.project_id and resource.canonical_target_type='perception_event' and resource.canonical_target_id=event.id::text
+ left join issue_links link on link.project_id=resource.project_id and link.link_type='perception_event' and link.target_id=event.id::text
+ where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.resource_kind='ai-alert' and resource.status='active'
+ and not exists(select 1 from jsonb_array_elements_text($3::jsonb) seen(id) where seen.id=resource.remote_id)
+ for update of resource`, instance.ProjectID, instance.ID, seenJSON)
 	if err != nil {
 		return err
 	}
 	type missingAlert struct {
 		resourceID int64
-		eventID    string
-		groupID    int64
-		issueID    int
+		eventID    sql.NullString
+		groupID    sql.NullInt64
+		issueID    sql.NullInt64
+		protected  bool
 	}
 	missing := make([]missingAlert, 0)
 	for rows.Next() {
 		var item missingAlert
-		if err := rows.Scan(&item.resourceID, &item.eventID, &item.groupID, &item.issueID); err != nil {
+		if err := rows.Scan(&item.resourceID, &item.eventID, &item.groupID, &item.issueID, &item.protected); err != nil {
 			rows.Close()
 			return err
 		}
@@ -528,6 +551,9 @@ func resolveMissingAIAlerts(ctx context.Context, tx *sql.Tx, instance connector.
 	for _, item := range missing {
 		if _, err := tx.ExecContext(ctx, `update connector_remote_resources set status='missing',missing_at=coalesce(missing_at,$2),updated_at=now() where id=$1`, item.resourceID, recoveredAt); err != nil {
 			return err
+		}
+		if item.protected || !item.eventID.Valid || !item.groupID.Valid || !item.issueID.Valid {
+			continue
 		}
 		result, err := tx.ExecContext(ctx, `update perception_events set status='resolved',state_version=state_version+1,resolved_at=$3,updated_at=now()
 			where project_id=$1 and id=$2 and status<>'resolved'`, instance.ProjectID, item.eventID, recoveredAt)
@@ -578,10 +604,6 @@ func (projector *SQLFlightCatalogProjector) ApplyFlightAlerts(ctx context.Contex
 			_ = tx.Rollback()
 		}
 	}()
-	ruleVersionID, err := ensureFlightAlertRule(ctx, tx, instance.ProjectID, teamID, instance.ID)
-	if err != nil {
-		return err
-	}
 	flights := make(map[string]struct{}, len(poll.Aggregates))
 	flightIDs := make([]string, 0, len(poll.Aggregates))
 	for _, aggregate := range poll.Aggregates {
@@ -608,7 +630,7 @@ func (projector *SQLFlightCatalogProjector) ApplyFlightAlerts(ctx context.Contex
 		}
 		seenAlerts[alert.AlertUUID] = struct{}{}
 		alertIDs = append(alertIDs, alert.AlertUUID)
-		if err := projector.projectAIAlert(ctx, tx, instance, teamID, ruleVersionID, alert); err != nil {
+		if err := projector.projectAIAlert(ctx, tx, instance, teamID, alert); err != nil {
 			return err
 		}
 	}

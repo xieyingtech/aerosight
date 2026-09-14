@@ -21,6 +21,7 @@ type failedStepPayload struct {
 // outbox retry budget, then applies the published step's abort/pause/continue
 // policy on the final attempt instead of leaving the run stuck in running.
 func WithTaskStepFailurePolicy(handler outbox.Handler) outbox.Handler {
+	handler = withStepExecutionBoundary(handler)
 	return func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
 		if _, err := tx.ExecContext(ctx, "savepoint task_step_handler"); err != nil {
 			return err
@@ -43,6 +44,13 @@ func finalizeTaskStepFailure(ctx context.Context, tx *sql.Tx, event outbox.Event
 	var payload failedStepPayload
 	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.TaskRunID <= 0 || payload.TaskRunStepID <= 0 {
 		return errors.New("TASK_STEP_FAILURE_PAYLOAD_INVALID")
+	}
+	var runStatus, dsl string
+	if err := tx.QueryRowContext(ctx, `select run.status,coalesce(version.dsl_version,'aerosight/v1') from task_runs run left join task_versions version on version.id=run.task_version_id and version.project_id=run.project_id where run.project_id=$1 and run.team_id=$2 and run.id=$3 for update of run`, event.ProjectID, event.TeamID, payload.TaskRunID).Scan(&runStatus, &dsl); err != nil {
+		return err
+	}
+	if dsl == "aerosight/v2" && runStatus != "running" && runStatus != "dispatching" && runStatus != "queued" {
+		return nil
 	}
 	var onFailure string
 	if err := tx.QueryRowContext(ctx, `select coalesce(step.failure_policy_json->>'onFailure','abort')

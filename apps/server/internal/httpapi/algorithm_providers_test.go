@@ -75,6 +75,14 @@ func TestAlgorithmProviderManagement(t *testing.T) {
 		t.Fatalf("public %s", encoded)
 	}
 	item := base + "/" + id
+	activeBody := strings.Replace(providerBody, `"name":" Provider "`, `"status":"active","name":" Provider "`, 1)
+	if got := call("PATCH", item, activeBody, 200); got["status"] != "active" {
+		t.Fatal("provider not activated")
+	}
+	call("PATCH", item, strings.Replace(activeBody, `"status":"active"`, `"status":"invalid"`, 1), 400)
+	if got := call("PATCH", item, strings.Replace(activeBody, `"status":"active"`, `"status":"disabled"`, 1), 200); got["status"] != "disabled" {
+		t.Fatal("provider not disabled")
+	}
 	readEnvelope := func() []byte {
 		t.Helper()
 		var raw []byte

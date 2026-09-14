@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"aerosight/server/internal/algorithm"
 	"aerosight/server/internal/config"
 	"aerosight/server/internal/database/sqlcgen"
 	"aerosight/server/internal/device"
@@ -27,6 +28,7 @@ import (
 )
 
 type Server struct {
+	inspectionMedia     algorithm.RemoteAlgorithmAssetReader
 	staticPages         http.Handler
 	aiHTTPClientFactory func(*url.URL, []netip.Addr) *http.Client
 	mediaStorageRoot    string
@@ -87,7 +89,11 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	r.Use(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
 			c.Header("Cache-Control", "no-store")
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 2<<20)
+			limit := int64(2 << 20)
+			if c.FullPath() == "/api/projects/:id/assets/import" {
+				limit = 41 << 20
+			}
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		}
 		c.Next()
 	})
@@ -118,6 +124,11 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.router.POST("/api/projects/:id/task-runs/:runId/reports", s.requireUser, s.timeout, s.createReportDraft)
 	s.router.POST("/api/projects/:id/reports/:reportId/publish", s.requireUser, s.timeout, s.publishReport)
 	s.router.GET("/api/projects/:id/reports/:reportId/export", s.requireUser, s.timeout, s.exportReport)
+	s.router.GET("/api/projects/:id/inspection/flight-plan-options", s.requireUser, s.timeout, s.inspectionFlightPlanOptions)
+	s.router.GET("/api/projects/:id/inspection/flight-plan", s.requireUser, s.timeout, s.previewInspectionFlightPlan)
+	s.router.GET("/api/projects/:id/inspection/readiness", s.requireUser, s.timeout, s.inspectionReadiness)
+	s.router.GET("/api/projects/:id/task-runs/:runId/inspection-summary", s.requireUser, s.timeout, s.readInspectionSummary)
+	s.router.GET("/api/projects/:id/reports/:reportId", s.requireUser, s.timeout, s.readGeneratedReport)
 	s.router.POST("/api/projects/:id/task-runs/:runId/control", s.requireUser, s.timeout, s.controlMissionRun)
 	s.router.GET("/api/projects/:id/task-runs/:runId/audit-trace", s.requireUser, s.timeout, s.getMissionAuditTrace)
 	s.router.POST("/api/projects/:id/task-runs/:runId/emergency-stop-drill", s.requireUser, s.timeout, s.runEmergencyStopDrill)
@@ -127,6 +138,16 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 		c.Params = append(c.Params, gin.Param{Key: "connectorId", Value: c.Param("adapterId")})
 		s.syncFlightHub(c)
 	})
+	s.router.GET("/api/projects/:id/inspection/observations/:observationId", s.requireUser, s.timeout, s.getInspectionObservation)
+	s.router.GET("/api/projects/:id/inspection/observations/:observationId/assets/:assetId/content", s.requireUser, s.timeout, s.readInspectionImage)
+	s.router.GET("/api/projects/:id/inspection/assessments/:assessmentId", s.requireUser, s.timeout, s.inspectionAssessment)
+	s.router.POST("/api/projects/:id/inspection/assessments/:assessmentId/review", s.requireUser, s.timeout, s.inspectionAssessment)
+	s.router.GET("/api/projects/:id/inspection/evidence-sets/:evidenceSetId", s.requireUser, s.timeout, s.getInspectionEvidenceSet)
+	s.router.GET("/api/projects/:id/inspection/connectors/:connectorId/alert-policy", s.requireUser, s.timeout, s.inspectionAlertPolicy)
+	s.router.POST("/api/projects/:id/inspection/connectors/:connectorId/alert-policy", s.requireUser, s.timeout, s.inspectionAlertPolicy)
+	s.router.POST("/api/projects/:id/tasks", s.requireUser, s.timeout, s.createTask)
+	s.router.PATCH("/api/projects/:id/tasks/:taskId", s.requireUser, s.timeout, s.updateTaskState)
+	s.router.POST("/api/projects/:id/tasks/validate", s.requireUser, s.timeout, s.validateTaskSource)
 	s.router.POST("/api/projects/:id/tasks/:taskId/versions", s.requireUser, s.timeout, s.taskDraft)
 	s.router.POST("/api/projects/:id/issues/:issueId/feedback", s.requireUser, s.timeout, s.issueFeedback)
 	s.router.POST("/api/projects/:id/device-adapters/discoveries/:identityId/bind", s.requireUser, s.timeout, s.bindDiscoveredDevice)
@@ -151,7 +172,12 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			// Apply before CSRF, which can parse form bodies before Gin runs.
-			r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+			limit := int64(2 << 20)
+			parts := strings.Split(r.URL.Path, "/")
+			if r.Method == "POST" && len(parts) == 6 && parts[1] == "api" && parts[2] == "projects" && parts[3] != "" && parts[4] == "assets" && parts[5] == "import" {
+				limit = 41 << 20
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/callbacks/algorithms/") {
 			if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {

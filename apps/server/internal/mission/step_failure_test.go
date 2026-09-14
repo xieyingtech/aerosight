@@ -24,3 +24,16 @@ func TestPausedNonDeviceStepCanResume(t *testing.T) {
 }
 
 func testNow() time.Time { return time.Unix(0, 0).UTC() }
+
+func TestCancelBusinessWorkflowDoesNotIssueDeviceStop(t *testing.T) {
+	for _, status := range []RunStatus{RunQueued, RunRunning, RunPaused} {
+		decision, err := Control(Snapshot{RunID: 3, Status: status, Steps: []Step{{Uses: "inspection.observe"}, {Uses: "inspection.detect"}}}, ControlCancel, testNow())
+		if err != nil || decision.RunStatus != RunCanceled || decision.IssueCommand != nil || decision.Reason != "operator_canceled_business_run" {
+			t.Fatalf("data workflow cancel: %+v %v", decision, err)
+		}
+	}
+	decision, err := Control(Snapshot{RunID: 3, Status: RunRunning, Steps: []Step{{Uses: "device.command"}}}, ControlCancel, testNow())
+	if err != nil || decision.IssueCommand == nil {
+		t.Fatal("device workflow lost existing control path")
+	}
+}

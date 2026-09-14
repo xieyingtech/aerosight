@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"aerosight/server/internal/mission"
 	"aerosight/server/internal/orchestration"
 	"aerosight/server/internal/outbox"
 )
@@ -19,6 +20,9 @@ type copilotStepPayload struct {
 // TaskStepHandler turns an explicit copilot.run step into the same protected,
 // revalidated job used by issue mentions and assignments.
 func TaskStepHandler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+	if step, ok := mission.StepExecution(ctx); ok && step.Parameters["mode"] == "assessment" {
+		return queueInspectionAssessment(ctx, tx, step)
+	}
 	var payload copilotStepPayload
 	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.TaskRunID <= 0 || payload.TaskRunStepID <= 0 {
 		return errors.New("TASK_COPILOT_PAYLOAD_INVALID")

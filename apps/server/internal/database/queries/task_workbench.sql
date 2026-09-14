@@ -1,14 +1,16 @@
 -- name: TaskWorkbenchTask :many
 SELECT to_jsonb(r) FROM (
-select id,name,description,status,current_published_version_id as "currentPublishedVersionId"
-    from tasks where project_id=sqlc.arg(p1) and id=sqlc.arg(p2)
+select tasks.id,tasks.name,tasks.description,tasks.status,tasks.current_published_version_id as "currentPublishedVersionId",
+ authorized_by_user_id as "authorizedByUserId",
+ (select name from users where users.id=tasks.authorized_by_user_id) as "authorizedByName"
+    from tasks where tasks.project_id=sqlc.arg(p1) and tasks.id=sqlc.arg(p2)
 ) r;
 
 -- name: TaskWorkbenchVersions :many
 SELECT to_jsonb(r) FROM (
 select id::int,version,status,definition_json as definition,
     input_schema_json as "inputSchema",trigger_json as trigger,concurrency_limit as "concurrencyLimit",
-    created_at as "createdAt",published_at as "publishedAt"
+    created_at as "createdAt",published_at as "publishedAt",author_revision as revision,author_format as "sourceFormat",author_source as source,definition_hash as "definitionHash"
     from task_versions where project_id=sqlc.arg(p1) and task_id=sqlc.arg(p2) order by version desc
 ) r;
 

@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	DatabaseURL               string
+	AlgorithmCAFile           string
 	LogLevel                  string
 	WorkerName                string
 	ObjectStorageLocalRoot    string
@@ -33,6 +34,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	config := Config{
+		AlgorithmCAFile:        strings.TrimSpace(os.Getenv("ALGORITHM_CA_FILE")),
 		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		LogLevel:               valueOrDefault("LOG_LEVEL", "info"),
 		WorkerName:             valueOrDefault("WORKER_NAME", "aerosight-worker"),

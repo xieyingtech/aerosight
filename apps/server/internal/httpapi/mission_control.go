@@ -18,7 +18,7 @@ func (s *Server) missionControlFailure(c *gin.Context, err error) {
 	if err != nil {
 		value := err.Error()
 		switch value {
-		case "PROJECT_ACCESS_DENIED", "TASK_RUN_NOT_FOUND", "TASK_RUN_VERSION_CONFLICT", "TASK_RUN_APPROVAL_NOT_REQUIRED", "TASK_RUN_TRANSITION_REASON_REQUIRED":
+		case "PROJECT_ACCESS_DENIED", "TASK_RUN_NOT_FOUND", "TASK_RUN_VERSION_CONFLICT", "TASK_RUN_APPROVAL_NOT_REQUIRED", "TASK_RUN_TRANSITION_REASON_REQUIRED", "INSPECTION_REVIEW_REQUIRED":
 			code = value
 		default:
 			if strings.HasPrefix(value, "TASK_RUN_TRANSITION_INVALID:") {
@@ -87,6 +87,15 @@ func (s *Server) controlMissionRun(c *gin.Context) {
 		}
 		if row.StateVersion != int32(version) {
 			return nil, errors.New("TASK_RUN_VERSION_CONFLICT")
+		}
+		if action == "resume" {
+			var needsReview bool
+			if e = w.Tx.QueryRowContext(c.Request.Context(), `select exists(select 1 from inspection_assessments where project_id=$1 and task_run_id=$2 and status='needs_review')`, pid, id).Scan(&needsReview); e != nil {
+				return nil, e
+			}
+			if needsReview {
+				return nil, errors.New("INSPECTION_REVIEW_REQUIRED")
+			}
 		}
 		if action == "approve" {
 			if !row.ApprovalRequestID.Valid {

@@ -21,6 +21,7 @@ type HTTP struct {
 	SSELimit                                                      int
 	MetricsToken                                                  string
 	AlgorithmAllowedHosts                                         []string
+	AlgorithmDevelopmentEndpoint                                  string
 	MediaAdminUser, MediaAdminPassword                            string
 	AIRequestTimeout                                              time.Duration
 	CSPMapOrigins, CSPMediaOrigins                                []string
@@ -96,6 +97,13 @@ func LoadHTTP(get func(string) string) (HTTP, error) {
 	for _, host := range strings.Split(get("ALGORITHM_ALLOWED_HOSTS"), ",") {
 		if host = strings.TrimSpace(host); host != "" {
 			cfg.AlgorithmAllowedHosts = append(cfg.AlgorithmAllowedHosts, host)
+		}
+	}
+	cfg.AlgorithmDevelopmentEndpoint = get("ALGORITHM_DEVELOPMENT_ENDPOINT")
+	if cfg.AlgorithmDevelopmentEndpoint != "" {
+		u, e := url.Parse(cfg.AlgorithmDevelopmentEndpoint)
+		if !cfg.Development || e != nil || u.Scheme != "https" || u.Hostname() != "127.0.0.1" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Port() == "" {
+			return cfg, fmt.Errorf("ALGORITHM_DEVELOPMENT_ENDPOINT requires development mode and an exact HTTPS 127.0.0.1 endpoint with port")
 		}
 	}
 	cfg.MediaAdminUser = get("MEDIA_ADMIN_USER")

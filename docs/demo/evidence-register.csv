@@ -1,0 +1,26 @@
+编号,材料或截图,对应模块,证据要求,状态,实际文件或运行ID
+M01,历史航拍素材清单,资产准备,来源与SHA256及完整解码验证,本地已校验待导入,.build/msup-demo/source-media/manifest.json
+M02,本地YOLO接口测试,算法服务,六图真实推理及异常输入检查,独立API及真实平台调用已验证,.build/msup-demo/yolo-results/summary.json
+M03,真实完整单链,平台闭环,历史原图真实YOLO真实模型与模拟复核,Run3五步成功,.build/msup-demo/run-detail.json
+M04,真实模型待复核,智能体,保留模型原文与范围,已截屏,.build/msup-demo/screenshots/assessment-before-review.png
+M05,成功运行截图,Task,五步succeeded,已截屏,.build/msup-demo/screenshots/run-succeeded.png
+M06,实际生成报告,报告,历史素材范围与复核理由,草稿已生成并截屏,.build/msup-demo/screenshots/report.png
+M07,平台原图检测框,感知,冻结原图与真实八个预测框叠加,浏览器已验证,.build/msup-demo/screenshots/detection-overlay.png
+M08,工单证据链,案件,工单进入原图算法研判导航,浏览器已验证,.build/msup-demo/screenshots/issue.png
+A01,平台架构图,全平台,区分实现与待接通路径,待绘制,
+A02,模块总览,全平台,覆盖设备数据算法智能体任务工单报告,待绘制,
+01,项目地图,时空底座,真实来源位置与质量标识,待采集,
+02,原图详情,资产,原图与采集时间来源,待导入后采集,
+03,算法版本,算法中心,本地YOLO版本类别参数,待接入,
+04,Task YAML,任务编排,正式发布版本,待采集,
+05,参数表单与触发,任务编排,与YAML同一草稿,待采集,
+06,Run步骤,执行器,正式运行且状态真实,待全链验收,
+07,原图检测框,感知,真实推理与原图坐标,待真实推理,
+08,研判与引用,智能体,真实模型和检测证据,待全链验收,
+09,人工复核,决策,正式操作与理由,待全链验收,
+10,工单反馈,业务处置,关联同一Run与原图,待全链验收,
+11,报告,结果交付,范围与关联真实,待全链验收,
+12,定时记录,触发器,真实schedule来源非手动冒充,待验证,
+E01,检测样本表,效果评测,逐图标注预测误报漏报与耗时,待实测,
+E02,防重与失败记录,工程可靠性,具体命令或正式Run,待整理,
+E03,第二项目复现,可复现性,正式入口重现完整流程,待验证,

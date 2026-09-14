@@ -1,31 +1,46 @@
 package flighthub
 
 import (
+	"aerosight/server/internal/algorithm"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"aerosight/server/internal/connector"
+	"aerosight/server/internal/inspection"
+	"aerosight/server/internal/migrations"
+	"aerosight/server/internal/mission"
 	"aerosight/server/internal/telemetry"
+	"aerosight/server/internal/testdb"
 )
 
 func TestSQLFlightAssetsAreIdempotentProjectScopedAndRefreshExpiredURLs(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("AEROSIGHT_TEST_DATABASE_URL is not configured")
-	}
-	database, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
+	var database *sql.DB
+	var err error
 	ctx := context.Background()
+	if databaseURL == "" {
+		database = testdb.New(t)
+		if _, err = migrations.Embedded(ctx, database); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		database, err = sql.Open("pgx", databaseURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { database.Close() })
+	}
 	suffix := time.Now().UnixNano()
 	var teamID, projectID, otherProjectID, dockID int
 	var adapterID, definitionID int64
@@ -153,7 +168,16 @@ func TestSQLFlightAssetsAreIdempotentProjectScopedAndRefreshExpiredURLs(t *testi
 	}
 
 	mediaCalls, recordCalls := 0, 0
+	gatewayBody := []byte("remote image fixture")
+	gatewayReads := 0
 	client := testClient(t, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Hostname() == "objects.vendor.example" {
+			gatewayReads++
+			if request.Header.Get("X-Project-Uuid") != "" || request.Header.Get("Authorization") != "" {
+				t.Fatal("media request leaked credentials")
+			}
+			return response(http.StatusOK, gatewayBody, nil), nil
+		}
 		if request.Header.Get("X-Project-Uuid") == "" {
 			t.Fatalf("unexpected refresh request %s", request.URL)
 		}
@@ -188,13 +212,135 @@ func TestSQLFlightAssetsAreIdempotentProjectScopedAndRefreshExpiredURLs(t *testi
 	if _, err := service.RefreshDownload(ctx, connector.Instance{ID: adapterID, ProjectID: otherProjectID}, mediaAssetID); !errors.Is(err, connector.ErrRemoteResourceUnavailable) || mediaCalls != 0 || recordCalls != 0 {
 		t.Fatalf("cross-project access err=%v mediaCalls=%d recordCalls=%d", err, mediaCalls, recordCalls)
 	}
-	mediaDownload, err := service.RefreshDownload(ctx, instance, mediaAssetID)
+	if _, err := service.RefreshInspectionDownload(ctx, instance, mediaAssetID, "wrong-flight"); !errors.Is(err, connector.ErrRemoteResourceUnavailable) || mediaCalls != 0 {
+		t.Fatal("cross-flight request reached provider", err)
+	}
+	if _, err := service.RefreshInspectionDownload(ctx, instance, recordAssetID, taskUUID); !errors.Is(err, connector.ErrRemoteResourceUnavailable) || recordCalls != 0 {
+		t.Fatal("record accepted as flight image", err)
+	}
+	mediaDownload, err := service.RefreshInspectionDownload(ctx, instance, mediaAssetID, taskUUID)
 	if err != nil || mediaCalls != 2 || mediaDownload.URL == "" || !mediaDownload.ExpiresAt.Equal(clock.Add(10*time.Minute)) {
 		t.Fatalf("refreshed media=%#v calls=%d err=%v", mediaDownload, mediaCalls, err)
 	}
 	recordDownload, err := service.RefreshDownload(ctx, instance, recordAssetID)
 	if err != nil || recordCalls != 1 || recordDownload.URL == "" || !recordDownload.ExpiresAt.Equal(clock.Add(10*time.Minute)) {
 		t.Fatalf("refreshed record=%#v calls=%d err=%v", recordDownload, recordCalls, err)
+	}
+	if _, err := service.RefreshInspectionVersionDownload(ctx, instance, mediaAssetID, taskUUID, "obsolete-version"); !IsSafeCode(err, "media_version_changed") {
+		t.Fatal("refresh switched media version", err)
+	}
+	if _, err := service.RefreshInspectionVersionDownload(ctx, instance, mediaAssetID, taskUUID, inspectionMediaVersion(media)); err != nil {
+		t.Fatal("same version refresh failed", err)
+	}
+	// Exercise the actual signed HTTP handler with encrypted remote references.
+	signer := algorithm.NewAssetURLSigner(strings.Repeat("s", 32), "https://worker.example")
+	sum := sha256.Sum256(gatewayBody)
+	pinned, err := signer.IssuePinnedAssetURL(projectID, mediaAssetID, 1, hex.EncodeToString(sum[:]), time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := algorithm.NewAssetAccessHandler(database, nil, signer).WithRemoteReader(service.ReadAlgorithmAsset)
+	gatewayServer := httptest.NewServer(gateway)
+	defer gatewayServer.Close()
+	serve := func(raw string, want int) {
+		t.Helper()
+		res, err := gatewayServer.Client().Get(strings.Replace(raw, "https://worker.example", gatewayServer.URL, 1))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != want {
+			t.Fatalf("gateway: got %d want %d: %s", res.StatusCode, want, body)
+		}
+		if want == http.StatusOK && string(body) != string(gatewayBody) {
+			t.Fatalf("wrong remote bytes: %q", body)
+		}
+		if want != http.StatusOK && strings.Contains(string(body), "remote image") {
+			t.Fatal("changed content disclosed")
+		}
+	}
+	serve(pinned, http.StatusOK)
+	gatewayBody = []byte("changed remote image fixture")
+	serve(pinned, http.StatusConflict)
+	beforeReads := gatewayReads
+	wrongProject, _ := signer.IssuePinnedAssetURL(otherProjectID, mediaAssetID, 1, hex.EncodeToString(sum[:]), time.Now().Add(time.Minute))
+	serve(wrongProject, http.StatusNotFound)
+	wrongVersion, _ := signer.IssuePinnedAssetURL(projectID, mediaAssetID, 2, hex.EncodeToString(sum[:]), time.Now().Add(time.Minute))
+	serve(wrongVersion, http.StatusNotFound)
+	if gatewayReads != beforeReads {
+		t.Fatal("invalid scope fetched remote bytes")
+	}
+	if _, handled, err := service.ReadAlgorithmAsset(ctx, projectID, recordAssetID, 1); !handled || err == nil {
+		t.Fatal("flight record accepted as algorithm image")
+	}
+	if _, err := database.ExecContext(ctx, "update device_adapters set status='disabled' where id=$1", adapterID); err != nil {
+		t.Fatal(err)
+	}
+	serve(pinned, http.StatusNotFound)
+	if gatewayReads != beforeReads {
+		t.Fatal("disabled connector fetched remote bytes")
+	}
+	if _, err := database.ExecContext(ctx, "update device_adapters set status='connected' where id=$1", adapterID); err != nil {
+		t.Fatal(err)
+	}
+	// Exercise the existing-flight observer against projected resources and the
+	// real encrypted-reference refresh. Remote task/hash responses are protocol fixtures.
+	createID := func(query string, args ...any) int64 {
+		t.Helper()
+		var id int64
+		if err := database.QueryRowContext(ctx, query, args...).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	businessTask := createID("insert into tasks(project_id,team_id,name,trigger_type,script) values($1,$2,'inspection','manual','typed-task-v2') returning id", projectID, teamID)
+	version := createID("insert into task_versions(project_id,team_id,task_id,version,status,script,dsl_version) values($1,$2,$3,1,'published','typed-task-v2','aerosight/v2') returning id", projectID, teamID, businessTask)
+	run := createID("insert into task_runs(project_id,team_id,task_id,task_version_id,trigger_source,status) values($1,$2,$3,$4,'manual','running') returning id", projectID, teamID, businessTask, version)
+	fixture := &inspectionFlightReadFixture{Client: client, task: FlightTask{UUID: taskUUID, Status: "success", BeginAt: clock.Add(-time.Hour).Format(time.RFC3339Nano), EndAt: clock.Format(time.RFC3339Nano), FolderInfo: FlightTaskFolderInfo{CountsKnown: true, ExpectedFileCount: 1, UploadedFileCount: 1}}}
+	observer := NewInspectionFlightObserver(fixture, service, tokenResolverFixture{token: "TOKEN_REDACTED"})
+	for _, tc := range []struct {
+		name           string
+		known, confirm bool
+		ids            []int64
+		wantError      bool
+	}{
+		{name: "complete", known: true}, {name: "unknown counters", wantError: true},
+		{name: "confirmed finite scope", confirm: true, ids: []int64{int64(mediaAssetID)}},
+		{name: "confirmation needs explicit selection", confirm: true, wantError: true},
+		{name: "wrong flight selection", known: true, confirm: true, ids: []int64{int64(recordAssetID)}, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture.task.FolderInfo.CountsKnown = tc.known
+			tx, err := database.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			observation, err := observer.Observe(ctx, tx, mission.PreparedStep{ProjectID: projectID, TeamID: teamID, RunID: int(run), StepID: 1, UserID: 1}, inspection.ObserveInput{Mode: "existing-flight", ConnectorID: adapterID, FlightUUID: taskUUID, AssetIDs: tc.ids, ConfirmLimitedScope: tc.confirm, ScopeDescription: "明确的测试图片范围"})
+			if tc.wantError {
+				if err == nil {
+					t.Fatal("incomplete or invalid input accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := inspection.Complete
+			if tc.confirm {
+				want = inspection.Partial
+			}
+			if observation.Completeness != want || len(observation.Assets) != 1 || observation.Assets[0].ChecksumSHA256 == "" || observation.Assets[0].ObjectVersion == "" || *observation.Assets[0].SourceRunID != int64(targets[0].TaskRunID) {
+				t.Fatalf("bad observation %+v", observation)
+			}
+			if tc.confirm && observation.LimitedScopeConfirmedBy == nil {
+				t.Fatal("confirmation identity missing")
+			}
+		})
 	}
 	var leakedURLCount int
 	if err := database.QueryRowContext(ctx, `select count(*) from assets where project_id=$1 and (metadata_json::text like '%auth_key=%' or storage_key like '%auth_key=%')`, projectID).Scan(&leakedURLCount); err != nil {
@@ -203,4 +349,18 @@ func TestSQLFlightAssetsAreIdempotentProjectScopedAndRefreshExpiredURLs(t *testi
 	if leakedURLCount != 0 {
 		t.Fatal("temporary URL was persisted after refresh")
 	}
+}
+
+// The real download transport has separate bounded-body/redirect/expiry tests.
+type inspectionFlightReadFixture struct {
+	*Client
+	task FlightTask
+}
+
+func (f *inspectionFlightReadFixture) GetFlightTask(context.Context, string, string, string) (FlightTask, error) {
+	return f.task, nil
+}
+func (f *inspectionFlightReadFixture) HashInspectionMedia(context.Context, TemporaryDownload, int64) (string, error) {
+	sum := sha256.Sum256([]byte("image fixture"))
+	return hex.EncodeToString(sum[:]), nil
 }

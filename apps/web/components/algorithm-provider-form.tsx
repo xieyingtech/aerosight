@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Provider = {
-  id: string; name: string; providerType: "http-json" | "kserve-v2" | "ogc-processes" | "ai-sdk";
+  status?: string; id: string; name: string; providerType: "http-json" | "kserve-v2" | "ogc-processes" | "ai-sdk";
   baseUrl: string; authType: "none" | "bearer" | "api-key-header" | "basic" | "signed";
   allowedHeaders: string[]; timeoutSeconds: number; concurrencyLimit: number; rateLimitPerMinute: number;
 };
@@ -21,13 +21,14 @@ export function AlgorithmProviderForm({ projectId, provider, onChanged }: { proj
       credential: formData.get("credential") || "", username: formData.get("username") || "", authType: formData.get("authType"),
       allowedHeaders: String(formData.get("allowedHeaders") ?? "").split(",").map((value) => value.trim()).filter(Boolean),
       timeoutSeconds: Number(formData.get("timeoutSeconds")), concurrencyLimit: Number(formData.get("concurrencyLimit")),
-      rateLimitPerMinute: Number(formData.get("rateLimitPerMinute"))
+      rateLimitPerMinute: Number(formData.get("rateLimitPerMinute")), status: formData.get("status")
     }) });
     onChanged();
     } catch (error) { setError(error instanceof APIError ? error.code : "保存失败，请稍后重试。"); }
     finally { setPending(false); }
   }
   return <form action={submit} className="grid gap-3 rounded-xl border p-4 md:grid-cols-2">
+    <label className="text-sm">服务状态<select name="status" defaultValue={provider?.status ?? "disabled"} className="ml-3 rounded-md border bg-transparent p-2"><option value="disabled">停用</option><option value="active">启用</option></select></label>
     <Input defaultValue={provider?.name} name="name" placeholder="服务名称" required /><Input defaultValue={provider?.baseUrl} name="baseUrl" placeholder="https://algorithm.example.test" required />
     <select className="h-9 rounded-md border bg-transparent px-3 text-sm" defaultValue={provider?.providerType ?? "http-json"} name="providerType"><option value="http-json">HTTP JSON（已启用）</option><option value="kserve-v2">KServe V2（未启用）</option><option value="ogc-processes">OGC Processes（未启用）</option><option value="ai-sdk">AI SDK（未启用）</option></select>
     <select className="h-9 rounded-md border bg-transparent px-3 text-sm" defaultValue={provider?.authType ?? "none"} name="authType"><option value="none">无认证</option><option value="bearer">Bearer</option><option value="api-key-header">API Key Header</option><option value="basic">Basic</option><option value="signed">签名</option></select>

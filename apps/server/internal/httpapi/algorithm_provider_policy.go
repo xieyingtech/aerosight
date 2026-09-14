@@ -17,13 +17,14 @@ import (
 type algorithmProviderInput struct {
 	Params     sqlcgen.CreateAlgorithmProviderParams
 	Credential map[string]string
+	Status     string
 	Audit      map[string]any
 }
 
 func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) {
 	out := algorithmProviderInput{Audit: map[string]any{}}
 	bad := errors.New("ALGORITHM_PROVIDER_INPUT_INVALID")
-	allowed := map[string]bool{"name": true, "providerType": true, "baseUrl": true, "authType": true, "credential": true, "username": true, "allowedHeaders": true, "timeoutSeconds": true, "concurrencyLimit": true, "rateLimitPerMinute": true}
+	allowed := map[string]bool{"name": true, "providerType": true, "baseUrl": true, "authType": true, "credential": true, "username": true, "allowedHeaders": true, "timeoutSeconds": true, "concurrencyLimit": true, "rateLimitPerMinute": true, "status": true}
 	for k, v := range raw {
 		if !allowed[k] {
 			return out, bad
@@ -31,6 +32,13 @@ func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) 
 		if k != "credential" {
 			out.Audit[k] = v
 		}
+	}
+	if v, exists := raw["status"]; exists {
+		status, ok := v.(string)
+		if !ok || (status != "active" && status != "disabled") {
+			return out, bad
+		}
+		out.Status = status
 	}
 	name, ok := raw["name"].(string)
 	name = strings.TrimSpace(name)
@@ -129,6 +137,12 @@ func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) 
 }
 
 func (s *Server) validateAlgorithmURL(ctx context.Context, raw string) (*url.URL, int, error) {
+	if s.cfg.Development && s.cfg.AlgorithmDevelopmentEndpoint != "" && raw == s.cfg.AlgorithmDevelopmentEndpoint {
+		target, err := url.Parse(raw)
+		if err == nil && target.Scheme == "https" && target.Hostname() == "127.0.0.1" && target.Port() != "" && target.User == nil && target.RawQuery == "" && target.Fragment == "" {
+			return target, 1, nil
+		}
+	}
 	return s.validateOutboundURL(ctx, raw, s.cfg.AlgorithmAllowedHosts)
 }
 

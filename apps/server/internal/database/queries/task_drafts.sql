@@ -2,7 +2,7 @@
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = sqlc.arg(p1) and task_id = sqlc.arg(p2) and status = 'draft'
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = sqlc.arg(p1) and task_id = sqlc.arg(p2) and status = 'draft'
 ) r;
 
 -- name: TaskDraftTask :many
@@ -17,7 +17,7 @@ select task.team_id as "teamId", task.current_published_version_id as "currentVe
 -- name: TaskDraftSource :many
 SELECT to_jsonb(r) FROM (
 select definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-                  concurrency_limit as "concurrencyLimit" from task_versions where project_id = sqlc.arg(p1) and id = sqlc.arg(p2)
+                  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = sqlc.arg(p1) and id = sqlc.arg(p2)
 ) r;
 
 -- name: TaskDraftCreate :one
@@ -42,7 +42,7 @@ insert into task_steps (
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = sqlc.arg(p1) and id = sqlc.arg(p2) for update
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = sqlc.arg(p1) and id = sqlc.arg(p2) for update
 ) r;
 
 -- name: TaskDraftSteps :many
@@ -65,7 +65,7 @@ update tasks set current_published_version_id=sqlc.arg(p3),name=coalesce(nullif(
 
 -- name: TaskDraftLockDraft :many
 SELECT to_jsonb(r) FROM (
-select id from task_versions where project_id=sqlc.arg(p1) and task_id=sqlc.arg(p2) and id=sqlc.arg(p3) and status='draft' for update
+select id,author_revision as revision,dsl_version as "apiVersion" from task_versions where project_id=sqlc.arg(p1) and task_id=sqlc.arg(p2) and id=sqlc.arg(p3) and status='draft' for update
 ) r;
 
 -- name: TaskDraftSave :exec
@@ -86,8 +86,30 @@ insert into task_steps(
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = sqlc.arg(p1) and task_id = sqlc.arg(p2) order by version desc
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = sqlc.arg(p1) and task_id = sqlc.arg(p2) order by version desc
 ) r;
 
 -- name: TaskDraftNextVersion :one
 select coalesce(max(version),0)::int+1 as version from task_versions where task_id=$1;
+
+-- name: TaskAuthorSave :exec
+UPDATE task_versions SET author_format=$3,author_source=$4,definition_hash=$5,dsl_version=$6,
+ author_revision=author_revision+1,script=CASE WHEN $6='aerosight/v2' THEN 'typed-task-v2' ELSE 'typed-task-v1' END
+WHERE project_id=$1 AND id=$2 AND status='draft';
+
+-- name: TaskAuthorCopy :exec
+UPDATE task_versions destination SET author_format=source.author_format,author_source=source.author_source,
+ definition_hash=source.definition_hash,dsl_version=source.dsl_version
+FROM task_versions source WHERE destination.project_id=$1 AND destination.id=$2
+ AND source.project_id=$1 AND source.id=$3 AND destination.status='draft';
+
+-- name: TaskAuthorCreateTask :one
+INSERT INTO tasks(project_id,team_id,name,description,trigger_type,status,script,created_by_user_id)
+VALUES($1,$2,$3,$4,$5,'disabled',$7,$6) RETURNING id;
+
+-- name: TaskAuthorSetState :execrows
+UPDATE tasks SET status=$3,authorized_by_user_id=CASE WHEN $3='active' THEN $4 ELSE authorized_by_user_id END,updated_at=now()
+WHERE project_id=$1 AND id=$2;
+
+-- name: TaskAuthorBindDelegate :exec
+UPDATE tasks SET authorized_by_user_id=$3 WHERE project_id=$1 AND id=$2;

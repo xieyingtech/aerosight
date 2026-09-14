@@ -1,5 +1,6 @@
 "use client";
 
+import { InspectionAlertPolicy } from "@/components/inspection-alert-policy";
 import { apiFetch } from "@/lib/api-client";
 
 import Link from "next/link";
@@ -375,6 +376,7 @@ export function DjiFlightHubConnections({
           <span className="mt-1 block text-xs text-muted-foreground">{item.description}</span>
         </Link>)}
       </nav>
+      <InspectionAlertPolicy key={selectedConnector.id} projectId={projectId} connectorId={selectedConnector.id}/>
       <section className="space-y-3 rounded-lg border p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2"><h3 className="text-sm font-medium">能力与同步诊断</h3>{diagnosticHealth && <Badge variant={diagnosticHealth.status === "failed" ? "destructive" : diagnosticHealth.status === "degraded" ? "secondary" : "default"}>{diagnosticHealth.label}</Badge>}</div>

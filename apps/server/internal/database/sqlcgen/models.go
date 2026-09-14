@@ -1336,6 +1336,123 @@ type IdempotencyRecord struct {
 	ExpiresAt      time.Time             `json:"expires_at"`
 }
 
+type InspectionAlertSource struct {
+	ProjectID           int32           `json:"project_id"`
+	ConnectorInstanceID int64           `json:"connector_instance_id"`
+	RemoteResourceID    int64           `json:"remote_resource_id"`
+	RemoteFlightID      string          `json:"remote_flight_id"`
+	EvidenceJson        json.RawMessage `json:"evidence_json"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+}
+
+type InspectionAssessment struct {
+	ID             uuid.UUID      `json:"id"`
+	ProjectID      int32          `json:"project_id"`
+	TeamID         int32          `json:"team_id"`
+	TaskRunID      int32          `json:"task_run_id"`
+	TaskRunStepID  int64          `json:"task_run_step_id"`
+	EvidenceSetID  uuid.UUID      `json:"evidence_set_id"`
+	Status         string         `json:"status"`
+	Revision       int32          `json:"revision"`
+	ProviderID     sql.NullInt32  `json:"provider_id"`
+	ModelVersion   sql.NullString `json:"model_version"`
+	PromptVersion  sql.NullString `json:"prompt_version"`
+	EvidenceHash   sql.NullString `json:"evidence_hash"`
+	OriginalOutput sql.NullString `json:"original_output"`
+	FailureCode    sql.NullString `json:"failure_code"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
+type InspectionAssessmentRevision struct {
+	AssessmentID     uuid.UUID       `json:"assessment_id"`
+	ProjectID        int32           `json:"project_id"`
+	Revision         int32           `json:"revision"`
+	Source           string          `json:"source"`
+	DecisionsJson    json.RawMessage `json:"decisions_json"`
+	ReviewedByUserID sql.NullInt32   `json:"reviewed_by_user_id"`
+	IdempotencyKey   string          `json:"idempotency_key"`
+	CreatedAt        time.Time       `json:"created_at"`
+}
+
+type InspectionConnectorPolicy struct {
+	ProjectID           int32 `json:"project_id"`
+	TeamID              int32 `json:"team_id"`
+	ConnectorInstanceID int64 `json:"connector_instance_id"`
+	TaskManagedAlerts   bool  `json:"task_managed_alerts"`
+}
+
+type InspectionEvidenceSet struct {
+	ID                       uuid.UUID       `json:"id"`
+	ProjectID                int32           `json:"project_id"`
+	TeamID                   int32           `json:"team_id"`
+	TaskRunID                int32           `json:"task_run_id"`
+	TaskRunStepID            int64           `json:"task_run_step_id"`
+	ObservationID            uuid.UUID       `json:"observation_id"`
+	Source                   string          `json:"source"`
+	ModelVersion             string          `json:"model_version"`
+	Completeness             string          `json:"completeness"`
+	TargetAlgorithmConfirmed bool            `json:"target_algorithm_confirmed"`
+	EvidenceJson             json.RawMessage `json:"evidence_json"`
+	CreatedAt                time.Time       `json:"created_at"`
+}
+
+type InspectionFlightBinding struct {
+	ProjectID           int32     `json:"project_id"`
+	TeamID              int32     `json:"team_id"`
+	BusinessRunID       int32     `json:"business_run_id"`
+	BusinessStepID      int64     `json:"business_step_id"`
+	ConnectorInstanceID int64     `json:"connector_instance_id"`
+	FlightRunID         int32     `json:"flight_run_id"`
+	ActionJobID         uuid.UUID `json:"action_job_id"`
+	ActionKind          string    `json:"action_kind"`
+	CreatedAt           time.Time `json:"created_at"`
+}
+
+type InspectionFlightOwnership struct {
+	ProjectID           int32         `json:"project_id"`
+	ConnectorInstanceID int64         `json:"connector_instance_id"`
+	RemoteFlightID      string        `json:"remote_flight_id"`
+	Ownership           string        `json:"ownership"`
+	TaskRunID           sql.NullInt32 `json:"task_run_id"`
+	CreatedAt           time.Time     `json:"created_at"`
+}
+
+type InspectionIssueSource struct {
+	ProjectID    int32     `json:"project_id"`
+	SourceKey    string    `json:"source_key"`
+	IssueID      int32     `json:"issue_id"`
+	AssessmentID uuid.UUID `json:"assessment_id"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type InspectionObservation struct {
+	ID                      uuid.UUID       `json:"id"`
+	ProjectID               int32           `json:"project_id"`
+	TeamID                  int32           `json:"team_id"`
+	TaskRunID               int32           `json:"task_run_id"`
+	TaskRunStepID           int64           `json:"task_run_step_id"`
+	SourceMode              string          `json:"source_mode"`
+	ConnectorInstanceID     sql.NullInt64   `json:"connector_instance_id"`
+	RemoteFlightID          sql.NullString  `json:"remote_flight_id"`
+	ProjectedRunID          sql.NullInt32   `json:"projected_run_id"`
+	Completeness            string          `json:"completeness"`
+	ScopeDescription        string          `json:"scope_description"`
+	ObservedFrom            time.Time       `json:"observed_from"`
+	ObservedTo              time.Time       `json:"observed_to"`
+	ManifestJson            json.RawMessage `json:"manifest_json"`
+	SealedAt                sql.NullTime    `json:"sealed_at"`
+	LimitedScopeConfirmedBy sql.NullInt32   `json:"limited_scope_confirmed_by"`
+	CreatedAt               time.Time       `json:"created_at"`
+}
+
+type InspectionObservationAsset struct {
+	ObservationID uuid.UUID     `json:"observation_id"`
+	ProjectID     int32         `json:"project_id"`
+	AssetID       int32         `json:"asset_id"`
+	AssetVersion  int32         `json:"asset_version"`
+	SourceRunID   sql.NullInt32 `json:"source_run_id"`
+}
+
 type Issue struct {
 	ID                int32           `json:"id"`
 	ProjectID         int32           `json:"project_id"`
@@ -1723,6 +1840,8 @@ type Task struct {
 	UpdatedAt                 time.Time       `json:"updated_at"`
 	TeamID                    int32           `json:"team_id"`
 	CurrentPublishedVersionID sql.NullInt64   `json:"current_published_version_id"`
+	AuthorizedByUserID        sql.NullInt32   `json:"authorized_by_user_id"`
+	ScheduleEvaluatedAt       sql.NullTime    `json:"schedule_evaluated_at"`
 }
 
 type TaskRun struct {
@@ -1799,6 +1918,21 @@ type TaskStep struct {
 	RetryPolicyJson       json.RawMessage       `json:"retry_policy_json"`
 }
 
+type TaskTriggerRecord struct {
+	ID            int64         `json:"id"`
+	ProjectID     int32         `json:"project_id"`
+	TeamID        int32         `json:"team_id"`
+	TaskID        int32         `json:"task_id"`
+	TaskVersionID int64         `json:"task_version_id"`
+	OccurrenceKey string        `json:"occurrence_key"`
+	ScheduledFor  sql.NullTime  `json:"scheduled_for"`
+	IntervalEnd   sql.NullTime  `json:"interval_end"`
+	Outcome       string        `json:"outcome"`
+	Reason        string        `json:"reason"`
+	TaskRunID     sql.NullInt32 `json:"task_run_id"`
+	CreatedAt     time.Time     `json:"created_at"`
+}
+
 type TaskVersion struct {
 	ID                int64           `json:"id"`
 	ProjectID         int32           `json:"project_id"`
@@ -1815,6 +1949,11 @@ type TaskVersion struct {
 	InputSchemaJson   json.RawMessage `json:"input_schema_json"`
 	TriggerJson       json.RawMessage `json:"trigger_json"`
 	ConcurrencyLimit  int32           `json:"concurrency_limit"`
+	AuthorFormat      string          `json:"author_format"`
+	AuthorSource      sql.NullString  `json:"author_source"`
+	AuthorRevision    int32           `json:"author_revision"`
+	DslVersion        string          `json:"dsl_version"`
+	DefinitionHash    sql.NullString  `json:"definition_hash"`
 }
 
 type Team struct {

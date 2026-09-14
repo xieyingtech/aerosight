@@ -29,6 +29,7 @@ func NewTrigger(issuer AssetAccessIssuer) *Trigger {
 }
 
 type triggerAsset struct {
+	Inspection                     bool
 	ID, ProjectID, TeamID, Version int
 	TaskRunID, TaskRunStepID       int64
 	DeviceID                       sql.NullInt64
@@ -161,11 +162,14 @@ func (trigger *Trigger) createRun(ctx context.Context, tx *sql.Tx, asset trigger
 		return err
 	}
 	expiresAt := trigger.now().Add(5 * time.Minute).UTC()
-	accessURL, err := trigger.issuer.IssueAssetURL(asset.ProjectID, asset.ID, asset.Version, expiresAt)
+	accessURL, err := issueInputAssetURL(trigger.issuer, asset.ProjectID, asset.ID, asset.Version, asset.Checksum, expiresAt, asset.Inspection)
 	if err != nil {
 		return err
 	}
 	input := buildTriggeredInput(runID, asset, definition, algorithmParameters, accessURL, expiresAt)
+	if asset.Inspection {
+		input.Context["inspection"] = true
+	}
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
 		return err
@@ -183,11 +187,13 @@ func (trigger *Trigger) createRun(ctx context.Context, tx *sql.Tx, asset trigger
 	if err != nil {
 		return err
 	}
-	executionKey := fmt.Sprintf("task-run:%d:step:%d", asset.TaskRunID, asset.TaskRunStepID)
-	if _, err := tx.ExecContext(ctx, `update task_run_steps set status='running',attempt_count=greatest(attempt_count,1),
+	if !asset.Inspection {
+		executionKey := fmt.Sprintf("task-run:%d:step:%d", asset.TaskRunID, asset.TaskRunStepID)
+		if _, err := tx.ExecContext(ctx, `update task_run_steps set status='running',attempt_count=greatest(attempt_count,1),
 		input_snapshot_json=$3,result_json=result_json||jsonb_build_object('algorithmRunId',$4::text),execution_key=$5
 		where project_id=$1 and id=$2`, asset.ProjectID, asset.TaskRunStepID, resolvedParameters, insertedRunID, executionKey); err != nil {
-		return err
+			return err
+		}
 	}
 	eventID := "algorithm-run-requested:" + insertedRunID
 	payload := map[string]any{"runId": insertedRunID, "sourceAssetId": asset.ID, "taskRunId": asset.TaskRunID, "taskRunStepId": asset.TaskRunStepID}

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
@@ -13,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -34,6 +37,7 @@ type DetectionSink interface {
 }
 
 type Processor struct {
+	inspectionDB    *sql.DB
 	client          HTTPDoer
 	breaker         *CircuitBreaker
 	store           RawResultStore
@@ -74,12 +78,44 @@ func (recorder transactionRecorder) RecordAttempt(ctx context.Context, attempt A
 	return err
 }
 
+type preparedAlgorithm struct {
+	runID             string
+	projectID, teamID int
+	request           Request
+}
+
 func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+	if processor.inspectionDB != nil {
+		var child bool
+		if err := tx.QueryRowContext(ctx, `select exists(select 1 from algorithm_runs r join task_run_steps rs on rs.id=r.task_run_step_id and rs.project_id=r.project_id join task_steps s on s.id=rs.task_step_id and s.uses='inspection.detect' where r.id=($1::jsonb->>'runId')::uuid and r.project_id=$2 and r.team_id=$3)`, event.Payload, event.ProjectID, event.TeamID).Scan(&child); err != nil {
+			return err
+		}
+		if child {
+			return nil
+		} // Durable child rows are consumed by the inspection worker.
+	}
+	prepared, err := processor.prepare(ctx, tx, event)
+	if err != nil || prepared == nil {
+		return err
+	}
+	recorder := transactionRecorder{tx: tx, projectID: event.ProjectID, teamID: event.TeamID}
+	outcome, executeErr := NewHTTPJSONAdapter(processor.client, recorder, processor.breaker).Execute(ctx, prepared.request)
+	return processor.finish(ctx, tx, prepared, outcome, executeErr)
+}
+
+func (processor *Processor) prepare(ctx context.Context, tx *sql.Tx, event outbox.Event) (*preparedAlgorithm, error) {
 	var payload struct {
 		RunID string `json:"runId"`
 	}
 	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.RunID == "" {
-		return errors.New("algorithm.run.requested payload requires runId")
+		return nil, errors.New("algorithm.run.requested payload requires runId")
+	}
+	allowed, err := inspectionDispatchAllowed(ctx, tx, event, payload.RunID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, nil
 	}
 	var (
 		endpoint       string
@@ -94,8 +130,8 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		authType       string
 		credentialRaw  []byte
 	)
-	err := tx.QueryRowContext(ctx, `
-		select provider.base_url, provider.provider_type, provider.status, provider.timeout_seconds,
+	err = tx.QueryRowContext(ctx, `
+			select provider.base_url, provider.provider_type, provider.status, provider.timeout_seconds,
 		       provider.id, provider.auth_type, provider.credential_envelope_json,
 		       run.input_snapshot_json, version.output_mapping_json, run.status, run.input_asset_id
 		from algorithm_runs run
@@ -111,38 +147,38 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		&inputJSON, &mappingJSON, &status, &runAssetID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
-		return errors.New("algorithm run scope does not match outbox event")
+		return nil, errors.New("algorithm run scope does not match outbox event")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status != "queued" {
-		return nil
+		return nil, nil
 	}
 	if _, err := RequireEnabled(providerType); err != nil {
-		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", err.Error())
+		return nil, processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", err.Error())
 	}
 	if providerStatus != "active" {
-		return processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "algorithm provider is not active")
+		return nil, processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "algorithm provider is not active")
 	}
 	providerHeaders, err := decryptProviderHeaders(providerID, event.ProjectID, authType, credentialRaw, processor.authSecret)
 	if err != nil {
-		return processor.failRun(ctx, tx, payload.RunID, "provider_credential_unavailable", "algorithm provider credentials are unavailable")
+		return nil, processor.failRun(ctx, tx, payload.RunID, "provider_credential_unavailable", "algorithm provider credentials are unavailable")
 	}
 	var input Input
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
-		return processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", err.Error())
+		return nil, processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", err.Error())
 	}
 	if input.RunID != payload.RunID || input.ProjectID != event.ProjectID || input.InputAsset.AssetID != runAssetID {
-		return processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", "algorithm input snapshot scope or asset mismatch")
+		return nil, processor.failRun(ctx, tx, payload.RunID, "invalid_input_snapshot", "algorithm input snapshot scope or asset mismatch")
 	}
 	if processor.assetIssuer == nil {
-		return processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", "algorithm asset URL issuer is unavailable")
+		return nil, processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", "algorithm asset URL issuer is unavailable")
 	}
 	assetURLExpiresAt := time.Now().Add(5 * time.Minute).UTC()
-	assetURL, err := processor.assetIssuer.IssueAssetURL(input.ProjectID, input.InputAsset.AssetID, input.InputAsset.Version, assetURLExpiresAt)
+	assetURL, err := issueInputAssetURL(processor.assetIssuer, input.ProjectID, input.InputAsset.AssetID, input.InputAsset.Version, input.InputAsset.ChecksumSHA256, assetURLExpiresAt, input.Context["inspection"] == true)
 	if err != nil {
-		return processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", err.Error())
+		return nil, processor.failRun(ctx, tx, payload.RunID, "asset_access_unavailable", err.Error())
 	}
 	input.InputAsset.AccessURL = assetURL
 	input.InputAsset.AccessExpiresAt = assetURLExpiresAt
@@ -150,27 +186,27 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		var tokenHash string
 		input, tokenHash, err = issueCallbackCredentials(input, processor.callbackBaseURL)
 		if err != nil {
-			return processor.failRun(ctx, tx, payload.RunID, "callback_unavailable", err.Error())
+			return nil, processor.failRun(ctx, tx, payload.RunID, "callback_unavailable", err.Error())
 		}
 		if _, err := tx.ExecContext(ctx, `update algorithm_runs set callback_token_hash=$2 where id=$1`, payload.RunID, tokenHash); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	var mapping Mapping
 	if err := json.Unmarshal(mappingJSON, &mapping); err != nil {
-		return processor.failRun(ctx, tx, payload.RunID, "invalid_output_mapping", err.Error())
+		return nil, processor.failRun(ctx, tx, payload.RunID, "invalid_output_mapping", err.Error())
 	}
 	if _, err := tx.ExecContext(ctx, `
 		update algorithm_runs set status = 'running', started_at = coalesce(started_at, now()),
 		       error_code = null, error_message = null
 		where id = $1`, payload.RunID); err != nil {
-		return err
+		return nil, err
 	}
-	recorder := transactionRecorder{tx: tx, projectID: event.ProjectID, teamID: event.TeamID}
-	adapter := NewHTTPJSONAdapter(processor.client, recorder, processor.breaker)
-	outcome, executeErr := adapter.Execute(ctx, Request{
-		Endpoint: endpoint, Headers: providerHeaders, Input: input, Mapping: mapping, Timeout: time.Duration(timeoutSeconds) * time.Second,
-	})
+	return &preparedAlgorithm{runID: payload.RunID, projectID: event.ProjectID, teamID: event.TeamID,
+		request: Request{Endpoint: endpoint, Headers: providerHeaders, Input: input, Mapping: mapping, Timeout: time.Duration(timeoutSeconds) * time.Second}}, nil
+}
+
+func (processor *Processor) finish(ctx context.Context, tx *sql.Tx, prepared *preparedAlgorithm, outcome Outcome, executeErr error) error {
 	if executeErr != nil {
 		code := "provider_execution_failed"
 		terminalStatus := "failed"
@@ -181,7 +217,7 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		} else if errors.Is(executeErr, ErrCircuitOpen) {
 			code = "provider_circuit_open"
 		}
-		return processor.finishFailed(ctx, tx, event.ProjectID, payload.RunID, terminalStatus, code, executeErr.Error(), outcome)
+		return processor.finishFailed(ctx, tx, prepared.projectID, prepared.runID, terminalStatus, code, executeErr.Error(), outcome)
 	}
 	if outcome.Kind == "accepted" || outcome.Kind == "waiting_callback" {
 		nextStatus := "polling"
@@ -190,10 +226,10 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 		}
 		_, err := tx.ExecContext(ctx, `
 			update algorithm_runs set status = $2, external_job_id = $3
-			where id = $1 and status = 'running'`, payload.RunID, nextStatus, outcome.ExternalJobID)
+			where id = $1 and status = 'running'`, prepared.runID, nextStatus, outcome.ExternalJobID)
 		return err
 	}
-	return processor.finishSucceeded(ctx, tx, event.ProjectID, payload.RunID, outcome)
+	return processor.finishSucceeded(ctx, tx, prepared.projectID, prepared.runID, outcome)
 }
 
 type providerCredential struct {
@@ -349,17 +385,21 @@ func completeTaskAlgorithmStep(ctx context.Context, tx *sql.Tx, projectID int, r
 	var stepID sql.NullInt64
 	var taskRunID, scopedProjectID, teamID, assetID int
 	var canonical []byte
-	var onFailure string
+	var onFailure, stepUses string
 	err := tx.QueryRowContext(ctx, `select run.task_run_step_id,coalesce(run.task_run_id,0),run.project_id,run.team_id,run.input_asset_id,
-		run.canonical_result_json,coalesce(step.failure_policy_json->>'onFailure','abort')
+		run.canonical_result_json,coalesce(step.failure_policy_json->>'onFailure','abort'),coalesce(step.uses,'')
 		from algorithm_runs run left join task_run_steps run_step on run_step.id=run.task_run_step_id and run_step.project_id=run.project_id
 		left join task_steps step on step.id=run_step.task_step_id and step.project_id=run_step.project_id
-		where run.id=$1 and ($2=0 or run.project_id=$2)`, runID, projectID).Scan(&stepID, &taskRunID, &scopedProjectID, &teamID, &assetID, &canonical, &onFailure)
+		where run.id=$1 and ($2=0 or run.project_id=$2)`, runID, projectID).Scan(&stepID, &taskRunID, &scopedProjectID, &teamID, &assetID, &canonical, &onFailure, &stepUses)
 	if err != nil {
 		return err
 	}
 	if !stepID.Valid {
 		return nil
+	}
+	if stepUses == "inspection.detect" {
+		_, err = tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json,max_attempts) values($1,$2,$3,'inspection.algorithm.completed',$4,(select greatest(1,coalesce((step.retry_policy_json->>'maxAttempts')::int,1)) from task_run_steps rs join task_steps step on step.id=rs.task_step_id and step.project_id=rs.project_id where rs.id=$5 and rs.project_id=$1)) on conflict(event_id) do nothing`, scopedProjectID, teamID, "inspection-algorithm-completed:"+runID+":"+outcome, map[string]any{"taskRunId": taskRunID, "taskRunStepId": stepID.Int64, "algorithmRunId": runID, "outcome": outcome}, stepID.Int64)
+		return err
 	}
 	stepStatus := "succeeded"
 	if outcome != "succeeded" {
@@ -454,4 +494,27 @@ func DefaultHTTPClient() *http.Client {
 			return errors.New("algorithm provider redirects must be explicitly revalidated")
 		},
 	}
+}
+
+// HTTPClientWithCA adds a deployment CA without disabling normal TLS validation.
+func HTTPClientWithCA(path string) (*http.Client, error) {
+	client := DefaultHTTPClient()
+	if path == "" {
+		return client, nil
+	}
+	pem, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	if !roots.AppendCertsFromPEM(pem) {
+		return nil, errors.New("algorithm CA file contains no certificates")
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	client.Transport = transport
+	return client, nil
 }

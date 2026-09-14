@@ -48,3 +48,26 @@ func TestUserTaskTriggerPreservesGatesAndRedactsAPIKey(t *testing.T) {
 		t.Fatal("missing unknown input gate")
 	}
 }
+
+func TestUserTaskV2ScheduleTrialMergesWithoutChangingPlan(t *testing.T) {
+	version := sqlcgen.ReadTaskTriggerVersionRow{DslVersion: "aerosight/v2", TaskVersionStatus: "published", TaskStatus: "active", ConcurrencyLimit: 1,
+		TriggerJson:     json.RawMessage(`{"type":"schedule","cron":"0 8 * * *","timezone":"Asia/Shanghai","inputs":{"count":2}}`),
+		InputSchemaJson: json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer","default":1}},"additionalProperties":false}`)}
+	before := string(version.TriggerJson)
+	input := map[string]any{"type": "manual", "inputs": map[string]any{"count": 3}, "idempotencyKey": "trial"}
+	raw, err := planUserTaskTrigger(version, input, 0, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot map[string]any
+	if err = json.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot["inputs"].(map[string]any)["count"] != float64(3) || string(version.TriggerJson) != before {
+		t.Fatal("trial changed inputs or plan")
+	}
+	input["inputs"] = map[string]any{"count": "3"}
+	if _, err = planUserTaskTrigger(version, input, 0, 42); err == nil {
+		t.Fatal("wrong type accepted")
+	}
+}

@@ -10,21 +10,29 @@ import (
 	"time"
 
 	"aerosight/server/internal/connector"
+	"aerosight/server/internal/migrations"
 	"aerosight/server/internal/telemetry"
+	"aerosight/server/internal/testdb"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestSQLFlightAlertProjectorKeepsLifecycleLinksAndSecretsIdempotent(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
-	if databaseURL == "" {
-		t.Skip("AEROSIGHT_TEST_DATABASE_URL is not configured")
-	}
-	database, err := sql.Open("pgx", databaseURL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer database.Close()
+	var database *sql.DB
+	var err error
 	ctx := context.Background()
+	if databaseURL == "" {
+		database = testdb.New(t)
+		if _, err = migrations.Embedded(ctx, database); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		database, err = sql.Open("pgx", databaseURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer database.Close()
+	}
 	suffix := time.Now().UnixNano()
 	var teamID, projectID int
 	var adapterID, definitionID int64

@@ -29,9 +29,11 @@ func TestProjectAssetListContract(t *testing.T) {
 	if len(read()) != 0 {
 		t.Fatal("nonempty new project")
 	}
+	// created_at is a timestamp without time zone; keep fixture wall-clock
+	// values independent of the PostgreSQL server session time zone.
 	for i, status := range []string{"available", "pending", "available"} {
 		if _, err := f.db.Exec(`insert into assets(project_id,team_id,kind,storage_key,logical_key,status,created_at)
-    values($1,$2,'image','private/storage',$3,$4,'2026-09-01T00:00:00Z'::timestamptz + $5 * interval '1 hour')`, pid, team, fmt.Sprint(i), status, i); err != nil {
+    values($1,$2,'image','private/storage',$3,$4,'2026-09-01 00:00:00'::timestamp + $5 * interval '1 hour')`, pid, team, fmt.Sprint(i), status, i); err != nil {
 			t.Fatal(err)
 		}
 	}

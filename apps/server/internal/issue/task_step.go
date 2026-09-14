@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"aerosight/server/internal/mission"
 	"aerosight/server/internal/observability"
 	"aerosight/server/internal/orchestration"
 	"aerosight/server/internal/outbox"
@@ -51,6 +52,9 @@ type taskStepRecord struct {
 }
 
 func (processor *TaskStepProcessor) Handler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+	if step, ok := mission.StepExecution(ctx); ok && step.Parameters["assessmentId"] != nil {
+		return processor.inspectionAssessment(ctx, tx, step)
+	}
 	var payload taskStepPayload
 	if err := json.Unmarshal(event.Payload, &payload); err != nil || payload.TaskRunID <= 0 || payload.TaskRunStepID <= 0 {
 		return errors.New("task issue payload requires taskRunId and taskRunStepId")

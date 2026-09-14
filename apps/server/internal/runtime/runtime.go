@@ -17,6 +17,7 @@ import (
 	"aerosight/server/internal/driver"
 	"aerosight/server/internal/flighthub"
 	"aerosight/server/internal/heartbeat"
+	"aerosight/server/internal/inspection"
 	issueworker "aerosight/server/internal/issue"
 	"aerosight/server/internal/media"
 	"aerosight/server/internal/mission"
@@ -259,7 +260,12 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 		}
 		return taskTriggerScheduler.UpstreamHandler(ctx, tx, event)
 	})
-	consumer.Register("mission.control", missionProcessor.Handler)
+	consumer.Register("mission.control", func(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+		if err := missionProcessor.Handler(ctx, tx, event); err != nil {
+			return err
+		}
+		return algorithm.ResumeInspectionChildren(ctx, tx, event)
+	})
 	consumer.Register("command.ack", missionProcessor.Handler)
 	var rawStore algorithm.RawResultStore
 	var assetStore algorithm.AlgorithmAssetStore
@@ -382,21 +388,51 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 		}
 		return mission.CompleteCollectionStep(ctx, tx, event)
 	})
+	var flightObserve inspection.FlightObservationReader
+	var remoteAsset inspection.RemoteAssetReader
+	var algorithmRemoteAsset algorithm.RemoteAlgorithmAssetReader
+	if workerConfig.AuthSecret != "" {
+		access, err := flighthub.NewFlightAssetAccessService(database, flightHubClient, flightHubTokenResolver, workerConfig.AuthSecret, nil)
+		if err != nil {
+			return nil, err
+		}
+		observer := flighthub.NewInspectionFlightObserver(flightHubClient, access, flightHubTokenResolver)
+		flightObserve = observer.Observe
+		remoteAsset = observer.ReadAsset
+		algorithmRemoteAsset = access.ReadAlgorithmAsset
+	}
+	observe := inspection.NewObserveProcessor(func(ctx context.Context, key string) ([]byte, error) {
+		if assetStore == nil {
+			return nil, errors.New("ASSET_STORAGE_UNAVAILABLE")
+		}
+		asset, err := assetStore.ReadAlgorithmAsset(ctx, key)
+		return asset.Body, err
+	}, flightObserve).WithRemoteAssetReader(remoteAsset)
+	consumer.Register("task.step.inspection.observe.requested", mission.WithTaskStepFailurePolicy(observe.Handler))
 	algorithmTrigger := algorithm.NewTrigger(assetSigner)
+	detect := inspection.NewDetectProcessor(algorithmTrigger)
+	consumer.Register("task.step.inspection.detect.requested", mission.WithTaskStepFailurePolicy(detect.Handler))
+	consumer.Register("inspection.algorithm.completed", mission.WithTaskStepFailurePolicy(detect.Handler))
 	consumer.Register("task.step.algorithm.requested", mission.WithTaskStepFailurePolicy(algorithmTrigger.TaskStepHandler))
 	consumer.Register("task.step.issue.requested", mission.WithTaskStepFailurePolicy(issueworker.NewTaskStepProcessor(nil).Handler))
 	consumer.Register("task.step.copilot.requested", mission.WithTaskStepFailurePolicy(agent.TaskStepHandler))
 	consumer.Register("task.step.report.requested", mission.WithTaskStepFailurePolicy(reportworker.NewProcessor(nil).Handler))
+	algorithmClient, err := algorithm.HTTPClientWithCA(workerConfig.AlgorithmCAFile)
+	if err != nil {
+		return nil, err
+	}
 	algorithmProcessor := algorithm.NewProcessor(
-		algorithm.DefaultHTTPClient(), algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
+		algorithmClient, algorithm.NewCircuitBreaker(3, 30*time.Second), rawStore,
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
 	)
+	algorithmProcessor.WithInspectionWorker(database)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 
 	callbacks := http.NewServeMux()
 	callbacks.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore, detectionSink))
-	callbacks.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner))
+	callbacks.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner).WithRemoteReader(algorithmRemoteAsset))
 	tasks := []func(context.Context) error{
+		func(ctx context.Context) error { return algorithmProcessor.RunInspection(ctx, time.Second) },
 		func(ctx context.Context) error {
 			return consumer.RunWithWake(ctx, wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger))
 		},
@@ -429,12 +465,13 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	if liveStreamHealth != nil {
 		tasks = append(tasks, func(ctx context.Context) error { return liveStreamHealth.Run(ctx, database, 2*time.Second) })
 	}
-	return &Runtime{Callbacks: callbacks, tasks: tasks}, nil
+	return &Runtime{Callbacks: callbacks, InspectionMedia: algorithmRemoteAsset, tasks: tasks}, nil
 }
 
 type Runtime struct {
-	Callbacks http.Handler
-	tasks     []func(context.Context) error
+	InspectionMedia algorithm.RemoteAlgorithmAssetReader
+	Callbacks       http.Handler
+	tasks           []func(context.Context) error
 }
 
 // Run cancels peer components on failure and waits for all of them to release resources.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"aerosight/server/internal/outbox"
+	"aerosight/server/internal/taskdefinition"
 )
 
 type scheduleTrigger struct {
@@ -35,6 +36,7 @@ type candidate struct {
 	ConcurrencyLimit int
 	TriggerJSON      []byte
 	InputSchemaJSON  []byte
+	DSLVersion       string
 }
 
 type Scheduler struct {
@@ -75,6 +77,9 @@ func parseFieldPart(part string, value, minimum, maximum int) (bool, error) {
 			return false, fmt.Errorf("invalid cron field %q", part)
 		}
 		start, end = parsed, parsed
+		if hasStep && !ranged {
+			end = maximum
+		}
 		if ranged {
 			parsedEnd, endErr := strconv.Atoi(right)
 			if endErr != nil {
@@ -90,16 +95,15 @@ func parseFieldPart(part string, value, minimum, maximum int) (bool, error) {
 }
 
 func fieldMatches(spec string, value, minimum, maximum int) (bool, error) {
+	result := false
 	for _, part := range strings.Split(spec, ",") {
 		matched, err := parseFieldPart(strings.TrimSpace(part), value, minimum, maximum)
 		if err != nil {
 			return false, err
 		}
-		if matched {
-			return true, nil
-		}
+		result = result || matched
 	}
-	return false, nil
+	return result, nil
 }
 
 func CronMatches(expression string, moment time.Time) (bool, error) {
@@ -107,42 +111,40 @@ func CronMatches(expression string, moment time.Time) (bool, error) {
 	if len(fields) != 5 {
 		return false, errors.New("cron expression must have five fields")
 	}
-	minute, err := fieldMatches(fields[0], moment.Minute(), 0, 59)
-	if err != nil || !minute {
-		return minute, err
+	values := []int{moment.Minute(), moment.Hour(), moment.Day(), int(moment.Month()), int(moment.Weekday())}
+	minima := []int{0, 0, 1, 1, 0}
+	maxima := []int{59, 23, 31, 12, 7}
+	matches := make([]bool, 5)
+	for i, field := range fields {
+		matched, err := fieldMatches(field, values[i], minima[i], maxima[i])
+		if err != nil {
+			return false, err
+		}
+		if i == 4 && values[i] == 0 {
+			sunday, err := fieldMatches(field, 7, 0, 7)
+			if err != nil {
+				return false, err
+			}
+			matched = matched || sunday
+		}
+		matches[i] = matched
 	}
-	hour, err := fieldMatches(fields[1], moment.Hour(), 0, 23)
-	if err != nil || !hour {
-		return hour, err
-	}
-	month, err := fieldMatches(fields[3], int(moment.Month()), 1, 12)
-	if err != nil || !month {
-		return month, err
-	}
-	dayOfMonth, err := fieldMatches(fields[2], moment.Day(), 1, 31)
-	if err != nil {
-		return false, err
-	}
-	weekday := int(moment.Weekday())
-	dayOfWeek, err := fieldMatches(strings.ReplaceAll(fields[4], "7", "0"), weekday, 0, 6)
-	if err != nil {
-		return false, err
-	}
+	day := matches[2] && matches[4]
 	if fields[2] != "*" && fields[4] != "*" {
-		return dayOfMonth || dayOfWeek, nil
+		day = matches[2] || matches[4]
 	}
-	return dayOfMonth && dayOfWeek, nil
+	return matches[0] && matches[1] && matches[3] && day, nil
 }
 
 func (scheduler *Scheduler) scheduleCandidates(ctx context.Context) ([]candidate, error) {
 	rows, err := scheduler.db.QueryContext(ctx, `
-		select version.project_id,version.team_id,version.task_id,version.id,version.concurrency_limit,version.trigger_json,version.input_schema_json
+		select version.project_id,version.team_id,version.task_id,version.id,version.concurrency_limit,version.trigger_json,version.input_schema_json,version.dsl_version
 		  from task_versions version
 		  join tasks task on task.id=version.task_id and task.project_id=version.project_id
 		 where version.status='published' and task.status='active'
 		   and task.current_published_version_id=version.id
 		   and version.trigger_json->>'type'='schedule'
-		   and coalesce((version.trigger_json->>'enabled')::boolean,true)`)
+		   and coalesce(version.trigger_json->>'enabled','true')<>'false'`)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func (scheduler *Scheduler) scheduleCandidates(ctx context.Context) ([]candidate
 	var result []candidate
 	for rows.Next() {
 		var item candidate
-		if err := rows.Scan(&item.ProjectID, &item.TeamID, &item.TaskID, &item.TaskVersionID, &item.ConcurrencyLimit, &item.TriggerJSON, &item.InputSchemaJSON); err != nil {
+		if err := rows.Scan(&item.ProjectID, &item.TeamID, &item.TaskID, &item.TaskVersionID, &item.ConcurrencyLimit, &item.TriggerJSON, &item.InputSchemaJSON, &item.DSLVersion); err != nil {
 			return nil, err
 		}
 		result = append(result, item)
@@ -161,8 +163,8 @@ func (scheduler *Scheduler) scheduleCandidates(ctx context.Context) ([]candidate
 func activeRunCount(ctx context.Context, tx *sql.Tx, item candidate) (int, error) {
 	var count int
 	err := tx.QueryRowContext(ctx, `select count(*) from task_runs
-		where project_id=$1 and task_version_id=$2
-		  and status in ('queued','blocked','ready','dispatching','running','paused','canceling')`, item.ProjectID, item.TaskVersionID).Scan(&count)
+		where project_id=$1 and task_id=$2
+		  and status in ('queued','blocked','ready','dispatching','running','paused','canceling')`, item.ProjectID, item.TaskID).Scan(&count)
 	return count, err
 }
 
@@ -203,14 +205,52 @@ func createRun(ctx context.Context, tx *sql.Tx, item candidate, source, triggerK
 		return 0, false, err
 	}
 	var existing int
-	err := tx.QueryRowContext(ctx, `select id from task_runs where project_id=$1 and task_version_id=$2 and trigger_key=$3`, item.ProjectID, item.TaskVersionID, triggerKey).Scan(&existing)
+	err := tx.QueryRowContext(ctx, `select id from task_runs where project_id=$1 and task_id=$2 and trigger_key=$3 order by id limit 1`, item.ProjectID, item.TaskID, triggerKey).Scan(&existing)
 	if err == nil {
 		return existing, false, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, false, err
 	}
-	if err := validateInputs(item.InputSchemaJSON, snapshotInputs(snapshot)); err != nil {
+	// Candidate discovery happens outside this transaction. Lock and recheck the
+	// current task/version so disable or publish cannot race a stale submission.
+	var currentVersion int64
+	var taskStatus, versionStatus, dsl string
+	var delegate sql.NullInt32
+	var currentTrigger []byte
+	err = tx.QueryRowContext(ctx, `select task.status,version.id,version.status,
+		version.input_schema_json,version.concurrency_limit,version.dsl_version,task.authorized_by_user_id,version.trigger_json
+		from tasks task join task_versions version on version.id=task.current_published_version_id and version.project_id=task.project_id
+		where task.project_id=$1 and task.id=$2 for update of task,version`, item.ProjectID, item.TaskID).
+		Scan(&taskStatus, &currentVersion, &versionStatus, &item.InputSchemaJSON, &item.ConcurrencyLimit, &dsl, &delegate, &currentTrigger)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if taskStatus != "active" || versionStatus != "published" || currentVersion != item.TaskVersionID {
+		return 0, false, nil
+	}
+	if dsl == "aerosight/v2" || source == "schedule" {
+		if !delegate.Valid {
+			return 0, false, errors.New("TASK_TRIGGER_DELEGATE_REQUIRED")
+		}
+		if err := authorizeDelegate(ctx, tx, item, delegate.Int32); err != nil {
+			return 0, false, err
+		}
+		var trigger map[string]any
+		if err := json.Unmarshal(currentTrigger, &trigger); err != nil {
+			return 0, false, err
+		}
+		defaults, _ := trigger["inputs"].(map[string]any)
+		inputs, err := taskdefinition.MergeInputs(item.InputSchemaJSON, defaults, snapshotInputs(snapshot))
+		if err != nil {
+			return 0, false, err
+		}
+		snapshot["inputs"] = inputs
+		snapshot["authorizedByUserId"] = delegate.Int32
+	} else if err := validateInputs(item.InputSchemaJSON, snapshotInputs(snapshot)); err != nil {
 		return 0, false, err
 	}
 	count, err := activeRunCount(ctx, tx, item)
@@ -222,9 +262,9 @@ func createRun(ctx context.Context, tx *sql.Tx, item candidate, source, triggerK
 	}
 	var runID int
 	err = tx.QueryRowContext(ctx, `insert into task_runs(
-		project_id,team_id,task_id,task_version_id,trigger_source,trigger_key,status,input_snapshot_json,state_reason)
-		values($1,$2,$3,$4,$5,$6,'queued',$7,'trigger-accepted') returning id`,
-		item.ProjectID, item.TeamID, item.TaskID, item.TaskVersionID, source, triggerKey, snapshot).Scan(&runID)
+		project_id,team_id,task_id,task_version_id,trigger_source,trigger_key,status,input_snapshot_json,state_reason,created_by_user_id)
+		values($1,$2,$3,$4,$5,$6,'queued',$7,'trigger-accepted',$8) returning id`,
+		item.ProjectID, item.TeamID, item.TaskID, item.TaskVersionID, source, triggerKey, snapshot, delegate).Scan(&runID)
 	if err != nil {
 		return 0, false, err
 	}
@@ -251,44 +291,14 @@ func (scheduler *Scheduler) ReconcileOnce(ctx context.Context) (int, error) {
 	}
 	created := 0
 	for _, item := range items {
-		var trigger scheduleTrigger
-		if err := json.Unmarshal(item.TriggerJSON, &trigger); err != nil {
-			return created, err
-		}
-		location, err := time.LoadLocation(trigger.Timezone)
+		inserted, err := scheduler.reconcileSchedule(ctx, item)
 		if err != nil {
-			return created, fmt.Errorf("load schedule timezone: %w", err)
-		}
-		scheduledFor := scheduler.now().In(location).Truncate(time.Minute)
-		matched, err := CronMatches(trigger.Cron, scheduledFor)
-		if err != nil {
-			return created, err
-		}
-		if !matched || !trigger.Enabled {
+			scheduler.logger.Error("task schedule rejected", "taskId", item.TaskID, "error", err.Error())
 			continue
 		}
-		triggerKey := "schedule:" + scheduledFor.UTC().Format(time.RFC3339)
-		snapshot := map[string]any{"trigger": map[string]any{
-			"type": "schedule", "idempotencyKey": strings.TrimPrefix(triggerKey, "schedule:"),
-			"occurredAt": scheduler.now().UTC().Format(time.RFC3339Nano), "scheduledFor": scheduledFor.UTC().Format(time.RFC3339),
-			"actor": map[string]any{"type": "service", "id": "task-scheduler"},
-		}, "inputs": map[string]any{}}
-		tx, err := scheduler.db.BeginTx(ctx, nil)
-		if err != nil {
-			return created, err
-		}
-		_, inserted, createErr := createRun(ctx, tx, item, "schedule", triggerKey, snapshot)
-		if createErr != nil {
-			_ = tx.Rollback()
-			return created, createErr
-		}
-		if err := tx.Commit(); err != nil {
-			return created, err
-		}
-		if inserted {
-			created++
-		}
+		created += inserted
 	}
+
 	return created, nil
 }
 
@@ -314,7 +324,11 @@ func (scheduler *Scheduler) UpstreamHandler(ctx context.Context, tx *sql.Tx, eve
 	}
 	var sourceTaskID int
 	var output map[string]any
-	if err := tx.QueryRowContext(ctx, `select task_id,output_snapshot_json from task_runs where project_id=$1 and id=$2`, event.ProjectID, payload.TaskRunID).Scan(&sourceTaskID, &output); err != nil {
+	var rawOutput []byte
+	if err := tx.QueryRowContext(ctx, `select task_id,output_snapshot_json from task_runs where project_id=$1 and id=$2`, event.ProjectID, payload.TaskRunID).Scan(&sourceTaskID, &rawOutput); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(rawOutput, &output); err != nil {
 		return err
 	}
 	rows, err := tx.QueryContext(ctx, `select version.project_id,version.team_id,version.task_id,version.id,version.concurrency_limit,version.trigger_json,version.input_schema_json

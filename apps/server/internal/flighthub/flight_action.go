@@ -19,24 +19,32 @@ const (
 	maxActionReconciliationReads = 3
 )
 
+// InspectionFlightActionContract is encrypted with the request and is never
+// forwarded to DJI. Task execution supplies the published frozen selection.
+type InspectionFlightActionContract struct {
+	SchedulerOwner string                   `json:"schedulerOwner"`
+	WaylineVersion InspectionWaylineVersion `json:"waylineVersion"`
+}
+
 type FlightActionRequest struct {
-	Name                       string                  `json:"name"`
-	TimeZone                   string                  `json:"timeZone"`
-	TaskType                   string                  `json:"taskType"`
-	RTHAltitude                int                     `json:"rthAltitude"`
-	RTHMode                    string                  `json:"rthMode"`
-	OutOfControlActionInFlight string                  `json:"outOfControlActionInFlight"`
-	WaylinePrecisionType       string                  `json:"waylinePrecisionType"`
-	ResumableStatus            string                  `json:"resumableStatus"`
-	RepeatType                 string                  `json:"repeatType"`
-	RepeatOption               *FlightTaskRepeatOption `json:"repeatOption"`
-	LandingDeviceID            int                     `json:"landingDeviceId"`
-	BeginAt                    int64                   `json:"beginAt"`
-	EndAt                      int64                   `json:"endAt"`
-	RecurringTaskStartTimes    []int64                 `json:"recurringTaskStartTimes"`
-	ContinuousTaskPeriods      [][]int64               `json:"continuousTaskPeriods"`
-	MinimumBatteryCapacity     int                     `json:"minimumBatteryCapacity"`
-	DesiredStatus              string                  `json:"desiredStatus"`
+	Inspection                 *InspectionFlightActionContract `json:"inspection,omitempty"`
+	Name                       string                          `json:"name"`
+	TimeZone                   string                          `json:"timeZone"`
+	TaskType                   string                          `json:"taskType"`
+	RTHAltitude                int                             `json:"rthAltitude"`
+	RTHMode                    string                          `json:"rthMode"`
+	OutOfControlActionInFlight string                          `json:"outOfControlActionInFlight"`
+	WaylinePrecisionType       string                          `json:"waylinePrecisionType"`
+	ResumableStatus            string                          `json:"resumableStatus"`
+	RepeatType                 string                          `json:"repeatType"`
+	RepeatOption               *FlightTaskRepeatOption         `json:"repeatOption"`
+	LandingDeviceID            int                             `json:"landingDeviceId"`
+	BeginAt                    int64                           `json:"beginAt"`
+	EndAt                      int64                           `json:"endAt"`
+	RecurringTaskStartTimes    []int64                         `json:"recurringTaskStartTimes"`
+	ContinuousTaskPeriods      [][]int64                       `json:"continuousTaskPeriods"`
+	MinimumBatteryCapacity     int                             `json:"minimumBatteryCapacity"`
+	DesiredStatus              string                          `json:"desiredStatus"`
 }
 
 type FlightActionJob struct {
@@ -199,6 +207,9 @@ func (store *SQLFlightActionStore) RecordAccepted(ctx context.Context, job Fligh
 			_ = tx.Rollback()
 		}
 	}()
+	if err := claimInspectionActionFlight(ctx, tx, job, strings.TrimSpace(remoteID)); err != nil {
+		return err
+	}
 	var resourceID int64
 	err = tx.QueryRowContext(ctx, `insert into connector_remote_resources(
 		project_id,team_id,connector_instance_id,resource_kind,remote_id,status,summary_json,canonical_target_type,canonical_target_id
@@ -264,6 +275,9 @@ func (store *SQLFlightActionStore) Complete(ctx context.Context, job FlightActio
 			_ = tx.Rollback()
 		}
 	}()
+	if err := claimInspectionActionFlight(ctx, tx, job, task.UUID); err != nil {
+		return err
+	}
 	var resourceID int64
 	err = tx.QueryRowContext(ctx, `insert into connector_remote_resources(
 		project_id,team_id,connector_instance_id,resource_kind,remote_id,status,summary_json,canonical_target_type,canonical_target_id
@@ -466,7 +480,7 @@ func (handler *FlightActionHandler) Handler(ctx context.Context, _ *sql.Tx, even
 	if job.Status == "reconciling" {
 		return handler.reconcile(ctx, job, request, token, scope.ProjectUUID)
 	}
-	if job.ActionKind == "flight-task-create" && job.Status == "queued" {
+	if job.ActionKind == "flight-task-create" && (job.Status == "queued" || (request.Inspection != nil && job.Status == "prepared")) {
 		check, err := handler.client.CheckFlightTaskDispatch(ctx, token, scope.ProjectUUID, job.DeviceExternalID, job.WaylineRemoteID)
 		if err != nil {
 			code := safeWorkflowCode(err)
@@ -485,12 +499,46 @@ func (handler *FlightActionHandler) Handler(ctx context.Context, _ *sql.Tx, even
 		if hasWarning {
 			return handler.store.Fail(ctx, job, "dispatch_check_warning")
 		}
-		if err := handler.store.MarkPrepared(ctx, job, map[string]any{
-			"passed": true, "warningCodes": codes, "devicePositionPresent": check.DevicePosition != nil,
-		}); err != nil {
-			return err
+		if job.Status == "queued" {
+			if err := handler.store.MarkPrepared(ctx, job, map[string]any{
+				"passed": true, "warningCodes": codes, "devicePositionPresent": check.DevicePosition != nil,
+			}); err != nil {
+				return err
+			}
 		}
 		job.Status = "prepared"
+	}
+	// Recheck after dispatch preflight, including a prepared job resumed after
+	// restart. Reconciling jobs returned above must never attempt a new flight
+	// or depend on a route that may have changed after the original dispatch.
+	if request.Inspection != nil {
+		if job.ActionKind != "flight-task-create" || request.Inspection.SchedulerOwner != "aerosight" || request.TaskType != "immediate" ||
+			request.BeginAt != 0 || request.EndAt != 0 || len(request.RecurringTaskStartTimes) > 0 || len(request.ContinuousTaskPeriods) > 0 ||
+			request.RepeatOption != nil || (request.RepeatType != "" && request.RepeatType != "nonrepeating") {
+			return handler.store.Fail(ctx, job, "inspection_schedule_invalid")
+		}
+		frozen := request.Inspection.WaylineVersion
+		if frozen.WaylineID != job.WaylineRemoteID || VerifyInspectionWayline(frozen, WaylineSummary{ID: frozen.WaylineID, UpdatedAt: frozen.UpdatedAt, SizeBytes: frozen.SizeBytes}) != nil {
+			return handler.store.Fail(ctx, job, "inspection_wayline_version_invalid")
+		}
+		reader, ok := handler.client.(InspectionWaylineReader)
+		if !ok {
+			return handler.store.Fail(ctx, job, "inspection_wayline_reader_unavailable")
+		}
+		current, readErr := reader.GetWayline(ctx, token, scope.ProjectUUID, job.WaylineRemoteID)
+		if readErr != nil {
+			code := safeWorkflowCode(readErr)
+			if terminalFlightActionError(code) {
+				return handler.store.Fail(ctx, job, code)
+			}
+			if err := handler.store.RecordError(ctx, job, code); err != nil {
+				return err
+			}
+			return retryableWorkflowError(code)
+		}
+		if VerifyInspectionWayline(frozen, current.WaylineSummary) != nil {
+			return handler.store.Fail(ctx, job, "inspection_wayline_version_changed")
+		}
 	}
 	if err := handler.store.BeginAttempt(ctx, job); err != nil {
 		return err

@@ -3,6 +3,8 @@ package httpapi
 import (
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
+	"aerosight/server/internal/taskdefinition"
+	"aerosight/server/internal/tasktrigger"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -68,7 +70,7 @@ func planUserTaskTrigger(version sqlcgen.ReadTaskTriggerVersionRow, input map[st
 	if err := json.Unmarshal(version.TriggerJson, &trigger); err != nil {
 		return nil, err
 	}
-	if trigger["type"] != input["type"] {
+	if trigger["type"] != input["type"] && !(version.DslVersion == "aerosight/v2" && trigger["type"] == "schedule" && input["type"] == "manual") {
 		return nil, errors.New("TASK_TRIGGER_TYPE_MISMATCH")
 	}
 	if trigger["type"] == "api" && trigger["key"] != input["key"] {
@@ -84,6 +86,13 @@ func planUserTaskTrigger(version sqlcgen.ReadTaskTriggerVersionRow, input map[st
 		return nil, errors.New("TASK_TRIGGER_INPUT_SCHEMA_INVALID")
 	}
 	inputs := input["inputs"].(map[string]any)
+	if version.DslVersion == "aerosight/v2" {
+		var err error
+		inputs, err = taskdefinition.MergeInputs(version.InputSchemaJson, fhObject(trigger["inputs"]), inputs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	required, _ := schema["required"].([]any)
 	for _, value := range required {
 		if key, ok := value.(string); ok {
@@ -165,16 +174,24 @@ func (s *Server) triggerTaskRun(c *gin.Context) {
 		}
 		vid := sql.NullInt64{Int64: version.TaskVersionID, Valid: true}
 		triggerKey := sql.NullString{String: key, Valid: true}
-		existing, err := q.ReadTriggeredRun(ctx, sqlcgen.ReadTriggeredRunParams{ProjectID: pid, TaskVersionID: vid, TriggerKey: triggerKey})
+		existing, err := q.ReadTriggeredRun(ctx, sqlcgen.ReadTriggeredRunParams{ProjectID: pid, TaskID: int32(tid), TriggerKey: triggerKey})
 		if err == nil {
 			return gin.H{"taskRunId": existing.ID, "status": existing.Status, "replayed": true}, nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
-		active, err := q.CountActiveTriggeredRuns(ctx, sqlcgen.CountActiveTriggeredRunsParams{ProjectID: pid, TaskVersionID: vid})
+		active, err := q.CountActiveTriggeredRuns(ctx, sqlcgen.CountActiveTriggeredRunsParams{ProjectID: pid, TaskID: int32(tid)})
 		if err != nil {
 			return nil, err
+		}
+		if version.DslVersion == "aerosight/v2" {
+			if !version.AuthorizedByUserID.Valid {
+				return nil, errors.New("TASK_TRIGGER_DELEGATE_REQUIRED")
+			}
+			if err := tasktrigger.AuthorizeDelegate(ctx, w.Tx, int(pid), version.TaskVersionID, version.AuthorizedByUserID.Int32); err != nil {
+				return nil, err
+			}
 		}
 		snapshot, err := planUserTaskTrigger(version, input, active, uid)
 		if err != nil {

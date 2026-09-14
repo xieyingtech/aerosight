@@ -142,6 +142,11 @@ func (s *Server) saveAlgorithmProvider(c *gin.Context) {
 				return nil, e
 			}
 		}
+		if input.Status != "" {
+			if _, e := w.Tx.ExecContext(ctx, "update algorithm_providers set status=$3,updated_at=now() where project_id=$1 and id=$2", pid, id, input.Status); e != nil {
+				return nil, e
+			}
+		}
 		if input.Credential != nil {
 			envelope, e := credentials.EncryptJSON(input.Credential, s.credentialSecret, credentials.AAD("algorithm-provider", id, int(pid)))
 			if e != nil {

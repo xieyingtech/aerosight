@@ -43,12 +43,13 @@ type assetFact struct {
 }
 
 type reportContent struct {
-	SchemaVersion string         `json:"schemaVersion"`
-	TaskRun       map[string]any `json:"taskRun"`
-	Steps         []stepFact     `json:"steps"`
-	Issues        []issueFact    `json:"issues"`
-	Assets        []assetFact    `json:"assets"`
-	DataGaps      []string       `json:"dataGaps"`
+	Inspection    *inspectionReport `json:"inspection,omitempty"`
+	SchemaVersion string            `json:"schemaVersion"`
+	TaskRun       map[string]any    `json:"taskRun"`
+	Steps         []stepFact        `json:"steps"`
+	Issues        []issueFact       `json:"issues"`
+	Assets        []assetFact       `json:"assets"`
+	DataGaps      []string          `json:"dataGaps"`
 }
 
 type Processor struct {
@@ -171,7 +172,7 @@ func loadContent(ctx context.Context, tx *sql.Tx, projectID, runID int, reportSt
 		from issues issue left join lateral (
 			select event.id,event.body from issue_events event where event.project_id=issue.project_id and event.issue_id=issue.id
 			and event.event_type in('comment','status_changed','copilot.completed') order by event.created_at desc,event.id desc limit 1
-		) last_event on true where issue.project_id=$1 and issue.task_run_id=$2 order by issue.number`, projectID, runID)
+		) last_event on true where issue.project_id=$1 and (issue.task_run_id=$2 or exists(select 1 from issue_links link where link.project_id=issue.project_id and link.issue_id=issue.id and link.link_type='task_run' and link.target_id=$2::text)) order by issue.number`, projectID, runID)
 	if err != nil {
 		return content, nil, err
 	}
@@ -203,7 +204,17 @@ func loadContent(ctx context.Context, tx *sql.Tx, projectID, runID int, reportSt
 		}
 		content.Assets = append(content.Assets, fact)
 	}
-	return content, eventIDs, rows.Close()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return content, nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return content, nil, err
+	}
+	if err := appendInspectionContent(ctx, tx, projectID, runID, &content); err != nil {
+		return content, nil, err
+	}
+	return content, eventIDs, nil
 }
 
 func insertEvidence(ctx context.Context, tx *sql.Tx, projectID int, reportVersionID string, taskVersionID int64, content reportContent, eventIDs []int) error {
@@ -211,28 +222,28 @@ func insertEvidence(ctx context.Context, tx *sql.Tx, projectID int, reportVersio
 		kind, id, version, href string
 		assetID                 any
 		checksum                any
-	}{{"task_run", fmt.Sprint(content.TaskRun["id"]), "current", fmt.Sprintf("/projects/%d/tasks/runs/%v", projectID, content.TaskRun["id"]), nil, nil},
-		{"task_version", fmt.Sprint(taskVersionID), "published", fmt.Sprintf("/projects/%d/tasks/versions/%d", projectID, taskVersionID), nil, nil}}
+	}{{"task_run", fmt.Sprint(content.TaskRun["id"]), "current", fmt.Sprintf("/projects/tasks/runs/detail/?projectId=%d&runId=%v", projectID, content.TaskRun["id"]), nil, nil},
+		{"task_version", fmt.Sprint(taskVersionID), "published", fmt.Sprintf("/projects/tasks/?projectId=%d&versionId=%d", projectID, taskVersionID), nil, nil}}
 	for _, step := range content.Steps {
 		refs = append(refs, struct {
 			kind, id, version, href string
 			assetID                 any
 			checksum                any
-		}{"step", fmt.Sprint(step.ID), step.Status, fmt.Sprintf("/projects/%d/tasks/runs/%v#step-%d", projectID, content.TaskRun["id"], step.ID), nil, nil})
+		}{"step", fmt.Sprint(step.ID), step.Status, fmt.Sprintf("/projects/tasks/runs/detail/?projectId=%d&runId=%v#step-%d", projectID, content.TaskRun["id"], step.ID), nil, nil})
 	}
 	for _, eventID := range eventIDs {
 		refs = append(refs, struct {
 			kind, id, version, href string
 			assetID                 any
 			checksum                any
-		}{"event", fmt.Sprint(eventID), "immutable", fmt.Sprintf("/projects/%d/issues?event=%d", projectID, eventID), nil, nil})
+		}{"event", fmt.Sprint(eventID), "immutable", fmt.Sprintf("/projects/issues/?projectId=%d&event=%d", projectID, eventID), nil, nil})
 	}
 	for _, asset := range content.Assets {
 		refs = append(refs, struct {
 			kind, id, version, href string
 			assetID                 any
 			checksum                any
-		}{"asset", fmt.Sprint(asset.ID), fmt.Sprint(asset.Version), fmt.Sprintf("/projects/%d/assets/%d", projectID, asset.ID), asset.ID, nullString(asset.Checksum)})
+		}{"asset", fmt.Sprint(asset.ID), fmt.Sprint(asset.Version), fmt.Sprintf("/projects/assets/?projectId=%d&selected=%d", projectID, asset.ID), asset.ID, nullString(asset.Checksum)})
 	}
 	for _, ref := range refs {
 		if _, err := tx.ExecContext(ctx, `insert into generated_report_evidence(

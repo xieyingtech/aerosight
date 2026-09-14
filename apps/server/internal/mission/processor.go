@@ -62,6 +62,18 @@ func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbo
 	if err != nil {
 		return err
 	}
+	if payload.Control == "" && snapshot.Status != RunQueued && snapshot.Status != RunDispatching && snapshot.Status != RunRunning {
+		return nil
+	}
+	if payload.Control == ControlResume {
+		var pendingReview bool
+		if err := tx.QueryRowContext(ctx, `select exists(select 1 from inspection_assessments where project_id=$1 and task_run_id=$2 and status='needs_review')`, event.ProjectID, payload.TaskRunID).Scan(&pendingReview); err != nil {
+			return err
+		}
+		if pendingReview {
+			return errors.New("INSPECTION_REVIEW_REQUIRED")
+		}
+	}
 	now := processor.now()
 	var decision Decision
 	if payload.Control != "" {
@@ -106,7 +118,7 @@ func loadSnapshot(ctx context.Context, tx *sql.Tx, projectID, runID int) (Snapsh
 	}
 	stepOutputs := map[string]map[string]any{}
 	rows, err := tx.QueryContext(ctx, `
-		select run_step.id,run_step.position,run_step.status,step.step_key,step.uses,step.capability_code,step.action,step.parameters_json,
+		select run_step.id,run_step.position,run_step.status,step.step_key,step.uses,coalesce(step.capability_code,''),step.action,step.parameters_json,
 		       greatest(0,coalesce((step.retry_policy_json->>'maxAttempts')::int-1,(step.failure_policy_json->>'maxRetries')::int,0)),
 		       greatest(0,coalesce((step.retry_policy_json->>'backoffSeconds')::int,(step.failure_policy_json->>'retryBackoffSeconds')::int,1)),
 		       step.timeout_seconds,
@@ -240,7 +252,9 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 	}
 	if decision.InvokeStep != nil {
 		eventType := map[string]string{
-			"algorithm.run": "task.step.algorithm.requested", "issue.create-or-update": "task.step.issue.requested",
+			"inspection.observe": "task.step.inspection.observe.requested",
+			"inspection.detect":  "task.step.inspection.detect.requested",
+			"algorithm.run":      "task.step.algorithm.requested", "issue.create-or-update": "task.step.issue.requested",
 			"copilot.run": "task.step.copilot.requested", "report.generate": "task.step.report.requested",
 		}[decision.InvokeStep.Uses]
 		if eventType == "" {
@@ -252,7 +266,7 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 		}
 		eventID := fmt.Sprintf("%s:run:%d:step:%d", eventType, snapshot.RunID, decision.InvokeStep.StepID)
 		if _, err := tx.ExecContext(ctx, `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json,max_attempts)
-			values($1,$2,$3,$4,$5,(select greatest(1,coalesce((retry_policy_json->>'maxAttempts')::int,1)) from task_steps where project_id=$1 and id=$6))
+			values($1,$2,$3,$4,$5,(select greatest(1,coalesce((step.retry_policy_json->>'maxAttempts')::int,1)) from task_run_steps rs join task_steps step on step.project_id=rs.project_id and step.id=rs.task_step_id where rs.project_id=$1 and rs.id=$6))
 			on conflict(event_id) do nothing`, projectID, teamID, eventID, eventType, payload, decision.InvokeStep.StepID); err != nil {
 			return err
 		}
@@ -277,7 +291,7 @@ func applyDecision(ctx context.Context, tx *sql.Tx, projectID, teamID int, snaps
 	if updated != 1 {
 		return errors.New("task run optimistic update conflict")
 	}
-	if decision.RunStatus == RunSucceeded || decision.RunStatus == RunFailed || decision.RunStatus == RunCanceled {
+	if decision.RunStatus == RunSucceeded || decision.RunStatus == RunFailed || decision.RunStatus == RunCanceled || decision.Reason == "operator_resumed" {
 		payload := map[string]any{"taskRunId": snapshot.RunID, "from": snapshot.Status, "to": decision.RunStatus,
 			"stateVersion": version + 1, "reason": decision.Reason}
 		eventID := fmt.Sprintf("task-run:%d:state:%d:%s", snapshot.RunID, version+1, decision.RunStatus)

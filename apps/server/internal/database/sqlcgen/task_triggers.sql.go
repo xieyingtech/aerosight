@@ -12,17 +12,17 @@ import (
 )
 
 const countActiveTriggeredRuns = `-- name: CountActiveTriggeredRuns :one
-SELECT count(*) FROM task_runs WHERE project_id=$1 AND task_version_id=$2
+SELECT count(*) FROM task_runs WHERE project_id=$1 AND task_id=$2
 AND status IN ('queued','blocked','ready','dispatching','running','paused','canceling')
 `
 
 type CountActiveTriggeredRunsParams struct {
-	ProjectID     int32         `json:"project_id"`
-	TaskVersionID sql.NullInt64 `json:"task_version_id"`
+	ProjectID int32 `json:"project_id"`
+	TaskID    int32 `json:"task_id"`
 }
 
 func (q *Queries) CountActiveTriggeredRuns(ctx context.Context, arg CountActiveTriggeredRunsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countActiveTriggeredRuns, arg.ProjectID, arg.TaskVersionID)
+	row := q.db.QueryRowContext(ctx, countActiveTriggeredRuns, arg.ProjectID, arg.TaskID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -105,7 +105,7 @@ func (q *Queries) LockTaskTrigger(ctx context.Context, arg LockTaskTriggerParams
 const readTaskTriggerVersion = `-- name: ReadTaskTriggerVersion :one
 SELECT task.project_id,task.team_id,task.id AS task_id,task.status AS task_status,
  version.id AS task_version_id,version.status AS task_version_status,version.trigger_json,
- version.input_schema_json,version.concurrency_limit
+ version.input_schema_json,version.concurrency_limit,version.dsl_version,task.authorized_by_user_id
 FROM tasks task JOIN task_versions version ON version.id=task.current_published_version_id AND version.project_id=task.project_id
 WHERE task.project_id=$1 AND task.id=$2 FOR UPDATE OF task,version
 `
@@ -116,15 +116,17 @@ type ReadTaskTriggerVersionParams struct {
 }
 
 type ReadTaskTriggerVersionRow struct {
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	TaskID            int32           `json:"task_id"`
-	TaskStatus        string          `json:"task_status"`
-	TaskVersionID     int64           `json:"task_version_id"`
-	TaskVersionStatus string          `json:"task_version_status"`
-	TriggerJson       json.RawMessage `json:"trigger_json"`
-	InputSchemaJson   json.RawMessage `json:"input_schema_json"`
-	ConcurrencyLimit  int32           `json:"concurrency_limit"`
+	ProjectID          int32           `json:"project_id"`
+	TeamID             int32           `json:"team_id"`
+	TaskID             int32           `json:"task_id"`
+	TaskStatus         string          `json:"task_status"`
+	TaskVersionID      int64           `json:"task_version_id"`
+	TaskVersionStatus  string          `json:"task_version_status"`
+	TriggerJson        json.RawMessage `json:"trigger_json"`
+	InputSchemaJson    json.RawMessage `json:"input_schema_json"`
+	ConcurrencyLimit   int32           `json:"concurrency_limit"`
+	DslVersion         string          `json:"dsl_version"`
+	AuthorizedByUserID sql.NullInt32   `json:"authorized_by_user_id"`
 }
 
 func (q *Queries) ReadTaskTriggerVersion(ctx context.Context, arg ReadTaskTriggerVersionParams) (ReadTaskTriggerVersionRow, error) {
@@ -140,18 +142,20 @@ func (q *Queries) ReadTaskTriggerVersion(ctx context.Context, arg ReadTaskTrigge
 		&i.TriggerJson,
 		&i.InputSchemaJson,
 		&i.ConcurrencyLimit,
+		&i.DslVersion,
+		&i.AuthorizedByUserID,
 	)
 	return i, err
 }
 
 const readTriggeredRun = `-- name: ReadTriggeredRun :one
-SELECT id,status FROM task_runs WHERE project_id=$1 AND task_version_id=$2 AND trigger_key=$3
+SELECT id,status FROM task_runs WHERE project_id=$1 AND task_id=$2 AND trigger_key=$3 ORDER BY id LIMIT 1
 `
 
 type ReadTriggeredRunParams struct {
-	ProjectID     int32          `json:"project_id"`
-	TaskVersionID sql.NullInt64  `json:"task_version_id"`
-	TriggerKey    sql.NullString `json:"trigger_key"`
+	ProjectID  int32          `json:"project_id"`
+	TaskID     int32          `json:"task_id"`
+	TriggerKey sql.NullString `json:"trigger_key"`
 }
 
 type ReadTriggeredRunRow struct {
@@ -160,7 +164,7 @@ type ReadTriggeredRunRow struct {
 }
 
 func (q *Queries) ReadTriggeredRun(ctx context.Context, arg ReadTriggeredRunParams) (ReadTriggeredRunRow, error) {
-	row := q.db.QueryRowContext(ctx, readTriggeredRun, arg.ProjectID, arg.TaskVersionID, arg.TriggerKey)
+	row := q.db.QueryRowContext(ctx, readTriggeredRun, arg.ProjectID, arg.TaskID, arg.TriggerKey)
 	var i ReadTriggeredRunRow
 	err := row.Scan(&i.ID, &i.Status)
 	return i, err

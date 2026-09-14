@@ -1,0 +1,16 @@
+"use client";
+import Link from "next/link";
+import {Page} from "@/components/page";
+import {StaticAPIPage,positiveParam} from "@/components/static-api-page";
+import {Button} from "@/components/ui/button";
+import {Card,CardContent,CardHeader,CardTitle} from "@/components/ui/card";
+type Summary={runId:number;runStatus:string;stateVersion:number;pendingReviewCount:number;final:false;dataGaps:string[];inspection?:{scopeNotice:string;observations:Array<{id:string;scopeDescription:string;completeness:string;assets:unknown[]}>;evidenceSets:Array<{id:string;source:string;modelVersion:string}>;assessments:Array<{id:string;status:string;revision:number;decisions:unknown}>}};
+export default function InspectionSummaryPage(){return <StaticAPIPage<Summary> endpoint={q=>{const pid=positiveParam(q),run=positiveParam(q,"runId");return pid&&run?`/api/projects/${pid}/task-runs/${run}/inspection-summary`:null;}}>{(summary,q,reload)=><Page title="巡检进展与待复核摘要" description={`运行状态 ${summary.runStatus} · 状态版本 ${summary.stateVersion}`}><div className="space-y-4">
+ <div className="flex items-center gap-4"><Link className="text-sm underline" href={`/projects/tasks/runs/detail/?projectId=${positiveParam(q)}&runId=${summary.runId}`}>返回任务运行</Link><Button variant="outline" onClick={reload}>刷新摘要</Button></div>
+ <p className="text-sm">此页为当前进展摘要，不是最终巡检报告。查看或刷新不会执行飞行、识别、研判或建案。</p>
+ {summary.pendingReviewCount>0&&<p role="status" className="rounded border p-3 text-sm">有 {summary.pendingReviewCount} 项研判待人工复核，整批案件处理尚未完成。请核对证据后进入对应研判处理。</p>}
+ {summary.inspection?<><p className="text-sm text-muted-foreground">{summary.inspection.scopeNotice}</p>
+ <Card><CardHeader><CardTitle>观察范围与识别</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{summary.inspection.observations.map(observation=><div key={observation.id}><p>{observation.scopeDescription} · {observation.assets?.length??0} 张图片 · {observation.completeness}</p><Link className="underline" href={`/projects/inspection/observation/?projectId=${positiveParam(q)}&observationId=${observation.id}`}>查看观察与原图</Link></div>)}{summary.inspection.evidenceSets.map(evidence=><div key={evidence.id}><Link className="underline" href={`/projects/inspection/evidence/?projectId=${positiveParam(q)}&evidenceSetId=${evidence.id}`}>查看识别证据</Link> · {evidence.source} · {evidence.modelVersion}</div>)}</CardContent></Card>
+ <Card><CardHeader><CardTitle>研判与复核</CardTitle></CardHeader><CardContent className="space-y-3">{summary.inspection.assessments.map(assessment=><div className="rounded border p-3" key={assessment.id}><Link className="text-sm underline" href={`/projects/inspection/assessment/?projectId=${positiveParam(q)}&assessmentId=${assessment.id}`}>查看研判 · 修订 {assessment.revision} · {assessment.status}</Link><pre className="mt-2 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(assessment.decisions,null,2)}</pre></div>)}{!summary.inspection.assessments.length&&<p className="text-sm">尚无研判记录，不能据此认定没有异常。</p>}</CardContent></Card></>:<p className="text-sm">尚无已封存的观察范围。</p>}
+ {!!summary.dataGaps.length&&<Card><CardHeader><CardTitle>资料缺口</CardTitle></CardHeader><CardContent><ul className="list-inside list-disc text-sm">{summary.dataGaps.map(gap=><li key={gap}>{gap}</li>)}</ul></CardContent></Card>}
+ </div></Page>}</StaticAPIPage>;}

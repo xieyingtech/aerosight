@@ -67,7 +67,10 @@ func (signer *AssetURLSigner) signature(projectID, assetID, version int, expires
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+type RemoteAlgorithmAssetReader func(context.Context, int, int, int) (AlgorithmAsset, bool, error)
+
 type AssetAccessHandler struct {
+	remote RemoteAlgorithmAssetReader
 	db     *sql.DB
 	store  AlgorithmAssetStore
 	signer *AssetURLSigner
@@ -75,6 +78,11 @@ type AssetAccessHandler struct {
 
 func NewAssetAccessHandler(db *sql.DB, store AlgorithmAssetStore, signer *AssetURLSigner) *AssetAccessHandler {
 	return &AssetAccessHandler{db: db, store: store, signer: signer}
+}
+
+func (handler *AssetAccessHandler) WithRemoteReader(reader RemoteAlgorithmAssetReader) *AssetAccessHandler {
+	handler.remote = reader
+	return handler
 }
 
 func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -87,12 +95,20 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 	projectID, projectErr := strconv.Atoi(request.URL.Query().Get("projectId"))
 	version, versionErr := strconv.Atoi(request.URL.Query().Get("version"))
 	expires, expiresErr := strconv.ParseInt(request.URL.Query().Get("expires"), 10, 64)
-	if err != nil || projectErr != nil || versionErr != nil || expiresErr != nil || assetID <= 0 || assetID > 2147483647 || projectID <= 0 || projectID > 2147483647 || version <= 0 || version > 2147483647 || handler.signer == nil ||
-		!handler.signer.Verify(projectID, assetID, version, expires, request.URL.Query().Get("signature")) {
+	checksum := request.URL.Query().Get("checksum")
+	verified := false
+	if handler.signer != nil {
+		if checksum != "" {
+			verified = handler.signer.VerifyPinned(projectID, assetID, version, expires, checksum, request.URL.Query().Get("signature"))
+		} else {
+			verified = handler.signer.Verify(projectID, assetID, version, expires, request.URL.Query().Get("signature"))
+		}
+	}
+	if err != nil || projectErr != nil || versionErr != nil || expiresErr != nil || assetID <= 0 || assetID > 2147483647 || projectID <= 0 || projectID > 2147483647 || version <= 0 || version > 2147483647 || !verified {
 		http.Error(writer, "asset access denied", http.StatusForbidden)
 		return
 	}
-	if handler.store == nil {
+	if handler.store == nil && handler.remote == nil {
 		http.Error(writer, "asset unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -107,7 +123,18 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 		http.Error(writer, "asset unavailable", http.StatusNotFound)
 		return
 	}
-	asset, err := handler.store.ReadAlgorithmAsset(lookup, row.StorageKey)
+	var asset AlgorithmAsset
+	handled := false
+	if handler.remote != nil {
+		asset, handled, err = handler.remote(lookup, projectID, assetID, version)
+	}
+	if err == nil && !handled {
+		if handler.store == nil {
+			err = errors.New("asset storage unavailable")
+		} else {
+			asset, err = handler.store.ReadAlgorithmAsset(lookup, row.StorageKey)
+		}
+	}
 	if err != nil {
 		if lookup.Err() == context.DeadlineExceeded {
 			http.Error(writer, "asset lookup timed out", http.StatusGatewayTimeout)
@@ -115,6 +142,13 @@ func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request
 		}
 		http.Error(writer, "asset unavailable", http.StatusNotFound)
 		return
+	}
+	if checksum != "" {
+		digest := sha256.Sum256(asset.Body)
+		if hex.EncodeToString(digest[:]) != checksum {
+			http.Error(writer, "asset version content changed", http.StatusConflict)
+			return
+		}
 	}
 	cancel()
 	contentType := row.MimeType.String

@@ -4,15 +4,15 @@ SELECT pg_advisory_xact_lock($1::integer,$2::integer);
 -- name: ReadTaskTriggerVersion :one
 SELECT task.project_id,task.team_id,task.id AS task_id,task.status AS task_status,
  version.id AS task_version_id,version.status AS task_version_status,version.trigger_json,
- version.input_schema_json,version.concurrency_limit
+ version.input_schema_json,version.concurrency_limit,version.dsl_version,task.authorized_by_user_id
 FROM tasks task JOIN task_versions version ON version.id=task.current_published_version_id AND version.project_id=task.project_id
 WHERE task.project_id=$1 AND task.id=$2 FOR UPDATE OF task,version;
 
 -- name: ReadTriggeredRun :one
-SELECT id,status FROM task_runs WHERE project_id=$1 AND task_version_id=$2 AND trigger_key=$3;
+SELECT id,status FROM task_runs WHERE project_id=$1 AND task_id=$2 AND trigger_key=$3 ORDER BY id LIMIT 1;
 
 -- name: CountActiveTriggeredRuns :one
-SELECT count(*) FROM task_runs WHERE project_id=$1 AND task_version_id=$2
+SELECT count(*) FROM task_runs WHERE project_id=$1 AND task_id=$2
 AND status IN ('queued','blocked','ready','dispatching','running','paused','canceling');
 
 -- name: InsertTriggeredRun :one

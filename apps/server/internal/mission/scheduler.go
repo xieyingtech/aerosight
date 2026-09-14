@@ -135,6 +135,9 @@ func Advance(snapshot Snapshot, signal *Signal, now time.Time) (Decision, error)
 		uses = "device.command"
 	}
 	if uses != "device.command" && uses != "device.collect" {
+		if step.Status == StepFailed {
+			return Decision{RunStatus: RunFailed, StepPosition: step.Position, StepStatus: StepFailed, Reason: "task_step_failed"}, nil
+		}
 		if step.Status == StepPending || step.Status == StepPaused {
 			return Decision{RunStatus: RunRunning, StepPosition: step.Position, StepStatus: StepRunning,
 				InvokeStep: &StepInvocation{StepID: step.ID, Key: step.Key, Uses: uses}, Reason: "task_step_dispatched"}, nil
@@ -240,6 +243,22 @@ func Control(snapshot Snapshot, action ControlAction, now time.Time) (Decision, 
 		}
 		return decision, nil
 	case ControlCancel, ControlEmergency:
+		if action == ControlCancel {
+			businessOnly := len(snapshot.Steps) > 0
+			for _, step := range snapshot.Steps {
+				switch step.Uses {
+				case "inspection.observe", "inspection.detect", "algorithm.run", "copilot.run", "issue.create-or-update", "report.generate":
+				default:
+					businessOnly = false
+				}
+			}
+			if businessOnly {
+				if snapshot.Status == RunSucceeded || snapshot.Status == RunFailed || snapshot.Status == RunCanceled {
+					return Decision{}, errors.New("terminal run cannot be canceled")
+				}
+				return Decision{RunStatus: RunCanceled, RevokeOrdinary: true, Reason: "operator_canceled_business_run"}, nil
+			}
+		}
 		priority := 90
 		actionName := "device.stop"
 		if action == ControlEmergency {

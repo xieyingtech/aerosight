@@ -330,6 +330,11 @@ type Querier interface {
 	StopFlightHubLiveSession(ctx context.Context, arg StopFlightHubLiveSessionParams) error
 	StopLiveControlSession(ctx context.Context, arg StopLiveControlSessionParams) error
 	StoreDeviceAdapterEnvelope(ctx context.Context, arg StoreDeviceAdapterEnvelopeParams) error
+	TaskAuthorBindDelegate(ctx context.Context, arg TaskAuthorBindDelegateParams) error
+	TaskAuthorCopy(ctx context.Context, arg TaskAuthorCopyParams) error
+	TaskAuthorCreateTask(ctx context.Context, arg TaskAuthorCreateTaskParams) (int32, error)
+	TaskAuthorSave(ctx context.Context, arg TaskAuthorSaveParams) error
+	TaskAuthorSetState(ctx context.Context, arg TaskAuthorSetStateParams) (int64, error)
 	TaskDraftCopySteps(ctx context.Context, arg TaskDraftCopyStepsParams) error
 	TaskDraftCreate(ctx context.Context, arg TaskDraftCreateParams) (TaskDraftCreateRow, error)
 	TaskDraftDeleteSteps(ctx context.Context, arg TaskDraftDeleteStepsParams) error

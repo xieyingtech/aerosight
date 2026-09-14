@@ -81,6 +81,9 @@ func (processor JobProcessor) Run(ctx context.Context, interval time.Duration) e
 }
 
 func (processor JobProcessor) ProcessNext(ctx context.Context) (bool, error) {
+	if worked, err := processor.ProcessAssessmentNext(ctx); worked || err != nil {
+		return worked, err
+	}
 	tx, err := processor.Database.BeginTx(ctx, nil)
 	if err != nil {
 		return false, err
@@ -90,7 +93,7 @@ func (processor JobProcessor) ProcessNext(ctx context.Context) (bool, error) {
 	err = tx.QueryRowContext(ctx, `select job.id,job.project_id,job.team_id,coalesce(job.issue_id,0),job.tool_name,
 		coalesce(job.trigger_type,''),coalesce(session.task_run_id,0),coalesce((job.args_json->>'taskRunStepId')::bigint,0)
 		from agent_tool_jobs job join agent_sessions session on session.id=job.session_id and session.project_id=job.project_id
-		where job.status='queued' order by job.created_at,job.id for update of job skip locked limit 1`).Scan(
+		where job.status='queued' and job.tool_name<>'inspection_assessment' order by job.created_at,job.id for update of job skip locked limit 1`).Scan(
 		&job.ID, &job.ProjectID, &job.TeamID, &job.IssueID, &job.ToolName, &job.TriggerType, &job.TaskRunID, &job.TaskRunStepID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
@@ -220,15 +223,30 @@ func (processor JobProcessor) loadProvider(ctx context.Context) (providerConfig,
 }
 
 func (processor JobProcessor) complete(ctx context.Context, provider providerConfig, prompt string) (string, error) {
-	body, _ := json.Marshal(map[string]any{"model": provider.ModelID, "messages": []map[string]string{{"role": "user", "content": prompt}}, "temperature": 0.2})
+	return processor.completeMessages(ctx, provider, []map[string]string{{"role": "user", "content": prompt}})
+}
+
+func (processor JobProcessor) completeMessages(ctx context.Context, provider providerConfig, messages []map[string]string, temperatures ...float64) (string, error) {
+	temperature := 0.2
+	if len(temperatures) > 0 {
+		temperature = temperatures[0]
+	}
+	body, _ := json.Marshal(map[string]any{"model": provider.ModelID, "messages": messages, "temperature": temperature})
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(provider.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
 	request.Header.Set("authorization", "Bearer "+provider.APIKey)
 	request.Header.Set("content-type", "application/json")
-	response, err := processor.HTTPClient.Do(request)
+	client := processor.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: 45 * time.Second}
+	}
+	response, err := client.Do(request)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", errors.New("MODEL_REQUEST_TIMEOUT")
+		}
 		return "", errors.New("MODEL_REQUEST_FAILED")
 	}
 	defer response.Body.Close()
@@ -244,6 +262,9 @@ func (processor JobProcessor) complete(ctx context.Context, provider providerCon
 		} `json:"choices"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&decoded); err != nil || len(decoded.Choices) == 0 || strings.TrimSpace(decoded.Choices[0].Message.Content) == "" {
+		if errors.Is(err, context.DeadlineExceeded) {
+			return "", errors.New("MODEL_REQUEST_TIMEOUT")
+		}
 		return "", errors.New("MODEL_RESPONSE_INVALID")
 	}
 	return strings.TrimSpace(decoded.Choices[0].Message.Content), nil
@@ -367,7 +388,7 @@ func evidenceVersionHash(refs []evidenceRef) string {
 
 func failureCodeFor(err error) string {
 	value := err.Error()
-	for _, code := range []string{"UNSUPPORTED_AGENT_JOB", "COPILOT_EVIDENCE_REQUIRED", "AI_PROVIDER_UNAVAILABLE", "AI_PROVIDER_CONFIGURATION_INVALID", "AI_PROVIDER_CREDENTIAL_UNAVAILABLE", "MODEL_REQUEST_FAILED", "MODEL_RESPONSE_INVALID"} {
+	for _, code := range []string{"UNSUPPORTED_AGENT_JOB", "COPILOT_EVIDENCE_REQUIRED", "AI_PROVIDER_UNAVAILABLE", "AI_PROVIDER_CONFIGURATION_INVALID", "AI_PROVIDER_CREDENTIAL_UNAVAILABLE", "MODEL_REQUEST_FAILED", "MODEL_REQUEST_TIMEOUT", "MODEL_RESPONSE_INVALID"} {
 		if value == code {
 			return code
 		}

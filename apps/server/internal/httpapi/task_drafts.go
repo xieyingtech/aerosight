@@ -3,6 +3,7 @@ package httpapi
 import (
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
+	"aerosight/server/internal/taskdefinition"
 	"context"
 	"database/sql"
 	"errors"
@@ -17,6 +18,9 @@ func (s *Server) taskDraft(c *gin.Context) {
 	fail := func(e error) {
 		code := e.Error()
 		status := 400
+		if strings.Contains(code, "REVISION") {
+			status = 409
+		}
 		if strings.Contains(code, "ACCESS") || strings.Contains(code, "PERMISSION") {
 			status = 403
 		}
@@ -56,8 +60,9 @@ func (s *Server) taskDraft(c *gin.Context) {
 		}
 	}
 	var definition map[string]any
+	var sourceFormat, authorSource string
 	if action == "save" {
-		definition, e = parseTaskDefinition(body["definition"])
+		definition, sourceFormat, authorSource, e = parseTaskAuthorInput(body)
 		if e != nil {
 			fail(e)
 			return
@@ -95,35 +100,30 @@ func (s *Server) taskDraft(c *gin.Context) {
 			if len(raw) == 0 {
 				return nil, errors.New("TASK_VERSION_DRAFT_NOT_FOUND")
 			}
+			locked, lockErr := fhFirstRow(raw, nil, "TASK_VERSION_DRAFT_NOT_FOUND")
+			if lockErr != nil {
+				return nil, lockErr
+			}
+			if definition["apiVersion"] == "aerosight/v2" || locked["apiVersion"] == "aerosight/v2" {
+				revision, ok := body["expectedRevision"].(float64)
+				if !ok || revision != float64(fhOptionalNumber(locked, "revision")) {
+					return nil, errors.New("TASK_REVISION_CONFLICT")
+				}
+				if locked["apiVersion"] == "aerosight/v2" && definition["apiVersion"] != "aerosight/v2" {
+					return nil, errors.New("TASK_DSL_DOWNGRADE_UNSUPPORTED")
+				}
+			}
 			if e = q.TaskDraftSave(ctx, sqlcgen.TaskDraftSaveParams{P1: pid, P2: tid, P3: vid, P4: taskJSON(definition), P5: taskJSON(definition["inputSchema"]), P6: taskJSON(definition["trigger"]), P7: int32(fhOptionalNumber(definition, "concurrencyLimit"))}); e != nil {
 				return nil, e
 			}
-			if e = q.TaskDraftDeleteSteps(ctx, sqlcgen.TaskDraftDeleteStepsParams{P1: pid, P2: vid}); e != nil {
+			if e = saveTaskSteps(ctx, q, pid, a.TeamID, vid, definition); e != nil {
 				return nil, e
 			}
-			for i, v := range definition["steps"].([]any) {
-				step := v.(map[string]any)
-				uses := fhString(step["uses"])
-				action := fhString(fhObject(step["with"])["action"])
-				if strings.TrimSpace(action) == "" {
-					action = uses
-				}
-				capability := uses
-				if requires := step["requires"].([]any); len(requires) > 0 {
-					capability = fhString(requires[0])
-				}
-				retry := fhObject(step["retry"])
-				idempotency := "unsafe"
-				if fhOptionalNumber(retry, "maxAttempts") > 1 {
-					idempotency = "safe"
-				}
-				failure := gin.H{"onFailure": step["onFailure"], "maxRetries": fhOptionalNumber(retry, "maxAttempts") - 1, "retryBackoffSeconds": retry["backoffSeconds"], "idempotency": idempotency}
-				e = q.TaskDraftInsertStep(ctx, sqlcgen.TaskDraftInsertStepParams{P1: pid, P2: a.TeamID, P3: vid, P4: int32(i + 1), P5: fhString(step["key"]), P6: fhString(step["name"]), P7: sql.NullString{String: capability, Valid: true}, P8: action, P9: taskJSON(step["with"]), P10: taskJSON(failure), P11: taskJSON(gin.H{"required": uses == "device.collect"}), P12: uses, P13: taskJSON(step["inputSchema"]), P14: taskJSON(step["outputSchema"]), P15: pqtype.NullRawMessage{RawMessage: taskJSON(step["condition"]), Valid: step["condition"] != nil}, P16: taskJSON(step["dependsOn"]), P17: int32(fhOptionalNumber(step, "timeoutSeconds")), P18: taskJSON(retry)})
-				if e != nil {
-					return nil, e
-				}
+			if e = saveTaskAuthor(ctx, q, pid, vid, definition, sourceFormat, authorSource); e != nil {
+				return nil, e
 			}
-			return gin.H{"versionId": vid, "definition": definition, "stepCount": len(definition["steps"].([]any))}, nil
+
+			return gin.H{"versionId": vid, "definition": definition, "stepCount": len(definition["steps"].([]any)), "revision": fhOptionalNumber(locked, "revision") + 1}, nil
 		}
 		raw, e := q.TaskDraftLockVersion(ctx, sqlcgen.TaskDraftLockVersionParams{P1: pid, P2: vid})
 		row, e := fhFirstRow(raw, e, "TASK_VERSION_NOT_FOUND")
@@ -142,6 +142,18 @@ func (s *Server) taskDraft(c *gin.Context) {
 			return nil, e
 		}
 		typed, typedErr := parseTaskDefinition(row["definition"])
+		if fhObject(row["definition"])["apiVersion"] != nil && typedErr != nil {
+			return nil, typedErr
+		}
+		if typedErr == nil && typed["apiVersion"] == "aerosight/v2" {
+			revision, ok := body["expectedRevision"].(float64)
+			if !ok || revision != float64(fhOptionalNumber(row, "revision")) {
+				return nil, errors.New("TASK_REVISION_CONFLICT")
+			}
+			if e = s.validateTaskPublication(ctx, w, uid, pid, typed); e != nil {
+				return nil, e
+			}
+		}
 		if typedErr == nil {
 			defs := typed["steps"].([]any)
 			if len(defs) != len(steps) {
@@ -175,6 +187,11 @@ func (s *Server) taskDraft(c *gin.Context) {
 		}
 		if e = q.TaskDraftUpdateTask(ctx, sqlcgen.TaskDraftUpdateTaskParams{P1: pid, P2: tid, P3: sql.NullInt64{Int64: vid, Valid: true}, P4: name, P5: sql.NullString{String: fhString(description), Valid: description != nil}, P6: trigger}); e != nil {
 			return nil, e
+		}
+		if typedErr == nil && typed["apiVersion"] == "aerosight/v2" {
+			if e = q.TaskAuthorBindDelegate(ctx, sqlcgen.TaskAuthorBindDelegateParams{ProjectID: pid, ID: tid, AuthorizedByUserID: sql.NullInt32{Int32: uid, Valid: true}}); e != nil {
+				return nil, e
+			}
 		}
 		_, e = w.Publish(ctx, database.ProjectEvent{ProjectID: pid, TeamID: a.TeamID, EventID: uuid.NewString(), EventType: "task_version.published", Payload: gin.H{"taskId": tid, "taskVersionId": vid, "version": row["version"]}, NoEnqueue: true})
 		return published, e
@@ -234,9 +251,54 @@ func createTaskDraft(ctx context.Context, q *sqlcgen.Queries, pid, team, tid, ui
 		return nil, e
 	}
 	if current > 0 {
+		if e = q.TaskAuthorCopy(ctx, sqlcgen.TaskAuthorCopyParams{ProjectID: pid, ID: draft.ID, ID_2: current}); e != nil {
+			return nil, e
+		}
 		if e = q.TaskDraftCopySteps(ctx, sqlcgen.TaskDraftCopyStepsParams{P1: pid, P2: current, P3: draft.ID}); e != nil {
 			return nil, e
 		}
 	}
 	return gin.H{"draft": draft, "replayed": false}, nil
+}
+
+func saveTaskSteps(ctx context.Context, q *sqlcgen.Queries, pid, team int32, vid int64, definition map[string]any) error {
+	var e error
+	if e = q.TaskDraftDeleteSteps(ctx, sqlcgen.TaskDraftDeleteStepsParams{P1: pid, P2: vid}); e != nil {
+		return e
+	}
+	for i, v := range definition["steps"].([]any) {
+		step := v.(map[string]any)
+		uses := fhString(step["uses"])
+		action := fhString(fhObject(step["with"])["action"])
+		if strings.TrimSpace(action) == "" {
+			action = uses
+		}
+		capability := uses
+		if requires := step["requires"].([]any); len(requires) > 0 {
+			capability = fhString(requires[0])
+		}
+		retry := fhObject(step["retry"])
+		idempotency := "unsafe"
+		if fhOptionalNumber(retry, "maxAttempts") > 1 {
+			idempotency = "safe"
+		}
+		failure := gin.H{"onFailure": step["onFailure"], "maxRetries": fhOptionalNumber(retry, "maxAttempts") - 1, "retryBackoffSeconds": retry["backoffSeconds"], "idempotency": idempotency}
+		e = q.TaskDraftInsertStep(ctx, sqlcgen.TaskDraftInsertStepParams{P1: pid, P2: team, P3: vid, P4: int32(i + 1), P5: fhString(step["key"]), P6: fhString(step["name"]), P7: sql.NullString{String: capability, Valid: true}, P8: action, P9: taskJSON(step["with"]), P10: taskJSON(failure), P11: taskJSON(gin.H{"required": uses == "device.collect"}), P12: uses, P13: taskJSON(step["inputSchema"]), P14: taskJSON(step["outputSchema"]), P15: pqtype.NullRawMessage{RawMessage: taskJSON(step["condition"]), Valid: step["condition"] != nil}, P16: taskJSON(step["dependsOn"]), P17: int32(fhOptionalNumber(step, "timeoutSeconds")), P18: taskJSON(retry)})
+		if e != nil {
+			return e
+		}
+	}
+	return nil
+}
+
+func saveTaskAuthor(ctx context.Context, q *sqlcgen.Queries, pid int32, vid int64, definition map[string]any, format, source string) error {
+	hash, err := taskdefinition.Hash(definition)
+	if err != nil {
+		return err
+	}
+	dsl := "aerosight/v1"
+	if definition["apiVersion"] == "aerosight/v2" {
+		dsl = "aerosight/v2"
+	}
+	return q.TaskAuthorSave(ctx, sqlcgen.TaskAuthorSaveParams{ProjectID: pid, ID: vid, AuthorFormat: format, AuthorSource: sql.NullString{String: source, Valid: true}, DefinitionHash: sql.NullString{String: hash, Valid: true}, DslVersion: dsl})
 }

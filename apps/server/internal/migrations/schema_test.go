@@ -29,6 +29,9 @@ LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
 UNION ALL
 SELECT 'constraint/'||c.relname||'/'||k.conname,pg_get_constraintdef(k.oid,true)
 FROM app_relations c JOIN pg_constraint k ON k.conrelid=c.oid
+-- PostgreSQL 18 catalogs NOT NULL constraints with inherited/generated names.
+-- Column attnotnull above already compares their actual behavior.
+WHERE k.contype <> 'n'
 UNION ALL
 SELECT 'index/'||c.relname||'/'||i.relname,pg_get_indexdef(i.oid)
 FROM app_relations c JOIN pg_index x ON x.indrelid=c.oid JOIN pg_class i ON i.oid=x.indexrelid

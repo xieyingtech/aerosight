@@ -36,6 +36,26 @@ func NewFlightAssetAccessService(database *sql.DB, client FlightAssetURLClient, 
 }
 
 func (service *FlightAssetAccessService) RefreshDownload(ctx context.Context, instance connector.Instance, assetID int) (TemporaryDownload, error) {
+	return service.refreshDownload(ctx, instance, assetID, "", "")
+}
+
+// RefreshInspectionDownload additionally verifies the encrypted media locator,
+// so a stale catalogue association cannot read another flight's media.
+func (service *FlightAssetAccessService) RefreshInspectionDownload(ctx context.Context, instance connector.Instance, assetID int, flightID string) (TemporaryDownload, error) {
+	if strings.TrimSpace(flightID) == "" {
+		return TemporaryDownload{}, connector.ErrRemoteResourceUnavailable
+	}
+	return service.refreshDownload(ctx, instance, assetID, flightID, "")
+}
+
+func (service *FlightAssetAccessService) RefreshInspectionVersionDownload(ctx context.Context, instance connector.Instance, assetID int, flightID, version string) (TemporaryDownload, error) {
+	if strings.TrimSpace(flightID) == "" || version == "" {
+		return TemporaryDownload{}, connector.ErrRemoteResourceUnavailable
+	}
+	return service.refreshDownload(ctx, instance, assetID, flightID, version)
+}
+
+func (service *FlightAssetAccessService) refreshDownload(ctx context.Context, instance connector.Instance, assetID int, expectedFlight, expectedVersion string) (TemporaryDownload, error) {
 	if service == nil || service.db == nil || instance.ID <= 0 || instance.ProjectID <= 0 || assetID <= 0 {
 		return TemporaryDownload{}, connector.ErrRemoteResourceUnavailable
 	}
@@ -66,6 +86,10 @@ func (service *FlightAssetAccessService) RefreshDownload(ctx context.Context, in
 		credentials.AAD("flighthub-asset-reference", assetID, instance.ProjectID), &locator); err != nil {
 		return TemporaryDownload{}, errors.New("FlightHub asset reference is unavailable")
 	}
+	if expectedFlight != "" && (accessKind != "flight-media" || locator["taskUUID"] != expectedFlight) {
+		return TemporaryDownload{}, connector.ErrRemoteResourceUnavailable
+	}
+
 	scope, err := parseScope(instance.DiscoveryScope)
 	if err != nil {
 		return TemporaryDownload{}, err
@@ -80,6 +104,15 @@ func (service *FlightAssetAccessService) RefreshDownload(ctx context.Context, in
 		case "flight-media":
 			if locator["taskUUID"] == "" || locator["mediaUUID"] == "" {
 				return TemporaryDownload{}, errors.New("FlightHub asset reference is unavailable")
+			}
+			if expectedVersion != "" {
+				client, ok := service.client.(interface {
+					RefreshInspectionMediaURL(context.Context, string, string, string, string, string) (TemporaryDownload, error)
+				})
+				if !ok {
+					return TemporaryDownload{}, errors.New("INSPECTION_MEDIA_VERSION_CHECK_UNAVAILABLE")
+				}
+				return client.RefreshInspectionMediaURL(ctx, token, scope.ProjectUUID, locator["taskUUID"], locator["mediaUUID"], expectedVersion)
 			}
 			return service.client.RefreshFlightTaskMediaURL(ctx, token, scope.ProjectUUID, locator["taskUUID"], locator["mediaUUID"])
 		case "flight-record":

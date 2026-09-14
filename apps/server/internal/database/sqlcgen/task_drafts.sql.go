@@ -13,6 +13,121 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const taskAuthorBindDelegate = `-- name: TaskAuthorBindDelegate :exec
+UPDATE tasks SET authorized_by_user_id=$3 WHERE project_id=$1 AND id=$2
+`
+
+type TaskAuthorBindDelegateParams struct {
+	ProjectID          int32         `json:"project_id"`
+	ID                 int32         `json:"id"`
+	AuthorizedByUserID sql.NullInt32 `json:"authorized_by_user_id"`
+}
+
+func (q *Queries) TaskAuthorBindDelegate(ctx context.Context, arg TaskAuthorBindDelegateParams) error {
+	_, err := q.db.ExecContext(ctx, taskAuthorBindDelegate, arg.ProjectID, arg.ID, arg.AuthorizedByUserID)
+	return err
+}
+
+const taskAuthorCopy = `-- name: TaskAuthorCopy :exec
+UPDATE task_versions destination SET author_format=source.author_format,author_source=source.author_source,
+ definition_hash=source.definition_hash,dsl_version=source.dsl_version
+FROM task_versions source WHERE destination.project_id=$1 AND destination.id=$2
+ AND source.project_id=$1 AND source.id=$3 AND destination.status='draft'
+`
+
+type TaskAuthorCopyParams struct {
+	ProjectID int32 `json:"project_id"`
+	ID        int64 `json:"id"`
+	ID_2      int64 `json:"id_2"`
+}
+
+func (q *Queries) TaskAuthorCopy(ctx context.Context, arg TaskAuthorCopyParams) error {
+	_, err := q.db.ExecContext(ctx, taskAuthorCopy, arg.ProjectID, arg.ID, arg.ID_2)
+	return err
+}
+
+const taskAuthorCreateTask = `-- name: TaskAuthorCreateTask :one
+INSERT INTO tasks(project_id,team_id,name,description,trigger_type,status,script,created_by_user_id)
+VALUES($1,$2,$3,$4,$5,'disabled',$7,$6) RETURNING id
+`
+
+type TaskAuthorCreateTaskParams struct {
+	ProjectID       int32          `json:"project_id"`
+	TeamID          int32          `json:"team_id"`
+	Name            string         `json:"name"`
+	Description     sql.NullString `json:"description"`
+	TriggerType     string         `json:"trigger_type"`
+	CreatedByUserID sql.NullInt32  `json:"created_by_user_id"`
+	Script          string         `json:"script"`
+}
+
+func (q *Queries) TaskAuthorCreateTask(ctx context.Context, arg TaskAuthorCreateTaskParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, taskAuthorCreateTask,
+		arg.ProjectID,
+		arg.TeamID,
+		arg.Name,
+		arg.Description,
+		arg.TriggerType,
+		arg.CreatedByUserID,
+		arg.Script,
+	)
+	var id int32
+	err := row.Scan(&id)
+	return id, err
+}
+
+const taskAuthorSave = `-- name: TaskAuthorSave :exec
+UPDATE task_versions SET author_format=$3,author_source=$4,definition_hash=$5,dsl_version=$6,
+ author_revision=author_revision+1,script=CASE WHEN $6='aerosight/v2' THEN 'typed-task-v2' ELSE 'typed-task-v1' END
+WHERE project_id=$1 AND id=$2 AND status='draft'
+`
+
+type TaskAuthorSaveParams struct {
+	ProjectID      int32          `json:"project_id"`
+	ID             int64          `json:"id"`
+	AuthorFormat   string         `json:"author_format"`
+	AuthorSource   sql.NullString `json:"author_source"`
+	DefinitionHash sql.NullString `json:"definition_hash"`
+	DslVersion     string         `json:"dsl_version"`
+}
+
+func (q *Queries) TaskAuthorSave(ctx context.Context, arg TaskAuthorSaveParams) error {
+	_, err := q.db.ExecContext(ctx, taskAuthorSave,
+		arg.ProjectID,
+		arg.ID,
+		arg.AuthorFormat,
+		arg.AuthorSource,
+		arg.DefinitionHash,
+		arg.DslVersion,
+	)
+	return err
+}
+
+const taskAuthorSetState = `-- name: TaskAuthorSetState :execrows
+UPDATE tasks SET status=$3,authorized_by_user_id=CASE WHEN $3='active' THEN $4 ELSE authorized_by_user_id END,updated_at=now()
+WHERE project_id=$1 AND id=$2
+`
+
+type TaskAuthorSetStateParams struct {
+	ProjectID          int32         `json:"project_id"`
+	ID                 int32         `json:"id"`
+	Status             string        `json:"status"`
+	AuthorizedByUserID sql.NullInt32 `json:"authorized_by_user_id"`
+}
+
+func (q *Queries) TaskAuthorSetState(ctx context.Context, arg TaskAuthorSetStateParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, taskAuthorSetState,
+		arg.ProjectID,
+		arg.ID,
+		arg.Status,
+		arg.AuthorizedByUserID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const taskDraftCopySteps = `-- name: TaskDraftCopySteps :exec
 insert into task_steps (
              project_id, team_id, task_version_id, position, step_key, name, capability_code,
@@ -117,7 +232,7 @@ const taskDraftExisting = `-- name: TaskDraftExisting :many
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = $1 and task_id = $2 and status = 'draft'
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = $1 and task_id = $2 and status = 'draft'
 ) r
 `
 
@@ -206,7 +321,7 @@ const taskDraftList = `-- name: TaskDraftList :many
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = $1 and task_id = $2 order by version desc
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = $1 and task_id = $2 order by version desc
 ) r
 `
 
@@ -240,7 +355,7 @@ func (q *Queries) TaskDraftList(ctx context.Context, arg TaskDraftListParams) ([
 
 const taskDraftLockDraft = `-- name: TaskDraftLockDraft :many
 SELECT to_jsonb(r) FROM (
-select id from task_versions where project_id=$1 and task_id=$2 and id=$3 and status='draft' for update
+select id,author_revision as revision,dsl_version as "apiVersion" from task_versions where project_id=$1 and task_id=$2 and id=$3 and status='draft' for update
 ) r
 `
 
@@ -277,7 +392,7 @@ const taskDraftLockVersion = `-- name: TaskDraftLockVersion :many
 SELECT to_jsonb(r) FROM (
 select id, project_id as "projectId", task_id as "taskId", version, status,
   definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-  concurrency_limit as "concurrencyLimit" from task_versions where project_id = $1 and id = $2 for update
+  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = $1 and id = $2 for update
 ) r
 `
 
@@ -395,7 +510,7 @@ func (q *Queries) TaskDraftSave(ctx context.Context, arg TaskDraftSaveParams) er
 const taskDraftSource = `-- name: TaskDraftSource :many
 SELECT to_jsonb(r) FROM (
 select definition_json as definition, script, input_schema_json as "inputSchema", trigger_json as trigger,
-                  concurrency_limit as "concurrencyLimit" from task_versions where project_id = $1 and id = $2
+                  concurrency_limit as "concurrencyLimit", author_revision as "revision", author_format as "sourceFormat", author_source as source, dsl_version as "apiVersion", definition_hash as "definitionHash" from task_versions where project_id = $1 and id = $2
 ) r
 `
 

@@ -7,6 +7,8 @@ bin/
 *.exe
 *.test
 coverage.out
+__pycache__/
+*.pyc
 apps/server/internal/migrations/sql/
 apps/server/internal/webassets/dist/
 

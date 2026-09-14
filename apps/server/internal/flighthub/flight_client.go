@@ -101,9 +101,37 @@ type DefaultFlightTaskName struct {
 }
 
 type FlightTaskFolderInfo struct {
+	// Missing counters are not zero: only explicitly supplied counters can prove completeness.
+	CountsKnown       bool  `json:"-"`
 	FolderID          int64 `json:"folder_id"`
 	ExpectedFileCount int   `json:"expected_file_count"`
 	UploadedFileCount int   `json:"uploaded_file_count"`
+}
+
+func (folder *FlightTaskFolderInfo) UnmarshalJSON(data []byte) error {
+	var value struct {
+		FolderID int64 `json:"folder_id"`
+		Expected *int  `json:"expected_file_count"`
+		Uploaded *int  `json:"uploaded_file_count"`
+	}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*folder = FlightTaskFolderInfo{FolderID: value.FolderID}
+	if value.Expected != nil {
+		if *value.Expected < 0 {
+			return schemaError()
+		}
+		folder.ExpectedFileCount = *value.Expected
+	}
+	if value.Uploaded != nil {
+		if *value.Uploaded < 0 {
+			return schemaError()
+		}
+		folder.UploadedFileCount = *value.Uploaded
+	}
+	folder.CountsKnown = value.Expected != nil && value.Uploaded != nil
+	return nil
 }
 
 type FlightTask struct {
@@ -1262,7 +1290,18 @@ func (client *Client) ListFlightAlerts(ctx context.Context, token, projectUUID s
 		return FlightAlertPage{}, err
 	}
 	var result FlightAlertPage
-	if err := json.Unmarshal(payload.Data, &result); err != nil || result.Data == nil || result.Page != page || result.PageSize != pageSize ||
+	if err := json.Unmarshal(payload.Data, &result); err != nil {
+		return FlightAlertPage{}, schemaError()
+	}
+	// FlightHub returns an explicit null collection for an empty alert catalog.
+	// Missing fields or nonzero counters cannot establish an empty result.
+	if result.Data == nil {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(payload.Data, &fields) == nil && strings.TrimSpace(string(fields["data"])) == "null" && strings.TrimSpace(string(fields["total"])) == "0" && strings.TrimSpace(string(fields["page_count"])) == "0" {
+			result.Data = []FlightAlertSummary{}
+		}
+	}
+	if result.Data == nil || result.Page != page || result.PageSize != pageSize ||
 		!validAlertPagination(result.Page, result.PageSize, result.Total, result.PageCount, len(result.Data)) {
 		return FlightAlertPage{}, schemaError()
 	}

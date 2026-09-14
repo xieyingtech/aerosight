@@ -17,6 +17,7 @@ import (
 
 func (s *Server) AttachMediaStorage(root string) { s.mediaStorageRoot = root }
 func (s *Server) mediaAccessRoutes() {
+	s.router.POST("/api/projects/:id/assets/import", s.requireUser, s.importImageAsset)
 	group := s.router.Group("/api/projects/:id/assets/:assetId", s.requireUser)
 	group.GET("/access", s.timeout, s.issueMediaAccess)
 	group.GET("/content", s.readMediaContent)
