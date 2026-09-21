@@ -149,12 +149,19 @@ func chatToolEvidence(name string, result gin.H) gin.H {
 	return gin.H{"name": name, "status": "succeeded", "summary": summary, "evidenceRefs": refs}
 }
 
-func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, requestID string) (gin.H, error) {
+func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, requestID string, listeners ...func(string, gin.H)) (gin.H, error) {
+	var emit func(string, gin.H)
+	if len(listeners) > 0 {
+		emit = listeners[0]
+	}
 	if err := s.checkChatAccess(ctx, uid, pid, sid); err != nil {
 		return nil, err
 	}
 	if _, err := s.appendAgentMessage(ctx, uid, pid, sid, "user", content, nil, requestID); err != nil {
 		return nil, err
+	}
+	if emit != nil {
+		emit("status", gin.H{"message": "正在分析问题，准备查询项目数据…"})
 	}
 	history, err := s.queries.RecentChatHistory(ctx, sqlcgen.RecentChatHistoryParams{ID: sid, ProjectID: pid, StartedByUserID: sql.NullInt32{Int32: uid, Valid: true}})
 	if err != nil {
@@ -167,15 +174,27 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 	defer cleanup()
 	input := []responses.ResponseInputItemUnionParam{}
 	for _, message := range history {
+		if message.Content == "" {
+			continue
+		}
 		input = append(input, responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{Role: responses.EasyInputMessageRole(message.Role), Content: responses.EasyInputMessageContentUnionParam{OfString: openai.String(message.Content)}}})
 	}
 	calls := []gin.H{}
 	text := ""
+	var saved gin.H
 	for step := 0; step < 8; step++ {
 		if err = s.checkChatAccess(ctx, uid, pid, sid); err != nil {
 			return nil, err
 		}
-		response, e := sdk.Responses.New(ctx, responses.ResponseNewParams{Model: model, Instructions: openai.String(chatInstructions), Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input}, Tools: chatTools(), Store: openai.Bool(false), Include: []responses.ResponseIncludable{"reasoning.encrypted_content"}})
+		params := responses.ResponseNewParams{Model: model, Instructions: openai.String(chatInstructions), Input: responses.ResponseNewParamsInputUnion{OfInputItemList: input}, Tools: chatTools(), Store: openai.Bool(false), Include: []responses.ResponseIncludable{"reasoning.encrypted_content"}}
+		var response *responses.Response
+		var e error
+		if emit == nil {
+			response, e = sdk.Responses.New(ctx, params)
+		} else {
+			emit("step", gin.H{"step": step})
+			response, e = streamChatResponse(ctx, sdk, params, func(delta string) { emit("text", gin.H{"delta": delta}) })
+		}
 		if e != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -190,6 +209,7 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 		}
 		text = response.OutputText()
 		toolCount := 0
+		stepCalls := []gin.H{}
 		// Preserve message phases and encrypted reasoning when replaying stateless
 		// Responses context. Hosted tools are not part of this application's toolset.
 		for _, item := range response.Output {
@@ -219,8 +239,16 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 			if err = s.checkChatAccess(ctx, uid, pid, sid); err != nil {
 				return nil, err
 			}
+			if emit != nil {
+				emit("tool", gin.H{"name": call.Name, "status": "running", "id": call.CallID})
+			}
 			result, e := s.executeChatReadTool(ctx, uid, pid, call.Name, json.RawMessage(call.Arguments))
 			if e != nil {
+				if emit != nil {
+					failed := gin.H{"name": call.Name, "status": "failed", "summary": "查询未完成"}
+					emit("tool", gin.H{"id": call.CallID, "name": call.Name, "status": "failed", "summary": "查询未完成"})
+					_, _ = s.appendAgentMessage(ctx, uid, pid, sid, "assistant", text, append(stepCalls, failed), requestID)
+				}
 				return nil, e
 			}
 			raw, e := json.Marshal(result)
@@ -228,11 +256,36 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 				return nil, e
 			}
 			input = append(input, responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{CallID: openai.String(call.CallID), Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: openai.String(string(raw))}}})
-			calls = append(calls, chatToolEvidence(call.Name, result))
+			evidence := chatToolEvidence(call.Name, result)
+			calls = append(calls, evidence)
+			stepCalls = append(stepCalls, evidence)
+			if emit != nil {
+				evidence["id"] = call.CallID
+				emit("tool", evidence)
+			}
+		}
+		if emit != nil && (text != "" || len(stepCalls) > 0) {
+			saved, err = s.appendAgentMessage(ctx, uid, pid, sid, "assistant", text, stepCalls, requestID)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if emit != nil && toolCount > 0 {
+			emit("status", gin.H{"message": "正在结合查询结果继续分析…"})
 		}
 		if toolCount == 0 {
 			break
 		}
+		if emit != nil && step == 7 {
+			return nil, errors.New("AGENT_TOOL_STEP_LIMIT")
+		}
+	}
+	if emit != nil {
+		if saved == nil || text == "" {
+			return nil, errors.New("AI_UPSTREAM_RESPONSE_INVALID")
+		}
+		saved["content"], saved["modelId"] = text, "openai:"+model
+		return saved, nil
 	}
 	stored := text
 	if stored == "" {
@@ -261,6 +314,10 @@ func (s *Server) chatTurn(c *gin.Context) {
 	content, ok := body["content"].(string)
 	if !ok || strings.TrimSpace(content) == "" {
 		s.agentSessionFailure(c, errors.New("AGENT_MESSAGE_INVALID"))
+		return
+	}
+	if strings.Contains(c.GetHeader("Accept"), "application/x-ndjson") {
+		s.streamChatTurn(c, pid, int32(sid), content)
 		return
 	}
 	result, err := s.runChatTurn(c.Request.Context(), currentUser(c).ID, pid, int32(sid), content, c.GetHeader("X-Request-ID"))
