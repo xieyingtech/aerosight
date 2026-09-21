@@ -27,7 +27,7 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 	bad := errors.New("AI_PROVIDER_INPUT_INVALID")
 	for k, v := range raw {
 		switch k {
-		case "name", "providerType", "baseUrl", "modelId", "enabled", "isDefault":
+		case "name", "providerType", "baseUrl", "modelId", "enabled", "isDefault", "realtimeProtocol", "realtimeModelId":
 			out.Audit[k] = v
 		case "apiKey":
 		default:
@@ -47,6 +47,30 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 		*f.dest = value
 		out.Audit[f.key] = value
 	}
+	out.Params.RealtimeProtocol = "disabled"
+	if value, present := raw["realtimeProtocol"]; present {
+		protocol, ok := value.(string)
+		if !ok || (protocol != "disabled" && protocol != "stepfun") {
+			return out, bad
+		}
+		out.Params.RealtimeProtocol = protocol
+	}
+	if value, present := raw["realtimeModelId"]; present {
+		model, ok := value.(string)
+		if !ok {
+			return out, bad
+		}
+		out.Params.RealtimeModelID = strings.TrimSpace(model)
+	}
+	if out.Params.RealtimeProtocol == "disabled" {
+		if out.Params.RealtimeModelID != "" {
+			return out, bad
+		}
+	} else if utf16Length(out.Params.RealtimeModelID) < 1 || utf16Length(out.Params.RealtimeModelID) > 255 {
+		return out, bad
+	}
+	out.Audit["realtimeProtocol"] = out.Params.RealtimeProtocol
+	out.Audit["realtimeModelId"] = out.Params.RealtimeModelID
 	if raw["providerType"] != "openai" {
 		return out, bad
 	}
@@ -62,6 +86,9 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 			}
 			out.Params.BaseUrl = sql.NullString{String: text, Valid: true}
 		}
+	}
+	if out.Params.RealtimeProtocol != "disabled" && !out.Params.BaseUrl.Valid {
+		return out, bad
 	}
 	if v, present := raw["apiKey"]; present {
 		text, ok := v.(string)
@@ -193,7 +220,7 @@ func (s *Server) saveAIProvider(c *gin.Context) {
 		if creating {
 			id, err = w.Queries.CreateAIProvider(ctx, p)
 		} else {
-			err = w.Queries.UpdateAIProvider(ctx, sqlcgen.UpdateAIProviderParams{ID: id, Name: p.Name, BaseUrl: p.BaseUrl, ModelID: p.ModelID, Enabled: p.Enabled, IsDefault: p.IsDefault, UpdatedByUserID: uid})
+			err = w.Queries.UpdateAIProvider(ctx, sqlcgen.UpdateAIProviderParams{ID: id, Name: p.Name, BaseUrl: p.BaseUrl, ModelID: p.ModelID, RealtimeProtocol: p.RealtimeProtocol, RealtimeModelID: p.RealtimeModelID, Enabled: p.Enabled, IsDefault: p.IsDefault, UpdatedByUserID: uid})
 		}
 		if err != nil {
 			return nil, err

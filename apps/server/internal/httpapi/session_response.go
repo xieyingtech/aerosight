@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"net"
 	"net/http"
 )
 
@@ -28,6 +30,13 @@ func (w *sessionFailureWriter) Write(body []byte) (int, error) {
 }
 
 func (w *sessionFailureWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w *sessionFailureWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if w.failed {
+		return nil, nil, errors.New("SESSION_FAILED")
+	}
+	return http.NewResponseController(w.ResponseWriter).Hijack()
+}
 
 func sessionResponseBoundary(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

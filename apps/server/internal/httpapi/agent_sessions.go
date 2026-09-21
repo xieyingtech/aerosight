@@ -31,6 +31,7 @@ func (s *Server) agentSessionRoutes() {
 	g.GET("", s.listAgentSessions)
 	g.POST("", s.createAgentSession)
 	s.router.POST("/api/projects/:id/agent-sessions/:sessionId/messages", s.requireUser, s.chatTimeout, s.chatTurn)
+	s.router.GET("/api/projects/:id/agent-sessions/:sessionId/realtime", s.requireUser, s.realtimeChat)
 }
 
 func (s *Server) listAgentSessions(c *gin.Context) {

@@ -7,7 +7,7 @@ import type { AIProviderView } from "@/lib/web-api-types";
 
 export default function AdminAIProvidersPage() {
   const state = useAPI<AIProviderView[]>("/api/admin/ai-providers");
-  return <APIStateView state={state}>{(providers) => <Page title="AI Provider" description="平台智能体和 @copilot 使用唯一启用的默认模型配置；API Key 加密保存且不会回显">
+  return <APIStateView state={state}>{(providers) => <Page title="AI Provider" description="智能体使用启用的默认 Provider；文字与实时语音模型分别配置，API Key 加密保存且不会回显">
     <div className="space-y-6">
       <section className="space-y-3"><h2 className="text-lg font-semibold">新增配置</h2><AIProviderForm onChanged={state.reload} /></section>
       <section className="space-y-3"><h2 className="text-lg font-semibold">现有配置</h2>

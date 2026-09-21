@@ -108,6 +108,8 @@ type AiProvider struct {
 	ProviderType           string          `json:"provider_type"`
 	BaseUrl                sql.NullString  `json:"base_url"`
 	ModelID                string          `json:"model_id"`
+	RealtimeProtocol       string          `json:"realtime_protocol"`
+	RealtimeModelID        string          `json:"realtime_model_id"`
 	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
 	Enabled                bool            `json:"enabled"`
 	IsDefault              bool            `json:"is_default"`

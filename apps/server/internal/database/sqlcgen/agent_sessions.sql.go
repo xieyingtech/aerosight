@@ -231,3 +231,27 @@ func (q *Queries) RecentChatHistory(ctx context.Context, arg RecentChatHistoryPa
 	}
 	return items, nil
 }
+
+const updateRealtimeChatMessage = `-- name: UpdateRealtimeChatMessage :execrows
+UPDATE agent_messages SET content=$3,tool_calls_json=$4 WHERE id=$1 AND session_id=$2
+`
+
+type UpdateRealtimeChatMessageParams struct {
+	ID            int32           `json:"id"`
+	SessionID     int32           `json:"session_id"`
+	Content       string          `json:"content"`
+	ToolCallsJson json.RawMessage `json:"tool_calls_json"`
+}
+
+func (q *Queries) UpdateRealtimeChatMessage(ctx context.Context, arg UpdateRealtimeChatMessageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateRealtimeChatMessage,
+		arg.ID,
+		arg.SessionID,
+		arg.Content,
+		arg.ToolCallsJson,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

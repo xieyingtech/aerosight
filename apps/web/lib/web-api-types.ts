@@ -5,6 +5,7 @@ import type { PerceptionEventAction } from "./perception-event-actions-core";
 
 
 export type AIProviderView = {
+  realtimeProtocol: "disabled" | "stepfun"; realtimeModelId: string;
   id: string; name: string; providerType: "openai"; baseUrl: string | null; modelId: string;
   enabled: boolean; isDefault: boolean; status: string; health: Record<string, unknown>;
   lastTestedAt: string | null; updatedAt: string;

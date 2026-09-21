@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Bot, Check, History, Loader2, MessageSquare, Plus, Sparkles } from "lucide-react";
+import { ArrowUp, AudioLines, Bot, Check, History, Loader2, MessageSquare, PhoneOff, Plus, Sparkles } from "lucide-react";
 import { apiJSON, apiFetch, APIError } from "@/lib/api-client";
 import { readChatStream } from "@/lib/agent-chat-stream";
+import { AgentRealtimeCall, mergeRealtimeMessage, realtimeErrorMessage } from "@/lib/agent-realtime";
 import { Button } from "@/components/ui/button";
 import { AgentQueryEvidence } from "@/components/agent-query-evidence";
 import { ChatMarkdown } from "@/components/chat-markdown";
@@ -38,14 +39,21 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const [pending, setPending] = useState<string | null>(null);
   const [liveSteps, setLiveSteps] = useState<Array<{ content: string; tools: Array<Record<string, unknown>> }>>([]);
   const [progress, setProgress] = useState("");
+  const [voice, setVoice] = useState<"off" | "connecting" | "connected">("off");
+  const [voiceStatus, setVoiceStatus] = useState("");
+  const voiceCall = useRef<AgentRealtimeCall | null>(null);
+  const mounted = useRef(true);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; voiceCall.current?.dispose(); }; }, []);
   const [historyOpen, setHistoryOpen] = useState(false);
   const lock = useRef(false);
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const session = sessions.find(item => item.id === activeId);
-  const messages = session?.messages ?? [];
+  const messages = (session?.messages ?? []).filter(message => message.content || (Array.isArray(message.toolCalls) && message.toolCalls.length));
+  const occupied = busy || voice !== "off";
+  const voiceButton = !draft.trim() && !messages.length;
   // One user message starts a turn; its assistant steps share one identity.
   const messageGroups: Array<AgentSessionView["messages"]> = [];
   for (const message of messages) {
@@ -58,11 +66,51 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   useEffect(() => {
     if (messages.length || pending) end.current?.scrollIntoView({ block: "nearest", behavior: busy ? "instant" : "smooth" });
     else end.current?.parentElement?.scrollTo({ top: 0 });
-  }, [activeId, messages.length, pending, busy, liveSteps]);
+  }, [activeId, messages.length, session?.messages, pending, busy, liveSteps]);
+
+  async function startVoice() {
+    if (lock.current || draft.trim() || messages.length) return;
+    lock.current = true;
+    setVoice("connecting"); setVoiceStatus("正在连接实时语音…"); setError(null);
+    let id = activeId;
+    const call = new AgentRealtimeCall({
+      message: message => {
+        if (!mounted.current) return;
+        setSessions(previous => previous.map(item => item.id === id ? { ...item, messages: mergeRealtimeMessage(item.messages, message) } : item));
+      },
+      status: status => { if (mounted.current) setVoiceStatus(status); },
+      ready: () => { if (mounted.current) setVoice("connected"); },
+      ended: failure => {
+        if (!mounted.current) return;
+        voiceCall.current = null; lock.current = false; setVoice("off");
+        setVoiceStatus("通话已结束，可以继续打字交流。");
+        if (failure) setError(realtimeErrorMessage(failure));
+        requestAnimationFrame(() => input.current?.focus());
+      },
+    });
+    voiceCall.current = call;
+    try {
+      await call.prepare();
+      if (!mounted.current || voiceCall.current !== call) { call.dispose(); return; }
+      if (id === null) {
+        const created = await apiJSON<{ id: number }>(base, { method: "POST" });
+        id = created.id;
+        if (!mounted.current || voiceCall.current !== call) { call.dispose(); return; }
+        setSessions(previous => [{ id: created.id, status: "open", summary: null, createdAt: new Date().toISOString(), messages: [] }, ...previous]);
+        setActiveId(id);
+      }
+      call.connect(`${base}/${id}/realtime`);
+    } catch (failure) {
+      call.dispose();
+      if (!mounted.current || voiceCall.current !== call) return;
+      voiceCall.current = null; lock.current = false; setVoice("off"); setVoiceStatus("");
+      setError(realtimeErrorMessage(failure));
+    }
+  }
 
   function select(id: number | null) {
     if (lock.current) return;
-    setActiveId(id); setDraft(""); setError(null); setHistoryOpen(false);
+    setActiveId(id); setDraft(""); setError(null); setVoiceStatus(""); setHistoryOpen(false);
     input.current?.focus();
   }
 
@@ -130,9 +178,9 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   return <section aria-label="项目智能体聊天" className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
     <h1 className="sr-only">项目智能体</h1>
     <SiteHeaderActions>
-      <Button size="icon" variant="ghost" title="新对话" aria-label="新对话" onClick={() => select(null)} disabled={busy}><Plus className="size-5" /></Button>
+      <Button size="icon" variant="ghost" title="新对话" aria-label="新对话" onClick={() => select(null)} disabled={occupied}><Plus className="size-5" /></Button>
       <DropdownMenu open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" title="历史会话" aria-label="历史会话" disabled={busy}><History className="size-5" /></Button></DropdownMenuTrigger>
+        <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" title="历史会话" aria-label="历史会话" disabled={occupied}><History className="size-5" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]" onCloseAutoFocus={event => { event.preventDefault(); input.current?.focus(); }}>
           <DropdownMenuLabel>历史会话</DropdownMenuLabel>
           <DropdownMenuSeparator />
@@ -150,7 +198,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
       </DropdownMenu>
     </SiteHeaderActions>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8" role="log" aria-label="对话消息" aria-live="polite">
-        {!messages.length && !pending ? <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center py-1">
+        {!messages.length && !pending && voice === "off" ? <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center py-1">
           <div className="mb-3 flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></div>
           <p className="mb-2 text-2xl font-semibold tracking-tight">今天想了解项目的什么？</p>
           <p className="max-w-lg text-sm leading-6 text-muted-foreground">和我聊聊设备、任务或案件。我会查询当前项目的数据，帮你梳理情况，并提供可追溯的依据。</p>
@@ -186,9 +234,17 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
           {error && <p role="alert" className="mb-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
           {session && session.status !== "open" ? <p className="mb-3 text-sm text-muted-foreground">此对话已结束，可以新建对话继续交流。</p> : null}
           <form onSubmit={event => { event.preventDefault(); void send(); }} className="rounded-2xl border bg-muted/15 p-3 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
-            <textarea ref={input} aria-label="发送给项目智能体" placeholder="询问项目情况，或继续追问…" value={draft} onChange={event => setDraft(event.target.value)} disabled={busy || Boolean(session && session.status !== "open")} rows={2} className="max-h-40 min-h-16 w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); } }} />
-            <div className="flex items-center justify-between gap-2"><span className="px-1 text-[11px] text-muted-foreground">Enter 发送 · Shift + Enter 换行</span><Button type="submit" size="icon" className="size-8 rounded-lg" aria-label="发送消息" disabled={busy || !draft.trim() || Boolean(session && session.status !== "open")}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}</Button></div>
+            {voice !== "off" ? <div className="flex min-h-16 items-center gap-3 px-1" role="status">
+              {voice === "connecting" ? <Loader2 className="size-5 animate-spin text-primary" /> : <AudioLines className="size-5 animate-pulse text-primary" />}
+              <div><p className="text-sm font-medium">{voice === "connecting" ? "正在接通实时对话" : "实时语音对话中"}</p><p className="mt-1 text-xs text-muted-foreground">{voiceStatus}</p></div>
+            </div> : <textarea ref={input} aria-label="发送给项目智能体" placeholder="询问项目情况，或继续追问…" value={draft} onChange={event => setDraft(event.target.value)} disabled={busy || Boolean(session && session.status !== "open")} rows={2} className="max-h-40 min-h-16 w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); } }} />}
+            <div className="flex items-center justify-between gap-2"><span className="px-1 text-[11px] text-muted-foreground">{voice !== "off" ? "可以随时说话打断 · 转写与查询显示在对话中" : voiceButton ? "输入文字，或点击声波开始实时对话" : "Enter 发送 · Shift + Enter 换行"}</span>
+              {voice !== "off" ? <Button type="button" size="icon" variant="destructive" className="size-8 shrink-0 rounded-lg" aria-label="结束实时对话" title="结束实时对话" onClick={() => voiceCall.current?.stop()}><PhoneOff className="size-4" /></Button>
+                : voiceButton ? <Button type="button" size="icon" className="size-8 shrink-0 rounded-lg" aria-label="开始实时语音对话" title="开始实时语音对话" disabled={busy || Boolean(session && session.status !== "open")} onClick={() => void startVoice()}><AudioLines className="size-4" /></Button>
+                : <Button type="submit" size="icon" className="size-8 shrink-0 rounded-lg" aria-label="发送消息" disabled={busy || !draft.trim() || Boolean(session && session.status !== "open")}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}</Button>}
+            </div>
           </form>
+          {voice === "off" && voiceStatus && <p role="status" className="mt-2 text-center text-xs text-muted-foreground">{voiceStatus}</p>}
           <p className="mt-2 text-center text-[11px] text-muted-foreground">回答基于当前项目可访问的数据，重要结论请结合证据核实。</p>
         </div>
       </div>

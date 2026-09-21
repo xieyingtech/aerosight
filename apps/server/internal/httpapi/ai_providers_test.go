@@ -154,3 +154,51 @@ func TestAIProviderManagement(t *testing.T) {
 	call("GET", base, "", 403)
 	call("DELETE", base+"/9999", "", 403)
 }
+
+func TestAIProviderRealtimeConfiguration(t *testing.T) {
+	var raw map[string]any
+	json.Unmarshal([]byte(aiProviderBody), &raw)
+	raw["baseUrl"] = "https://api.stepfun.com/v1"
+	raw["realtimeProtocol"] = "stepfun"
+	raw["realtimeModelId"] = " custom-voice-v3 "
+	parsed, err := parseAIProvider(raw)
+	if err != nil || parsed.Params.RealtimeModelID != "custom-voice-v3" {
+		t.Fatalf("config %+v %v", parsed, err)
+	}
+	for _, invalid := range []map[string]any{
+		{"realtimeProtocol": "openai-realtime", "realtimeModelId": "voice"},
+		{"realtimeProtocol": "stepfun", "realtimeModelId": " "},
+		{"realtimeProtocol": "disabled", "realtimeModelId": "voice"},
+		{"realtimeProtocol": true, "realtimeModelId": "voice"},
+	} {
+		raw["realtimeProtocol"], raw["realtimeModelId"] = invalid["realtimeProtocol"], invalid["realtimeModelId"]
+		if _, err := parseAIProvider(raw); err == nil {
+			t.Fatalf("accepted %+v", invalid)
+		}
+	}
+}
+
+func TestAIProviderRealtimePersistence(t *testing.T) {
+	f := newAPIFixture(t)
+	f.server.credentialSecret = "realtime-config-test"
+	f.server.networkResolver = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
+	}
+	body := strings.TrimSuffix(aiProviderBody, "}") + `,"baseUrl":"https://api.stepfun.com/v1","realtimeProtocol":"stepfun","realtimeModelId":"voice-one"}`
+	res := f.request(t, "POST", "/api/admin/ai-providers", body)
+	created := decodedResponse(t, res)
+	if res.StatusCode != 201 || created["realtimeModelId"] != "voice-one" {
+		t.Fatalf("create %+v", created)
+	}
+	body = strings.ReplaceAll(body, "voice-one", "voice-two")
+	body = strings.ReplaceAll(body, " secret-ai-key ", "")
+	res = f.request(t, "PATCH", "/api/admin/ai-providers/"+created["id"].(string), body)
+	updated := decodedResponse(t, res)
+	if res.StatusCode != 200 || updated["realtimeModelId"] != "voice-two" || updated["modelId"] != "model-test" {
+		t.Fatalf("update %+v", updated)
+	}
+	providers, err := f.server.queries.ReadDefaultChatProvider(context.Background())
+	if err != nil || len(providers) != 1 || providers[0].RealtimeModelID != "voice-two" || providers[0].RealtimeProtocol != "stepfun" {
+		t.Fatalf("runtime config %+v %v", providers, err)
+	}
+}

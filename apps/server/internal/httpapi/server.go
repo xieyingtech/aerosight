@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/httprate"
 	"github.com/gorilla/csrf"
+	"github.com/gorilla/websocket"
 	sloggin "github.com/samber/slog-gin"
 	"github.com/unrolled/secure"
 	"log/slog"
@@ -23,11 +24,14 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type Server struct {
+	realtimeConnect     func(context.Context) (*websocket.Conn, error)
+	realtimeUsers       sync.Map
 	inspectionMedia     algorithm.RemoteAlgorithmAssetReader
 	staticPages         http.Handler
 	aiHTTPClientFactory func(*url.URL, []netip.Addr) *http.Client

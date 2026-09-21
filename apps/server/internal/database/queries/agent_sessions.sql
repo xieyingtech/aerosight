@@ -17,6 +17,9 @@ SELECT id FROM agent_sessions WHERE id=$1 AND project_id=$2 AND started_by_user_
 -- name: AppendChatMessage :one
 INSERT INTO agent_messages(session_id,role,content,tool_calls_json) VALUES($1,$2,$3,$4) RETURNING id,created_at;
 
+-- name: UpdateRealtimeChatMessage :execrows
+UPDATE agent_messages SET content=$3,tool_calls_json=$4 WHERE id=$1 AND session_id=$2;
+
 -- name: RecentChatHistory :many
 SELECT recent.role,recent.content FROM (
  SELECT message.id,message.role,message.content FROM agent_messages message

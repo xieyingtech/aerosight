@@ -360,6 +360,7 @@ type Querier interface {
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)
 	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)
+	UpdateRealtimeChatMessage(ctx context.Context, arg UpdateRealtimeChatMessageParams) (int64, error)
 	UpsertDraftReport(ctx context.Context, arg UpsertDraftReportParams) (uuid.UUID, error)
 }
 

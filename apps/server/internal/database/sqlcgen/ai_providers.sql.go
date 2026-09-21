@@ -21,17 +21,19 @@ func (q *Queries) ClearAIProviderDefault(ctx context.Context) error {
 }
 
 const createAIProvider = `-- name: CreateAIProvider :one
-INSERT INTO ai_providers(name,provider_type,base_url,model_id,credential_envelope_json,enabled,is_default,created_by_user_id,updated_by_user_id)
-VALUES($1,'openai',$2,$3,'{}',$4,$5,$6,$6) RETURNING id
+INSERT INTO ai_providers(name,provider_type,base_url,model_id,credential_envelope_json,enabled,is_default,created_by_user_id,updated_by_user_id,realtime_protocol,realtime_model_id)
+VALUES($1,'openai',$2,$3,'{}',$4,$5,$6,$6,$7,$8) RETURNING id
 `
 
 type CreateAIProviderParams struct {
-	Name            string         `json:"name"`
-	BaseUrl         sql.NullString `json:"base_url"`
-	ModelID         string         `json:"model_id"`
-	Enabled         bool           `json:"enabled"`
-	IsDefault       bool           `json:"is_default"`
-	CreatedByUserID int32          `json:"created_by_user_id"`
+	Name             string         `json:"name"`
+	BaseUrl          sql.NullString `json:"base_url"`
+	ModelID          string         `json:"model_id"`
+	Enabled          bool           `json:"enabled"`
+	IsDefault        bool           `json:"is_default"`
+	CreatedByUserID  int32          `json:"created_by_user_id"`
+	RealtimeProtocol string         `json:"realtime_protocol"`
+	RealtimeModelID  string         `json:"realtime_model_id"`
 }
 
 func (q *Queries) CreateAIProvider(ctx context.Context, arg CreateAIProviderParams) (int64, error) {
@@ -42,6 +44,8 @@ func (q *Queries) CreateAIProvider(ctx context.Context, arg CreateAIProviderPara
 		arg.Enabled,
 		arg.IsDefault,
 		arg.CreatedByUserID,
+		arg.RealtimeProtocol,
+		arg.RealtimeModelID,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -62,7 +66,7 @@ func (q *Queries) DeleteAIProvider(ctx context.Context, id int64) (int64, error)
 
 const listAIProviders = `-- name: ListAIProviders :many
 SELECT to_jsonb(result) FROM (
- SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
+ SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
  FROM ai_providers ORDER BY name
 ) result
 `
@@ -137,7 +141,7 @@ func (q *Queries) LockPlatformUserRole(ctx context.Context, id int32) (string, e
 
 const readAIProviderPublic = `-- name: ReadAIProviderPublic :one
 SELECT to_jsonb(result) FROM (
- SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
+ SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
  FROM ai_providers WHERE id=$1
 ) result
 `
@@ -150,7 +154,7 @@ func (q *Queries) ReadAIProviderPublic(ctx context.Context, id int64) (json.RawM
 }
 
 const readDefaultChatProvider = `-- name: ReadDefaultChatProvider :many
-SELECT id,provider_type,base_url,model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_default LIMIT 2
+SELECT id,provider_type,base_url,model_id,realtime_protocol,realtime_model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_default LIMIT 2
 `
 
 type ReadDefaultChatProviderRow struct {
@@ -158,6 +162,8 @@ type ReadDefaultChatProviderRow struct {
 	ProviderType           string          `json:"provider_type"`
 	BaseUrl                sql.NullString  `json:"base_url"`
 	ModelID                string          `json:"model_id"`
+	RealtimeProtocol       string          `json:"realtime_protocol"`
+	RealtimeModelID        string          `json:"realtime_model_id"`
 	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
 }
 
@@ -175,6 +181,8 @@ func (q *Queries) ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultCha
 			&i.ProviderType,
 			&i.BaseUrl,
 			&i.ModelID,
+			&i.RealtimeProtocol,
+			&i.RealtimeModelID,
 			&i.CredentialEnvelopeJson,
 		); err != nil {
 			return nil, err
@@ -226,17 +234,19 @@ func (q *Queries) SetAIProviderHealth(ctx context.Context, arg SetAIProviderHeal
 }
 
 const updateAIProvider = `-- name: UpdateAIProvider :exec
-UPDATE ai_providers SET name=$2,provider_type='openai',base_url=$3,model_id=$4,enabled=$5,is_default=$6,updated_by_user_id=$7,updated_at=now() WHERE id=$1
+UPDATE ai_providers SET name=$2,provider_type='openai',base_url=$3,model_id=$4,enabled=$5,is_default=$6,updated_by_user_id=$7,realtime_protocol=$8,realtime_model_id=$9,updated_at=now() WHERE id=$1
 `
 
 type UpdateAIProviderParams struct {
-	ID              int64          `json:"id"`
-	Name            string         `json:"name"`
-	BaseUrl         sql.NullString `json:"base_url"`
-	ModelID         string         `json:"model_id"`
-	Enabled         bool           `json:"enabled"`
-	IsDefault       bool           `json:"is_default"`
-	UpdatedByUserID int32          `json:"updated_by_user_id"`
+	ID               int64          `json:"id"`
+	Name             string         `json:"name"`
+	BaseUrl          sql.NullString `json:"base_url"`
+	ModelID          string         `json:"model_id"`
+	Enabled          bool           `json:"enabled"`
+	IsDefault        bool           `json:"is_default"`
+	UpdatedByUserID  int32          `json:"updated_by_user_id"`
+	RealtimeProtocol string         `json:"realtime_protocol"`
+	RealtimeModelID  string         `json:"realtime_model_id"`
 }
 
 func (q *Queries) UpdateAIProvider(ctx context.Context, arg UpdateAIProviderParams) error {
@@ -248,6 +258,8 @@ func (q *Queries) UpdateAIProvider(ctx context.Context, arg UpdateAIProviderPara
 		arg.Enabled,
 		arg.IsDefault,
 		arg.UpdatedByUserID,
+		arg.RealtimeProtocol,
+		arg.RealtimeModelID,
 	)
 	return err
 }
