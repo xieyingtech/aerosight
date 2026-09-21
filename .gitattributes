@@ -1,0 +1,2 @@
+# Preserve reviewed contract checksums on Windows.
+contracts/dji-flighthub/v2/** text eol=lf
