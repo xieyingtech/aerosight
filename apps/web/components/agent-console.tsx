@@ -40,6 +40,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const [liveSteps, setLiveSteps] = useState<Array<{ content: string; tools: Array<Record<string, unknown>> }>>([]);
   const [progress, setProgress] = useState("");
   const [voice, setVoice] = useState<"off" | "connecting" | "connected">("off");
+  const [inputStatus, setInputStatus] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("");
   const voiceCall = useRef<AgentRealtimeCall | null>(null);
   const mounted = useRef(true);
@@ -51,7 +52,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const session = sessions.find(item => item.id === activeId);
-  const messages = (session?.messages ?? []).filter(message => message.content || (Array.isArray(message.toolCalls) && message.toolCalls.length));
+  const messages = (session?.messages ?? []).filter(message => (voice === "connected" && message.role === "user") || message.content || (Array.isArray(message.toolCalls) && message.toolCalls.length));
   const occupied = busy || voice !== "off";
   const voiceButton = !draft.trim() && !messages.length;
   // One user message starts a turn; its assistant steps share one identity.
@@ -71,7 +72,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   async function startVoice() {
     if (lock.current || draft.trim() || messages.length) return;
     lock.current = true;
-    setVoice("connecting"); setVoiceStatus("正在连接实时语音…"); setError(null);
+    setInputStatus(""); setVoice("connecting"); setVoiceStatus("正在连接实时语音…"); setError(null);
     let id = activeId;
     const call = new AgentRealtimeCall({
       message: message => {
@@ -79,6 +80,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
         setSessions(previous => previous.map(item => item.id === id ? { ...item, messages: mergeRealtimeMessage(item.messages, message) } : item));
       },
       status: status => { if (mounted.current) setVoiceStatus(status); },
+      inputStatus: (status) => { if (mounted.current) setInputStatus(status); },
       ready: () => { if (mounted.current) setVoice("connected"); },
       ended: failure => {
         if (!mounted.current) return;
@@ -210,6 +212,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
               {group[0].role !== "user" && <p className="mb-2 text-xs opacity-60">项目智能体</p>}
               <div className="space-y-3">{group.map(message => <div key={message.id}>
                 {message.content && (message.role === "assistant" ? <ChatMarkdown content={message.content} /> : <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>)}
+                {voice === "connected" && message.role === "user" && !message.content && <p className="text-sm opacity-70">正在聆听并转写…</p>}
                 <AgentQueryEvidence toolCalls={message.toolCalls} inline />
               </div>)}</div>
             </div>
@@ -236,7 +239,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
           <form onSubmit={event => { event.preventDefault(); void send(); }} className="rounded-2xl border bg-muted/15 p-3 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
             {voice !== "off" ? <div className="flex min-h-16 items-center gap-3 px-1" role="status">
               {voice === "connecting" ? <Loader2 className="size-5 animate-spin text-primary" /> : <AudioLines className="size-5 animate-pulse text-primary" />}
-              <div><p className="text-sm font-medium">{voice === "connecting" ? "正在接通实时对话" : "实时语音对话中"}</p><p className="mt-1 text-xs text-muted-foreground">{voiceStatus}</p></div>
+              <div><p className="text-sm font-medium">{voice === "connecting" ? "正在接通实时对话" : "实时语音对话中"}</p><p className="mt-1 text-xs text-muted-foreground">{voiceStatus}</p>{voice === "connected" && <p role="status" className="mt-1 text-xs text-muted-foreground">{inputStatus}</p>}</div>
             </div> : <textarea ref={input} aria-label="发送给项目智能体" placeholder="询问项目情况，或继续追问…" value={draft} onChange={event => setDraft(event.target.value)} disabled={busy || Boolean(session && session.status !== "open")} rows={2} className="max-h-40 min-h-16 w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); } }} />}
             <div className="flex items-center justify-between gap-2"><span className="px-1 text-[11px] text-muted-foreground">{voice !== "off" ? "可以随时说话打断 · 转写与查询显示在对话中" : voiceButton ? "输入文字，或点击声波开始实时对话" : "Enter 发送 · Shift + Enter 换行"}</span>
               {voice !== "off" ? <Button type="button" size="icon" variant="destructive" className="size-8 shrink-0 rounded-lg" aria-label="结束实时对话" title="结束实时对话" onClick={() => voiceCall.current?.stop()}><PhoneOff className="size-4" /></Button>

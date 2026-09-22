@@ -6,6 +6,7 @@ type RealtimeCallbacks = {
   message: (message: RealtimeMessage) => void;
   status: (status: string) => void;
   ready: () => void;
+  inputStatus?: (status: string) => void;
   ended: (error?: unknown) => void;
 };
 export function mergeRealtimeMessage(messages: RealtimeMessage[], message: RealtimeMessage) {
@@ -28,6 +29,8 @@ export function realtimeErrorMessage(error: unknown): string {
     AI_REALTIME_DISCONNECTED: "实时语音连接已中断，已完成的对话仍会保留。",
     AI_REALTIME_TIMEOUT: "本次实时通话已结束，请新建对话继续。",
     AI_REALTIME_ALREADY_CONNECTED: "已有一通实时对话，请先结束另一个窗口中的通话。",
+    AI_REALTIME_CAPTURE_FAILED: "未能持续采集音频，请检查输入设备并重新接通。",
+    AI_REALTIME_UPLOAD_FAILED: "音频未送达服务端，请检查网络后重新接通。",
     AI_REALTIME_AUDIO_BLOCKED: "浏览器未能播放语音，请检查音频权限后重新连接。",
     AI_REALTIME_AUDIO_BACKLOG: "网络或音频播放延迟过大，通话已结束，请重新连接。",
     PROJECT_ACCESS_DENIED: "你没有在此项目中使用智能体的权限。",
@@ -40,6 +43,12 @@ export function realtimeErrorMessage(error: unknown): string {
 // message renderer, with exactly the same IDs and DTO as persisted text chat.
 export class AgentRealtimeCall {
   private context: AudioContext | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private inputTimer: ReturnType<typeof setInterval> | null = null;
+  private lastFrame = 0;
+  private lastSignal = 0;
+  private lastAck = 0;
+  private connectedAt = 0;
   private media: MediaStream | null = null;
   private recorder: AudioWorkletNode | null = null;
   private socket: WebSocket | null = null;
@@ -64,7 +73,7 @@ export class AgentRealtimeCall {
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || !window.AudioContext || !window.AudioWorkletNode) throw new Error("AI_REALTIME_UNSUPPORTED");
     this.callbacks.status("请允许浏览器使用音频输入设备…");
     this.timer = setTimeout(() => this.finish(new DOMException("Permission timed out", "NotAllowedError")), 30000);
-    this.context = new AudioContext({ sampleRate: 24000 });
+    this.context = new AudioContext();
     const resumed = this.context.resume();
     // Request permission in the same user gesture, even if the embedded
     // browser defers AudioContext.resume until it has audio-input permission.
@@ -76,13 +85,19 @@ export class AgentRealtimeCall {
     this.callbacks.status("音频设备已就绪，正在连接实时语音服务…");
     await this.context.audioWorklet.addModule("/audio/agent-recorder.js");
     if (this.closed) throw new DOMException("Cancelled", "AbortError");
-    const source = this.context.createMediaStreamSource(media);
+    await this.context.resume();
+    if (this.closed) throw new DOMException("Cancelled", "AbortError");
+    this.source = this.context.createMediaStreamSource(media);
     this.recorder = new AudioWorkletNode(this.context, "agent-recorder");
     // The worklet emits silence to its output; input is sent only after ready.
-    source.connect(this.recorder).connect(this.context.destination);
+    this.source.connect(this.recorder).connect(this.context.destination);
+    this.recorder.onprocessorerror = () => this.finish(new Error("AI_REALTIME_CAPTURE_FAILED"));
     this.recorder.port.onmessage = ({ data }: MessageEvent<ArrayBuffer>) => {
       if (!this.ready || this.stopping || this.socket?.readyState !== WebSocket.OPEN) return;
       if (this.socket.bufferedAmount > 240000) { this.finish(new Error("AI_REALTIME_AUDIO_BACKLOG")); return; }
+      this.lastFrame = Date.now();
+      const pcm = new Int16Array(data);
+      if (pcm.some(sample => Math.abs(sample) > 160)) this.lastSignal = this.lastFrame;
       this.socket.send(data);
     };
     media.getTracks().forEach(track => { track.onended = () => { if (!this.closed) this.finish(new Error("AI_REALTIME_DISCONNECTED")); }; });
@@ -102,7 +117,12 @@ export class AgentRealtimeCall {
         const event = JSON.parse(String(data)) as { type: string; data: Record<string, unknown> };
         if (!this.stopping) this.armTimeout(45000);
         switch (event.type) {
-          case "ready": this.ready = true; this.callbacks.ready(); this.callbacks.status("已接通，直接说话即可"); break;
+          case "ready":
+            this.ready = true; this.connectedAt = Date.now();
+            this.callbacks.ready(); this.callbacks.status("已接通，AI 正在向你问好…");
+            this.inputTimer = setInterval(() => this.checkInput(), 1000);
+            break;
+          case "input_audio_received": this.lastAck = Date.now(); break;
           case "message": this.callbacks.message(event.data as RealtimeMessage); break;
           case "status": if (!this.stopping) this.callbacks.status(String(event.data.message)); break;
           case "audio": if (!this.stopping) this.play(String(event.data.itemId), String(event.data.delta)); break;
@@ -119,6 +139,21 @@ export class AgentRealtimeCall {
     };
     socket.onerror = () => this.finish(new Error("AI_REALTIME_CONNECT_FAILED"));
     socket.onclose = () => { if (!this.closed) this.finish(new Error("AI_REALTIME_DISCONNECTED")); };
+  }
+
+  private checkInput() {
+    if (this.closed || this.stopping) return;
+    const now = Date.now();
+    if (now - Math.max(this.connectedAt, this.lastFrame) > 8000) {
+      this.finish(new Error("AI_REALTIME_CAPTURE_FAILED")); return;
+    }
+    if (this.lastFrame && now - Math.max(this.connectedAt, this.lastAck) > 12000) {
+      this.finish(new Error("AI_REALTIME_UPLOAD_FAILED")); return;
+    }
+    const muted = this.media?.getAudioTracks().some(track => track.muted || !track.enabled);
+    this.callbacks.inputStatus?.(muted ? "音频输入已静音，请检查设备" :
+      this.lastSignal && now - this.lastSignal < 1500 ? (this.lastAck ? "检测到声音 · 音频已送达" : "检测到声音 · 正在发送") :
+      now - Math.max(this.connectedAt, this.lastSignal) > 6000 ? "未检测到声音，请检查输入设备或靠近麦克风" : "音频输入已就绪");
   }
 
   private armTimeout(ms: number) {
@@ -187,6 +222,9 @@ export class AgentRealtimeCall {
 
   dispose() {
     this.closed = true;
+    if (this.inputTimer) clearInterval(this.inputTimer);
+    this.source?.disconnect();
+    if (this.recorder) this.recorder.onprocessorerror = null;
     if (this.timer) clearTimeout(this.timer);
     this.media?.getTracks().forEach(track => { track.onended = null; track.stop(); });
     this.recorder?.disconnect();

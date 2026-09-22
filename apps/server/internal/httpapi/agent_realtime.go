@@ -127,6 +127,7 @@ type realtimeConversation struct {
 	calls            map[string]bool
 	toolCount        int
 	continueResponse bool
+	started          bool
 	emit             func(string, any) error
 	write            func(any) error
 }
@@ -204,10 +205,21 @@ func (r *realtimeConversation) handle(ctx context.Context, e stepRealtimeEvent) 
 	case "session.created":
 		return r.write(gin.H{"type": "session.update", "session": stepRealtimeSession()})
 	case "session.updated":
-		return r.emit("ready", gin.H{"model": r.config.Model, "sampleRate": 24000})
+		if r.started {
+			return nil
+		}
+		r.started = true
+		if err := r.emit("ready", gin.H{"model": r.config.Model, "sampleRate": 24000}); err != nil {
+			return err
+		}
+		return r.write(gin.H{"type": "response.create", "response": gin.H{"instructions": "请用中文简短欢迎用户：你好，我是项目智能体，可以帮你查询设备、任务和案件。你想先了解什么？本次只说欢迎语，不调用工具。", "tool_choice": "none"}})
 	case "input_audio_buffer.speech_started":
 		r.toolCount = 0
-		if _, err := r.message(ctx, e.ItemID, "user"); err != nil {
+		m, err := r.message(ctx, e.ItemID, "user")
+		if err != nil {
+			return err
+		}
+		if err = r.publish(m); err != nil {
 			return err
 		}
 		return r.emit("interrupted", gin.H{})
@@ -419,6 +431,7 @@ func (s *Server) realtimeChat(c *gin.Context) {
 		return ch
 	}
 	clientFrames, upstreamFrames := read(client, 64<<10), read(upstream, 2<<20)
+	var lastAudioAck time.Time
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -458,6 +471,10 @@ func (s *Server) realtimeChat(c *gin.Context) {
 					return
 				}
 				err = write(gin.H{"type": "input_audio_buffer.append", "audio": base64.StdEncoding.EncodeToString(f.data)})
+				if err == nil && time.Since(lastAudioAck) >= time.Second {
+					lastAudioAck = time.Now()
+					err = emit("input_audio_received", gin.H{})
+				}
 			} else {
 				var command struct {
 					Type       string `json:"type"`

@@ -73,6 +73,11 @@ func TestRealtimeWebSocketTranscriptToolsAndPersistence(t *testing.T) {
 			return
 		}
 		_ = conn.WriteJSON(gin.H{"type": "session.updated"})
+		var greeting map[string]any
+		if err = conn.ReadJSON(&greeting); err != nil || greeting["type"] != "response.create" {
+			t.Errorf("missing greeting: %v %v", greeting, err)
+			return
+		}
 		for _, event := range []gin.H{
 			{"type": "input_audio_buffer.speech_started", "item_id": "user1"},
 			{"type": "response.output_item.added", "item": gin.H{"id": "assistant1", "type": "message", "role": "assistant"}},
@@ -205,5 +210,33 @@ func TestRealtimeUnconfiguredProviderDoesNotDial(t *testing.T) {
 	_, _, err := f.server.connectRealtime(context.Background())
 	if err == nil || err.Error() != "AI_REALTIME_PROVIDER_REQUIRED" {
 		t.Fatalf("missing configuration: %v", err)
+	}
+}
+
+func TestRealtimeWelcomesOnceAfterSessionConfigured(t *testing.T) {
+	writes, ready := 0, 0
+	r := &realtimeConversation{config: realtimeConfig{Model: "configured-model"},
+		write: func(value any) error {
+			writes++
+			event := value.(gin.H)
+			if event["type"] != "response.create" || event["response"].(gin.H)["tool_choice"] != "none" {
+				t.Fatalf("invalid greeting %v", event)
+			}
+			return nil
+		},
+		emit: func(kind string, value any) error {
+			if kind == "ready" {
+				ready++
+			}
+			return nil
+		},
+	}
+	for i := 0; i < 2; i++ {
+		if err := r.handle(context.Background(), stepRealtimeEvent{Type: "session.updated"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if writes != 1 || ready != 1 {
+		t.Fatalf("duplicate welcome: %d ready: %d", writes, ready)
 	}
 }

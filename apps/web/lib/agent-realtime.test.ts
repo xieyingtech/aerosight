@@ -11,7 +11,7 @@ test("late transcription updates the original turn without duplication", () => {
   let messages = mergeRealtimeMessage([assistant], user);
   messages = mergeRealtimeMessage(messages, { ...assistant, content: "查询完成" });
   assert.deepEqual(messages.map(m => [m.role, m.content]), [["user", "查设备"], ["assistant", "查询完成"]]);
-  assert.match(realtimeErrorMessage(new APIError(400, "AI_REALTIME_CONNECT_FAILED")), /StepFun/);
+  assert.match(realtimeErrorMessage(new APIError(400, "AI_REALTIME_CONNECT_FAILED")), /实时语音/);
   assert.match(realtimeErrorMessage(new DOMException("Denied", "NotAllowedError")), /权限/);
 });
 
