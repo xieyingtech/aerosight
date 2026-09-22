@@ -51,7 +51,7 @@ func realtimeReadTool(item stepRealtimeItem) (string, error) {
 
 func realtimeURL(base, model string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimRight(base, "/"))
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.TrimSpace(model) == "" {
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.TrimSpace(model) == "" {
 		return nil, errors.New("AI_REALTIME_PROVIDER_REQUIRED")
 	}
 	u.Path += "/realtime"
@@ -61,7 +61,7 @@ func realtimeURL(base, model string) (*url.URL, error) {
 
 func (s *Server) connectRealtime(ctx context.Context) (*websocket.Conn, realtimeConfig, error) {
 	config := realtimeConfig{}
-	providers, err := s.queries.ReadDefaultChatProvider(ctx)
+	providers, err := s.queries.ReadDefaultRealtimeProvider(ctx)
 	if err != nil {
 		return nil, config, err
 	}
@@ -86,15 +86,19 @@ func (s *Server) connectRealtime(ctx context.Context) (*websocket.Conn, realtime
 	var secret struct {
 		APIKey string `json:"apiKey"`
 	}
-	if json.Unmarshal(p.CredentialEnvelopeJson, &envelope) != nil || credentials.DecryptJSON(envelope, s.credentialSecret, credentials.AAD("ai-provider", p.ID, nil), &secret) != nil || secret.APIKey == "" {
+	if json.Unmarshal(p.CredentialEnvelopeJson, &envelope) != nil || credentials.DecryptJSON(envelope, s.credentialSecret, credentials.AAD("ai-provider", p.ID, nil), &secret) != nil {
 		return nil, config, errors.New("AI_PROVIDER_CREDENTIAL_UNAVAILABLE")
 	}
-	target, addresses, err := s.resolveOutboundURL(ctx, target.String(), []string{target.Hostname()})
+	target, addresses, err := s.resolveAIURL(ctx, target.String())
 	if err != nil {
 		return nil, config, err
 	}
 	transport := pinnedAIHTTPClient(target, addresses).Transport.(*http.Transport)
-	target.Scheme = "wss"
+	if target.Scheme == "http" {
+		target.Scheme = "ws"
+	} else {
+		target.Scheme = "wss"
+	}
 	dialer := websocket.Dialer{HandshakeTimeout: 15 * time.Second, NetDialContext: transport.DialContext}
 	conn, response, err := dialer.DialContext(ctx, target.String(), http.Header{"Authorization": {"Bearer " + secret.APIKey}})
 	if err != nil {

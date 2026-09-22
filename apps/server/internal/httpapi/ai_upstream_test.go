@@ -108,7 +108,7 @@ func TestAIProviderHealth(t *testing.T) {
 	calls, status := 0, 200
 	connectionFail := false
 	f.server.aiHTTPClientFactory = func(target *url.URL, addresses []netip.Addr) *http.Client {
-		if target.String() != "https://api.openai.com/v1" || addresses[0].String() != "8.8.8.8" {
+		if target.String() != "https://api.openai.com/v1" || (addresses[0].String() != "8.8.8.8" && addresses[0].String() != "127.0.0.1") {
 			t.Fatalf("target %s %v", target, addresses)
 		}
 		return &http.Client{Transport: aiTestTransport(func(r *http.Request) (*http.Response, error) {
@@ -151,17 +151,14 @@ func TestAIProviderHealth(t *testing.T) {
 	f.server.networkResolver = func(context.Context, string) ([]netip.Addr, error) {
 		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
 	}
-	res = f.request(t, "POST", path, "")
-	denied := decodedResponse(t, res)
-	if res.StatusCode != 400 || denied["error"] != "OUTBOUND_ADDRESS_RESTRICTED" || calls != 4 {
-		t.Fatalf("SSRF %d %+v", res.StatusCode, denied)
-	}
+	connectionFail, status = false, 200
+	check("OK")
 	if _, err := f.db.Exec("update users set role='user' where email='admin@example.com'"); err != nil {
 		t.Fatal(err)
 	}
 	res = f.request(t, "POST", path, "")
-	denied = decodedResponse(t, res)
-	if res.StatusCode != 403 || calls != 4 {
+	denied := decodedResponse(t, res)
+	if res.StatusCode != 403 || calls != 5 {
 		t.Fatalf("denied %d %+v", res.StatusCode, denied)
 	}
 }

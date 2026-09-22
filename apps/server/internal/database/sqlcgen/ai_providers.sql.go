@@ -20,6 +20,15 @@ func (q *Queries) ClearAIProviderDefault(ctx context.Context) error {
 	return err
 }
 
+const clearAIProviderRealtimeDefault = `-- name: ClearAIProviderRealtimeDefault :exec
+UPDATE ai_providers SET is_realtime_default=false,updated_at=now() WHERE is_realtime_default
+`
+
+func (q *Queries) ClearAIProviderRealtimeDefault(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearAIProviderRealtimeDefault)
+	return err
+}
+
 const createAIProvider = `-- name: CreateAIProvider :one
 INSERT INTO ai_providers(name,provider_type,base_url,model_id,credential_envelope_json,enabled,is_default,created_by_user_id,updated_by_user_id,realtime_protocol,realtime_model_id)
 VALUES($1,'openai',$2,$3,'{}',$4,$5,$6,$6,$7,$8) RETURNING id
@@ -66,7 +75,7 @@ func (q *Queries) DeleteAIProvider(ctx context.Context, id int64) (int64, error)
 
 const listAIProviders = `-- name: ListAIProviders :many
 SELECT to_jsonb(result) FROM (
- SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
+ SELECT models_json AS models,is_realtime_default AS "isRealtimeDefault",id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
  FROM ai_providers ORDER BY name
 ) result
 `
@@ -141,7 +150,7 @@ func (q *Queries) LockPlatformUserRole(ctx context.Context, id int32) (string, e
 
 const readAIProviderPublic = `-- name: ReadAIProviderPublic :one
 SELECT to_jsonb(result) FROM (
- SELECT id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
+ SELECT models_json AS models,is_realtime_default AS "isRealtimeDefault",id::text,name,provider_type AS "providerType",base_url AS "baseUrl",model_id AS "modelId",realtime_protocol AS "realtimeProtocol",realtime_model_id AS "realtimeModelId",enabled,is_default AS "isDefault",status,health_json AS health,last_tested_at AS "lastTestedAt",updated_at AS "updatedAt"
  FROM ai_providers WHERE id=$1
 ) result
 `
@@ -154,7 +163,7 @@ func (q *Queries) ReadAIProviderPublic(ctx context.Context, id int64) (json.RawM
 }
 
 const readDefaultChatProvider = `-- name: ReadDefaultChatProvider :many
-SELECT id,provider_type,base_url,model_id,realtime_protocol,realtime_model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_default LIMIT 2
+SELECT id,provider_type,base_url,model_id,realtime_protocol,realtime_model_id,credential_envelope_json,models_json FROM ai_providers WHERE enabled AND is_default LIMIT 2
 `
 
 type ReadDefaultChatProviderRow struct {
@@ -165,6 +174,7 @@ type ReadDefaultChatProviderRow struct {
 	RealtimeProtocol       string          `json:"realtime_protocol"`
 	RealtimeModelID        string          `json:"realtime_model_id"`
 	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
+	ModelsJson             json.RawMessage `json:"models_json"`
 }
 
 func (q *Queries) ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultChatProviderRow, error) {
@@ -176,6 +186,52 @@ func (q *Queries) ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultCha
 	items := []ReadDefaultChatProviderRow{}
 	for rows.Next() {
 		var i ReadDefaultChatProviderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProviderType,
+			&i.BaseUrl,
+			&i.ModelID,
+			&i.RealtimeProtocol,
+			&i.RealtimeModelID,
+			&i.CredentialEnvelopeJson,
+			&i.ModelsJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const readDefaultRealtimeProvider = `-- name: ReadDefaultRealtimeProvider :many
+SELECT id,provider_type,base_url,model_id,realtime_protocol,realtime_model_id,credential_envelope_json FROM ai_providers WHERE enabled AND is_realtime_default LIMIT 2
+`
+
+type ReadDefaultRealtimeProviderRow struct {
+	ID                     int64           `json:"id"`
+	ProviderType           string          `json:"provider_type"`
+	BaseUrl                sql.NullString  `json:"base_url"`
+	ModelID                string          `json:"model_id"`
+	RealtimeProtocol       string          `json:"realtime_protocol"`
+	RealtimeModelID        string          `json:"realtime_model_id"`
+	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
+}
+
+func (q *Queries) ReadDefaultRealtimeProvider(ctx context.Context) ([]ReadDefaultRealtimeProviderRow, error) {
+	rows, err := q.db.QueryContext(ctx, readDefaultRealtimeProvider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReadDefaultRealtimeProviderRow{}
+	for rows.Next() {
+		var i ReadDefaultRealtimeProviderRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ProviderType,
@@ -230,6 +286,21 @@ func (q *Queries) SetAIProviderHealth(ctx context.Context, arg SetAIProviderHeal
 		arg.HealthJson,
 		arg.UpdatedByUserID,
 	)
+	return err
+}
+
+const setAIProviderModels = `-- name: SetAIProviderModels :exec
+UPDATE ai_providers SET models_json=$2,is_realtime_default=$3 WHERE id=$1
+`
+
+type SetAIProviderModelsParams struct {
+	ID                int64           `json:"id"`
+	ModelsJson        json.RawMessage `json:"models_json"`
+	IsRealtimeDefault bool            `json:"is_realtime_default"`
+}
+
+func (q *Queries) SetAIProviderModels(ctx context.Context, arg SetAIProviderModelsParams) error {
+	_, err := q.db.ExecContext(ctx, setAIProviderModels, arg.ID, arg.ModelsJson, arg.IsRealtimeDefault)
 	return err
 }
 

@@ -26,6 +26,9 @@ func pinnedAIHTTPClient(target *url.URL, addresses []netip.Addr) *http.Client {
 		expectedPort := target.Port()
 		if expectedPort == "" {
 			expectedPort = "443"
+			if target.Scheme == "http" {
+				expectedPort = "80"
+			}
 		}
 		if err != nil || !strings.EqualFold(host, target.Hostname()) || port != expectedPort {
 			return nil, errors.New("AI_UPSTREAM_DESTINATION_CHANGED")

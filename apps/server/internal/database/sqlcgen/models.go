@@ -103,6 +103,8 @@ type AgentToolJob struct {
 }
 
 type AiProvider struct {
+	ModelsJson             json.RawMessage `json:"models_json"`
+	IsRealtimeDefault      bool            `json:"is_realtime_default"`
 	ID                     int64           `json:"id"`
 	Name                   string          `json:"name"`
 	ProviderType           string          `json:"provider_type"`

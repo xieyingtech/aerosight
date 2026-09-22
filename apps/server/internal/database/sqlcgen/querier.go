@@ -30,6 +30,7 @@ type Querier interface {
 	ChatQueryTasks(ctx context.Context, arg ChatQueryTasksParams) ([]json.RawMessage, error)
 	ChatQueryTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ClearAIProviderDefault(ctx context.Context) error
+	ClearAIProviderRealtimeDefault(ctx context.Context) error
 	CommitHTTPSession(ctx context.Context, arg CommitHTTPSessionParams) error
 	CompleteIdempotency(ctx context.Context, arg CompleteIdempotencyParams) (int64, error)
 	CompletePlatformAudit(ctx context.Context, arg CompletePlatformAuditParams) (int64, error)
@@ -243,6 +244,7 @@ type Querier interface {
 	ReadChannelTelemetry(ctx context.Context, arg ReadChannelTelemetryParams) ([]ReadChannelTelemetryRow, error)
 	ReadDJILiveTopology(ctx context.Context, arg ReadDJILiveTopologyParams) (ReadDJILiveTopologyRow, error)
 	ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultChatProviderRow, error)
+	ReadDefaultRealtimeProvider(ctx context.Context) ([]ReadDefaultRealtimeProviderRow, error)
 	ReadDeviceRelations(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ReadDeviceTree(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ReadFHDiagnosticsAccess(ctx context.Context, arg ReadFHDiagnosticsAccessParams) ([]json.RawMessage, error)
@@ -309,6 +311,7 @@ type Querier interface {
 	SaveProjectFeatures(ctx context.Context, arg SaveProjectFeaturesParams) error
 	SetAIProviderCredential(ctx context.Context, arg SetAIProviderCredentialParams) error
 	SetAIProviderHealth(ctx context.Context, arg SetAIProviderHealthParams) error
+	SetAIProviderModels(ctx context.Context, arg SetAIProviderModelsParams) error
 	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
 	SetAlgorithmProviderCredential(ctx context.Context, arg SetAlgorithmProviderCredentialParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)

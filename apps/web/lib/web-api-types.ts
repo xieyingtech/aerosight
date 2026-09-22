@@ -4,7 +4,13 @@ import type { buildAlgorithmRunDiagnostics } from "./algorithm-run-view-core";
 import type { PerceptionEventAction } from "./perception-event-actions-core";
 
 
+export type AIModelConfig = {
+  id: string; protocol: "openai-compatible" | "responses" | "anthropic-messages" | "stepfun-realtime";
+  capabilities: string[]; enabled: boolean;
+};
+
 export type AIProviderView = {
+  models: AIModelConfig[]; isRealtimeDefault: boolean;
   realtimeProtocol: "disabled" | "stepfun"; realtimeModelId: string;
   id: string; name: string; providerType: "openai"; baseUrl: string | null; modelId: string;
   enabled: boolean; isDefault: boolean; status: string; health: Record<string, unknown>;

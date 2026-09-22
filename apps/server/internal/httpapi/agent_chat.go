@@ -84,6 +84,14 @@ func (s *Server) configuredChatClient(ctx context.Context) (openai.Client, strin
 		return zero, "", cleanup, errors.New("AI_PROVIDER_CONFIGURATION_INVALID")
 	}
 	provider := providers[0]
+	var configuredModels []aiModel
+	if json.Unmarshal(provider.ModelsJson, &configuredModels) == nil {
+		for _, model := range configuredModels {
+			if model.ID == provider.ModelID && model.Protocol != "responses" {
+				return zero, "", cleanup, errors.New("AI_PROVIDER_PROTOCOL_NOT_IMPLEMENTED")
+			}
+		}
+	}
 	var envelope credentials.Envelope
 	if err = json.Unmarshal(provider.CredentialEnvelopeJson, &envelope); err != nil {
 		return zero, "", cleanup, err
@@ -94,9 +102,7 @@ func (s *Server) configuredChatClient(ctx context.Context) (openai.Client, strin
 	if err = credentials.DecryptJSON(envelope, s.credentialSecret, credentials.AAD("ai-provider", provider.ID, nil), &credential); err != nil {
 		return zero, "", cleanup, err
 	}
-	if credential.APIKey == "" {
-		return zero, "", cleanup, errors.New("AI_PROVIDER_CREDENTIAL_UNAVAILABLE")
-	}
+
 	base := provider.BaseUrl.String
 	if base == "" {
 		base = "https://api.openai.com/v1"
@@ -105,7 +111,7 @@ func (s *Server) configuredChatClient(ctx context.Context) (openai.Client, strin
 	if err != nil {
 		return zero, "", cleanup, err
 	}
-	target, addresses, err := s.resolveOutboundURL(ctx, base, []string{target.Hostname()})
+	target, addresses, err := s.resolveAIURL(ctx, base)
 	if err != nil {
 		return zero, "", cleanup, err
 	}

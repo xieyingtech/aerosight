@@ -15,13 +15,13 @@ import (
 )
 
 func TestRealtimeStepEndpoint(t *testing.T) {
-	for _, base := range []string{"https://api.stepfun.com/v1", "https://api.stepfun.com/step_plan/v1/", "https://api.stepfun.ai/v1", "https://gateway.example/realtime-api/v1"} {
+	for _, base := range []string{"http://127.0.0.1:8000/v1", "https://api.stepfun.com/v1", "https://api.stepfun.com/step_plan/v1/", "https://api.stepfun.ai/v1", "https://gateway.example/realtime-api/v1"} {
 		u, err := realtimeURL(base, "custom-realtime-v3 &voice")
 		if err != nil || u.Query().Get("model") != "custom-realtime-v3 &voice" {
 			t.Fatalf("endpoint %s %v", base, err)
 		}
 	}
-	for _, base := range []string{"http://api.stepfun.com/v1", "https://secret@api.stepfun.com/v1", "https://api.stepfun.com/v1?x=1"} {
+	for _, base := range []string{"ftp://api.stepfun.com/v1", "https://secret@api.stepfun.com/v1", "https://api.stepfun.com/v1?x=1"} {
 		if _, err := realtimeURL(base, "custom-realtime-v3 &voice"); err == nil {
 			t.Fatalf("accepted %s", base)
 		}
@@ -52,7 +52,7 @@ func TestRealtimeDispatcherDoesNotAcceptScopeOrWriteTools(t *testing.T) {
 func TestRealtimeWebSocketTranscriptToolsAndPersistence(t *testing.T) {
 	f, _, _, _, sid, path := newChatFixture(t)
 	path = strings.TrimSuffix(path, "messages") + "realtime"
-	if _, err := f.db.Exec("update ai_providers set base_url='https://api.stepfun.com/v1',realtime_protocol='stepfun',realtime_model_id='configured-voice-model'"); err != nil {
+	if _, err := f.db.Exec("update ai_providers set base_url='https://api.stepfun.com/v1',realtime_protocol='stepfun',realtime_model_id='configured-voice-model',is_realtime_default=true"); err != nil {
 		t.Fatal(err)
 	}
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {

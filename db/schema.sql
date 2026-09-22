@@ -531,6 +531,10 @@ ALTER SEQUENCE public.agents_id_seq OWNED BY public.agents.id;
 --
 
 CREATE TABLE public.ai_providers (
+    models_json jsonb NOT NULL DEFAULT '[]'::jsonb,
+    is_realtime_default boolean NOT NULL DEFAULT false,
+    CONSTRAINT ai_providers_models_array CHECK (jsonb_typeof(models_json) = 'array'),
+    CONSTRAINT ai_providers_realtime_default_enabled CHECK (NOT is_realtime_default OR (enabled AND realtime_protocol <> 'disabled')),
     id bigint NOT NULL,
     name text NOT NULL,
     provider_type text NOT NULL,
@@ -10932,3 +10936,5 @@ create table inspection_flight_bindings (
  foreign key(action_job_id,project_id,team_id,connector_instance_id,flight_run_id,action_kind)
  references connector_action_jobs(id,project_id,team_id,connector_instance_id,task_run_id,action_kind)
 );
+
+CREATE UNIQUE INDEX ai_providers_single_realtime_default_idx ON public.ai_providers(is_realtime_default) WHERE is_realtime_default;

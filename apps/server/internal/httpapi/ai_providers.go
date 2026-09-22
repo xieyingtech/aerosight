@@ -17,9 +17,11 @@ import (
 )
 
 type aiProviderInput struct {
-	Params sqlcgen.CreateAIProviderParams
-	APIKey string
-	Audit  map[string]any
+	Params            sqlcgen.CreateAIProviderParams
+	APIKey            string
+	Models            []aiModel
+	IsRealtimeDefault bool
+	Audit             map[string]any
 }
 
 func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
@@ -27,7 +29,7 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 	bad := errors.New("AI_PROVIDER_INPUT_INVALID")
 	for k, v := range raw {
 		switch k {
-		case "name", "providerType", "baseUrl", "modelId", "enabled", "isDefault", "realtimeProtocol", "realtimeModelId":
+		case "name", "providerType", "baseUrl", "modelId", "enabled", "isDefault", "realtimeProtocol", "realtimeModelId", "models", "isRealtimeDefault":
 			out.Audit[k] = v
 		case "apiKey":
 		default:
@@ -40,6 +42,9 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 		dest *string
 	}{{"name", 120, &out.Params.Name}, {"modelId", 255, &out.Params.ModelID}} {
 		value, ok := raw[f.key].(string)
+		if f.key == "modelId" && raw["models"] != nil && ((raw[f.key] == nil) || (ok && strings.TrimSpace(value) == "")) {
+			continue
+		}
 		value = strings.TrimSpace(value)
 		if !ok || utf16Length(value) < 1 || utf16Length(value) > f.max {
 			return out, bad
@@ -81,7 +86,7 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 		}
 		if text != "" {
 			parsed, err := url.Parse(text)
-			if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" {
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
 				return out, bad
 			}
 			out.Params.BaseUrl = sql.NullString{String: text, Valid: true}
@@ -113,6 +118,37 @@ func parseAIProvider(raw map[string]any) (aiProviderInput, error) {
 	if out.Params.IsDefault && !out.Params.Enabled {
 		return out, bad
 	}
+	if value, present := raw["models"]; present {
+		var err error
+		out.Models, err = parseAIModels(value)
+		if err != nil {
+			return out, err
+		}
+		if out.Params.IsDefault && !hasAITextModel(out.Models, out.Params.ModelID) {
+			return out, bad
+		}
+		if out.Params.RealtimeProtocol != "disabled" && !hasAIModel(out.Models, out.Params.RealtimeModelID, "stepfun-realtime") {
+			return out, bad
+		}
+	} else {
+		out.Models = []aiModel{{ID: out.Params.ModelID, Protocol: "responses", Capabilities: []string{"text"}, Enabled: true}}
+		if out.Params.RealtimeProtocol != "disabled" {
+			out.Models = append(out.Models, aiModel{ID: out.Params.RealtimeModelID, Protocol: "stepfun-realtime", Capabilities: []string{"realtime", "audio-input", "audio-output"}, Enabled: true})
+		}
+	}
+	out.IsRealtimeDefault = out.Params.IsDefault && out.Params.RealtimeProtocol != "disabled"
+	if value, present := raw["isRealtimeDefault"]; present {
+		var ok bool
+		out.IsRealtimeDefault, ok = value.(bool)
+		if !ok {
+			return out, bad
+		}
+	}
+	if out.IsRealtimeDefault && (!out.Params.Enabled || out.Params.RealtimeProtocol == "disabled") {
+		return out, bad
+	}
+	out.Audit["models"] = out.Models
+	out.Audit["isRealtimeDefault"] = out.IsRealtimeDefault
 	return out, nil
 }
 
@@ -131,7 +167,7 @@ func (s *Server) aiProviderFailure(c *gin.Context, err error) {
 	switch err.Error() {
 	case "FORBIDDEN":
 		code, status = "FORBIDDEN", 403
-	case "AI_PROVIDER_INPUT_INVALID", "AI_PROVIDER_API_KEY_REQUIRED", "AI_PROVIDER_NOT_FOUND", "OUTBOUND_URL_INVALID", "OUTBOUND_HTTPS_REQUIRED", "OUTBOUND_URL_CREDENTIALS_FORBIDDEN", "OUTBOUND_DNS_EMPTY", "OUTBOUND_DNS_FAILED", "OUTBOUND_ADDRESS_RESTRICTED":
+	case "AI_PROVIDER_MODELS_FAILED", "AI_PROVIDER_ENDPOINT_KEY_REQUIRED", "AI_PROVIDER_CREDENTIAL_UNAVAILABLE", "AI_PROVIDER_INPUT_INVALID", "AI_PROVIDER_API_KEY_REQUIRED", "AI_PROVIDER_NOT_FOUND", "OUTBOUND_URL_INVALID", "OUTBOUND_HTTPS_REQUIRED", "OUTBOUND_URL_CREDENTIALS_FORBIDDEN", "OUTBOUND_DNS_EMPTY", "OUTBOUND_DNS_FAILED", "OUTBOUND_ADDRESS_RESTRICTED":
 		code = err.Error()
 	}
 	s.failure(c, status, code)
@@ -153,6 +189,8 @@ func (s *Server) aiProviderRoutes() {
 		c.JSON(200, rows)
 	})
 	g.POST("", s.saveAIProvider)
+	g.POST("/models", s.discoverAIModels)
+	g.PUT("/defaults", s.setAIDefault)
 	g.PATCH("/:providerId", s.saveAIProvider)
 	g.DELETE("/:providerId", s.deleteAIProvider)
 	g.POST("/:providerId/test", s.testAIProvider)
@@ -179,14 +217,10 @@ func (s *Server) saveAIProvider(c *gin.Context) {
 		s.aiProviderFailure(c, err)
 		return
 	}
-	if creating && input.APIKey == "" {
-		s.aiProviderFailure(c, errors.New("AI_PROVIDER_API_KEY_REQUIRED"))
-		return
-	}
+
 	ctx := c.Request.Context()
 	if input.Params.BaseUrl.Valid {
-		target, _ := url.Parse(input.Params.BaseUrl.String)
-		if _, _, err = s.validateOutboundURL(ctx, input.Params.BaseUrl.String, []string{target.Hostname()}); err != nil {
+		if _, _, err = s.resolveAIURL(ctx, input.Params.BaseUrl.String); err != nil {
 			s.aiProviderFailure(c, err)
 			return
 		}
@@ -210,6 +244,22 @@ func (s *Server) saveAIProvider(c *gin.Context) {
 				return nil, e
 			}
 		}
+		if !creating && raw["isDefault"] == nil && raw["isRealtimeDefault"] == nil {
+			if e := preserveAIDefaults(ctx, w, id, &input); e != nil {
+				return nil, e
+			}
+		}
+		if input.IsRealtimeDefault {
+			if e := w.Queries.ClearAIProviderRealtimeDefault(ctx); e != nil {
+				return nil, e
+			}
+		}
+		// Clear before updating enabled/protocol to satisfy the database constraint.
+		if !creating {
+			if e := w.Queries.SetAIProviderModels(ctx, sqlcgen.SetAIProviderModelsParams{ID: id, ModelsJson: []byte("[]"), IsRealtimeDefault: false}); e != nil {
+				return nil, e
+			}
+		}
 		if input.Params.IsDefault {
 			if e := w.Queries.ClearAIProviderDefault(ctx); e != nil {
 				return nil, e
@@ -225,7 +275,11 @@ func (s *Server) saveAIProvider(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		if input.APIKey != "" {
+		modelsJSON, _ := json.Marshal(input.Models)
+		if e := w.Queries.SetAIProviderModels(ctx, sqlcgen.SetAIProviderModelsParams{ID: id, ModelsJson: modelsJSON, IsRealtimeDefault: input.IsRealtimeDefault}); e != nil {
+			return nil, e
+		}
+		if creating || input.APIKey != "" {
 			envelope, e := credentials.EncryptJSON(map[string]string{"apiKey": input.APIKey}, s.credentialSecret, credentials.AAD("ai-provider", id, nil))
 			if e != nil {
 				return nil, e
@@ -315,9 +369,7 @@ func (s *Server) testAIProvider(c *gin.Context) {
 		if e = credentials.DecryptJSON(envelope, s.credentialSecret, credentials.AAD("ai-provider", id, nil), &credential); e != nil {
 			return nil, e
 		}
-		if credential.APIKey == "" {
-			return nil, errors.New("AI_PROVIDER_API_KEY_REQUIRED")
-		}
+
 		baseURL := p.BaseUrl.String
 		if baseURL == "" {
 			baseURL = "https://api.openai.com/v1"
@@ -326,7 +378,7 @@ func (s *Server) testAIProvider(c *gin.Context) {
 		if e != nil {
 			return nil, errors.New("OUTBOUND_URL_INVALID")
 		}
-		target, addresses, e := s.resolveOutboundURL(ctx, baseURL, []string{target.Hostname()})
+		target, addresses, e := s.resolveAIURL(ctx, baseURL)
 		if e != nil {
 			return nil, e
 		}

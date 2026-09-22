@@ -72,7 +72,15 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 
 ### AI provider
 
-先在非 AI 路径完成纵向验收。需要 AI 时，由平台管理员进入“系统管理 → AI Provider”，填写 Provider、可选基础地址、模型与 API Key，测试连接后启用并设为唯一默认项。无需设置 AI 环境变量或重启 Web。没有可用默认 Provider 时，智能体、案件 Copilot 与 Task `copilot.run` 明确不可用，其他功能继续运行。智能体永远不能绕过预检、审批和命令账本直连设备。
+由平台管理员进入“系统管理 → AI Provider”，在供应商列表点击“新建 Provider”或“编辑”，使用同一个配置弹窗：
+
+- **基础配置**：供应商名称、基础地址、API Key 和启用状态。AI Provider 支持内网、回环地址及 HTTP / HTTPS；地址包含 API 前缀，例如 `http://192.168.1.10:8000/v1`。API Key 加密保存；无认证服务新建时可留空，编辑时留空保留已有 Key。
+- **模型配置**：进入分页自动调用当前地址的 `/models` 接口；顶部输入框支持搜索匹配、下拉选择和添加列表以外的模型 ID。模型行只配置协议，能力不再单独声明，默认启用全部能力。协议必须选择 OpenAI Compatible、Responses、Anthropic Messages 或 StepFun Realtime，新模型默认 OpenAI Compatible。
+- **默认模型**：在管理页从全部供应商的模型中分别选择默认文字和默认实时模型，不在供应商弹窗里设置。当前运行时接入 Responses 和 StepFun Realtime；OpenAI Compatible 与 Anthropic Messages 目前为协议配置项，调用适配尚未实现，选为默认后不会错误地按 Responses 发送请求。停用或删除默认模型所在的供应商后，需要重新选择对应默认模型。
+
+“测试连接”检查模型列表接口的 HTTP 状态，不代表模型推理或实时语音已经验收。模型获取失败时可保留已有配置并手动添加。已有 Key 不回显，修改未保存的基础地址后获取模型需填写新地址的 Key，或先保存基础配置。
+
+升级时执行迁移 `0078_ai_provider_models.sql`，将已有文字/实时模型转换为模型目录，并保留原来的默认选择；部署新后端和前端后即可使用。之后修改供应商或模型无需重启或 AI 环境变量。没有可用默认文字模型时，智能体文字聊天、案件 Copilot 与 Task `copilot.run` 不可用；没有默认实时模型时实时语音不可用。智能体仍通过既有预检、审批和命令账本访问设备。
 
 ## 5. 功能开关与试点启用顺序
 
