@@ -16,7 +16,7 @@ const projectNavigation: ProjectNavigationItem[] = [
   { key: "devices", title: "设备", segment: "devices" },
   { key: "connectors", title: "连接器", segment: "connectors", managementOnly: true },
   { key: "issues", title: "案件", segment: "issues" },
-  { key: "algorithms", title: "算法服务", segment: "algorithms", permission: "algorithm:manage" },
+  { key: "algorithms", title: "算法运行", segment: "algorithms", permission: "algorithm:manage" },
   { key: "agents", title: "智能体", segment: "agents", permission: "agent:use" },
   { key: "assets", title: "数据资产", segment: "assets" },
   { key: "settings", title: "设置", segment: "settings", managementOnly: true }

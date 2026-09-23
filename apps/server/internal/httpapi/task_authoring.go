@@ -52,7 +52,7 @@ func (s *Server) validateTaskPublication(ctx context.Context, w *database.WriteT
 		for key, value := range fhObject(step["with"]) {
 			query, ok := resourceQueries[key]
 			if uses == "inspection.detect" && fhObject(step["with"])["source"] == "external" && key == "algorithmDefinitionVersionId" {
-				query = `select exists(select 1 from algorithm_definition_versions v join algorithm_definitions d on d.id=v.algorithm_definition_id and d.project_id=v.project_id join algorithm_providers p on p.id=d.provider_id and p.project_id=d.project_id where v.project_id=$1 and v.id=$2 and v.status='published' and d.capability_code='detection' and p.status='active' and p.provider_type='http-json')`
+				query = `select exists(select 1 from algorithm_definition_versions v join algorithm_definitions d on d.id=v.algorithm_definition_id and d.project_id=v.project_id join algorithm_providers p on p.id=d.provider_id where v.project_id=$1 and v.id=$2 and v.status='published' and d.capability_code='detection' and p.status='active' and p.provider_type='http-json')`
 			}
 			if !ok {
 				continue

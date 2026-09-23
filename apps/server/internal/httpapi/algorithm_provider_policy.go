@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"aerosight/server/internal/algorithm"
-	"aerosight/server/internal/database/sqlcgen"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,10 +14,16 @@ import (
 )
 
 type algorithmProviderInput struct {
-	Params     sqlcgen.CreateAlgorithmProviderParams
+	Params     algorithmProviderParams
 	Credential map[string]string
 	Status     string
 	Audit      map[string]any
+}
+
+type algorithmProviderParams struct {
+	Name, ProviderType, BaseUrl, AuthType                string
+	AllowedHeadersJson                                   []byte
+	TimeoutSeconds, ConcurrencyLimit, RateLimitPerMinute int32
 }
 
 func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) {

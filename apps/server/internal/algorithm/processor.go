@@ -118,21 +118,22 @@ func (processor *Processor) prepare(ctx context.Context, tx *sql.Tx, event outbo
 		return nil, nil
 	}
 	var (
-		endpoint       string
-		providerType   string
-		providerStatus string
-		timeoutSeconds int
-		inputJSON      []byte
-		mappingJSON    []byte
-		status         string
-		runAssetID     int
-		providerID     int64
-		authType       string
-		credentialRaw  []byte
+		endpoint        string
+		providerType    string
+		providerStatus  string
+		timeoutSeconds  int
+		inputJSON       []byte
+		mappingJSON     []byte
+		status          string
+		runAssetID      int
+		providerID      int64
+		credentialScope sql.NullInt32
+		authType        string
+		credentialRaw   []byte
 	)
 	err = tx.QueryRowContext(ctx, `
 			select provider.base_url, provider.provider_type, provider.status, provider.timeout_seconds,
-		       provider.id, provider.auth_type, provider.credential_envelope_json,
+		       provider.id, provider.project_id, provider.auth_type, provider.credential_envelope_json,
 		       run.input_snapshot_json, version.output_mapping_json, run.status, run.input_asset_id
 		from algorithm_runs run
 		join algorithm_definition_versions version
@@ -140,10 +141,10 @@ func (processor *Processor) prepare(ctx context.Context, tx *sql.Tx, event outbo
 		join algorithm_definitions definition
 		  on definition.id = version.algorithm_definition_id and definition.project_id = run.project_id
 		join algorithm_providers provider
-		  on provider.id = definition.provider_id and provider.project_id = run.project_id
+		  on provider.id = definition.provider_id
 		where run.id = $1 and run.project_id = $2 and run.team_id = $3
 		for update of run`, payload.RunID, event.ProjectID, event.TeamID).Scan(
-		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &providerID, &authType, &credentialRaw,
+		&endpoint, &providerType, &providerStatus, &timeoutSeconds, &providerID, &credentialScope, &authType, &credentialRaw,
 		&inputJSON, &mappingJSON, &status, &runAssetID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -161,7 +162,7 @@ func (processor *Processor) prepare(ctx context.Context, tx *sql.Tx, event outbo
 	if providerStatus != "active" {
 		return nil, processor.failRun(ctx, tx, payload.RunID, "provider_unavailable", "algorithm provider is not active")
 	}
-	providerHeaders, err := decryptProviderHeaders(providerID, event.ProjectID, authType, credentialRaw, processor.authSecret)
+	providerHeaders, err := decryptProviderHeaders(providerID, int(credentialScope.Int32), authType, credentialRaw, processor.authSecret)
 	if err != nil {
 		return nil, processor.failRun(ctx, tx, payload.RunID, "provider_credential_unavailable", "algorithm provider credentials are unavailable")
 	}

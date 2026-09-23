@@ -57,7 +57,7 @@ SELECT to_jsonb(result) FROM (
  FROM algorithm_runs run
  JOIN algorithm_definition_versions version ON version.id=run.algorithm_definition_version_id AND version.project_id=run.project_id
  JOIN algorithm_definitions definition ON definition.id=version.algorithm_definition_id AND definition.project_id=run.project_id
- JOIN algorithm_providers provider ON provider.id=definition.provider_id AND provider.project_id=run.project_id
+ JOIN algorithm_providers provider ON provider.id=definition.provider_id
  WHERE run.project_id=$1 ORDER BY run.created_at DESC LIMIT 100
 ) result
 `
@@ -167,7 +167,7 @@ SELECT to_jsonb(result) FROM (
  FROM algorithm_runs run
  JOIN algorithm_definition_versions version ON version.id=run.algorithm_definition_version_id AND version.project_id=run.project_id
  JOIN algorithm_definitions definition ON definition.id=version.algorithm_definition_id AND definition.project_id=run.project_id
- JOIN algorithm_providers provider ON provider.id=definition.provider_id AND provider.project_id=run.project_id
+ JOIN algorithm_providers provider ON provider.id=definition.provider_id
  WHERE run.project_id=$1 AND run.id=$2
 ) result
 `
@@ -191,7 +191,7 @@ SELECT definition.team_id,version.id AS configuration_snapshot_id,provider.provi
  coalesce(asset.mime_type,'application/octet-stream')::text AS mime_type
 FROM algorithm_definition_versions version
 JOIN algorithm_definitions definition ON definition.id=version.algorithm_definition_id AND definition.project_id=version.project_id AND definition.current_published_version_id=version.id
-JOIN algorithm_providers provider ON provider.id=definition.provider_id AND provider.project_id=definition.project_id AND provider.status='active'
+JOIN algorithm_providers provider ON provider.id=definition.provider_id AND provider.status='active'
 JOIN assets asset ON asset.project_id=version.project_id AND asset.id=$1 AND asset.status='available'
 WHERE version.project_id=$2 AND version.id=$3 AND version.status='published'
 FOR SHARE OF version,definition,provider,asset

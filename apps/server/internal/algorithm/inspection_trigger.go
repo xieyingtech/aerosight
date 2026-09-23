@@ -29,7 +29,7 @@ func (trigger *Trigger) QueueInspectionAsset(ctx context.Context, tx *sql.Tx, pr
  cross join lateral jsonb_array_elements(observation.manifest_json->'assets') frozen
  join algorithm_definition_versions version on version.id=$7 and version.project_id=run.project_id and version.status='published'
  join algorithm_definitions definition on definition.id=version.algorithm_definition_id and definition.project_id=run.project_id and definition.capability_code='detection'
- join algorithm_providers provider on provider.id=definition.provider_id and provider.project_id=run.project_id and provider.status='active' and provider.provider_type='http-json'
+ join algorithm_providers provider on provider.id=definition.provider_id and provider.status='active' and provider.provider_type='http-json'
  where run.project_id=$1 and run.team_id=$2 and run.id=$3 and run.status in('running','dispatching')
  and (frozen->>'assetId')::bigint=asset.id and (frozen->>'version')::int=asset.version
  and coalesce(frozen->>'objectVersion','')=coalesce(asset.object_version,'')

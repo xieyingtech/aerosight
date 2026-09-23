@@ -139,7 +139,7 @@ func (trigger *Trigger) TaskStepHandler(ctx context.Context, tx *sql.Tx, event o
 		and asset.task_run_id=run.id and asset.status='available'
 		join algorithm_definition_versions version on version.id=$6 and version.project_id=run.project_id and version.status='published'
 		join algorithm_definitions definition on definition.id=version.algorithm_definition_id and definition.project_id=version.project_id
-		join algorithm_providers provider on provider.id=definition.provider_id and provider.project_id=definition.project_id and provider.status='active'
+		join algorithm_providers provider on provider.id=definition.provider_id and provider.status='active'
 		where run.project_id=$1 and run.team_id=$2 and run.id=$3`, event.ProjectID, event.TeamID, payload.TaskRunID,
 		selected.AssetID, payload.TaskRunStepID, selected.DefinitionVersionID).Scan(&asset.ID, &asset.ProjectID, &asset.TeamID,
 		&asset.Version, &asset.TaskRunID, &asset.TaskRunStepID, &asset.DeviceID, &asset.Kind, &asset.MIMEType, &asset.Checksum,

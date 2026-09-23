@@ -235,8 +235,8 @@ type AlgorithmDefinitionVersion struct {
 
 type AlgorithmProvider struct {
 	ID                     int64                 `json:"id"`
-	ProjectID              int32                 `json:"project_id"`
-	TeamID                 int32                 `json:"team_id"`
+	ProjectID              sql.NullInt32         `json:"project_id"`
+	TeamID                 sql.NullInt32         `json:"team_id"`
 	Name                   string                `json:"name"`
 	ProviderType           string                `json:"provider_type"`
 	BaseUrl                string                `json:"base_url"`

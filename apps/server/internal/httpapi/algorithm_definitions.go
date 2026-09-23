@@ -185,7 +185,8 @@ func (s *Server) saveAlgorithmDefinition(c *gin.Context) {
 	}
 	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), Action: "algorithm_definition.save", ResourceType: "algorithm_definition", ResourceID: resource, Input: gin.H{"definition": input.Definition, "configuration": input.Configuration}, PolicyResult: map[string]any{"permission": "algorithm:manage", "internalConfigurationSnapshots": true}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, a.TeamID, "algorithm:manage", false), func(w *database.WriteTx) (gin.H, error) {
-		team, e := w.Queries.LockAlgorithmDefinitionProvider(ctx, sqlcgen.LockAlgorithmDefinitionProviderParams{ProjectID: pid, ID: input.ProviderID})
+		var providerID int64
+		e := w.Tx.QueryRowContext(ctx, `select id from algorithm_providers where id=$1 for share`, input.ProviderID).Scan(&providerID)
 		if errors.Is(e, sql.ErrNoRows) {
 			return nil, errors.New("ALGORITHM_PROVIDER_NOT_FOUND")
 		}
@@ -194,7 +195,7 @@ func (s *Server) saveAlgorithmDefinition(c *gin.Context) {
 		}
 		number := int32(1)
 		if creating {
-			id, e = w.Queries.CreateAlgorithmDefinition(ctx, sqlcgen.CreateAlgorithmDefinitionParams{ProjectID: pid, TeamID: team, ProviderID: input.ProviderID, Name: input.Name, CapabilityCode: input.Capability, Description: input.Description, CreatedByUserID: sql.NullInt32{Int32: uid, Valid: true}})
+			id, e = w.Queries.CreateAlgorithmDefinition(ctx, sqlcgen.CreateAlgorithmDefinitionParams{ProjectID: pid, TeamID: a.TeamID, ProviderID: input.ProviderID, Name: input.Name, CapabilityCode: input.Capability, Description: input.Description, CreatedByUserID: sql.NullInt32{Int32: uid, Valid: true}})
 			if e != nil {
 				return nil, e
 			}
@@ -227,7 +228,7 @@ func (s *Server) saveAlgorithmDefinition(c *gin.Context) {
 			}
 			encoded[key] = value
 		}
-		snapshot, e := w.Queries.InsertAlgorithmConfiguration(ctx, sqlcgen.InsertAlgorithmConfigurationParams{ProjectID: pid, TeamID: team, AlgorithmDefinitionID: id, Version: number, ExecutionMode: conf["executionMode"].(string), ModelOrProcess: conf["modelOrProcess"].(string), InputRequirementsJson: encoded["inputSchema"], ParametersSchemaJson: encoded["parametersSchema"], OutputSchemaJson: encoded["outputSchema"], ProtocolConfigJson: encoded["protocolConfig"], OutputMappingJson: encoded["outputMapping"], LabelMappingJson: encoded["labelMapping"], DisplayMetadataJson: encoded["displayMetadata"], PublishThreshold: conf["publishThreshold"].(float64), ActorUserID: sql.NullInt32{Int32: uid, Valid: true}})
+		snapshot, e := w.Queries.InsertAlgorithmConfiguration(ctx, sqlcgen.InsertAlgorithmConfigurationParams{ProjectID: pid, TeamID: a.TeamID, AlgorithmDefinitionID: id, Version: number, ExecutionMode: conf["executionMode"].(string), ModelOrProcess: conf["modelOrProcess"].(string), InputRequirementsJson: encoded["inputSchema"], ParametersSchemaJson: encoded["parametersSchema"], OutputSchemaJson: encoded["outputSchema"], ProtocolConfigJson: encoded["protocolConfig"], OutputMappingJson: encoded["outputMapping"], LabelMappingJson: encoded["labelMapping"], DisplayMetadataJson: encoded["displayMetadata"], PublishThreshold: conf["publishThreshold"].(float64), ActorUserID: sql.NullInt32{Int32: uid, Valid: true}})
 		if e != nil {
 			return nil, e
 		}

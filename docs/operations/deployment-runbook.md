@@ -68,7 +68,7 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 
 ### 算法 provider
 
-先配置 `ALGORITHM_ALLOWED_HOSTS`，再由项目管理员创建 provider：类型、HTTPS base URL、认证凭据、认证方式、允许 header、timeout、并发与速率限制。运行连接测试，确认 DNS/重定向仍满足 allowlist 且 callback 签名有效，最后开启 `external_algorithms_enabled`。任何 SSRF 拒绝、mapping 漂移或 callback 重放告警都阻断启用。
+先配置 `ALGORITHM_ALLOWED_HOSTS`，再由平台管理员进入“系统管理 → 算法服务”，在列表中用“新建算法服务”或“编辑”弹窗配置全平台共享的 Provider：类型、HTTPS base URL、认证凭据、认证方式、允许 header、timeout、并发与速率限制。项目算法定义仍按项目隔离，但可引用任一平台 Provider。运行地址和协议测试，确认 DNS 满足 allowlist，再验证实际调用与 callback 签名，最后开启 `external_algorithms_enabled`。任何 SSRF 拒绝、mapping 漂移或 callback 重放告警都阻断启用。已有项目 Provider 会显示在平台列表中，其历史凭据保持原加密范围；新 Provider 使用平台加密范围。
 
 ### AI provider
 

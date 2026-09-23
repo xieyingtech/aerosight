@@ -201,7 +201,7 @@ func (handler *CallbackHandler) process(
 		from algorithm_runs run
 		join algorithm_definition_versions version on version.id = run.algorithm_definition_version_id and version.project_id = run.project_id
 		join algorithm_definitions definition on definition.id = version.algorithm_definition_id and definition.project_id = run.project_id
-		join algorithm_providers provider on provider.id = definition.provider_id and provider.project_id = run.project_id
+		join algorithm_providers provider on provider.id = definition.provider_id
 		where run.id = $1 for update of run`, runID).Scan(
 		&projectID, &teamID, &providerID, &providerType, &tokenHash, &externalJobID, &currentStatus, &mappingJSON,
 	)

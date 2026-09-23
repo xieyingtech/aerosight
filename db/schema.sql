@@ -836,8 +836,8 @@ ALTER SEQUENCE public.algorithm_definitions_id_seq OWNED BY public.algorithm_def
 
 CREATE TABLE public.algorithm_providers (
     id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
+    project_id integer,
+    team_id integer,
     name text NOT NULL,
     provider_type text NOT NULL,
     base_url text NOT NULL,
@@ -5053,13 +5053,6 @@ ALTER TABLE ONLY public.algorithm_providers
 
 
 --
--- Name: algorithm_providers algorithm_providers_project_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.algorithm_providers
-    ADD CONSTRAINT algorithm_providers_project_name_unique UNIQUE (project_id, name);
-
-
 --
 -- Name: algorithm_run_attempts algorithm_run_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
@@ -8322,11 +8315,11 @@ ALTER TABLE ONLY public.algorithm_callback_receipts
 
 
 --
--- Name: algorithm_callback_receipts algorithm_callback_receipts_provider_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: algorithm_callback_receipts algorithm_callback_receipts_provider_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.algorithm_callback_receipts
-    ADD CONSTRAINT algorithm_callback_receipts_provider_project_fk FOREIGN KEY (provider_id, project_id) REFERENCES public.algorithm_providers(id, project_id) ON DELETE CASCADE;
+    ADD CONSTRAINT algorithm_callback_receipts_provider_fk FOREIGN KEY (provider_id) REFERENCES public.algorithm_providers(id) ON DELETE RESTRICT;
 
 
 --
@@ -8394,11 +8387,11 @@ ALTER TABLE ONLY public.algorithm_definitions
 
 
 --
--- Name: algorithm_definitions algorithm_definitions_provider_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: algorithm_definitions algorithm_definitions_provider_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.algorithm_definitions
-    ADD CONSTRAINT algorithm_definitions_provider_project_fk FOREIGN KEY (provider_id, project_id) REFERENCES public.algorithm_providers(id, project_id) ON DELETE CASCADE;
+    ADD CONSTRAINT algorithm_definitions_provider_fk FOREIGN KEY (provider_id) REFERENCES public.algorithm_providers(id) ON DELETE RESTRICT;
 
 
 --
@@ -8410,13 +8403,6 @@ ALTER TABLE ONLY public.algorithm_providers
 
 
 --
--- Name: algorithm_providers algorithm_providers_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.algorithm_providers
-    ADD CONSTRAINT algorithm_providers_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
 --
 -- Name: algorithm_run_attempts algorithm_run_attempts_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --

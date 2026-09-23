@@ -220,6 +220,9 @@ func readCredentials(ctx context.Context, tx *sql.Tx) ([]storedCredential, map[s
 		if source.scoped {
 			scopeProjection = "project_id::bigint"
 		}
+		if source.table == "algorithm_providers" {
+			scopeProjection = "coalesce(project_id, 0)::bigint"
+		}
 		statement := fmt.Sprintf(`select id, %s, credential_envelope_json
 			from %s where credential_envelope_json is not null order by id for update`, scopeProjection, source.table)
 		rows, err := tx.QueryContext(ctx, statement)

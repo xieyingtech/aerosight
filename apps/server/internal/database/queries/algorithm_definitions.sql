@@ -1,6 +1,3 @@
--- name: LockAlgorithmDefinitionProvider :one
-SELECT team_id FROM algorithm_providers WHERE project_id=$1 AND id=$2 FOR SHARE;
-
 -- name: CreateAlgorithmDefinition :one
 INSERT INTO algorithm_definitions(project_id,team_id,provider_id,name,capability_code,description,created_by_user_id)
 VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id;
@@ -32,5 +29,5 @@ SELECT jsonb_build_object('id',definition.id::text,'configurationSnapshotId',ver
  'schemas',jsonb_build_object('input',version.input_requirements_json,'parameters',version.parameters_schema_json,'output',version.output_schema_json),'display',version.display_metadata_json)
 FROM algorithm_definitions definition
 JOIN algorithm_definition_versions version ON version.id=definition.current_published_version_id AND version.project_id=definition.project_id
-JOIN algorithm_providers provider ON provider.id=definition.provider_id AND provider.project_id=definition.project_id
+JOIN algorithm_providers provider ON provider.id=definition.provider_id
 WHERE definition.project_id=$1 AND version.status='published' ORDER BY definition.name;

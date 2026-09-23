@@ -40,7 +40,6 @@ type Querier interface {
 	CountLiveStartSessions(ctx context.Context, arg CountLiveStartSessionsParams) (int32, error)
 	CreateAIProvider(ctx context.Context, arg CreateAIProviderParams) (int64, error)
 	CreateAlgorithmDefinition(ctx context.Context, arg CreateAlgorithmDefinitionParams) (int64, error)
-	CreateAlgorithmProvider(ctx context.Context, arg CreateAlgorithmProviderParams) (int64, error)
 	CreateChatSession(ctx context.Context, arg CreateChatSessionParams) (int32, error)
 	CreateDefaultAdmin(ctx context.Context, password sql.NullString) error
 	CreateFlightHubConnector(ctx context.Context, arg CreateFlightHubConnectorParams) (CreateFlightHubConnectorRow, error)
@@ -181,7 +180,6 @@ type Querier interface {
 	ListAdminTeams(ctx context.Context) ([]ListAdminTeamsRow, error)
 	ListAdminUsers(ctx context.Context) ([]ListAdminUsersRow, error)
 	ListAlgorithmCatalog(ctx context.Context, projectID int32) ([]json.RawMessage, error)
-	ListAlgorithmProviders(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListAlgorithmRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ListChatMessagesRow, error)
 	ListChatSessions(ctx context.Context, arg ListChatSessionsParams) ([]ListChatSessionsRow, error)
@@ -202,8 +200,6 @@ type Querier interface {
 	LockAIProvider(ctx context.Context, id int64) (LockAIProviderRow, error)
 	LockAIProviderRegistry(ctx context.Context) error
 	LockAlgorithmDefinition(ctx context.Context, arg LockAlgorithmDefinitionParams) (int64, error)
-	LockAlgorithmDefinitionProvider(ctx context.Context, arg LockAlgorithmDefinitionProviderParams) (int32, error)
-	LockAlgorithmProviderCredential(ctx context.Context, arg LockAlgorithmProviderCredentialParams) (LockAlgorithmProviderCredentialRow, error)
 	LockAlgorithmRetrySource(ctx context.Context, arg LockAlgorithmRetrySourceParams) (LockAlgorithmRetrySourceRow, error)
 	LockChatSession(ctx context.Context, arg LockChatSessionParams) (int32, error)
 	LockDJIAdapterEnvelope(ctx context.Context, arg LockDJIAdapterEnvelopeParams) (pqtype.NullRawMessage, error)
@@ -235,8 +231,6 @@ type Querier interface {
 	QueueIssueCopilot(ctx context.Context, arg QueueIssueCopilotParams) (uuid.UUID, error)
 	ReadAIProviderPublic(ctx context.Context, id int64) (json.RawMessage, error)
 	ReadAlgorithmAccessAsset(ctx context.Context, arg ReadAlgorithmAccessAssetParams) (ReadAlgorithmAccessAssetRow, error)
-	ReadAlgorithmProviderEndpoint(ctx context.Context, arg ReadAlgorithmProviderEndpointParams) (ReadAlgorithmProviderEndpointRow, error)
-	ReadAlgorithmProviderPublic(ctx context.Context, arg ReadAlgorithmProviderPublicParams) (json.RawMessage, error)
 	ReadAlgorithmRunAttempts(ctx context.Context, arg ReadAlgorithmRunAttemptsParams) ([]json.RawMessage, error)
 	ReadAlgorithmRunDetail(ctx context.Context, arg ReadAlgorithmRunDetailParams) (json.RawMessage, error)
 	ReadAlgorithmRunSource(ctx context.Context, arg ReadAlgorithmRunSourceParams) (ReadAlgorithmRunSourceRow, error)
@@ -313,7 +307,6 @@ type Querier interface {
 	SetAIProviderHealth(ctx context.Context, arg SetAIProviderHealthParams) error
 	SetAIProviderModels(ctx context.Context, arg SetAIProviderModelsParams) error
 	SetAlgorithmCurrentConfiguration(ctx context.Context, arg SetAlgorithmCurrentConfigurationParams) error
-	SetAlgorithmProviderCredential(ctx context.Context, arg SetAlgorithmProviderCredentialParams) error
 	SetDeviceAdapterEnabled(ctx context.Context, arg SetDeviceAdapterEnabledParams) (SetDeviceAdapterEnabledRow, error)
 	SetLivePlaybackExpiry(ctx context.Context, arg SetLivePlaybackExpiryParams) error
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -358,7 +351,6 @@ type Querier interface {
 	TaskWorkbenchVersions(ctx context.Context, arg TaskWorkbenchVersionsParams) ([]json.RawMessage, error)
 	UpdateAIProvider(ctx context.Context, arg UpdateAIProviderParams) error
 	UpdateAlgorithmDefinition(ctx context.Context, arg UpdateAlgorithmDefinitionParams) error
-	UpdateAlgorithmProvider(ctx context.Context, arg UpdateAlgorithmProviderParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)

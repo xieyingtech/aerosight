@@ -131,7 +131,10 @@ func TestAlgorithmDefinitionSnapshots(t *testing.T) {
 	count("select count(*) from algorithm_definition_versions where status='published' and version=6", 1)
 	count("select count(*) from algorithm_definitions d join algorithm_definition_versions v on d.current_published_version_id=v.id where v.version=6", 1)
 	_, other := f.project(t)
-	call("POST", fmt.Sprintf("/api/projects/%d/algorithm-definitions", other), body, 400)
+	call("POST", fmt.Sprintf("/api/projects/%d/algorithm-definitions", other), body, 201)
+	if got := call("GET", fmt.Sprintf("/api/projects/%d/algorithm-definitions", other), "", 200); len(got["definitions"].([]any)) != 1 {
+		t.Fatalf("shared provider did not create an isolated project definition: %+v", got)
+	}
 	data = call("PUT", base+"/2147483647", body, 400)
 	if data["error"] != "ALGORITHM_DEFINITION_NOT_FOUND" {
 		t.Fatalf("missing %+v", data)

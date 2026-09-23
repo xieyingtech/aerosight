@@ -32,7 +32,7 @@ export type IssueListItem = {
 };
 
 export type AlgorithmProviderView = {
-  id: string; projectId: number; name: string; providerType: "http-json" | "kserve-v2" | "ogc-processes" | "ai-sdk";
+  id: string; name: string; providerType: "http-json" | "kserve-v2" | "ogc-processes" | "ai-sdk";
   baseUrl: string; authType: "none" | "bearer" | "api-key-header" | "basic" | "signed";
   allowedHeaders: string[]; timeoutSeconds: number; concurrencyLimit: number; rateLimitPerMinute: number;
   status: string; health: Record<string, unknown>; updatedAt: string;
