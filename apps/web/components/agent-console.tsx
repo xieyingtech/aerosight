@@ -54,7 +54,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const session = sessions.find(item => item.id === activeId);
   const messages = (session?.messages ?? []).filter(message => (voice === "connected" && message.role === "user") || message.content || (Array.isArray(message.toolCalls) && message.toolCalls.length));
   const occupied = busy || voice !== "off";
-  const voiceButton = !draft.trim() && !messages.length;
+  const voiceButton = !draft.trim();
   // One user message starts a turn; its assistant steps share one identity.
   const messageGroups: Array<AgentSessionView["messages"]> = [];
   for (const message of messages) {
@@ -70,7 +70,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   }, [activeId, messages.length, session?.messages, pending, busy, liveSteps]);
 
   async function startVoice() {
-    if (lock.current || draft.trim() || messages.length) return;
+    if (lock.current || draft.trim()) return;
     lock.current = true;
     setInputStatus(""); setVoice("connecting"); setVoiceStatus("正在连接实时语音…"); setError(null);
     let id = activeId;
