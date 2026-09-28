@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
@@ -21,7 +23,7 @@ export function TaskCreateForm({projectId}:{projectId:number}){
   try{
    const response=await apiFetch(`/api/projects/${projectId}/tasks`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sourceFormat:value.format,source:value.source,idempotencyKey:key.current})});
    const result=await response.json();if(!response.ok)throw new Error(String(result.error??"创建失败"));
-   router.push(`/projects/tasks/detail/?projectId=${projectId}&taskId=${String(result.taskId)}`);
+   router.push(canonicalPageHref(`/projects/tasks/detail/?projectId=${projectId}&taskId=${String(result.taskId)}`));
   }catch(e){setMessage(e instanceof Error?e.message:"创建失败");}finally{setPending(false);}
  }
  return <section className="space-y-3 rounded-lg border p-4">

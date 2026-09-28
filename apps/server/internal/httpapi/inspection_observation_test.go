@@ -5,11 +5,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
@@ -56,10 +57,12 @@ func TestInspectionSnapshotsAreProjectScopedAndSealed(t *testing.T) {
 	call(path, 404)
 	root := t.TempDir()
 	f.server.AttachMediaStorage(root)
-	imageBody, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=")
+	var imageBuffer bytes.Buffer
+	err := png.Encode(&imageBuffer, image.NewRGBA(image.Rect(0, 0, 1, 1)))
 	if err != nil {
 		t.Fatal(err)
 	}
+	imageBody := imageBuffer.Bytes()
 	dir := filepath.Join(root, "projects", fmt.Sprint(pid))
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -90,6 +93,21 @@ func TestInspectionSnapshotsAreProjectScopedAndSealed(t *testing.T) {
 	}
 	call(fmt.Sprintf("%s/assets/%d/content", path, asset+1), 403)
 	call(fmt.Sprintf("/api/projects/%d/inspection/observations/%s/assets/%d/content", other, observation, asset), 403)
+	var uid int32
+	if err = f.db.QueryRow("select id from users where email='admin@example.com'").Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
+	photoArgs, _ := json.Marshal(map[string]any{"resource": "photo", "observationId": observation, "assetId": asset})
+	photoResult, photoErr := f.server.executeInspectionQuery(context.Background(), uid, int32(pid), photoArgs)
+	if photoErr != nil {
+		t.Fatal("agent photo read", photoErr)
+	}
+	if _, ok := photoResult["_image"].(agentPhoto); !ok {
+		t.Fatalf("image input missing: %+v", photoResult)
+	}
+	if photoResult, photoErr = f.server.executeInspectionQuery(context.Background(), uid, int32(other), photoArgs); photoErr != nil || photoResult["status"] != "failed" {
+		t.Fatal(photoErr)
+	}
 	if err = os.WriteFile(imagePath, []byte("changed bytes"), 0600); err != nil {
 		t.Fatal(err)
 	}

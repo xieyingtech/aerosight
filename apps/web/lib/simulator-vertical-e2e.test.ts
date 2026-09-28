@@ -9,7 +9,7 @@ import { createProjectMapModel } from "./project-map-model.ts";
 import type { ProjectReplay } from "./project-replay-core.ts";
 import { applyReplayToSnapshot } from "./replay-model.ts";
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
-import { mapSuspectedConstructionDetections, suspectedConstructionTemplate } from "./suspected-construction-template.ts";
+import { mapAlgorithmDetections } from "./algorithm-detection-mapping.ts";
 import { evaluateTaskCondition } from "./task-condition-evaluator.ts";
 import { applyCommandAck, transitionTaskRun } from "./task-run-core.ts";
 import { planTaskTrigger } from "./task-trigger-core.ts";
@@ -25,7 +25,7 @@ test("simulator vertical acceptance covers manual and scheduled task through iss
       pose: { longitude: 120.15, latitude: 30.27, altitudeMeters: 80, capturedAt: startedAt } }],
     tracks: [{ projectId: 17, deviceId: 1, startedAt, endedAt: "2026-08-27T08:05:00.000Z", pointCount: 2,
       geometry: { type: "LineString", coordinates: [[120.15, 30.27, 80], [120.16, 30.28, 85]] } }],
-    activeTasks: [], taskSteps: [], algorithmRuns: [], liveStreams: [], mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
+    activeTasks: [], taskSteps: [], algorithmRuns: [], liveStreams: [], mediaPoints: [], algorithmResults: [], openIssues: [], openAlerts: [], regions: [],
     freshness: { latestCapturedAt: "2026-08-27T08:05:00.000Z", isRealtime: true },
     availability: { devices: "available", tasks: "available", media: "available", alerts: "available", liveStreams: "available" }
   };
@@ -75,14 +75,14 @@ test("simulator vertical acceptance covers manual and scheduled task through iss
 
   assert.doesNotThrow(() => assertStreamCanStart({ deviceStatus: "online", capabilities: ["camera.live"], adapterType: "simulator" }));
   assert.equal(transitionLiveStream("starting", "live"), "live");
-  const detections = mapSuspectedConstructionDetections({
-    response: { results: [{ id: "sim-detection-1", class: "new_building", score: 0.91,
+  const detections = mapAlgorithmDetections({
+    response: { results: [{ id: "sim-detection-1", class: "object", score: 0.91,
       geometry: { type: "bbox", x: 10, y: 20, width: 100, height: 80 } }] },
-    mapping: suspectedConstructionTemplate.outputMapping,
-    labelMapping: suspectedConstructionTemplate.labelMapping,
+    mapping: { detectionsPath: "results", keyPath: "id", labelPath: "class", confidencePath: "score", geometryPath: "geometry", geometryTypePath: "geometry.type", geometryFormat: "object" },
+    labelMapping: { object: "object" },
     inputAsset: { assetId: 21, version: 1, checksumSha256: "a".repeat(64), mimeType: "image/jpeg" }
   });
-  assert.equal(detections[0].label, "suspected-construction:new-building");
+  assert.equal(detections[0].label, "object");
   const condition = evaluateTaskCondition({ op: "gte",left: { ref: "steps.detect.outputs.maxConfidence" },right: { value: 0.8 } },{
     inputs: { areaId: 8 },steps: { detect: { outputs: { maxConfidence: detections[0].confidence,count: detections.length } } }
   });
@@ -94,17 +94,17 @@ test("simulator vertical acceptance covers manual and scheduled task through iss
 
   const completedSnapshot: ProjectSituationSnapshot = {
     ...initialSnapshot,
-    activeTasks: [{ id: 42, projectId: 17, taskName: "疑似违建巡检", status: run.status, startedAt }],
+    activeTasks: [{ id: 42, projectId: 17, taskName: "算法结果巡检", status: run.status, startedAt }],
     taskSteps: [{ id: 43, projectId: 17, taskRunId: 42, name: "巡检采集", stepKey: "collect", uses: "device.collect",
       status: "succeeded", occurredAt: "2026-08-27T08:04:00.000Z" }],
-    algorithmRuns: [{ id: "algorithm-run-1", projectId: 17, taskRunId: 42, definitionName: "疑似违建识别",
+    algorithmRuns: [{ id: "algorithm-run-1", projectId: 17, taskRunId: 42, definitionName: "算法结果识别",
       status: "succeeded", occurredAt: "2026-08-27T08:05:00.000Z" }],
     liveStreams: [{ id: 3, projectId: 17, deviceId: 1, status: "live", startedAt }],
     mediaPoints: [{ id: 21, projectId: 17, deviceId: 1, kind: "image", capturedAt: "2026-08-27T08:04:00.000Z",
       metadata: { longitude: 120.16, latitude: 30.28 } }],
-    suspectedConstruction: [{ id: "group-1", projectId: 17, label: "疑似违建", status: "active",
+    algorithmResults: [{ id: "group-1", projectId: 17, label: "算法结果", status: "active",
       capturedAt: "2026-08-27T08:06:00.000Z", geometry: { type: "Polygon", coordinates: [[[120.16, 30.28], [120.17, 30.28], [120.17, 30.29], [120.16, 30.28]]] } }],
-    openIssues: [{ id: "issue-1", projectId: 17, title: "疑似违建复核", status: "open",
+    openIssues: [{ id: "issue-1", projectId: 17, title: "算法结果复核", status: "open",
       updatedAt: "2026-08-27T08:07:00.000Z", longitude: 120.16, latitude: 30.28 }],
     openAlerts: []
   };

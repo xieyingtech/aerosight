@@ -8,9 +8,8 @@ import { migrateDatabase } from "./db-migrate.mjs";
 import { createProjectMapModel } from "../../apps/web/lib/project-map-model.ts";
 import { readProjectSituationSnapshot } from "../../contracts/go-migration/legacy-web/project-snapshot-core.ts";
 import {
-  mapSuspectedConstructionDetections,
-  suspectedConstructionTemplate
-} from "../../apps/web/lib/suspected-construction-template.ts";
+  mapAlgorithmDetections
+} from "../../apps/web/lib/algorithm-detection-mapping.ts";
 import { buildTimelineModel } from "../../apps/web/lib/timeline-model.ts";
 import { evaluateTaskCondition } from "../../apps/web/lib/task-condition-evaluator.ts";
 
@@ -110,7 +109,7 @@ async function seed(client) {
   )).rows[0];
   const definition = (await client.query(
     `insert into algorithm_definitions(project_id,team_id,provider_id,name,capability_code,created_by_user_id)
-     values($1,$2,$3,'benchmark-detection','perception.suspected-construction',$4) returning id`,
+     values($1,$2,$3,'benchmark-detection','perception.detection',$4) returning id`,
     [project.id, team.id, provider.id, user.id]
   )).rows[0];
   const algorithmVersion = (await client.query(
@@ -118,8 +117,7 @@ async function seed(client) {
        project_id,team_id,algorithm_definition_id,version,status,execution_mode,model_or_process,
        output_mapping_json,label_mapping_json,publish_threshold,created_by_user_id,published_by_user_id,published_at
      ) values($1,$2,$3,1,'draft','callback','benchmark-v1',$4,$5,0.65,$6,$6,now()) returning id`,
-    [project.id, team.id, definition.id, suspectedConstructionTemplate.outputMapping,
-      suspectedConstructionTemplate.labelMapping, user.id]
+    [project.id, team.id, definition.id.outputMapping.labelMapping, user.id]
   )).rows[0];
   await client.query("update algorithm_definition_versions set status='published' where id=$1", [algorithmVersion.id]);
   await client.query("update algorithm_definitions set current_published_version_id=$2 where id=$1", [definition.id, algorithmVersion.id]);
@@ -261,11 +259,11 @@ async function benchmarkDetections(client, pool, scope) {
       [runId,scope.projectId,scope.teamId,scope.algorithmVersionId,scope.assetId,taskRun.id,detectRunStepId,`benchmark-run-${index}`]
     );
     const started = performance.now();
-    const canonical = mapSuspectedConstructionDetections({
-      response: { results: [{ id: `detection-${index}`, class: "suspected_construction", score: 0.91,
+    const canonical = mapAlgorithmDetections({
+      response: { results: [{ id: `detection-${index}`, class: "object", score: 0.91,
         geometry: { type: "bbox", x: 10, y: 12, width: 30, height: 24 } }] },
-      mapping: suspectedConstructionTemplate.outputMapping,
-      labelMapping: suspectedConstructionTemplate.labelMapping,
+      mapping: { detectionsPath: "results", keyPath: "id", labelPath: "class", confidencePath: "score", geometryPath: "geometry", geometryTypePath: "geometry.type", geometryFormat: "object" },
+      labelMapping: { object: "object" },
       inputAsset: { assetId: scope.assetId, version: 1, checksumSha256: "a".repeat(64), mimeType: "image/jpeg" }
     })[0];
     await client.query("begin");

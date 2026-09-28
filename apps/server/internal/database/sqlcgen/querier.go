@@ -311,6 +311,7 @@ type Querier interface {
 	SetLivePlaybackExpiry(ctx context.Context, arg SetLivePlaybackExpiryParams) error
 	SnapshotActiveTasks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	SnapshotAlgorithmResults(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotAlgorithmRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotDeviceGrants(ctx context.Context, arg SnapshotDeviceGrantsParams) ([]json.RawMessage, error)
 	SnapshotDevices(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -320,7 +321,6 @@ type Querier interface {
 	SnapshotMedia(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotProjectScope(ctx context.Context, arg SnapshotProjectScopeParams) (SnapshotProjectScopeRow, error)
 	SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error)
-	SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTaskSteps(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotTracks(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	StopFlightHubLiveSession(ctx context.Context, arg StopFlightHubLiveSessionParams) error

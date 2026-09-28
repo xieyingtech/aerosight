@@ -45,7 +45,7 @@ func (q *Queries) SnapshotActiveTasks(ctx context.Context, projectID int32) ([]j
 
 const snapshotAlerts = `-- name: SnapshotAlerts :many
 select to_jsonb(snapshot_row) as item from (
-select event.id,event.project_id as "projectId",'疑似违建' as title,event.status,event.severity,
+select event.id,event.project_id as "projectId",event.title,event.status,event.severity,
               event.last_detected_at as "updatedAt",ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
        from perception_events event join detection_groups group_row on group_row.id=event.detection_group_id and group_row.project_id=event.project_id
        where event.project_id=$1 and event.status in('open','acknowledged','investigating')
@@ -55,6 +55,39 @@ select event.id,event.project_id as "projectId",'疑似违建' as title,event.st
 
 func (q *Queries) SnapshotAlerts(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
 	rows, err := q.db.QueryContext(ctx, snapshotAlerts, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []json.RawMessage{}
+	for rows.Next() {
+		var item json.RawMessage
+		if err := rows.Scan(&item); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const snapshotAlgorithmResults = `-- name: SnapshotAlgorithmResults :many
+select to_jsonb(snapshot_row) as item from (
+select group_row.id::text as id, group_row.project_id as "projectId", group_row.label,
+              group_row.status, group_row.location_quality as "locationQuality",
+              group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
+       from detection_groups group_row where group_row.project_id=$1 and group_row.status='active'
+       order by group_row.last_detected_at desc limit 500
+) snapshot_row
+`
+
+func (q *Queries) SnapshotAlgorithmResults(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
+	rows, err := q.db.QueryContext(ctx, snapshotAlgorithmResults, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -156,6 +189,11 @@ const snapshotDevices = `-- name: SnapshotDevices :many
 SELECT to_jsonb(r) FROM (
 
        select device.id, device.name, device.type, device.status,
+              (select definition.connector_key from device_connector_bindings binding
+               join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
+               join connector_definitions definition on definition.id=adapter.connector_definition_id
+               where binding.project_id=device.project_id and binding.device_id=device.id and binding.status='active'
+               order by binding.priority desc,binding.connector_instance_id limit 1) as "connectorKey",
               device.device_type_id::text as "deviceTypeId",
               device_type.type_key as "typeKey", device_type.version as "typeVersion",
               device_type.display_name as "typeName", device_type.category,
@@ -448,39 +486,6 @@ select channel.stable_channel_id as "stableChannelId",channel.device_id as "devi
 
 func (q *Queries) SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
 	rows, err := q.db.QueryContext(ctx, snapshotRealtimeChannels, projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []json.RawMessage{}
-	for rows.Next() {
-		var item json.RawMessage
-		if err := rows.Scan(&item); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const snapshotSuspectedConstruction = `-- name: SnapshotSuspectedConstruction :many
-select to_jsonb(snapshot_row) as item from (
-select group_row.id::text as id, group_row.project_id as "projectId", '疑似违建' as label,
-              group_row.status, group_row.location_quality as "locationQuality",
-              group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
-       from detection_groups group_row where group_row.project_id=$1 and group_row.status='active'
-       order by group_row.last_detected_at desc limit 500
-) snapshot_row
-`
-
-func (q *Queries) SnapshotSuspectedConstruction(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
-	rows, err := q.db.QueryContext(ctx, snapshotSuspectedConstruction, projectID)
 	if err != nil {
 		return nil, err
 	}

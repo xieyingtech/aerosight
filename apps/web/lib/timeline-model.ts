@@ -79,9 +79,9 @@ export function buildTimelineModel(snapshot: ProjectSituationSnapshot, options?:
     const timestamp = dateValue(media.capturedAt ?? media.createdAt);
     if (timestamp) raw.media.push({ id: `media-${media.id}-${timestamp}`, entityId: String(media.deviceId ?? media.id), lane: "media", label: String(media.kind ?? "媒体"), timestamp, count: 1 });
   }
-  for (const detection of snapshot.suspectedConstruction) {
+  for (const detection of snapshot.algorithmResults) {
     const timestamp = dateValue(detection.capturedAt ?? detection.createdAt);
-    if (timestamp) raw.detections.push({ id: `detection-${detection.id}-${timestamp}`, entityId: String(detection.id), lane: "detections", label: String(detection.label ?? "疑似违建"), timestamp, count: 1, status: String(detection.status ?? "open") });
+    if (timestamp) raw.detections.push({ id: `detection-${detection.id}-${timestamp}`, entityId: String(detection.id), lane: "detections", label: String(detection.label ?? "算法识别结果"), timestamp, count: 1, status: String(detection.status ?? "open") });
   }
   for (const issue of snapshot.openIssues) {
     const timestamp = dateValue(issue.updatedAt ?? issue.createdAt);

@@ -1,7 +1,8 @@
 "use client";
 
 import { Suspense, type ReactNode } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { scopedPageQuery } from "@/lib/page-routes";
 import { useAPI } from "@/lib/use-api";
 import { APIStateView } from "@/components/api-state";
 
@@ -17,8 +18,13 @@ export function uuidParam(query: PageQuery, key: string): string | null {
   return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
 }
 type Props<T> = { endpoint: (query: PageQuery) => string | null; children: (data: T, query: PageQuery, reload: () => void) => ReactNode };
+export function usePageQuery() {
+  const search = useSearchParams();
+  const pathname = usePathname();
+  return scopedPageQuery(pathname, search.toString());
+}
 function Content<T>({ endpoint, children }: Props<T>) {
-  const query = useSearchParams();
+  const query = usePageQuery();
   const path = endpoint(query);
   const state = useAPI<T>(path);
   if (!path) return <p className="p-4 text-sm text-destructive" role="alert">无法打开此页面，请从列表重新进入。</p>;

@@ -41,7 +41,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const query = useSearchParams();
-  const projectId = Number(query.get("projectId") ?? pathname.match(/^\/projects\/(\d+)/)?.[1]);
+  const projectId = Number(pathname.match(/^\/projects\/(\d+)/)?.[1] ?? query.get("projectId"));
   const currentProject = projects.find((project) => project.id === projectId);
   const navMain = [
     { title: "项目", url: "/projects", icon: <FolderKanbanIcon /> },

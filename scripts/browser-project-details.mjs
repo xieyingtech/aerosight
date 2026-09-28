@@ -21,8 +21,8 @@ export async function verifyProjectDetails(page, detailURL, seedSQL) {
   const cases = [
     ['tasks/runs/detail', 'runId', ids.taskRunId, '任务运行工作台', 'Post-build task'],
     ['algorithms/runs/detail', 'runId', ids.algorithmRunId, 'Post-build algorithm'],
-    ['issues/detail', 'issueId', ids.issueId, '案件 #1 · Post-build issue'],
-    ['events/detail', 'eventId', ids.eventId, '疑似违建', 'Post-build rule'],
+    ['issues/detail', 'issueId', ids.issueId, 'Post-build issue'],
+    ['events/detail', 'eventId', ids.eventId, '算法识别结果', 'Post-build rule'],
   ];
   const verified = [];
   for (const [path, key, id, heading, text] of cases) {

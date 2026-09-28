@@ -11,12 +11,11 @@ export default function nextConfig(phase: string): NextConfig {
   return {
     allowedDevOrigins: [new URL(process.env.PUBLIC_ORIGIN ?? "http://localhost:3000").hostname],
     skipTrailingSlashRedirect: true,
-    async redirects() { return legacyPageRedirects(); },
     async rewrites() {
       return { beforeFiles: [
         { source: "/api/:path*", destination: `${origin.origin}/api/:path*` },
         { source: "/algorithm-assets/:path*", destination: `${origin.origin}/algorithm-assets/:path*` }
-      ], afterFiles: [], fallback: [] };
+      ], afterFiles: [], fallback: legacyPageRedirects().map(({source, destination}) => ({source, destination})) };
     }
   };
 }

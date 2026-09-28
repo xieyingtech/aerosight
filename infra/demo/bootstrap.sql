@@ -146,7 +146,7 @@ insert into algorithm_definitions (
   project_id, team_id, provider_id, name, capability_code, description, created_by_user_id
 )
 select project_id, team_id, provider_id, '通用文档 OCR', 'perception.ocr',
-       '由动态 schema 定义的通用 OCR 演示，不绑定违建或其他业务类别。', user_id
+       '由动态 schema 定义的 OCR 演示配置，可独立删除。', user_id
   from demo
 on conflict (project_id, name) do nothing;
 

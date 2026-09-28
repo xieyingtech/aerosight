@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
-import { activeProjectStreams, hasTransitionalLiveStream, isLiveStreamPlayable, liveStreamPollDecision, resolveWorkbenchSelection, workbenchQuery } from "./realtime-workbench-core.ts";
+import { activeProjectStreams, hasTransitionalLiveStream, isLiveStreamPlayable, liveStreamPollDecision, realtimeDeviceModules, resolveWorkbenchSelection, workbenchQuery } from "./realtime-workbench-core.ts";
 
 test("selection updates retain static project scope and filters while replacing old selections", () => {
-  const query = new URLSearchParams(workbenchQuery({deviceId: 12, streamId: 21}, "projectId=7&deviceId=11&deviceId=99&streamId=5&layer=a&layer=b"));
+  const query = new URLSearchParams(workbenchQuery({deviceId: 12, streamId: 21}, 7, "projectId=7&deviceId=11&deviceId=99&streamId=5&layer=a&layer=b"));
   assert.equal(query.get("projectId"), "7");
   assert.deepEqual(query.getAll("deviceId"), ["12"]);
   assert.equal(query.get("streamId"), "21");
   assert.deepEqual(query.getAll("layer"), ["a", "b"]);
-  const cleared = new URLSearchParams(workbenchQuery({deviceId:null,streamId:null}, query.toString()));
+  const cleared = new URLSearchParams(workbenchQuery({deviceId:null,streamId:null}, 7, query.toString()));
   assert.equal(cleared.get("projectId"), "7");
   assert.equal(cleared.has("deviceId"), false);
   assert.equal(cleared.has("streamId"), false);
@@ -20,9 +20,18 @@ const snapshot = {
   project: { id: 7, name: "North", teamId: 3 }, generatedAt: "2026-08-28T00:00:00Z", consistency: "repeatable-read",
   devices: [{ id: 11, name: "Dock" }, { id: 12, name: "Drone" }], tracks: [], activeTasks: [], taskSteps: [], algorithmRuns: [],
   liveStreams: [{ id: 21, deviceId: 12, status: "starting" }, { id: 22, deviceId: 11, status: "stopped" }],
-  mediaPoints: [], suspectedConstruction: [], openIssues: [], openAlerts: [], regions: [],
+  mediaPoints: [], algorithmResults: [], openIssues: [], openAlerts: [], regions: [],
   freshness: { latestCapturedAt: null, isRealtime: true }, availability: {}
 } satisfies ProjectSituationSnapshot;
+
+test("workbench modules follow device capabilities, including temporarily unavailable video", () => {
+  const capability = (code: string, availability = "available") => ({code, availability, reason: null, risk: "low" as const, authorized: true, actions: []});
+  assert.deepEqual(realtimeDeviceModules(null), { live: false, timeline: false });
+  assert.deepEqual(realtimeDeviceModules({capabilities: [capability("state.read")]}), {live: false, timeline: true});
+  assert.deepEqual(realtimeDeviceModules({capabilities: [capability("stream.video.read", "unavailable")]}), {live: true, timeline: false});
+  assert.deepEqual(realtimeDeviceModules({capabilities: [capability("stream.video.control"), capability("state.read")]}), {live: true, timeline: true});
+  assert.deepEqual(realtimeDeviceModules({id: 11}), {live: false, timeline: false});
+});
 
 test("stream deep link owns device selection and foreign identifiers fail closed", () => {
   assert.deepEqual(resolveWorkbenchSelection(snapshot, { deviceId: 11, streamId: 21 }), { deviceId: 12, streamId: 21 });
@@ -35,7 +44,9 @@ test("device deep link selects its active stream and keeps devices without strea
 });
 
 test("query and transition helpers expose only active project state", () => {
-  assert.equal(workbenchQuery({ deviceId: 12, streamId: 21 }), "deviceId=12&streamId=21");
+  assert.equal(workbenchQuery({ deviceId: 12, streamId: 21 }, 7), "projectId=7&deviceId=12&streamId=21");
+  assert.equal(workbenchQuery({ deviceId: null, streamId: null }, 7), "projectId=7");
+  assert.equal(new URLSearchParams(workbenchQuery({ deviceId: 12, streamId: 21 }, 7, "projectId=99")).get("projectId"), "7");
   assert.deepEqual(activeProjectStreams(snapshot).map((stream) => stream.id), [21]);
   assert.equal(hasTransitionalLiveStream(snapshot), true);
   assert.equal(isLiveStreamPlayable("starting"), false);

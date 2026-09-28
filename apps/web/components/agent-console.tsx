@@ -6,11 +6,13 @@ import { apiJSON, apiFetch, APIError } from "@/lib/api-client";
 import { readChatStream } from "@/lib/agent-chat-stream";
 import { AgentRealtimeCall, mergeRealtimeMessage, realtimeErrorMessage } from "@/lib/agent-realtime";
 import { Button } from "@/components/ui/button";
-import { AgentQueryEvidence } from "@/components/agent-query-evidence";
+import { AgentQueryEvidence, agentToolLabel } from "@/components/agent-query-evidence";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { SiteHeaderActions } from "@/components/site-header";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { AgentSessionView } from "@/lib/web-api-types";
+
+type AgentApproval = NonNullable<AgentSessionView["approvals"]>[number];
 
 const suggestions = [
   { title: "项目态势", prompt: "帮我总结当前项目的整体态势，有哪些值得关注的情况？" },
@@ -25,7 +27,8 @@ function errorMessage(error: unknown) {
   if (error.code === "AI_REQUEST_TIMEOUT") return "回复超时，请稍后继续提问。";
   if (error.code.startsWith("AI_UPSTREAM_")) return "AI 服务暂时无法回复，请稍后继续提问。";
   if (error.code === "AGENT_TOOL_STEP_LIMIT") return "本次查询已达到执行步数上限，可根据已有结果继续追问。";
-  if (error.code.startsWith("AGENT_TOOL_")) return "本次工具查询未完成，请查看调用状态后重试。";
+  if (error.code.startsWith("AGENT_TOOL_")) return "本次工具调用未完成，请查看调用状态后重试。";
+  if (error.code === "ISSUE_VERSION_CONFLICT") return "案件已更新，请让智能体重新查询后再发起操作。";
   if (error.status === 403) return "你没有在此项目中使用智能体的权限。";
   return "消息未能完成，请稍后重试。";
 }
@@ -36,12 +39,14 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deciding, setDeciding] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [liveSteps, setLiveSteps] = useState<Array<{ content: string; tools: Array<Record<string, unknown>> }>>([]);
   const [progress, setProgress] = useState("");
   const [voice, setVoice] = useState<"off" | "connecting" | "connected">("off");
   const [inputStatus, setInputStatus] = useState("");
   const [voiceStatus, setVoiceStatus] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const voiceCall = useRef<AgentRealtimeCall | null>(null);
   const mounted = useRef(true);
   const controller = useRef<AbortController | null>(null);
@@ -53,6 +58,31 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   const input = useRef<HTMLTextAreaElement>(null);
   const session = sessions.find(item => item.id === activeId);
   const messages = (session?.messages ?? []).filter(message => (voice === "connected" && message.role === "user") || message.content || (Array.isArray(message.toolCalls) && message.toolCalls.length));
+  const approvals = session?.approvals ?? [];
+  useEffect(() => {
+    const nextExpiry = approvals.filter(approval => approval.status === "pending").map(approval => Date.parse(approval.expiresAt)).filter(expiry => expiry > now).sort((a, b) => a - b)[0];
+    if (nextExpiry === undefined) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(nextExpiry - now + 50, 60_000));
+    return () => window.clearTimeout(timer);
+  }, [session?.approvals, now]);
+  const approvalById = new Map(approvals.map(approval => [approval.id, approval]));
+  const legacyApprovals = [...approvals].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  const usedApprovals = new Set<string>();
+  const approvalByCall = new Map<string, AgentApproval>();
+  for (const message of messages) {
+    if (!Array.isArray(message.toolCalls)) continue;
+    message.toolCalls.forEach((rawCall, index) => {
+      if (!rawCall || typeof rawCall !== "object") return;
+      const call = rawCall as Record<string, unknown>;
+      if (call.status !== "confirmation_required") return;
+      const explicit = typeof call.approvalId === "string" ? approvalById.get(call.approvalId) : undefined;
+      const approval = explicit ?? legacyApprovals.find(candidate => candidate.toolName === call.name && !usedApprovals.has(candidate.id) && Date.parse(candidate.createdAt) <= Date.parse(message.createdAt));
+      if (approval && !usedApprovals.has(approval.id)) {
+        usedApprovals.add(approval.id);
+        approvalByCall.set(`${message.id}:${index}`, approval);
+      }
+    });
+  }
   const occupied = busy || voice !== "off";
   const voiceButton = !draft.trim();
   // One user message starts a turn; its assistant steps share one identity.
@@ -78,6 +108,12 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
       message: message => {
         if (!mounted.current) return;
         setSessions(previous => previous.map(item => item.id === id ? { ...item, messages: mergeRealtimeMessage(item.messages, message) } : item));
+        if (Array.isArray(message.toolCalls) && message.toolCalls.some(tool => tool.status === "confirmation_required")) {
+          void apiJSON<AgentSessionView[]>(base).then(refreshed => {
+            if (!mounted.current) return;
+            setSessions(previous => previous.map(item => item.id === id ? { ...item, approvals: refreshed.find(row => row.id === id)?.approvals ?? [] } : item));
+          }).catch(() => {});
+        }
       },
       status: status => { if (mounted.current) setVoiceStatus(status); },
       inputStatus: (status) => { if (mounted.current) setInputStatus(status); },
@@ -87,6 +123,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
         voiceCall.current = null; lock.current = false; setVoice("off");
         setVoiceStatus("通话已结束，可以继续打字交流。");
         if (failure) setError(realtimeErrorMessage(failure));
+        void apiJSON<AgentSessionView[]>(base).then(refreshed => { if (mounted.current) setSessions(refreshed); }).catch(() => {});
         requestAnimationFrame(() => input.current?.focus());
       },
     });
@@ -145,7 +182,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
           setLiveSteps(previous => previous.map((step, index) => index === previous.length - 1 ? { ...step, content: step.content + String(event.data.delta ?? "") } : step));
         }
         if (event.type === "tool") {
-          setProgress(event.data.status === "running" ? "正在查询项目数据…" : "正在整理查询结果…");
+          setProgress(event.data.status === "running" ? (event.data.name === "mutate_issue" || event.data.name === "create_task_draft" ? "正在准备待授权操作…" : "正在查询项目数据…") : "正在整理工具结果…");
           setLiveSteps(previous => previous.map((step, index) => {
             if (index !== previous.length - 1) return step;
             const found = step.tools.some(tool => tool.id === event.data.id);
@@ -175,6 +212,42 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
       setPending(null); setBusy(false); lock.current = false;
       requestAnimationFrame(() => input.current?.focus());
     }
+  }
+
+  async function decide(approvalId: string, decision: "approve" | "reject") {
+    if (activeId === null || deciding) return;
+    setDeciding(approvalId); setError(null);
+    try {
+      const result = await apiJSON<{ status: string; followupStatus?: string }>(`${base}/${activeId}/approvals/${approvalId}`, { method: "POST", body: JSON.stringify({ decision }) });
+      setSessions(await apiJSON<AgentSessionView[]>(base));
+      if (decision === "approve" && result.followupStatus === "failed") setError("授权结果已保存，但智能体回复暂未生成，请查看工具结果。");
+    } catch (failure) {
+      setNow(Date.now());
+      if (failure instanceof APIError && failure.status === 403) setError("当前账号没有执行此操作的权限，请联系项目管理员。");
+      else if (failure instanceof APIError && failure.code === "AGENT_APPROVAL_EXPIRED") setError("授权已过期，请让智能体重新发起操作。");
+      else if (failure instanceof APIError && failure.status === 409) setError("资源已变化或授权已处理，请先核对平台状态，勿重复提交。");
+      else if (failure instanceof APIError && failure.status === 404) setError("授权记录已失效，请让智能体重新发起操作。");
+      else setError("授权处理失败，请稍后重试。");
+      try { setSessions(await apiJSON<AgentSessionView[]>(base)); } catch { /* keep current view */ }
+    } finally { setDeciding(null); }
+  }
+
+  function approvalDescription(approval: NonNullable<AgentSessionView["approvals"]>[number]) {
+    if (approval.summary) return approval.summary;
+    if (approval.toolName === "create_task_draft") return "为已有任务创建可编辑草稿版本；不会发布、启用或运行任务。";
+    const mutation = approval.mutation;
+    if (!mutation) return "修改案件";
+    if (mutation.action === "comment") return `添加评论：${mutation.body ?? ""}`;
+    if (mutation.action === "status") return `状态改为 ${mutation.status === "closed" ? "已关闭" : "待处理"}`;
+    if (mutation.action === "labels") return `标签改为：${(mutation.labels ?? []).join("、") || "无"}`;
+    if (mutation.action === "assign" || mutation.action === "unassign") return `${mutation.action === "assign" ? "分配给" : "取消分配"} ${mutation.assigneeType === "agent" ? "智能体" : "用户"} #${mutation.assigneeId}`;
+    return mutation.action;
+  }
+
+  function outdatedApprovalPrompt(message: AgentSessionView["messages"][number], group: AgentSessionView["messages"]) {
+    if (message.content.trim() !== "待授权操作已经生成。请核对内容后，手动点击“授权执行”或“拒绝”。") return false;
+    const linked = group.flatMap(item => Array.isArray(item.toolCalls) ? item.toolCalls.map((_: unknown, index: number) => approvalByCall.get(`${item.id}:${index}`)).filter((approval): approval is AgentApproval => Boolean(approval)) : []);
+    return linked.length > 0 && linked.every(approval => approval.status !== "pending" || Date.parse(approval.expiresAt) <= now);
   }
 
   return <section aria-label="项目智能体聊天" className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
@@ -211,9 +284,31 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
             <div className={`min-w-0 max-w-[88%] ${group[0].role === "user" ? "rounded-2xl rounded-tr-sm bg-primary px-4 py-3 text-primary-foreground" : "flex-1 pt-1"}`}>
               {group[0].role !== "user" && <p className="mb-2 text-xs opacity-60">项目智能体</p>}
               <div className="space-y-3">{group.map(message => <div key={message.id}>
-                {message.content && (message.role === "assistant" ? <ChatMarkdown content={message.content} /> : <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>)}
+                {message.content && !outdatedApprovalPrompt(message, group) && (message.role === "assistant" ? <ChatMarkdown content={message.content} /> : <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>)}
                 {voice === "connected" && message.role === "user" && !message.content && <p className="text-sm opacity-70">正在聆听并转写…</p>}
-                <AgentQueryEvidence toolCalls={message.toolCalls} inline />
+                {Array.isArray(message.toolCalls) && message.toolCalls.length ? message.toolCalls.map((rawCall, index) => {
+                  const approval = approvalByCall.get(`${message.id}:${index}`);
+                  const call = rawCall && typeof rawCall === "object" ? rawCall as Record<string, unknown> : rawCall;
+                  const expired = approval?.status === "pending" && new Date(approval.expiresAt).getTime() <= now;
+                  const evidence = approval ? { ...call, status: expired ? "expired" : approval.status === "pending" ? "confirmation_required" : approval.status, summary: approvalDescription(approval) } : call;
+                  return <div key={index}>
+                    <AgentQueryEvidence toolCalls={[evidence]} inline />
+                    {approval?.status === "pending" && !expired && session?.status === "open" ? <div className="rounded-lg border bg-card px-3 py-3 text-sm">
+                      <p className="font-medium">请确认 · {agentToolLabel(approval.toolName)}{approval.taskId ? ` · 任务 #${approval.taskId}` : approval.issueId ? ` · 案件 #${approval.issueId}` : ""}</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words">{approvalDescription(approval)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{approval.toolName === "mutate_issue" ? `基于案件版本 ${approval.expectedVersion}，执行时会重新检查权限和版本。` : "执行时会重新检查当前账号权限及平台资源状态。"}</p>
+                      {approval.input && <details className="mt-2"><summary className="cursor-pointer text-xs text-muted-foreground">查看本次执行参数</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">{JSON.stringify(approval.input, null, 2)}</pre></details>}
+                      {["run_task", "set_task_state", "submit_flight", "control_flight", "control_task_run"].includes(approval.toolName) && <p className="mt-2 font-medium text-amber-700 dark:text-amber-400">此操作可能影响真实设备或后续定时运行。提交成功不等于飞机已起飞或停止。</p>}
+                      <div className="mt-3 flex gap-2">
+                        <Button size="sm" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "approve")}>{deciding === approval.id ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}授权执行</Button>
+                        <Button size="sm" variant="outline" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "reject")}>拒绝</Button>
+                      </div>
+                    </div> : null}
+                    {expired ? <p className="mt-1 text-xs text-muted-foreground">本次授权已过期，请重新向智能体发起操作。</p> : null}
+                    {approval?.status === "executing" && <p className="mt-1 text-xs text-muted-foreground">授权已提交，正在处理；若长时间未更新，请核对平台任务或飞行作业，勿重复提交。</p>}
+                    {approval?.result != null && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">查看平台返回结果</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(approval.result, null, 2)}</pre></details>}
+                  </div>;
+                }) : <AgentQueryEvidence toolCalls={message.toolCalls} inline />}
               </div>)}</div>
             </div>
           </article>)}

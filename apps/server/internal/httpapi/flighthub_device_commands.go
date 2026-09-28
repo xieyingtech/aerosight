@@ -18,7 +18,7 @@ type fhDiscretePolicy struct {
 }
 
 var fhDiscretePolicies = map[string]fhDiscretePolicy{
-	"return_home": {"flight.return_home", "device.control", "device.control", nil}, "return_home_cancel": {"flight.return_home", "device.control", "device.control", nil}, "flighttask_pause": {"mission.execute", "device.control", "device.control", nil}, "flighttask_recovery": {"mission.execute", "device.control", "device.control", nil},
+	"return_home": {"flight.return_home", "device.control", "device.control", []string{"dji.dock2", "dji.dock3"}}, "return_home_cancel": {"flight.return_home", "device.control", "device.control", []string{"dji.dock2", "dji.dock3"}}, "flighttask_pause": {"mission.execute", "device.control", "device.control", []string{"dji.dock2", "dji.dock3"}}, "flighttask_recovery": {"mission.execute", "device.control", "device.control", []string{"dji.dock2", "dji.dock3"}},
 	"camera.change": {"camera.change", "device.camera.change", "flighthub.camera.change", []string{"dji.dock2", "dji.dock3"}}, "camera.change_lens": {"camera.lens.change", "device.lens.change", "flighthub.lens.change", []string{"dji.matrice3d", "dji.matrice3td", "dji.matrice4d", "dji.matrice4td"}},
 }
 
@@ -45,7 +45,10 @@ func validFHCommandParameters(key string, m map[string]any) bool {
 }
 func fhCommandSafety(ctx context.Context, q *sqlcgen.Queries, pid, team int32, input deviceCommandInput, target sqlcgen.LockDeviceCommandTargetRow, route gin.H) (gin.H, error) {
 	p, ok := fhDiscretePolicies[input.Key]
-	if !ok || p.capability != input.Capability {
+	if !ok {
+		return nil, errors.New("FLIGHTHUB_COMMAND_UNSUPPORTED")
+	}
+	if p.capability != input.Capability {
 		return nil, errors.New("FLIGHTHUB_COMMAND_POLICY_MISMATCH")
 	}
 	if !validFHCommandParameters(input.Key, input.Parameters) {

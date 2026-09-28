@@ -3,7 +3,7 @@
 import { apiFetch } from "@/lib/api-client";
 
 import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, WrenchIcon } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { projectPageHref, scopedPageQuery } from "@/lib/page-routes";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ActiveStreamSwitcher } from "@/components/active-stream-switcher";
@@ -17,8 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { InputSelect } from "@/components/ui/input-select";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import {
-  findProjectDevice, liveStreamPollDecision, resolveWorkbenchSelection,
-  type RealtimeWorkbenchSelection, workbenchQuery
+  activeProjectStreams, findProjectDevice, liveStreamPollDecision, realtimeDeviceModules, resolveWorkbenchSelection,
+  type RealtimeWorkbenchSelection
 } from "@/lib/realtime-workbench-core";
 import type { SituationSelection } from "@/lib/situation-state";
 
@@ -44,7 +44,6 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   initialDeviceId?: string | null;
   initialStreamId?: string | null;
 }) {
-  const pathname = usePathname();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [selection, setSelection] = useState<RealtimeWorkbenchSelection>(() => resolveWorkbenchSelection(initialSnapshot, {
     deviceId: initialDeviceId, streamId: initialStreamId
@@ -55,12 +54,15 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
 
   const syncSelection = useCallback((next: RealtimeWorkbenchSelection, replace = true) => {
     setSelection(next);
-    const encoded = workbenchQuery(next);
-    const href = encoded ? `${pathname}?${encoded}` : pathname;
+    const query = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    for (const key of ["projectId", "deviceId", "streamId"]) query.delete(key);
+    if (next.deviceId) query.set("deviceId", String(next.deviceId));
+    if (next.streamId) query.set("streamId", String(next.streamId));
+    const href = projectPageHref(snapshot.project.id, "realtime", Object.fromEntries(query));
     if (replace && typeof window !== "undefined" && `${window.location.pathname}${window.location.search}` !== href) {
       window.history.replaceState(window.history.state, "", href);
     }
-  }, [pathname]);
+  }, [snapshot.project.id]);
 
   const refresh = useCallback(async (selectStreamId?: number) => {
     setRefreshing(true);
@@ -81,12 +83,15 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   }, [selection.deviceId, selection.streamId, snapshot.project.id, syncSelection]);
 
   useEffect(() => {
-    const decision = liveStreamPollDecision(snapshot, pollCount.current);
+    const device = findProjectDevice(snapshot, selection.deviceId);
+    const pollingSnapshot = selection.deviceId && realtimeDeviceModules(device).live
+      ? scopedTimelineSnapshot(snapshot, selection.deviceId) : { ...snapshot, liveStreams: [] };
+    const decision = liveStreamPollDecision(pollingSnapshot, pollCount.current);
     if (decision === "stable") { pollCount.current = 0; setTransitionTimeout(false); return; }
     if (decision === "timeout") { setTransitionTimeout(true); return; }
     const timer = window.setInterval(async () => {
       pollCount.current += 1;
-      if (liveStreamPollDecision(snapshot, pollCount.current) === "timeout") {
+      if (liveStreamPollDecision(pollingSnapshot, pollCount.current) === "timeout") {
         window.clearInterval(timer);
         setTransitionTimeout(true);
         return;
@@ -94,11 +99,11 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
       await refresh();
     }, 2000);
     return () => window.clearInterval(timer);
-  }, [refresh, snapshot]);
+  }, [refresh, snapshot, selection.deviceId]);
 
   useEffect(() => {
     const onPopState = () => {
-      const params = new URLSearchParams(window.location.search);
+      const params = scopedPageQuery(window.location.pathname, window.location.search);
       setSelection(resolveWorkbenchSelection(snapshot, { deviceId: params.get("deviceId"), streamId: params.get("streamId") }));
     };
     window.addEventListener("popstate", onPopState);
@@ -106,6 +111,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   }, [snapshot]);
 
   const selectedDevice = findProjectDevice(snapshot, selection.deviceId);
+  const modules = realtimeDeviceModules(selectedDevice);
   const mapSelection: SituationSelection | null = selectedDevice ? {
     lane: `device-${String(selectedDevice.category ?? selectedDevice.type ?? "ground")}`,
     entityId: String(selectedDevice.id), label: String(selectedDevice.name ?? `设备 #${selectedDevice.id}`)
@@ -116,7 +122,8 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     description: `${String(device.typeName ?? device.category ?? "未分类")} · ${String(device.status ?? "unknown")}`,
     keywords: [String(device.typeKey ?? ""), String(device.driverKey ?? ""), String(device.category ?? "")]
   }));
-  const timelineSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
+  const deviceSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
+  const hasActiveStreams = deviceSnapshot ? activeProjectStreams(deviceSnapshot).length > 0 : false;
   const actions = (selectedDevice?.capabilities ?? []).flatMap((capability) => capability.actions).filter((action) => action.kind !== "live");
   const diagnostics = selectedDevice && selection.deviceId
     ? (snapshot.diagnostics ?? []).filter((item) => item.deviceId == null || Number(item.deviceId) === selection.deviceId) : [];
@@ -142,7 +149,6 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   return <div className="grid min-h-[600px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
     <ProjectMap className="h-[65svh] min-h-[520px] xl:h-full xl:min-h-0" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
     <aside className="min-h-0 space-y-3 xl:overflow-y-auto xl:pr-1">
-      <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={snapshot} />
       <section className="rounded-xl border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索并选择设备</p></div>
@@ -157,12 +163,17 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
             <div className="mt-3 flex flex-wrap gap-1.5">{(selectedDevice.capabilities ?? []).map((capability) => <Badge key={capability.code} variant="secondary">{capability.code}</Badge>)}</div>
           </section>
           {actions.length ? <section className="rounded-xl border bg-card p-4"><h2 className="flex items-center gap-2 font-medium"><WrenchIcon className="size-4" />设备操作</h2><DeviceActionPanel deviceName={selectedDevice.name} actions={actions} deviceId={Number(selectedDevice.id)} onChanged={async () => { await refresh(); }} projectId={snapshot.project.id} /></section> : null}
-          <LiveChannelControls activeStreamKeys={activeStreamKeys} device={selectedDevice} onStarted={handleStreamStarted} projectId={snapshot.project.id} />
-          <section className="overflow-hidden rounded-xl border bg-card"><LiveStreamPanel cursor={null} mode="live" onStreamChanged={async () => { await refresh(); }} selectedStreamId={selection.streamId} selection={mapSelection} snapshot={snapshot} /></section>
+          {modules.live && deviceSnapshot && <>
+            <LiveChannelControls key={String(selectedDevice.id)} activeStreamKeys={activeStreamKeys} device={selectedDevice} onStarted={handleStreamStarted} projectId={snapshot.project.id} />
+            {hasActiveStreams && <>
+              <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={deviceSnapshot} />
+              <section className="overflow-hidden rounded-xl border bg-card"><LiveStreamPanel cursor={null} mode="live" onStreamChanged={async () => { await refresh(); }} selectedStreamId={selection.streamId} selection={mapSelection} snapshot={deviceSnapshot} /></section>
+            </>}
+          </>}
         </> : <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
-      {transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
+      {modules.live && hasActiveStreams && transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
       {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
-      {timelineSnapshot && <ProjectTimeline snapshot={timelineSnapshot} />}
+      {modules.timeline && deviceSnapshot && <ProjectTimeline snapshot={deviceSnapshot} />}
     </aside>
   </div>;
 }

@@ -10,7 +10,7 @@ import (
 func fixtureContext() Context {
 	return Context{Inputs: map[string]any{"minimum": json.Number("0.8")}, Steps: map[string]map[string]any{
 		"collect": {"assetId": json.Number("41")},
-		"detect":  {"confidence": json.Number("0.91"), "category": "suspected-construction", "spatialRelation": "inside"},
+		"detect":  {"confidence": json.Number("0.91"), "category": "object", "spatialRelation": "inside"},
 	}}
 }
 

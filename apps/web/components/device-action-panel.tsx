@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import { apiFetch } from "@/lib/api-client";
 
@@ -52,7 +54,7 @@ export function DeviceActionPanel({ projectId, deviceId, deviceName, actions, on
     const result = await response.json() as { error?: string; session?: { id: number; status: string }; id?: string; status?: string };
     setStatus(response.ok
       ? action.kind === "live" ? `直播 #${result.session?.id}：${result.session?.status}` : `命令 ${result.id}：${result.status}`
-      : result.error ?? "操作失败");
+      : result.error === "FLIGHTHUB_COMMAND_UNSUPPORTED" ? "当前司空接入尚未实现此操作，请在司空平台执行。" : result.error ?? "操作失败");
     if (response.ok) { setSelected(null); await onChanged?.(); }
     } catch { setStatus("请求失败，请检查最新设备状态后重试。"); }
     finally { setPending(false); }
@@ -67,7 +69,7 @@ export function DeviceActionPanel({ projectId, deviceId, deviceName, actions, on
   return <div className="mt-3 space-y-2 rounded-lg border bg-muted/20 p-3">
     <div className="flex flex-wrap gap-2">
       {actions.map((action) => action.kind === "workflow"
-        ? <Button asChild key={`${action.capabilityCode}:${action.key}`} size="sm" variant="outline"><Link href={`/projects/tasks/?projectId=${projectId}`}>{action.label}</Link></Button>
+        ? <Button asChild key={`${action.capabilityCode}:${action.key}`} size="sm" variant="outline"><Link href={canonicalPageHref(`/projects/tasks/?projectId=${projectId}`)}>{action.label}</Link></Button>
         : <Button disabled={action.enabled === false || pending} key={`${action.capabilityCode}:${action.key}`} onClick={() => choose(action)} size="sm" title={action.unavailableReason ?? undefined} variant={action.risk === "critical" ? "destructive" : "outline"}>{action.label}</Button>)}
     </div>
     {actions.some((action) => action.enabled === false && action.unavailableReason) && <div className="space-y-1 text-xs text-amber-700">

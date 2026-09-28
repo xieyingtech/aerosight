@@ -52,6 +52,8 @@ func chatStreamError(err error) string {
 		return "AI_REQUEST_CANCELLED"
 	case err.Error() == "PROJECT_ACCESS_DENIED", err.Error() == "AGENT_SESSION_NOT_FOUND":
 		return err.Error()
+	case err.Error() == "ISSUE_VERSION_CONFLICT":
+		return err.Error()
 	case strings.HasPrefix(err.Error(), "AI_PROVIDER_"), strings.HasPrefix(err.Error(), "AI_UPSTREAM_"), strings.HasPrefix(err.Error(), "AGENT_TOOL_"):
 		return strings.SplitN(err.Error(), ":", 2)[0]
 	default:

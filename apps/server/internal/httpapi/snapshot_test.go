@@ -26,7 +26,7 @@ func TestSnapshotEmptyLayersScopeAndDiagnostics(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("snapshot %d %+v", res.StatusCode, data)
 	}
-	for _, key := range []string{"devices", "tracks", "activeTasks", "liveStreams", "realtimeChannels", "mediaPoints", "suspectedConstruction", "openAlerts", "openIssues", "regions"} {
+	for _, key := range []string{"devices", "tracks", "activeTasks", "liveStreams", "realtimeChannels", "mediaPoints", "algorithmResults", "openAlerts", "openIssues", "regions"} {
 		rows, ok := data[key].([]any)
 		if !ok || len(rows) != 0 {
 			t.Fatalf("empty layer %s: %+v", key, data[key])
@@ -50,6 +50,27 @@ func TestSnapshotEmptyLayersScopeAndDiagnostics(t *testing.T) {
 	denied.Body.Close()
 	if denied.StatusCode != 404 {
 		t.Fatalf("revoked scope: %d", denied.StatusCode)
+	}
+}
+
+func TestSnapshotAlgorithmResultsPreserveLabels(t *testing.T) {
+	f := newAPIFixture(t)
+	team, pid := f.project(t)
+	if _, err := f.db.Exec("insert into detection_groups(project_id,team_id,label,location_quality,first_detected_at,last_detected_at) values($1,$2,'车辆识别','unavailable',now(),now()),($1,$2,'文字识别','unavailable',now(),now())", pid, team); err != nil {
+		t.Fatal(err)
+	}
+	res := f.request(t, "GET", fmt.Sprintf("/api/projects/%d/snapshot", pid), "")
+	data := decodedResponse(t, res)
+	if res.StatusCode != 200 {
+		t.Fatalf("snapshot %d %+v", res.StatusCode, data)
+	}
+	results := data["algorithmResults"].([]any)
+	labels := map[string]bool{}
+	for _, row := range results {
+		labels[row.(map[string]any)["label"].(string)] = true
+	}
+	if len(results) != 2 || !labels["车辆识别"] || !labels["文字识别"] {
+		t.Fatalf("labels were replaced: %+v", results)
 	}
 }
 

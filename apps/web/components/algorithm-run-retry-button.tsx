@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -14,7 +16,7 @@ export function AlgorithmRunRetryButton({ projectId, runId }: { projectId: numbe
     try {
       const result = await apiJSON<{runId: string}>(`/api/projects/${projectId}/algorithm-runs/${runId}/retry`, { method: "POST" });
       if (!result.runId) { setError("重试失败"); return; }
-      router.push(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${encodeURIComponent(result.runId)}`);
+      router.push(canonicalPageHref(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${encodeURIComponent(result.runId)}`));
     } catch (error) { setError(error instanceof APIError ? error.code : "重试失败，请稍后重试。"); }
     finally { setPending(false); }
   }

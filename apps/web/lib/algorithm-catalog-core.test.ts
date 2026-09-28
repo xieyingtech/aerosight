@@ -17,5 +17,5 @@ test("dynamic catalog exposes an arbitrary OCR definition entirely from server d
   assert.equal(entry.display.resultRenderer, "ocr");
   assert.equal(entry.provider.available, true);
   assert.equal(entry.configurationSnapshotId, "31");
-  assert.equal(JSON.stringify(entry).includes("违建"), false);
+  assert.equal(JSON.stringify(entry).includes("检测结果"), false);
 });

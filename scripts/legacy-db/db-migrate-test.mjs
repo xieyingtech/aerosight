@@ -1766,7 +1766,7 @@ async function assertDetectionSchema(connectionString) {
          project_id,team_id,algorithm_run_id,input_asset_id,task_run_id,detection_key,label,confidence,
          pixel_geometry_json,geographic_geometry,location_quality,projection_method,horizontal_error_meters,
          transform_version,captured_at
-       ) values ($1,$2,'20000000-0000-4000-8000-000000000001',$3,$4,'d-1','suspected-construction',0.9,
+       ) values ($1,$2,'20000000-0000-4000-8000-000000000001',$3,$4,'d-1','object',0.9,
          '{"type":"bbox","x":1,"y":2,"width":3,"height":4}',
          st_geomfromtext('POLYGON((120 30,120.001 30,120.001 30.001,120 30.001,120 30))',4326),
          'estimated','nadir-ray-ground-plane',2.5,'aerosight-geo-projection/v1',now()) returning id`,
@@ -1774,7 +1774,7 @@ async function assertDetectionSchema(connectionString) {
     );
     const group = await client.query(
       `insert into detection_groups (project_id,team_id,label,location_quality,first_detected_at,last_detected_at)
-       values ($1,$2,'suspected-construction','estimated',now(),now()) returning id`,
+       values ($1,$2,'object','estimated',now(),now()) returning id`,
       [scope.project_id, scope.team_id]
     );
     await client.query(
@@ -1800,7 +1800,7 @@ async function assertPerceptionEventSchema(connectionString) {
       from detection_groups group_row join team_members member on member.team_id=group_row.team_id and member.role='owner' limit 1`)).rows[0];
     const rule = await client.query(`insert into event_rules(project_id,team_id,name,status,created_by_user_id) values($1,$2,'fixture-rule','active',$3) returning id`,[scope.project_id,scope.team_id,scope.user_id]);
     const version = await client.query(`insert into event_rule_versions(project_id,team_id,event_rule_id,version,status,label,minimum_confidence,severity,published_by_user_id,published_at)
-      values($1,$2,$3,1,'draft','suspected-construction',0.7,'high',$4,now()) returning id`,[scope.project_id,scope.team_id,rule.rows[0].id,scope.user_id]);
+      values($1,$2,$3,1,'draft','object',0.7,'high',$4,now()) returning id`,[scope.project_id,scope.team_id,rule.rows[0].id,scope.user_id]);
     await client.query(`update event_rule_versions set status='published' where id=$1`,[version.rows[0].id]);
     await client.query(`update event_rules set current_published_version_id=$2 where id=$1`,[rule.rows[0].id,version.rows[0].id]);
     await client.query(`update event_rule_versions set severity='low' where id=$1`,[version.rows[0].id]).then(

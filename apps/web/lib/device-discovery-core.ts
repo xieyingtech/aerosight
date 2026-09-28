@@ -6,6 +6,7 @@ export type DeviceDiscovery = {
   connectorName: string;
   connectorKey: string;
   externalDeviceId: string;
+  sourceName?: string | null;
   externalDeviceType: string | null;
   parentExternalId: string | null;
   status: DiscoveryStatus;
@@ -31,6 +32,14 @@ export function canConfirmDiscovery(status: DiscoveryStatus) {
   return status === "discovered";
 }
 
+export function discoveryDeviceName(item: DeviceDiscovery) {
+  const sourceName = item.sourceName?.trim();
+  const serial = item.externalDeviceId.split("/").at(-1) ?? item.externalDeviceId;
+  if (sourceName && sourceName !== item.externalDeviceId && sourceName !== serial) return sourceName;
+  if (item.connectorKey !== "dji.flighthub2") return item.externalDeviceId;
+  return `${item.suggestedTypeName ?? "DJI 设备"} ${serial.slice(-6)}`;
+}
+
 export function filterDiscoveries(
   discoveries: DeviceDiscovery[],
   filters: { status?: DiscoveryStatus | "all"; connectorId?: string; query?: string }
@@ -40,7 +49,7 @@ export function filterDiscoveries(
     if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
     if (filters.connectorId && filters.connectorId !== "all" && item.connectorId !== filters.connectorId) return false;
     if (!query) return true;
-    return [item.externalDeviceId, item.externalDeviceType, item.connectorName, item.suggestedTypeName, item.suggestedTypeKey]
+    return [discoveryDeviceName(item), item.sourceName, item.externalDeviceId, item.externalDeviceType, item.connectorName, item.suggestedTypeName, item.suggestedTypeKey]
       .some((value) => value?.toLocaleLowerCase().includes(query));
   });
 }

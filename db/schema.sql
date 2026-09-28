@@ -3519,7 +3519,7 @@ CREATE TABLE public.perception_events (
     event_rule_version_id bigint NOT NULL,
     detection_group_id bigint NOT NULL,
     deduplication_key text NOT NULL,
-    title text DEFAULT '疑似违建'::text NOT NULL,
+    title text DEFAULT '算法识别结果'::text NOT NULL,
     severity text NOT NULL,
     status text DEFAULT 'open'::text NOT NULL,
     occurrence_count integer DEFAULT 1 NOT NULL,

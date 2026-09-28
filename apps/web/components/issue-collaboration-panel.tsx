@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 
 type Assignee = Record<string, unknown>;
 
-export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign, canUseAgent, onChanged }: {
+export function IssueCollaborationPanel({ projectId, issueId, stateVersion, status, labels, assignees, members, agents, canHandle, canAssign, canUseAgent, onChanged, section }: {
+  section: "conversation" | "properties";
   projectId: number; issueId: number; stateVersion: number; status: string; labels: string[];
   assignees: Assignee[]; members: Assignee[]; agents: Assignee[]; canHandle: boolean; canAssign: boolean; canUseAgent: boolean;
   onChanged: () => void;
@@ -36,14 +37,15 @@ export function IssueCollaborationPanel({ projectId, issueId, stateVersion, stat
     }))
   ];
   return <div className="space-y-5">
-    <section className="space-y-2"><h3 className="text-sm font-medium">当前指派</h3><div className="flex flex-wrap gap-2">
+    {section === "properties" && <section className="space-y-2"><h3 className="text-sm font-medium">负责人</h3><div className="flex flex-wrap gap-2">
       {assignees.length ? assignees.map((item) => <Badge key={String(item.id)} variant="outline">{String(item.name)} · {item.assigneeType === "agent" ? "智能体" : "成员"}{canAssign ? <button className="ml-1" disabled={pending} onClick={() => mutate({ action: "unassign", assigneeType: item.assigneeType, assigneeId: Number(item.assigneeId) })} type="button">×</button> : null}</Badge>) : <span className="text-sm text-muted-foreground">尚未指派</span>}
-    </div>{canAssign ? <div className="flex gap-2"><select className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm" onChange={(event) => setSelected(event.target.value)} value={selected}><option value="">选择成员或智能体</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><Button disabled={!selected || pending} onClick={() => { const [assigneeType, id] = selected.split(":"); return mutate({ action: "assign", assigneeType, assigneeId: Number(id) }); }} variant="outline">指派</Button></div> : null}</section>
+    </div>{canAssign ? <div className="flex gap-2"><select aria-label="选择负责人" className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2.5 text-sm" onChange={(event) => setSelected(event.target.value)} value={selected}><option value="">选择成员或智能体</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><Button disabled={!selected || pending} onClick={() => { const [assigneeType, id] = selected.split(":"); return mutate({ action: "assign", assigneeType, assigneeId: Number(id) }); }} variant="outline">指派</Button></div> : null}</section>}
     {canHandle ? <>
-      <section className="space-y-2"><h3 className="text-sm font-medium">添加评论</h3><textarea className="min-h-24 w-full rounded-lg border bg-background p-2.5 text-sm" maxLength={5000} onChange={(event) => setComment(event.target.value)} placeholder="记录调查进展，或 @copilot 请求协助…" value={comment} /><Button disabled={!comment.trim() || pending} onClick={() => mutate({ action: "comment", body: comment })}>发表评论</Button></section>
-      <section className="space-y-2"><h3 className="text-sm font-medium">标签</h3><div className="flex gap-2"><Input onChange={(event) => setLabelText(event.target.value)} placeholder="逗号分隔" value={labelText} /><Button disabled={pending} onClick={() => mutate({ action: "labels", labels: labelText.split(",") })} variant="outline">保存标签</Button></div></section>
+      {section === "conversation" && <section className="space-y-3"><h3 className="text-sm font-medium">添加评论</h3><textarea aria-label="评论内容" className="min-h-36 w-full rounded-md border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" maxLength={5000} onChange={(event) => setComment(event.target.value)} placeholder="记录调查进展，或 @copilot 请求协助…" value={comment} /><div className="flex flex-wrap items-center justify-between gap-3">
       <Button disabled={pending} onClick={() => mutate({ action: "status", status: status === "closed" ? "open" : "closed" })} variant="outline">{status === "closed" ? "重新打开案件" : "关闭案件"}</Button>
-    </> : <p className="text-sm text-muted-foreground">你可以查看案件，但没有评论或处置权限。</p>}
+      <Button disabled={!comment.trim() || pending} onClick={() => mutate({ action: "comment", body: comment })}>发表评论</Button></div></section>}
+      {section === "properties" && <section className="space-y-2 border-t pt-5"><h3 className="text-sm font-medium">标签</h3><div className="flex flex-wrap gap-1.5">{labels.length ? labels.map(label => <Badge key={label} variant="secondary">{label}</Badge>) : <span className="text-sm text-muted-foreground">暂无标签</span>}</div><Input aria-label="案件标签" onChange={(event) => setLabelText(event.target.value)} placeholder="用逗号分隔标签" value={labelText} /><Button size="sm" disabled={pending} onClick={() => mutate({ action: "labels", labels: labelText.split(",") })} variant="outline">保存标签</Button></section>}
+    </> : section === "conversation" ? <p className="text-sm text-muted-foreground">你可以查看案件，但没有评论或处置权限。</p> : <section className="space-y-2 border-t pt-5"><h3 className="text-sm font-medium">标签</h3><div className="flex flex-wrap gap-1.5">{labels.length ? labels.map(label => <Badge key={label} variant="secondary">{label}</Badge>) : <span className="text-sm text-muted-foreground">暂无标签</span>}</div></section>}
     {error ? <p className="text-sm text-destructive">{error === "ISSUE_VERSION_CONFLICT" ? "案件已被其他人更新，请刷新后重试。" : error}</p> : null}
   </div>;
 }

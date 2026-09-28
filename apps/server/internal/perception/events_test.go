@@ -7,8 +7,8 @@ import (
 
 func TestAlertStormDeduplicatesWithinRuleVersionAndGroup(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
-	rule := RuleVersion{ID: 7, Version: 2, Label: "suspected-construction", MinimumConfidence: .7, Severity: "high", DeduplicationWindow: time.Hour}
-	candidate := EventCandidate{ProjectID: 2, DetectionGroupID: 9, Label: "suspected-construction", Confidence: .91, DetectedAt: now}
+	rule := RuleVersion{ID: 7, Version: 2, Label: "object", MinimumConfidence: .7, Severity: "high", DeduplicationWindow: time.Hour}
+	candidate := EventCandidate{ProjectID: 2, DetectionGroupID: 9, Label: "object", Confidence: .91, DetectedAt: now}
 	first := EvaluateEventRule(rule, candidate, nil)
 	if !first.Create || first.OccurrenceCount != 1 {
 		t.Fatalf("first event not created: %+v", first)
@@ -29,8 +29,8 @@ func TestAlertStormDeduplicatesWithinRuleVersionAndGroup(t *testing.T) {
 func TestRuleUpgradeDoesNotRewriteHistoricalEventBasis(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	existing := &PerceptionEventState{RuleVersionID: 7, DetectionGroupID: 9, Status: "open", OccurrenceCount: 3}
-	upgraded := RuleVersion{ID: 8, Version: 3, Label: "suspected-construction", MinimumConfidence: .8, Severity: "critical"}
-	evaluation := EvaluateEventRule(upgraded, EventCandidate{ProjectID: 2, DetectionGroupID: 9, Label: "suspected-construction", Confidence: .9, DetectedAt: now}, existing)
+	upgraded := RuleVersion{ID: 8, Version: 3, Label: "object", MinimumConfidence: .8, Severity: "critical"}
+	evaluation := EvaluateEventRule(upgraded, EventCandidate{ProjectID: 2, DetectionGroupID: 9, Label: "object", Confidence: .9, DetectedAt: now}, existing)
 	if !evaluation.Create || evaluation.DeduplicationKey == existing.DeduplicationKey {
 		t.Fatalf("rule upgrade mutated historical event: %+v", evaluation)
 	}

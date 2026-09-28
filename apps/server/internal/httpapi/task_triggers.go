@@ -19,7 +19,7 @@ import (
 
 func validateUserTaskInvocation(input map[string]any) error {
 	kind, _ := input["type"].(string)
-	allowed := map[string]bool{"type": true, "idempotencyKey": true, "occurredAt": true, "inputs": true}
+	allowed := map[string]bool{"type": true, "idempotencyKey": true, "occurredAt": true, "inputs": true, "expectedVersionId": true}
 	switch kind {
 	case "manual":
 	case "api":
@@ -32,6 +32,11 @@ func validateUserTaskInvocation(input map[string]any) error {
 	}
 	for key := range input {
 		if !allowed[key] {
+			return errors.New("TASK_TRIGGER_INPUT_INVALID")
+		}
+	}
+	if expected, present := input["expectedVersionId"]; present {
+		if _, ok := fhSafePositive(expected); !ok {
 			return errors.New("TASK_TRIGGER_INPUT_INVALID")
 		}
 	}
@@ -171,6 +176,12 @@ func (s *Server) triggerTaskRun(c *gin.Context) {
 		}
 		if err != nil {
 			return nil, err
+		}
+		if expected, present := input["expectedVersionId"]; present {
+			id, ok := fhSafePositive(expected)
+			if !ok || id != version.TaskVersionID {
+				return nil, errors.New("TASK_TRIGGER_VERSION_CONFLICT")
+			}
 		}
 		vid := sql.NullInt64{Int64: version.TaskVersionID, Valid: true}
 		triggerKey := sql.NullString{String: key, Valid: true}

@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import { InspectionReadiness } from "@/components/inspection-readiness";
 import { TaskSourceValidation } from "@/components/task-source-validation";
@@ -64,7 +66,7 @@ export function TaskTemplateWorkbench({ projectId,taskId,model,onChanged }: { pr
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "TASK_TRIGGER_FAILED"));
       manualAttempt.current=null;
-      router.push(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(result.taskRunId)}`);
+      router.push(canonicalPageHref(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(result.taskRunId)}`));
     } catch (error) { setMessage(error instanceof Error ? error.message : "触发失败"); }
     finally { setPending(false); }
   }

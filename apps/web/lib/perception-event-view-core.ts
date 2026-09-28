@@ -26,8 +26,8 @@ export function buildPerceptionEventEvidence(input: PerceptionEventEvidenceInput
   const mapped = detections.filter((item) => item.geographicGeometry !== null);
   const event: Record<string, unknown> & { title: string; disclaimer: string; hasMapLocation: boolean; locationSummary: string } = {
     ...input.event,
-    title: "疑似违建",
-    disclaimer: "该结果为算法生成的巡检线索，不构成法律意义上的违建认定。",
+    title: String(input.event.title ?? "算法识别结果"),
+    disclaimer: "该结果为算法生成的巡检线索，需结合原始证据和人工复核确认。",
     hasMapLocation: mapped.length > 0,
     locationSummary: mapped.length > 0 ? `${mapped.length} 条检测具有可用地理位置` : "位置不可用，仅展示影像内标注"
   };

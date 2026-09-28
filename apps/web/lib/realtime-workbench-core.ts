@@ -16,6 +16,14 @@ export function findProjectDevice(snapshot: ProjectSituationSnapshot, deviceId: 
   return snapshot.devices.find((device) => Number(device.id) === deviceId) ?? null;
 }
 
+export function realtimeDeviceModules(device: ProjectSnapshotDevice | null) {
+  const codes = new Set((device?.capabilities ?? []).map((capability) => capability.code));
+  return {
+    live: codes.has("stream.video.read") || codes.has("stream.video.control"),
+    timeline: codes.has("state.read") || (device?.channels ?? []).some((channel) => channel.dataType !== "video"),
+  };
+}
+
 export function resolveWorkbenchSelection(
   snapshot: ProjectSituationSnapshot,
   requested: { deviceId?: string | number | null; streamId?: string | number | null }
@@ -35,8 +43,9 @@ export function resolveWorkbenchSelection(
   return { deviceId: null, streamId: null };
 }
 
-export function workbenchQuery(selection: RealtimeWorkbenchSelection, currentQuery = "") {
+export function workbenchQuery(selection: RealtimeWorkbenchSelection, projectId: number, currentQuery = "") {
   const query = new URLSearchParams(currentQuery);
+  query.set("projectId", String(projectId));
   query.delete("deviceId");
   query.delete("streamId");
   if (selection.deviceId) query.set("deviceId", String(selection.deviceId));

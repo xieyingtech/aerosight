@@ -5,7 +5,7 @@ import { algorithmCredentialPayload, algorithmProviderInputSchema } from "./algo
 import { effectiveProjectPermissions } from "./project-permission-policy.ts";
 
 const input = {
-  name: "违建识别服务", providerType: "http-json" as const, baseUrl: "https://algorithm.example.test/v1",
+  name: "算法识别服务", providerType: "http-json" as const, baseUrl: "https://algorithm.example.test/v1",
   credential: "plaintext-token", authType: "bearer" as const,
   allowedHeaders: ["X-Request-Source"], timeoutSeconds: 30, concurrencyLimit: 4, rateLimitPerMinute: 120
 };

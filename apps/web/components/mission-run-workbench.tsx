@@ -1,3 +1,4 @@
+import { canonicalPageHref } from "@/lib/page-routes";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +11,7 @@ export function MissionRunWorkbench({ projectId, model, onChanged }: { onChanged
   const checks = Array.isArray((model.run.preflight as { checks?: unknown[] } | undefined)?.checks)
     ? (model.run.preflight as { checks: Array<Record<string, unknown>> }).checks : [];
   return <div className="space-y-4">
- {model.steps.some(step=>String(step.uses).startsWith("inspection."))&&<Link className="text-sm underline" href={`/projects/inspection/summary/?projectId=${projectId}&runId=${model.run.id}`}>查看巡检进展与待复核摘要</Link>}
+ {model.steps.some(step=>String(step.uses).startsWith("inspection."))&&<Link className="text-sm underline" href={canonicalPageHref(`/projects/inspection/summary/?projectId=${projectId}&runId=${model.run.id}`)}>查看巡检进展与待复核摘要</Link>}
     <div className="grid gap-4 md:grid-cols-3">
       <Card><CardHeader><CardDescription>运行状态</CardDescription><CardTitle>{String(model.run.taskName)}</CardTitle></CardHeader><CardContent className="space-y-2"><Badge>{String(model.run.status)}</Badge><p className="text-xs text-muted-foreground">版本 {String(model.run.taskVersion ?? "-")} · 状态版本 {String(model.run.stateVersion)}</p><p className="text-xs text-muted-foreground">原因：{String(model.run.stateReason ?? "—")}</p></CardContent></Card>
       <Card><CardHeader><CardDescription>执行设备</CardDescription><CardTitle>{String(model.run.deviceName ?? "尚未分配")}</CardTitle></CardHeader><CardContent><p className="text-sm">{String(model.run.deviceStatus ?? "unknown")}</p></CardContent></Card>
@@ -29,10 +30,10 @@ function InspectionStepLinks({projectId,output}:{projectId:number;output:unknown
  const values=output as Record<string,unknown>;
  const id=values.assessmentId;
  return <div className="mt-3 flex flex-wrap gap-3 text-sm">
-  {typeof id==="string"&&/^[0-9a-f-]{36}$/i.test(id)&&<Link className="underline" href={`/projects/inspection/assessment/?projectId=${projectId}&assessmentId=${id}`}>查看研判与人工复核</Link>}
-  {typeof values.observationId==="string"&&<a className="underline" href={`/projects/inspection/observation/?projectId=${projectId}&observationId=${encodeURIComponent(values.observationId)}`} target="_blank" rel="noreferrer">观察范围与原图引用</a>}
-  {typeof values.evidenceSetId==="string"&&<a className="underline" href={`/projects/inspection/evidence/?projectId=${projectId}&evidenceSetId=${encodeURIComponent(values.evidenceSetId)}`} target="_blank" rel="noreferrer">识别证据</a>}
-  {typeof values.reportId==="string"&&/^[0-9a-f-]{36}$/i.test(values.reportId)&&<Link className="underline" href={`/projects/reports/detail/?projectId=${projectId}&reportId=${values.reportId}`}>查看巡检报告</Link>}
-  {Array.isArray(values.issueIds)&&values.issueIds.filter((v):v is number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>0).map(issueId=><Link key={issueId} className="underline" href={`/projects/issues/detail/?projectId=${projectId}&issueId=${issueId}`}>案件 #{issueId}</Link>)}
+  {typeof id==="string"&&/^[0-9a-f-]{36}$/i.test(id)&&<Link className="underline" href={canonicalPageHref(`/projects/inspection/assessment/?projectId=${projectId}&assessmentId=${id}`)}>查看研判与人工复核</Link>}
+  {typeof values.observationId==="string"&&<a className="underline" href={canonicalPageHref(`/projects/inspection/observation/?projectId=${projectId}&observationId=${encodeURIComponent(values.observationId)}`)} target="_blank" rel="noreferrer">观察范围与原图引用</a>}
+  {typeof values.evidenceSetId==="string"&&<a className="underline" href={canonicalPageHref(`/projects/inspection/evidence/?projectId=${projectId}&evidenceSetId=${encodeURIComponent(values.evidenceSetId)}`)} target="_blank" rel="noreferrer">识别证据</a>}
+  {typeof values.reportId==="string"&&/^[0-9a-f-]{36}$/i.test(values.reportId)&&<Link className="underline" href={canonicalPageHref(`/projects/reports/detail/?projectId=${projectId}&reportId=${values.reportId}`)}>查看巡检报告</Link>}
+  {Array.from(new Set([values.issueId, ...(Array.isArray(values.issueIds) ? values.issueIds : [])])).filter((v):v is number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>0).map(issueId=><Link key={issueId} className="underline" href={canonicalPageHref(`/projects/issues/detail/?projectId=${projectId}&issueId=${issueId}`)}>案件 #{issueId}</Link>)}
  </div>;
 }

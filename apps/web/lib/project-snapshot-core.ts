@@ -46,7 +46,7 @@ export type ProjectSituationSnapshot = {
   realtimeChannels?: Array<Record<string, unknown>>;
   diagnostics?: OperationDiagnostic[];
   mediaPoints: Array<Record<string, unknown>>;
-  suspectedConstruction: Array<Record<string, unknown>>;
+  algorithmResults: Array<Record<string, unknown>>;
   openIssues: Array<Record<string, unknown>>;
   /** @deprecated legacy perception records kept for history/replay compatibility */
   openAlerts: Array<Record<string, unknown>>;

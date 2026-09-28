@@ -54,7 +54,7 @@ func TestHTTPJSONAdapterSendsPresignedURLAndMapsSynchronousResponse(t *testing.T
 			t.Fatal(err)
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"modelRevision":"detector-2026.08","modelDigest":"sha256:abc","results":[{"id":"d-1","class":"suspected-construction","score":0.91,"bbox":{"type":"bbox","x":1,"y":2,"width":3,"height":4}}]}`))
+		_, _ = writer.Write([]byte(`{"modelRevision":"detector-2026.08","modelDigest":"sha256:abc","results":[{"id":"d-1","class":"object","score":0.91,"bbox":{"type":"bbox","x":1,"y":2,"width":3,"height":4}}]}`))
 	}))
 	defer server.Close()
 	recorder := &memoryRecorder{}
@@ -63,7 +63,7 @@ func TestHTTPJSONAdapterSendsPresignedURLAndMapsSynchronousResponse(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if outcome.Kind != "completed" || len(outcome.Detections) != 1 || outcome.Detections[0].Label != "suspected-construction" {
+	if outcome.Kind != "completed" || len(outcome.Detections) != 1 || outcome.Detections[0].Label != "object" {
 		t.Fatalf("unexpected outcome: %+v", outcome)
 	}
 	if outcome.ModelRevision != "detector-2026.08" || outcome.ModelDigest != "sha256:abc" {

@@ -203,7 +203,7 @@ func (processor JobProcessor) ProcessAssessmentNext(ctx context.Context) (bool, 
 	if executeErr != nil {
 		state = "failed"
 		code = assessmentFailureCode(executeErr)
-	} else if result.Assessment.NeedsReview() {
+	} else if result.Assessment.NeedsReview() || result.RequiresReview {
 		state = "needs_review"
 	}
 	if _, err = tx.ExecContext(ctx, `update inspection_assessments set status=$2,provider_id=nullif($3,'')::bigint,model_version=nullif($4,''),original_output=$5,failure_code=nullif($6,''),revision=case when $2 in('succeeded','needs_review') then 1 else 0 end where id=$1`, assessmentID, state, result.ProviderID, result.ModelID, result.RawOutput, code); err != nil {

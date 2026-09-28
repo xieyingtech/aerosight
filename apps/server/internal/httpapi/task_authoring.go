@@ -301,7 +301,8 @@ func (s *Server) updateTaskState(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Status string `json:"status"`
+		Status            string `json:"status"`
+		ExpectedVersionID *int64 `json:"expectedVersionId"`
 	}
 	if strictJSON(c, &body) != nil || body.Status != "active" && body.Status != "disabled" {
 		s.failure(c, 400, "TASK_STATE_INVALID")
@@ -323,6 +324,9 @@ func (s *Server) updateTaskState(c *gin.Context) {
 		task, err := fhFirstRow(rows, err, "TASK_NOT_FOUND")
 		if err != nil {
 			return nil, err
+		}
+		if body.ExpectedVersionID != nil && *body.ExpectedVersionID != fhOptionalNumber(task, "currentVersionId") {
+			return nil, errors.New("TASK_VERSION_CONFLICT")
 		}
 		if body.Status == "active" {
 			vid := fhOptionalNumber(task, "currentVersionId")

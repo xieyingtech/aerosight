@@ -87,7 +87,7 @@ func (q *Queries) ChatQueryDevices(ctx context.Context, arg ChatQueryDevicesPara
 
 const chatQueryIssues = `-- name: ChatQueryIssues :many
 SELECT to_jsonb(result) FROM (
- SELECT issue.id,issue.number,issue.title,issue.priority,issue.status,issue.occurrence_count AS "occurrenceCount",issue.last_seen_at AS "observedAt",
+ SELECT issue.id,issue.number,issue.title,issue.priority,issue.status,issue.state_version AS "stateVersion",issue.occurrence_count AS "occurrenceCount",issue.last_seen_at AS "observedAt",
  CASE WHEN EXISTS(SELECT 1 FROM issue_links link JOIN detections detection
  ON detection.project_id=link.project_id AND detection.id=CASE WHEN link.target_id~'^[0-9]+$'
  AND (length(link.target_id)<=18 OR (length(link.target_id)=19 AND link.target_id COLLATE "C"<='9223372036854775807')) THEN link.target_id::bigint END
@@ -159,9 +159,16 @@ func (q *Queries) ChatQueryMapContext(ctx context.Context, projectID int32) ([]j
 
 const chatQueryTasks = `-- name: ChatQueryTasks :many
 SELECT to_jsonb(result) FROM (
- SELECT run.id,task.name,run.status,run.state_reason AS reason,coalesce(run.finished_at,run.started_at,run.created_at) AS "observedAt",'platform-state' AS quality
- FROM task_runs run JOIN tasks task ON task.id=run.task_id AND task.project_id=run.project_id
- WHERE run.project_id=$1 ORDER BY run.created_at DESC,run.id LIMIT $2::int
+ SELECT task.id,task.name,task.status,task.trigger_type AS "triggerType",
+ run.id AS "latestRunId",run.status AS "latestRunStatus",run.state_reason AS "latestRunReason",
+ task.updated_at AT TIME ZONE current_setting('TimeZone') AS "observedAt",'platform-state' AS quality
+ FROM tasks task
+ LEFT JOIN LATERAL (
+  SELECT r.id,r.status,r.state_reason FROM task_runs r
+  WHERE r.project_id=task.project_id AND r.task_id=task.id
+  ORDER BY r.created_at DESC,r.id DESC LIMIT 1
+ ) run ON true
+ WHERE task.project_id=$1 ORDER BY task.updated_at DESC,task.id DESC LIMIT $2::int
 ) result
 `
 

@@ -12,7 +12,7 @@ import (
 
 func TestStaticPagesGinFallbackBoundary(t *testing.T) {
 	files := fstest.MapFS{}
-	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "404.html"} {
+	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "projects/detail/index.html", "404.html"} {
 		files[name] = &fstest.MapFile{Data: []byte("<html>" + name + "</html>")}
 	}
 	pages, err := webassets.New(files)
@@ -30,7 +30,7 @@ func TestStaticPagesGinFallbackBoundary(t *testing.T) {
 	}{
 		{"/", 200, "text/html"}, {"/login/", 200, "text/html"}, {"/missing", 404, "text/html"},
 		{"/api/missing", 404, "application/json"}, {"/algorithm-assets/missing", 404, "application/json"},
-		{"/projects/42", 307, "text/html"},
+		{"/projects/42", 200, "text/html"},
 	} {
 		for _, method := range []string{"GET", "HEAD"} {
 			w := httptest.NewRecorder()

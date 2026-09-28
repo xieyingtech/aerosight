@@ -13,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const inspectionAssessmentPromptVersion = "inspection-assessment-v2"
+const inspectionAssessmentPromptVersion = "inspection-assessment-v3"
 
 // Called inside the mission Run lock. The author never supplies user identity,
 // session identity or the evidence payload. Registration waits for the worker.

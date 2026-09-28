@@ -103,8 +103,8 @@ func chatEvidenceReference(pid int32, name, id string) gin.H {
 		path, kind = "/projects/devices/", "device"
 		query.Set("selected", id)
 	case "query_tasks":
-		path, kind = "/projects/tasks/runs/detail/", "task-run"
-		query.Set("runId", id)
+		path, kind = "/projects/tasks/detail/", "task"
+		query.Set("taskId", id)
 	case "query_issues":
 		path, kind = "/projects/issues/detail/", "issue"
 		query.Set("issueId", id)
@@ -179,6 +179,9 @@ func formatChatToolResult(pid int32, name string, rows []gin.H, limit int, now t
 }
 
 func (s *Server) executeChatReadTool(ctx context.Context, uid, pid int32, name string, arguments json.RawMessage) (gin.H, error) {
+	if name == "query_inspection" {
+		return s.executeInspectionQuery(ctx, uid, pid, arguments)
+	}
 	input, err := parseChatToolInput(name, arguments)
 	if err != nil {
 		return nil, err

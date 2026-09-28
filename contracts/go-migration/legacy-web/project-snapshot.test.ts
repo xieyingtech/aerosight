@@ -18,7 +18,7 @@ class SnapshotClient {
     if (text.includes("snapshot:project-scope")) {
       return result(this.authorized ? [{ id: 7, name: "North", teamId: 3, role: "member", dependencyHealth: {} } as unknown as T] : []);
     }
-    if (this.airSense && text.includes("snapshot:suspected-construction")) {
+    if (this.airSense && text.includes("snapshot:algorithm-results")) {
       return result([{ id: 17, projectId: 7, label: "AirSense 空域目标", status: "active" } as unknown as T]);
     }
     if (this.airSense && text.includes("snapshot:alerts")) {
@@ -35,7 +35,7 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
   assert.equal(snapshot?.project.id, 7);
   assert.match(client.statements[0], /repeatable read read only/i);
   assert.equal(client.statements.at(-1), "commit");
-  for (const marker of ["snapshot:devices", "snapshot:device-grants", "snapshot:tracks", "snapshot:active-tasks", "snapshot:task-steps", "snapshot:algorithm-runs", "snapshot:live-streams", "snapshot:realtime-channels", "snapshot:diagnostics", "snapshot:media", "snapshot:suspected-construction", "snapshot:issues", "snapshot:alerts", "snapshot:regions"]) {
+  for (const marker of ["snapshot:devices", "snapshot:device-grants", "snapshot:tracks", "snapshot:active-tasks", "snapshot:task-steps", "snapshot:algorithm-runs", "snapshot:live-streams", "snapshot:realtime-channels", "snapshot:diagnostics", "snapshot:media", "snapshot:algorithm-results", "snapshot:issues", "snapshot:alerts", "snapshot:regions"]) {
     assert(client.statements.some((statement) => statement.includes(marker)));
   }
   const deviceStatement = client.statements.find((statement) => statement.includes("snapshot:devices"));
@@ -53,14 +53,14 @@ test("snapshot reads every layer in one repeatable-read transaction", async () =
 test("snapshot preserves AirSense labels and titles for the realtime map", async () => {
   const client = new SnapshotClient(true, true);
   const snapshot = await readProjectSituationSnapshot(2, 7, async () => client as never);
-  assert.equal(snapshot?.suspectedConstruction[0]?.label, "AirSense 空域目标");
+  assert.equal(snapshot?.algorithmResults[0]?.label, "AirSense 空域目标");
   assert.equal(snapshot?.openAlerts[0]?.title, "司空 AirSense 空域告警");
-  const groupStatement = client.statements.find((statement) => statement.includes("snapshot:suspected-construction"));
+  const groupStatement = client.statements.find((statement) => statement.includes("snapshot:algorithm-results"));
   const alertStatement = client.statements.find((statement) => statement.includes("snapshot:alerts"));
   assert.match(groupStatement ?? "", /group_row\.label/);
   assert.match(alertStatement ?? "", /event\.title/);
-  assert.doesNotMatch(groupStatement ?? "", /'疑似违建'\s+as\s+label/);
-  assert.doesNotMatch(alertStatement ?? "", /'疑似违建'\s+as\s+title/);
+  assert.doesNotMatch(groupStatement ?? "", /'算法识别结果'\s+as\s+label/);
+  assert.doesNotMatch(alertStatement ?? "", /'算法识别结果'\s+as\s+title/);
 });
 
 test("unauthorized project id reveals no scoped resources", async () => {

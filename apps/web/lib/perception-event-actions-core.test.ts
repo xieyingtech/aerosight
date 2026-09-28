@@ -10,7 +10,7 @@ test("event handling permission and optimistic version are both required",()=>{
 });
 
 test("feedback actions produce event patches without mutating original algorithm evidence",()=>{
-  const originalAlgorithmResult=Object.freeze({runId:"run-1",detections:Object.freeze([{label:"suspected-construction",confidence:.9}])});
+  const originalAlgorithmResult=Object.freeze({runId:"run-1",detections:Object.freeze([{label:"object",confidence:.9}])});
   const before=JSON.stringify(originalAlgorithmResult);
   const correction=planPerceptionEventAction({action:"category_correction",category:"extension",currentStatus:"open",actualVersion:0,expectedVersion:0,actorUserId:7,permissions:new Set(["event:handle"])});
   assert.deepEqual(correction.feedbackValue,{category:"extension"});

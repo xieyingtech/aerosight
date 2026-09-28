@@ -154,7 +154,7 @@ func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance 
 	var featureEnabled, fieldAccepted bool
 	var deviceType string
 	err := tx.QueryRowContext(ctx, `select device.type,
-		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false),
+		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,true),
 		exists(select 1 from connector_capability_snapshots capability
 			where capability.project_id=adapter.project_id and capability.connector_instance_id=adapter.id
 				and capability.capability_code='live.control' and capability.status='supported'

@@ -40,6 +40,12 @@ func TestProjectFeatureTreeCatalog(t *testing.T) {
 	if err != nil || values["live.control"] || !values["flight.execute"] || values["unknown"] {
 		t.Fatalf("invalid read: %v %v", values, err)
 	}
+	for _, raw := range []string{`{}`, `{"live.control":false}`, `{"live.control":null}`} {
+		values, err := featureValues([]byte(raw))
+		if err != nil || values["live.control"] != (raw == `{}`) || values["flight.execute"] || values["device.control"] {
+			t.Fatalf("invalid live default or saved override: %s %v %v", raw, values, err)
+		}
+	}
 }
 
 func TestProjectFeatureSettings(t *testing.T) {
@@ -60,8 +66,8 @@ func TestProjectFeatureSettings(t *testing.T) {
 		t.Fatal("missing defaults")
 	}
 	for k, v := range values {
-		if v != false {
-			t.Fatalf("default enabled %s", k)
+		if v != (k == "live.control") {
+			t.Fatalf("incorrect default %s: %v", k, v)
 		}
 	}
 	exec := func(query string, args ...any) {
@@ -70,7 +76,7 @@ func TestProjectFeatureSettings(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
-	exec(`insert into project_feature_flags(project_id,flighthub_action_flags_json) values($1,'{"future.feature":true,"flighthub.model.delete":true}')`, pid)
+	exec(`insert into project_feature_flags(project_id,flighthub_action_flags_json) values($1,'{"live.control":false,"future.feature":true,"flighthub.model.delete":true}')`, pid)
 	body := `{"changes":{"live.control":{"expected":false,"enabled":true},"storage.objects":{"expected":false,"enabled":true}}}`
 	call("PATCH", path, body, 200)
 	call("PATCH", path, body, 409)

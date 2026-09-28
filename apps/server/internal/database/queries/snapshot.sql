@@ -10,6 +10,11 @@ select project.id, project.name, project.team_id as "teamId", membership.role,
 SELECT to_jsonb(r) FROM (
 
        select device.id, device.name, device.type, device.status,
+              (select definition.connector_key from device_connector_bindings binding
+               join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
+               join connector_definitions definition on definition.id=adapter.connector_definition_id
+               where binding.project_id=device.project_id and binding.device_id=device.id and binding.status='active'
+               order by binding.priority desc,binding.connector_instance_id limit 1) as "connectorKey",
               device.device_type_id::text as "deviceTypeId",
               device_type.type_key as "typeKey", device_type.version as "typeVersion",
               device_type.display_name as "typeName", device_type.category,
@@ -157,9 +162,9 @@ select asset.id, asset.kind, asset.mime_type as "mimeType", asset.device_id as "
        order by coalesce(asset.captured_at, asset.created_at) desc limit 500
 ) snapshot_row;
 
--- name: SnapshotSuspectedConstruction :many
+-- name: SnapshotAlgorithmResults :many
 select to_jsonb(snapshot_row) as item from (
-select group_row.id::text as id, group_row.project_id as "projectId", '疑似违建' as label,
+select group_row.id::text as id, group_row.project_id as "projectId", group_row.label,
               group_row.status, group_row.location_quality as "locationQuality",
               group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
        from detection_groups group_row where group_row.project_id=$1 and group_row.status='active'
@@ -168,7 +173,7 @@ select group_row.id::text as id, group_row.project_id as "projectId", '疑似违
 
 -- name: SnapshotAlerts :many
 select to_jsonb(snapshot_row) as item from (
-select event.id,event.project_id as "projectId",'疑似违建' as title,event.status,event.severity,
+select event.id,event.project_id as "projectId",event.title,event.status,event.severity,
               event.last_detected_at as "updatedAt",ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
        from perception_events event join detection_groups group_row on group_row.id=event.detection_group_id and group_row.project_id=event.project_id
        where event.project_id=$1 and event.status in('open','acknowledged','investigating')

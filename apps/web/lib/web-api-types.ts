@@ -23,6 +23,7 @@ export type AgentSessionView = {
   summary: string | null;
   createdAt: string;
   messages: Array<{ id: number; role: string; content: string; toolCalls: unknown; createdAt: string }>;
+  approvals?: Array<{ id: string; toolName: string; status: "pending" | "executing" | "succeeded" | "failed" | "rejected"; issueId?: number; taskId?: number; expectedVersion?: number; input?: Record<string, unknown>; summary?: string; result?: unknown; mutation?: { action: string; body?: string; status?: string; labels?: string[]; assigneeType?: string; assigneeId?: number }; createdAt: string; expiresAt: string }>;
 };
 
 export type IssueListItem = {

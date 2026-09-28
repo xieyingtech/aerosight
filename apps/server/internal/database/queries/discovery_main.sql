@@ -2,6 +2,7 @@
 SELECT to_jsonb(r) FROM (
 select identity.id::text,identity.adapter_id::text as "connectorId",adapter.name as "connectorName",
              definition.connector_key as "connectorKey",identity.external_device_id as "externalDeviceId",
+             coalesce(nullif(identity.identity_json#>>'{attributes,name}',''),nullif(identity.identity_json#>>'{attributes,callsign}','')) as "sourceName",
              identity.external_device_type as "externalDeviceType",
              nullif(identity.identity_json->>'parentExternalId','') as "parentExternalId",
              identity.discovery_status as status,type.type_key as "suggestedTypeKey",

@@ -19,7 +19,7 @@ func TestLegacyEventDetailAndReadOnlyEndpoints(t *testing.T) {
 	if err := f.db.QueryRow("insert into detection_groups(project_id,team_id,label,location_quality,first_detected_at,last_detected_at) values($1,$2,'construction','unavailable',now(),now()) returning id", pid, team).Scan(&group); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.db.QueryRow("insert into perception_events(id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,severity,first_detected_at,last_detected_at) values(gen_random_uuid(),$1,$2,$3,$4,'legacy-event','medium',now(),now()) returning id", pid, team, version, group).Scan(&event); err != nil {
+	if err := f.db.QueryRow("insert into perception_events(id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,title,severity,first_detected_at,last_detected_at) values(gen_random_uuid(),$1,$2,$3,$4,'legacy-event','OCR 文字识别','medium',now(),now()) returning id", pid, team, version, group).Scan(&event); err != nil {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/api/projects/%d/events/%s", pid, event)
@@ -29,7 +29,7 @@ func TestLegacyEventDetailAndReadOnlyEndpoints(t *testing.T) {
 		t.Fatalf("detail %d %+v", res.StatusCode, data)
 	}
 	detail := data["event"].(map[string]any)
-	if detail["title"] != "疑似违建" || detail["detectionGroupId"] != fmt.Sprint(group) || detail["hasMapLocation"] != false || detail["locationSummary"] != "位置不可用，仅展示影像内标注" || len(data["detections"].([]any)) != 0 || len(data["feedback"].([]any)) != 0 {
+	if detail["title"] != "OCR 文字识别" || detail["detectionGroupId"] != fmt.Sprint(group) || detail["hasMapLocation"] != false || detail["locationSummary"] != "位置不可用，仅展示影像内标注" || len(data["detections"].([]any)) != 0 || len(data["feedback"].([]any)) != 0 {
 		t.Fatalf("contract %+v", data)
 	}
 	for _, suffix := range []string{"actions", "agent-drafts"} {

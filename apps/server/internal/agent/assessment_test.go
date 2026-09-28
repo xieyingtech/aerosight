@@ -394,6 +394,29 @@ func TestInspectionAssessmentQueueAndModelWithoutIssue(t *testing.T) {
 		if err = tx.QueryRow("insert into issues(project_id,number,title,source_type) values($1,1,'linked fixture','manual') returning id", project).Scan(&issueID); err != nil {
 			t.Fatal(err)
 		}
+		suggested, err := inspection.LinkedIssues(ctx, tx, batch, observation)
+		if err != nil || len(suggested) != 1 || suggested[0].IssueID != issueID || suggested[0].MatchKind != "candidate" || !suggested[0].RequiresReview {
+			t.Fatal("unassociated project issue not offered for review", suggested, err)
+		}
+		responseText = fmt.Sprintf(`{"decisions":[{"candidateId":"external:fixture-child:0","action":"update","issueId":%d,"reason":"same observed problem, confirm association","evidenceRefs":["algorithm:fixture-child"],"missingInformation":[]}]}`, issueID)
+		proposed, err := processor.assessEvidence(ctx, assessment, batch, observation, map[int64]bool{issueID: true}, suggested...)
+		if err != nil || !proposed.RequiresReview {
+			t.Fatal("new association bypassed review", proposed, err)
+		}
+		otherProject := project + 1000000
+		if _, err = tx.Exec("insert into projects(id,team_id,name) values($1,$2,'other project')", otherProject, team); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = tx.Exec("insert into issues(project_id,number,title,source_type) values($1,1,'foreign fixture','manual')", otherProject); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = tx.Exec("insert into issues(project_id,number,title,source_type,status) values($1,2,'closed fixture','manual','closed')", project); err != nil {
+			t.Fatal(err)
+		}
+		suggested, err = inspection.LinkedIssues(ctx, tx, batch, observation)
+		if err != nil || len(suggested) != 1 || suggested[0].IssueID != issueID {
+			t.Fatal("foreign or closed issue offered", suggested, err)
+		}
 		if _, err = tx.Exec("insert into inspection_issue_sources(project_id,source_key,issue_id,assessment_id) values($1,$2,$3,$4)", project, keys[batch.Candidates[0].ID], issueID, reviewID); err != nil {
 			t.Fatal(err)
 		}
@@ -402,8 +425,9 @@ func TestInspectionAssessmentQueueAndModelWithoutIssue(t *testing.T) {
 			t.Fatal("linked scope missing", linked, err)
 		}
 		responseText = fmt.Sprintf(`{"decisions":[{"candidateId":"external:fixture-child:0","action":"update","issueId":%d,"reason":"known source","evidenceRefs":["algorithm:fixture-child"],"missingInformation":[]}]}`, issueID)
-		if _, err = processor.assessEvidence(ctx, assessment, batch, observation, map[int64]bool{issueID: true}, linked...); err != nil {
-			t.Fatal(err)
+		confirmed, err := processor.assessEvidence(ctx, assessment, batch, observation, map[int64]bool{issueID: true}, linked...)
+		if err != nil || confirmed.RequiresReview {
+			t.Fatal("known association unnecessarily requires review", confirmed, err)
 		}
 		wrong := append([]inspection.LinkedIssue(nil), linked...)
 		wrong[0].CandidateID = "other-candidate"

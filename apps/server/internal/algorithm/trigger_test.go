@@ -41,7 +41,7 @@ func TestRepeatedMediaEventUsesOneStableTaskAssetVersionKey(t *testing.T) {
 func TestTriggeredInputPinsAssetTaskAndDefinitionVersions(t *testing.T) {
 	asset := triggerAsset{ID: 41, ProjectID: 2, TeamID: 3, Version: 7, TaskRunID: 19, TaskRunStepID: 23,
 		DeviceID: sql.NullInt64{Int64: 5, Valid: true}, Kind: "image", MIMEType: "image/jpeg", Checksum: string(make([]byte, 64)), CapturedAt: time.Unix(1_800_000_000, 0)}
-	definition := triggerDefinition{VersionID: 11, ProviderType: "http-json", Model: "construction-v2", ExecutionMode: "synchronous", MappingVersion: "suspected-construction/v1"}
+	definition := triggerDefinition{VersionID: 11, ProviderType: "http-json", Model: "detection-v2", ExecutionMode: "synchronous", MappingVersion: "detection/v1"}
 	expires := time.Unix(1_800_000_300, 0)
 	input := buildTriggeredInput("00000000-0000-4000-8000-000000000001", asset, definition,
 		map[string]any{"threshold": 0.8}, "https://assets.example.test/signed", expires)

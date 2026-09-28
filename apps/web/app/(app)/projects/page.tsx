@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import Link from "next/link";
 import { Plus } from "lucide-react";
@@ -47,7 +49,7 @@ function ProjectsView({ projects, params }: { projects: Record<string, unknown>[
             label: "项目",
             render: (item) => (
               <div>
-                <Link className="font-medium text-primary hover:underline" href={`/projects/detail/?projectId=${String(item.id)}`}>
+                <Link className="font-medium text-primary hover:underline" href={canonicalPageHref(`/projects/detail/?projectId=${String(item.id)}`)}>
                   <span className="text-muted-foreground">{String(item.teamName)}/</span>
                   {String(item.name)}
                 </Link>

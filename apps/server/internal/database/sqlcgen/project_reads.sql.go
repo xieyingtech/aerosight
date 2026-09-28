@@ -147,6 +147,7 @@ select device.id,device.device_type_id::text as "deviceTypeId",device.name,devic
               device.status_reason as "statusReason",device_type.display_name as "typeName",
               device_type.type_key as "typeKey",driver.driver_key as "driverKey",driver.version as "driverVersion",
               device_type.vendor,device_type.model,
+              flighthub_route.connector_key as "connectorKey",
               case when flighthub_route.id is null then null else json_build_object(
                 'connectorStatus',case when flighthub_route.priority_count>1 then 'route_conflict'
                   when flighthub_route.connector_key<>'dji.flighthub2' or flighthub_route.version<>'1.0.0' then 'not_primary'

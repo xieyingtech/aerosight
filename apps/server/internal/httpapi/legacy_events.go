@@ -54,8 +54,7 @@ func (s *Server) legacyEventRoutes() {
 					mapped++
 				}
 			}
-			event["title"] = "疑似违建"
-			event["disclaimer"] = "该结果为算法生成的巡检线索，不构成法律意义上的违建认定。"
+			event["disclaimer"] = "该结果为算法生成的巡检线索，需结合原始证据和人工复核确认。"
 			event["hasMapLocation"] = mapped > 0
 			event["locationSummary"] = "位置不可用，仅展示影像内标注"
 			if mapped > 0 {

@@ -27,9 +27,13 @@ type realtimeConfig struct{ Protocol, Model string }
 var realtimeResources = map[string]string{"devices": "query_devices", "tasks": "query_tasks", "issues": "query_issues", "assets": "query_assets", "tracks": "query_tracks", "map": "query_map_context"}
 
 func stepRealtimeSession() gin.H {
-	tools := []gin.H{{"type": "function", "function": gin.H{"name": "query_project", "description": "查询当前项目的数据。支持设备、任务、案件、资产、轨迹和地图。", "parameters": gin.H{"type": "object", "properties": gin.H{"resource": gin.H{"type": "string", "enum": []string{"devices", "tasks", "issues", "assets", "tracks", "map"}, "description": "查询的数据类型，设备选devices，任务选tasks"}}, "required": []string{"resource"}, "additionalProperties": false}}}}
+	tools := []gin.H{{"type": "function", "function": gin.H{"name": "query_project", "description": "查询当前项目的数据。支持设备、任务、案件、资产、轨迹和地图。", "parameters": gin.H{"type": "object", "properties": gin.H{"resource": gin.H{"type": "string", "enum": []string{"devices", "tasks", "issues", "assets", "tracks", "map"}, "description": "查询的数据类型，设备选devices，任务选tasks"}}, "required": []string{"resource"}, "additionalProperties": false}}}, {"type": "function", "function": gin.H{"name": "mutate_issue", "description": "申请案件评论、状态、标签或分配变更，等待用户在界面点击授权后才会执行。先查询案件以获取 stateVersion。", "parameters": gin.H{"type": "object", "properties": gin.H{"issueId": gin.H{"type": "integer"}, "expectedVersion": gin.H{"type": "integer"}, "mutation": gin.H{"type": "object", "properties": gin.H{"action": gin.H{"type": "string", "enum": []string{"comment", "status", "labels", "assign", "unassign"}}, "body": gin.H{"type": "string"}, "status": gin.H{"type": "string"}, "labels": gin.H{"type": "array", "items": gin.H{"type": "string"}}, "assigneeType": gin.H{"type": "string"}, "assigneeId": gin.H{"type": "integer"}}, "required": []string{"action"}, "additionalProperties": false}}, "required": []string{"issueId", "expectedVersion", "mutation"}, "additionalProperties": false}}}, {"type": "function", "function": gin.H{"name": "create_task_draft", "description": "申请为已有任务创建可编辑草稿，等待用户在界面点击授权后才会执行，不会发布或运行。", "parameters": gin.H{"type": "object", "properties": gin.H{"taskId": gin.H{"type": "integer"}}, "required": []string{"taskId"}, "additionalProperties": false}}}}
+	tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": "query_inspection", "description": "只读查询巡检就绪、任务工作台、飞行、照片清单、识别、研判和报告。使用查询到的真实资源 ID。", "parameters": agentInspectionQuerySchema()}})
+	for _, spec := range agentWorkflowTools() {
+		tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": spec.Name, "description": spec.Description + " 必须用户在界面点击授权后执行。", "parameters": spec.Schema}})
+	}
 	return gin.H{"modalities": []string{"text", "audio"}, "voice": "linjiajiejie",
-		"instructions":       "你是 AeroSight 项目智能体。用户询问项目情况时必须调用 query_project 查询真实数据。调用工具前不要说话，获得工具结果后再用中文简短回答。不能执行设备或算法操作。以工具返回的数据时间和质量为准，空结果说明暂无记录。",
+		"instructions":       chatInstructions + " 用户询问项目情况时调用 query_project 或 query_inspection。调用工具前不要说话，获得结果后用中文简短回答。",
 		"input_audio_format": "pcm16", "output_audio_format": "pcm16", "input_audio_transcription": gin.H{"model": "whisper-1"},
 		"turn_detection": gin.H{"type": "server_vad", "prefix_padding_ms": 500, "silence_duration_ms": 600}, "tools": tools, "tool_choice": "auto"}
 }
@@ -319,9 +323,13 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 	if err := r.s.checkChatAccess(ctx, r.uid, r.pid, r.sid); err != nil {
 		return err
 	}
-	name, err := realtimeReadTool(item)
-	if err != nil {
-		return err
+	name := item.Name
+	if !agentIsWriteTool(name) && name != "query_inspection" {
+		var err error
+		name, err = realtimeReadTool(item)
+		if err != nil {
+			return err
+		}
 	}
 	m, err := r.message(ctx, item.ID, "assistant")
 	if err != nil {
@@ -333,14 +341,35 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 	}
 	toolCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	result, err := r.s.executeChatReadTool(toolCtx, r.uid, r.pid, name, json.RawMessage(`{}`))
+	var result gin.H
+	if name == "mutate_issue" {
+		result, err = r.s.proposeIssueWrite(toolCtx, r.uid, r.pid, r.sid, json.RawMessage(item.Arguments), r.requestID)
+	} else if name == "create_task_draft" {
+		result, err = r.s.proposeTaskDraft(toolCtx, r.uid, r.pid, r.sid, json.RawMessage(item.Arguments), r.requestID)
+	} else if _, known := agentWorkflowSpec(name); known {
+		result, err = r.s.proposeWorkflowWrite(toolCtx, r.uid, r.pid, r.sid, name, json.RawMessage(item.Arguments), r.requestID)
+	} else if name == "query_inspection" {
+		var args map[string]any
+		_ = json.Unmarshal([]byte(item.Arguments), &args)
+		if args["resource"] == "photo" {
+			result = gin.H{"status": "failed", "summary": "实时语音模型不接收图片，请在文字对话读取巡检照片。"}
+		} else {
+			result, err = r.s.executeInspectionQuery(toolCtx, r.uid, r.pid, json.RawMessage(item.Arguments))
+		}
+	} else {
+		result, err = r.s.executeChatReadTool(toolCtx, r.uid, r.pid, name, json.RawMessage(`{}`))
+	}
 	if err != nil {
 		m.ToolCalls = []gin.H{{"name": name, "status": "failed", "summary": "查询未完成"}}
 		_ = r.publish(m)
 		_ = r.save(ctx, m)
 		return err
 	}
-	m.ToolCalls = []gin.H{chatToolEvidence(name, result)}
+	if agentIsWriteTool(name) {
+		m.ToolCalls = []gin.H{{"name": name, "status": "confirmation_required", "summary": result["summary"], "approvalId": result["approvalId"]}}
+	} else {
+		m.ToolCalls = []gin.H{chatToolEvidence(name, result)}
+	}
 	if err = r.publish(m); err != nil {
 		return err
 	}

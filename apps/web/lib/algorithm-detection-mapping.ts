@@ -15,33 +15,7 @@ export type DetectionAssetReference = {
   mimeType: string;
 };
 
-export const suspectedConstructionTemplate = {
-  templateKey: "suspected-construction",
-  templateVersion: 1,
-  name: "疑似违建识别",
-  description: "识别新增、扩建等疑似建设活动；结果是机器线索，不代表法律结论。",
-  capabilityCode: "perception.suspected-construction",
-  executionMode: "synchronous",
-  inputRequirements: { assetKinds: ["image"], mimeTypes: ["image/jpeg", "image/png"] },
-  parametersSchema: {
-    type: "object", additionalProperties: false,
-    properties: { threshold: { type: "number", minimum: 0, maximum: 1, default: 0.65 } }
-  },
-  outputMapping: {
-    detectionsPath: "results", keyPath: "id", labelPath: "class", confidencePath: "score",
-    geometryPath: "geometry", geometryTypePath: "geometry.type", geometryFormat: "object"
-  } satisfies DetectionMapping,
-  labelMapping: {
-    new_building: "suspected-construction:new-building",
-    extension: "suspected-construction:extension",
-    earthwork: "suspected-construction:earthwork",
-    suspected_construction: "suspected-construction"
-  },
-  publishThreshold: 0.65,
-  mappingVersion: "suspected-construction/v1"
-} as const;
-
-export function mapSuspectedConstructionDetections(input: {
+export function mapAlgorithmDetections(input: {
   response: unknown;
   mapping: DetectionMapping;
   labelMapping: Readonly<Record<string, string>>;

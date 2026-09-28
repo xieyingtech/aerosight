@@ -21,14 +21,15 @@ export function InputSelect({ value, options, onValueChange, placeholder = "搜�
   const selected = options.find((option) => option.value === value) ?? null;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(selected?.label ?? (allowCustom ? value ?? "" : ""));
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const filtered = useMemo(() => {
-    const matches = filterInputSelectOptions(options, open ? query : "");
+    const matches = filterInputSelectOptions(options, open ? searchQuery : "");
     const custom = query.trim();
     return allowCustom && custom && !options.some((option) => option.value === custom)
       ? [...matches, { value: custom, label: custom, description: "添加自定义模型" }]
       : matches;
-  }, [open, options, query, allowCustom]);
+  }, [open, options, query, searchQuery, allowCustom]);
 
   useEffect(() => { if (!open) setQuery(selected?.label ?? (allowCustom ? value ?? "" : "")); }, [open, selected?.label, allowCustom, value]);
   useEffect(() => {
@@ -59,10 +60,10 @@ export function InputSelect({ value, options, onValueChange, placeholder = "搜�
       aria-controls={listId}
       aria-expanded={open}
       className="flex h-9 w-full rounded-lg border border-input bg-transparent py-1 pl-9 pr-9 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-      onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); setOpen(true); }}
-      onFocus={(event) => { setOpen(true); event.currentTarget.select(); }}
+      onChange={(event) => { setQuery(event.target.value); setSearchQuery(event.target.value); setActiveIndex(0); setOpen(true); }}
+      onFocus={(event) => { setSearchQuery(""); setActiveIndex(0); setOpen(true); event.currentTarget.select(); }}
       onKeyDown={(event) => {
-        if (event.key === "ArrowDown") { event.preventDefault(); setOpen(true); setActiveIndex((current) => open ? Math.max(0, Math.min(filtered.length - 1, current + 1)) : 0); }
+        if (event.key === "ArrowDown") { event.preventDefault(); if (!open) setSearchQuery(""); setOpen(true); setActiveIndex((current) => open ? Math.max(0, Math.min(filtered.length - 1, current + 1)) : 0); }
         if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((current) => Math.max(0, current - 1)); }
         if (event.key === "Enter") { event.preventDefault(); if (open && filtered[activeIndex]) choose(filtered[activeIndex]); }
         if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); setQuery(selected?.label ?? (allowCustom ? value ?? "" : "")); }

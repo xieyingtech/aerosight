@@ -39,8 +39,11 @@ func TestChatToolInputAndFormatting(t *testing.T) {
 		t.Fatalf("format %+v %v", result, err)
 	}
 	ref := result["items"].([]gin.H)[0]["reference"].(gin.H)
-	if ref["id"] != "12345678" || ref["href"] != "/projects/devices/?projectId=17&selected=12345678" {
+	if ref["id"] != "12345678" || ref["href"] != "/projects/17/devices/?selected=12345678" {
 		t.Fatalf("ref %+v", ref)
+	}
+	if ref := chatEvidenceReference(17, "query_tasks", "42"); ref["type"] != "task" || ref["href"] != "/projects/17/tasks/42/" {
+		t.Fatalf("task reference %+v", ref)
 	}
 	for _, name := range []string{"query_tasks", "query_issues", "query_assets", "query_tracks", "query_map_context"} {
 		ref := chatEvidenceReference(17, name, "a&b")
@@ -109,6 +112,23 @@ func TestChatReadToolsProjectScope(t *testing.T) {
 		if strings.Contains(string(encoded), "secret/key") {
 			t.Fatal("storage key leaked")
 		}
+	}
+	var unrunTaskID int
+	if err := f.db.QueryRow("insert into tasks(project_id,team_id,name,trigger_type,script,status) values($1,$2,'New unrun task','manual','','disabled') returning id", pid, team).Scan(&unrunTaskID); err != nil {
+		t.Fatal(err)
+	}
+	tasks := query("query_tasks", `{}`)["items"].([]gin.H)
+	if len(tasks) != 2 {
+		t.Fatalf("tasks without run omitted: %+v", tasks)
+	}
+	var unrunTask gin.H
+	for _, item := range tasks {
+		if item["id"] == float64(unrunTaskID) {
+			unrunTask = item
+		}
+	}
+	if unrunTask == nil || unrunTask["name"] != "New unrun task" || unrunTask["status"] != "disabled" || unrunTask["latestRunId"] != nil {
+		t.Fatalf("unrun task %+v", unrunTask)
 	}
 	tracks := query("query_tracks", `{}`)["items"].([]gin.H)
 	geometry := tracks[0]["geometry"].(map[string]any)

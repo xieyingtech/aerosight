@@ -67,7 +67,7 @@ func (store *SQLFlightHubLiveSessionStore) Load(ctx context.Context, projectID i
 		stream.status,adapter.status,device.type,stream.start_attempted_at,stream.start_accepted_at,
 		stream.supplier_credential_expires_at,definition.connector_key,definition.version,
 		adapter.config_json,adapter.credential_envelope_json,adapter.discovery_scope_json,
-		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false),
+		coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,true),
 		exists(select 1 from connector_capability_snapshots capability
 		 where capability.project_id=stream.project_id and capability.connector_instance_id=stream.adapter_id
 		   and capability.capability_code='live.control' and capability.status='supported'

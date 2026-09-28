@@ -168,9 +168,24 @@ func productType(model DeviceModel) (string, bool) {
 func mapDevice(projectUUID string, device *Device, parent string) connector.ExternalDevice {
 	typeKey, known := productType(device.Model)
 	externalID := projectUUID + "/" + device.SN
+	name := strings.TrimSpace(device.Callsign)
+	if name == "" || name == externalID || name == device.SN {
+		modelName := strings.TrimSpace(device.Model.Name)
+		if label, ok := map[string]string{"dji.dock2": "DJI Dock 2", "dji.matrice3d": "DJI Matrice 3D", "dji.matrice3td": "DJI Matrice 3TD"}[typeKey]; ok {
+			modelName = label
+		}
+		if modelName == "" {
+			modelName = "DJI 设备"
+		}
+		suffix := device.SN
+		if len(suffix) > 6 {
+			suffix = suffix[len(suffix)-6:]
+		}
+		name = modelName + " " + suffix
+	}
 	attributes := map[string]any{
 		"source": "dji.flighthub2", "projectUuid": projectUUID, "serialNumber": device.SN,
-		"callsign": device.Callsign, "online": device.Online, "modeCode": device.ModeCode,
+		"callsign": name, "name": name, "online": device.Online, "modeCode": device.ModeCode,
 		"model": map[string]any{
 			"key": device.Model.Key, "domain": device.Model.Domain, "type": device.Model.Type,
 			"subtype": device.Model.Subtype, "name": device.Model.Name, "class": device.Model.Class,

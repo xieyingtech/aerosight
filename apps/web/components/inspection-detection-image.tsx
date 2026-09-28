@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 import Link from "next/link";
 import {useState} from "react";
 export type ExternalDetectionResult={algorithmRunId:string;modelRevision:string;asset:{assetId:number;version:number};result:{detections:Array<{detectionKey:string;label:string;confidence:number;pixelGeometry:{type:string;x:number;y:number;width:number;height:number}}>}};
@@ -7,7 +9,7 @@ export function InspectionDetectionImage({projectId,observationId,item}:{project
  const [failed,setFailed]=useState(false);
  const detections=item.result.detections;
  return <section className="space-y-3 rounded-lg border p-4">
-  <div className="flex flex-wrap justify-between gap-2"><h2 className="font-medium">原图 #{item.asset.assetId} · {detections.length} 个预测目标</h2><Link className="text-sm underline" href={`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${item.algorithmRunId}`}>模型 {item.modelRevision} · 运行详情</Link></div>
+  <div className="flex flex-wrap justify-between gap-2"><h2 className="font-medium">原图 #{item.asset.assetId} · {detections.length} 个预测目标</h2><Link className="text-sm underline" href={canonicalPageHref(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${item.algorithmRunId}`)}>模型 {item.modelRevision} · 运行详情</Link></div>
   <p className="text-xs text-muted-foreground">框为原图像素坐标，预测结果需复核；不代表目标地理位置或违规认定。</p>
   {failed?<p role="alert">冻结原图不可用，请检查资产版本后刷新。</p>:<div className="relative mx-auto max-w-6xl">
    <img alt={`巡检原图 ${item.asset.assetId}，叠加 ${detections.length} 个预测框`} className="block h-auto w-full" src={`/api/projects/${projectId}/inspection/observations/${observationId}/assets/${item.asset.assetId}/content`} onLoad={e=>setSize({width:e.currentTarget.naturalWidth,height:e.currentTarget.naturalHeight})} onError={()=>setFailed(true)}/>

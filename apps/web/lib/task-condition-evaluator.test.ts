@@ -3,9 +3,9 @@ import test from "node:test";
 import { evaluateTaskCondition, taskConditionSchema } from "./task-condition-evaluator.ts";
 
 const context = {
-  inputs: { minimumConfidence: 0.8, acceptedCategories: ["suspected-construction"] },
+  inputs: { minimumConfidence: 0.8, acceptedCategories: ["object"] },
   steps: {
-    detect: { outputs: { category: "suspected-construction", confidence: 0.91, count: 3, status: "succeeded", spatialRelation: "inside" } }
+    detect: { outputs: { category: "object", confidence: 0.91, count: 3, status: "succeeded", spatialRelation: "inside" } }
   }
 };
 

@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import { useActionState } from "react";
 import { apiJSON, APIError } from "@/lib/api-client";
@@ -16,7 +18,7 @@ export function NewProjectForm({ teams }: { teams: ManagedTeam[] }) {
     const teamId = Number(form.get("teamId"));
     if (!name || name.length > 100) return { error: "请输入 1–100 字符的项目名称" };
     if (!Number.isSafeInteger(teamId) || teamId <= 0) return { error: "请选择团队" };
-    try { const project = await apiJSON<{ id: number }>("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamId, name }) }); window.location.assign(`/projects/detail/?projectId=${project.id}`); return {}; }
+    try { const project = await apiJSON<{ id: number }>("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teamId, name }) }); window.location.assign(canonicalPageHref(`/projects/detail/?projectId=${project.id}`)); return {}; }
     catch (error) { return { error: error instanceof APIError && error.status === 403 ? "你没有在此团队创建项目的权限。" : "创建项目失败，请重试。" }; }
   }, {});
 

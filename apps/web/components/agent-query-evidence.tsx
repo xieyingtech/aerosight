@@ -5,7 +5,24 @@ const queryNames: Record<string, string> = {
   query_assets: "数据资产",
   query_tracks: "设备轨迹",
   query_map_context: "地图态势",
+  mutate_issue: "案件操作",
+  create_task_draft: "任务草稿",
+  query_inspection: "巡检资源",
+  sync_flight_resources: "同步飞行和媒体",
+  create_inspection_task: "新建巡检任务",
+  save_task_draft: "保存任务草稿",
+  publish_task: "发布任务",
+  set_task_state: "任务启停",
+  run_task: "启动任务",
+  control_task_run: "任务运行控制",
+  submit_flight: "提交真实飞行",
+  control_flight: "飞行控制",
+  run_algorithm: "图片算法识别",
+  review_inspection: "巡检人工复核",
+  generate_report: "生成报告草稿",
 };
+export const agentToolLabel = (name: string) => queryNames[name] ?? name;
+const isWriteTool = (name?: string) => Boolean(name && name !== "query_inspection" && !name.startsWith("query_") && queryNames[name]);
 
 const queryDescriptions: Record<string, string> = {
   query_devices: "查询设备的类型、驱动、运行状态和数据新鲜度。",
@@ -19,6 +36,17 @@ const queryDescriptions: Record<string, string> = {
 type Evidence = { type: string; id: string; version: string; href?: string };
 type Query = { name?: string; status?: string; summary?: string; evidenceRefs?: Evidence[] };
 
+function statusText(query: Query) {
+  if (query.status === "running") return isWriteTool(query.name) ? "准备授权请求…" : "查询中…";
+  if (query.status === "executing") return "处理中／待核对";
+  if (query.status === "failed") return "执行失败";
+  if (query.status === "confirmation_required") return "待授权";
+  if (query.status === "succeeded") return isWriteTool(query.name) ? "已处理" : "查询完成";
+  if (query.status === "rejected") return "已拒绝";
+  if (query.status === "expired") return "已过期";
+  return query.summary === "返回 0 条项目内记录" ? "无相关记录" : query.summary || "查询完成";
+}
+
 export function AgentQueryEvidence({ toolCalls, inline = false }: { toolCalls: unknown; inline?: boolean }) {
   if (!Array.isArray(toolCalls)) return null;
   const queries = toolCalls.filter((item): item is Query => Boolean(item) && typeof item === "object");
@@ -29,18 +57,18 @@ export function AgentQueryEvidence({ toolCalls, inline = false }: { toolCalls: u
 
   return <details className="mt-4 text-xs">
     <summary className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
-      {single ? <><span className={single.status === "running" ? "animate-pulse" : ""}>{queryNames[single.name ?? ""] ?? single.name ?? "项目查询"}</span><code className="ml-2">{single.name}</code><span className="ml-2">{single.status === "running" ? "查询中…" : single.status === "failed" ? "查询失败" : single.summary === "返回 0 条项目内记录" ? "无相关记录" : single.summary || "查询完成"}</span></> : <>工具调用 · {queries.length} 次{hasFailure ? " · 部分查询失败" : ""}</>}
+      {single ? <><span className={single.status === "running" ? "animate-pulse" : ""}>{queryNames[single.name ?? ""] ?? single.name ?? "项目查询"}</span><code className="ml-2">{single.name}</code><span className="ml-2">{statusText(single)}</span></> : <>工具调用 · {queries.length} 次{hasFailure ? " · 部分查询失败" : ""}</>}
     </summary>
     <div className="mt-3 space-y-4 border-l-2 border-border pl-4">
       {queries.map((item, index) => {
         const summary = item.summary === "返回 0 条项目内记录" ? "未查到相关记录（本次查询结果为空）" : item.summary;
-        const status = item.status === "succeeded" ? "查询完成" : item.status === "failed" ? "查询失败" : item.status === "running" ? "查询中" : "状态未知";
+        const status = statusText(item);
         return <div key={index}>
           <p className="font-medium">{index + 1}. {queryNames[item.name ?? ""] ?? item.name ?? "项目数据查询"}<span className="ml-2 font-normal text-muted-foreground">{status}</span></p>
           {item.name && <p className="mt-1 text-muted-foreground">调用工具：<code className="break-all font-mono">{item.name}</code></p>}
           {queryDescriptions[item.name ?? ""] && <p className="mt-1 leading-5 text-muted-foreground">查询内容：{queryDescriptions[item.name ?? ""]}</p>}
-          <p className="mt-1 text-muted-foreground">查询范围：当前项目中你有权访问的数据</p>
-          {summary && <p className="mt-1 leading-5">返回结果：{summary}</p>}
+          {!isWriteTool(item.name) && <p className="mt-1 text-muted-foreground">查询范围：当前项目中你有权访问的数据</p>}
+          {summary && <p className="mt-1 leading-5">{isWriteTool(item.name) ? "操作内容" : "返回结果"}：{summary}</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.length > 0 && <p className="mt-2 font-medium">相关依据</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.map((ref, refIndex) => <p className="mt-1 break-words text-muted-foreground" key={refIndex}>
             {ref.href?.startsWith("/") && !ref.href.startsWith("//") ? <a className="text-primary underline underline-offset-2" href={ref.href}>{ref.type}:{ref.id}</a> : <span>{ref.type}:{ref.id}</span>} · {ref.version}

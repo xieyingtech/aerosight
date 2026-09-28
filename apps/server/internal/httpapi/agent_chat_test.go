@@ -74,7 +74,7 @@ func TestChatResponsesToolLoop(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Fatal(err)
 			}
-			if body["model"] != "model-test" || body["store"] != false || body["previous_response_id"] != nil || len(body["tools"].([]any)) != 6 {
+			if body["model"] != "model-test" || body["store"] != false || body["previous_response_id"] != nil || len(body["tools"].([]any)) != 9+len(agentWorkflowTools()) {
 				t.Fatalf("params %+v", body)
 			}
 			input := body["input"].([]any)
@@ -132,7 +132,7 @@ func TestChatResponsesToolLoop(t *testing.T) {
 	}
 	refs := stored[5]["evidenceRefs"].([]any)
 	ref := refs[0].(map[string]any)
-	if ref["type"] != "map-context" || ref["id"] != "current" || !strings.Contains(ref["href"].(string), "/projects/detail/?projectId=") {
+	if ref["type"] != "map-context" || ref["id"] != "current" || !strings.Contains(ref["href"].(string), "/projects/") {
 		t.Fatalf("evidence %+v", ref)
 	}
 }

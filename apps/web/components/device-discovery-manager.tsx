@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  canConfirmDiscovery, DISCOVERY_STATUS_LABELS, filterDiscoveries,
+  canConfirmDiscovery, discoveryDeviceName, DISCOVERY_STATUS_LABELS, filterDiscoveries,
   type DeviceDiscovery, type DeviceTypeOption, type DiscoveryConnector, type DiscoveryStatus,
 } from "@/lib/device-discovery-core";
 
@@ -27,13 +27,13 @@ function DiscoveryRow({ item, projectId, deviceTypes, canManage, busy, act }: {
   item: DeviceDiscovery; projectId: number; deviceTypes: DeviceTypeOption[]; canManage: boolean; busy: boolean;
   act: (url: string, body: unknown) => Promise<void>;
 }) {
-  const [name, setName] = useState(item.externalDeviceId);
+  const [name, setName] = useState(() => discoveryDeviceName(item));
   const [typeKey, setTypeKey] = useState(item.suggestedTypeKey ?? "");
   return <article className="rounded-lg border p-3">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{item.externalDeviceId}</span>
+          <span className="font-medium">{discoveryDeviceName(item)}</span>
           <Badge variant={item.status === "conflicted" ? "destructive" : item.status === "managed" ? "secondary" : "outline"}>{DISCOVERY_STATUS_LABELS[item.status]}</Badge>
           {item.matchConfidence !== null && <Badge variant="outline">匹配 {Math.round(item.matchConfidence * 100)}%</Badge>}
         </div>

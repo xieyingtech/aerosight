@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -79,7 +80,7 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 		key  string
 		read func(context.Context, int32) ([]json.RawMessage, error)
 	}{
-		{"devices", q.SnapshotDevices}, {"tracks", q.SnapshotTracks}, {"activeTasks", q.SnapshotActiveTasks}, {"taskSteps", q.SnapshotTaskSteps}, {"algorithmRuns", q.SnapshotAlgorithmRuns}, {"liveStreams", q.SnapshotLiveStreams}, {"realtimeChannels", q.SnapshotRealtimeChannels}, {"diagnostics", q.SnapshotDiagnostics}, {"mediaPoints", q.SnapshotMedia}, {"suspectedConstruction", q.SnapshotSuspectedConstruction}, {"openAlerts", q.SnapshotAlerts}, {"openIssues", q.SnapshotIssues},
+		{"devices", q.SnapshotDevices}, {"tracks", q.SnapshotTracks}, {"activeTasks", q.SnapshotActiveTasks}, {"taskSteps", q.SnapshotTaskSteps}, {"algorithmRuns", q.SnapshotAlgorithmRuns}, {"liveStreams", q.SnapshotLiveStreams}, {"realtimeChannels", q.SnapshotRealtimeChannels}, {"diagnostics", q.SnapshotDiagnostics}, {"mediaPoints", q.SnapshotMedia}, {"algorithmResults", q.SnapshotAlgorithmResults}, {"openAlerts", q.SnapshotAlerts}, {"openIssues", q.SnapshotIssues},
 	}
 	for _, read := range reads {
 		raw, err := read.read(ctx, pid)
@@ -155,17 +156,18 @@ func snapshotHealth(raw json.RawMessage) (gin.H, gin.H) {
 	if !available {
 		capabilities["historical_queries"] = "degraded"
 	}
-	layers := gin.H{"devices": "available", "tasks": "available", "media": "available", "issues": "available", "alerts": "available", "liveStreams": "available", "suspectedConstruction": "available", "regions": "not-configured"}
+	layers := gin.H{"devices": "available", "tasks": "available", "media": "available", "issues": "available", "alerts": "available", "liveStreams": "available", "algorithmResults": "available", "regions": "not-configured"}
 	if capabilities["realtime_device_control"] == "degraded" {
 		layers["liveStreams"] = "degraded"
 	}
 	if capabilities["algorithm_execution"] == "degraded" {
-		layers["suspectedConstruction"] = "degraded"
+		layers["algorithmResults"] = "degraded"
 	}
 	return gin.H{"status": status, "ready": available, "historicalDataAvailable": available, "degradationReasons": reasons, "capabilityAvailability": capabilities}, layers
 }
 
 func projectCapabilities(device gin.H, role string, grants []gin.H) {
+	device["flightHubAPICatalog"] = flightHubDeviceCatalog(device)
 	capabilities := []gin.H{}
 	raw, _ := device["rawCapabilities"].([]any)
 	for _, item := range raw {
@@ -205,10 +207,21 @@ func projectCapabilities(device gin.H, role string, grants []gin.H) {
 		}
 		if allowed {
 			for _, action := range capabilityActions(code) {
+				actionReason := reason
+				if device["connectorKey"] == "dji.flighthub2" && action["kind"] == "command" {
+					policy, supported := fhDiscretePolicies[fhString(action["key"])]
+					if !supported || policy.capability != code {
+						// Cloud API model actions do not belong in a FlightHub action menu.
+						continue
+					}
+					if supported && policy.types != nil && !slices.Contains(policy.types, fhString(device["typeKey"])) {
+						actionReason = "此司空操作不适用于当前设备分类；飞行控制指令请通过机场执行"
+					}
+				}
 				action["capabilityCode"] = code
 				action["risk"] = cap["risk"]
-				action["enabled"] = reason == nil
-				action["unavailableReason"] = reason
+				action["enabled"] = actionReason == nil
+				action["unavailableReason"] = actionReason
 				actions = append(actions, action)
 			}
 		}

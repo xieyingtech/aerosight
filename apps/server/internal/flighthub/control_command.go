@@ -31,10 +31,10 @@ type controlCommandPolicy struct {
 }
 
 var discreteControlPolicies = map[string]controlCommandPolicy{
-	"return_home":         {actionCode: "return_home", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home"},
-	"return_home_cancel":  {actionCode: "return_home_cancel", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home_cancel"},
-	"flighttask_pause":    {actionCode: "flighttask_pause", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_pause"},
-	"flighttask_recovery": {actionCode: "flighttask_recovery", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_recovery"},
+	"return_home":         {actionCode: "return_home", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
+	"return_home_cancel":  {actionCode: "return_home_cancel", capabilityCode: "flight.return_home", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.return_home_cancel", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
+	"flighttask_pause":    {actionCode: "flighttask_pause", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_pause", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
+	"flighttask_recovery": {actionCode: "flighttask_recovery", capabilityCode: "mission.execute", connectorCapabilityCode: "device.control", featureFlag: "device.control", approvalAction: "flighthub.device.flighttask_recovery", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
 	"camera.change": {actionCode: "camera.change", capabilityCode: "camera.change", connectorCapabilityCode: "device.camera.change", featureFlag: FlightHubCameraChangeFeatureFlag,
 		approvalAction: "flighthub.device.camera.change", deviceTypes: map[string]bool{"dji.dock2": true, "dji.dock3": true}},
 	"camera.change_lens": {actionCode: "camera.change_lens", capabilityCode: "camera.lens.change", connectorCapabilityCode: "device.lens.change", featureFlag: FlightHubLensChangeFeatureFlag,

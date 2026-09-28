@@ -27,9 +27,9 @@ var projectFeatureTree = []featureNode{
 		{ID: "storage.objects", Label: "文件存储"},
 		{ID: "algorithms.external", Label: "外部算法"},
 	}},
-	{ID: "flighthub", Label: "大疆司空", Description: "功能启用后仍需通过连接、设备能力验证和操作条件检查。", Children: []featureNode{
+	{ID: "flighthub", Label: "大疆司空", Description: "设备、航线、媒体、地图和模型的只读查询默认开放；观看直播默认开启。修改和控制功能需单独开启，仍受账号权限、设备能力和操作条件检查约束。", Children: []featureNode{
 		{ID: "live", Label: "直播", Children: []featureNode{
-			{ID: "live.control", Label: "启动直播"},
+			{ID: "live.control", Label: "观看直播（启动推流）", Description: "默认开启。观看时会请求设备启动推流，不会发起飞行；仍需直播操作权限和设备支持。"},
 			{ID: "flighthub.live.quality", Label: "调整画质"},
 			{ID: "flighthub.live.recording", Label: "录制控制"},
 			{ID: "flighthub.live.share", Label: "直播分享"},
@@ -85,9 +85,12 @@ func featureValues(raw []byte) (map[string]bool, error) {
 	}
 	out := map[string]bool{}
 	for key := range featureLeafIDs(projectFeatureTree) {
-		var enabled bool
-		// Only a literal boolean true grants enablement; unknown keys never escape.
-		_ = json.Unmarshal(stored[key], &enabled)
+		enabled := key == "live.control"
+		// Saved values must be literal booleans; missing live viewing uses its default.
+		if value, present := stored[key]; present {
+			enabled = false
+			_ = json.Unmarshal(value, &enabled)
+		}
 		out[key] = enabled
 	}
 	return out, nil

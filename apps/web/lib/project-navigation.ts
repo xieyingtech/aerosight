@@ -1,4 +1,5 @@
 import type { ProjectPermission } from "@/lib/project-permission-policy";
+import { projectPageHref } from "./page-routes.ts";
 
 export type ProjectNavigationItem = {
   key: "overview" | "realtime" | "tasks" | "devices" | "connectors" | "issues" | "algorithms" | "agents" | "assets" | "settings";
@@ -36,11 +37,7 @@ export function visibleProjectNavigation(
 }
 
 export function projectNavigationHref(projectId: number, segment: string, parameters: Record<string, string | number> = {}) {
-  const query = new URLSearchParams({projectId: String(projectId)});
-  for (const [key, value] of Object.entries(parameters)) {
-    if (key !== "projectId") query.set(key, String(value));
-  }
-  return `/projects/${segment || "detail"}/?${query}`;
+  return projectPageHref(projectId, segment || "detail", parameters);
 }
 
 export function legacyProjectEventListHref(projectId: number) {

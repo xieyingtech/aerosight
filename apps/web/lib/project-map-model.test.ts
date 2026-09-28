@@ -18,7 +18,7 @@ const snapshot: ProjectSituationSnapshot = {
   taskSteps: [], algorithmRuns: [],
   regions: [{ id: 4, name: "Area", geometry: { type: "Polygon", coordinates: [[[120, 30], [121, 30], [121, 31], [120, 30]]] } }],
   mediaPoints: [{ id: 5, kind: "image", metadata: { longitude: 120.3, latitude: 30.4 } }],
-  suspectedConstruction: [{ id: 6, label: "疑似违建", geometry: { type: "Point", coordinates: [120.4, 30.5] } }],
+  algorithmResults: [{ id: 6, label: "车辆识别", geometry: { type: "Point", coordinates: [120.4, 30.5] } }],
   openIssues: [{ id: 7, number: 19, title: "Issue", geometry: { type: "Point", coordinates: [120.5, 30.6] } }],
   openAlerts: [], liveStreams: [],
   freshness: { latestCapturedAt: null, isRealtime: false }, availability: {}
@@ -26,7 +26,7 @@ const snapshot: ProjectSituationSnapshot = {
 
 test("map layer registry keeps all operational layers stable", () => {
   assert.deepEqual(projectMapLayers.map((layer) => layer.id), [
-    "regions", "mission-routes", "tracks", "suspected-construction", "media", "issues", "drones", "docks", "ground-robots"
+    "regions", "mission-routes", "tracks", "algorithm-results", "media", "issues", "drones", "docks", "ground-robots"
   ]);
 });
 
@@ -40,11 +40,12 @@ test("history window keeps timeless regions but filters timestamped features", (
 test("map model renders air-ground features and drops foreign project data", () => {
   const model = createProjectMapModel(snapshot);
   const kinds = new Set(model.features.map((item) => item.properties.layerKind));
-  for (const kind of ["device-drone", "device-ground", "track", "mission-route", "region", "media", "suspected-construction", "issue"]) {
+  for (const kind of ["device-drone", "device-ground", "track", "mission-route", "region", "media", "algorithm-results", "issue"]) {
     assert(kinds.has(kind as never), `missing ${kind}`);
   }
   assert(!model.features.some((item) => item.properties.entityId === "99"));
 	assert(model.features.every((item) => item.properties.projectId === 7));
+  assert.equal(model.features.find((item) => item.properties.layerKind === "algorithm-results")?.properties.label, "车辆识别");
 });
 
 test("Dock 2 and M3TD snapshot uses facility and aircraft map icons", () => {

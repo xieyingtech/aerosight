@@ -6,7 +6,7 @@ const failedRun = {
   id: "00000000-0000-4000-8000-000000000001", status: "failed",
   inputSnapshot: {
     inputAsset: { assetId: 41, version: 3, checksumSha256: "a".repeat(64), mimeType: "image/jpeg", accessUrl: "https://signed.example/secret" },
-    definition: { configurationSnapshotId: 8, providerType: "http-json", modelOrProcess: "construction-v2", mappingVersion: "mapping-v4" },
+    definition: { configurationSnapshotId: 8, providerType: "http-json", modelOrProcess: "detection-v2", mappingVersion: "mapping-v4" },
     parameters: { threshold: 0.72 }, context: { capturedAt: "2026-08-27T01:00:00Z" },
     callback: { token: "must-never-render" }
   },

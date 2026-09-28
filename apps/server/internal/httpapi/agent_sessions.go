@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +32,7 @@ func (s *Server) agentSessionRoutes() {
 	g.GET("", s.listAgentSessions)
 	g.POST("", s.createAgentSession)
 	s.router.POST("/api/projects/:id/agent-sessions/:sessionId/messages", s.requireUser, s.chatTimeout, s.chatTurn)
+	s.router.POST("/api/projects/:id/agent-sessions/:sessionId/approvals/:approvalId", s.requireUser, s.chatTimeout, s.decideAgentWrite)
 	s.router.GET("/api/projects/:id/agent-sessions/:sessionId/realtime", s.requireUser, s.realtimeChat)
 }
 
@@ -65,7 +67,7 @@ func (s *Server) listAgentSessions(c *gin.Context) {
 	for _, session := range sessions {
 		positions[session.ID] = len(rows)
 		ids = append(ids, session.ID)
-		rows = append(rows, gin.H{"id": session.ID, "status": session.Status, "summary": nullable(session.Summary), "createdAt": timestamp(session.CreatedAt), "messages": []gin.H{}})
+		rows = append(rows, gin.H{"id": session.ID, "status": session.Status, "summary": nullable(session.Summary), "createdAt": timestamp(session.CreatedAt), "messages": []gin.H{}, "approvals": []gin.H{}})
 	}
 	if len(ids) > 0 {
 		messages, e := q.ListChatMessages(ctx, sqlcgen.ListChatMessagesParams{ProjectID: pid, StartedByUserID: user, SessionIds: ids})
@@ -77,6 +79,43 @@ func (s *Server) listAgentSessions(c *gin.Context) {
 			index := positions[message.SessionID]
 			rows[index]["messages"] = append(rows[index]["messages"].([]gin.H), gin.H{"id": message.ID, "sessionId": message.SessionID, "role": message.Role, "content": message.Content, "toolCalls": message.ToolCallsJson, "createdAt": timestamp(message.CreatedAt)})
 		}
+	}
+	approvals, err := tx.QueryContext(ctx, `SELECT id::text,session_id,tool_name,status,arguments,created_at,expires_at,result FROM agent_write_approvals WHERE project_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 100`, pid, uid)
+	if err != nil {
+		s.agentSessionFailure(c, err)
+		return
+	}
+	for approvals.Next() {
+		var id, toolName, status string
+		var sid int32
+		var raw []byte
+		var resultRaw []byte
+		var created, expires time.Time
+		if err = approvals.Scan(&id, &sid, &toolName, &status, &raw, &created, &expires, &resultRaw); err != nil {
+			break
+		}
+		var args map[string]any
+		if err = json.Unmarshal(raw, &args); err != nil {
+			break
+		}
+		mutation, _ := args["mutation"].(map[string]any)
+		var result any
+		if len(resultRaw) > 0 {
+			_ = json.Unmarshal(resultRaw, &result)
+		}
+		if index, ok := positions[sid]; ok {
+			rows[index]["approvals"] = append(rows[index]["approvals"].([]gin.H), gin.H{"id": id, "toolName": toolName, "status": status, "issueId": args["issueId"], "taskId": args["taskId"], "expectedVersion": args["expectedVersion"], "mutation": mutation, "input": args["input"], "summary": args["summary"], "result": result, "createdAt": timestamp(created), "expiresAt": timestamp(expires)})
+		}
+	}
+	if closeErr := approvals.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = approvals.Err()
+	}
+	if err != nil {
+		s.agentSessionFailure(c, err)
+		return
 	}
 	if err = tx.Commit(); err != nil {
 		s.agentSessionFailure(c, err)

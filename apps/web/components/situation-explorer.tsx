@@ -19,7 +19,7 @@ function selectedRecord(snapshot: ProjectSituationSnapshot, lane: string, entity
     : lane === "issue" || lane === "issues" ? snapshot.openIssues
     : lane === "alert" || lane === "alerts" ? snapshot.openAlerts
     : lane === "tasks" || lane === "mission-route" ? snapshot.activeTasks
-    : lane === "detections" || lane === "suspected-construction" ? snapshot.suspectedConstruction
+    : lane === "detections" || lane === "algorithm-results" ? snapshot.algorithmResults
     : lane === "region" ? snapshot.regions : [];
   return sources.find((item) => String(item.id ?? item.deviceId) === entityId);
 }

@@ -80,7 +80,7 @@ export type ProjectSituationSnapshot = {
   realtimeChannels?: Array<Record<string, unknown>>;
   diagnostics?: OperationDiagnostic[];
   mediaPoints: Array<Record<string, unknown>>;
-  suspectedConstruction: Array<Record<string, unknown>>;
+  algorithmResults: Array<Record<string, unknown>>;
   openIssues: Array<Record<string, unknown>>;
   /** @deprecated legacy perception records kept for history/replay compatibility */
   openAlerts: Array<Record<string, unknown>>;
@@ -311,8 +311,8 @@ export async function readProjectSituationSnapshot(
        order by coalesce(asset.captured_at, asset.created_at) desc limit 500`,
       [projectId]
     )).rows;
-    const suspectedConstruction = (await client.query<Record<string, unknown>>(
-      `/* snapshot:suspected-construction */
+    const algorithmResults = (await client.query<Record<string, unknown>>(
+      `/* snapshot:algorithm-results */
        select group_row.id, group_row.project_id as "projectId", group_row.label,
               group_row.status, group_row.location_quality as "locationQuality",
               group_row.last_detected_at as "capturedAt", ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry
@@ -384,7 +384,7 @@ export async function readProjectSituationSnapshot(
       realtimeChannels,
       diagnostics,
       mediaPoints,
-      suspectedConstruction,
+      algorithmResults,
       openIssues,
       openAlerts,
       regions,
@@ -395,7 +395,7 @@ export async function readProjectSituationSnapshot(
       availability: {
         devices: "available", tasks: "available", media: "available", issues: "available", alerts: "available",
         liveStreams: health.capabilityAvailability.realtime_device_control === "degraded" ? "degraded" : "available",
-        suspectedConstruction: health.capabilityAvailability.algorithm_execution === "degraded" ? "degraded" : "available",
+        algorithmResults: health.capabilityAvailability.algorithm_execution === "degraded" ? "degraded" : "available",
         regions: regions.length ? "available" : "not-configured"
       },
       health

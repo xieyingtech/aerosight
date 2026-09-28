@@ -27,7 +27,7 @@ func TestRealtimeStepEndpoint(t *testing.T) {
 		}
 	}
 	tools := stepRealtimeSession()["tools"].([]gin.H)
-	if len(tools) != 1 || tools[0]["function"] == nil || tools[0]["name"] != nil {
+	if len(tools) != 4+len(agentWorkflowTools()) || tools[0]["function"] == nil || tools[0]["name"] != nil {
 		t.Fatal("StepFun requires nested function definitions")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"strings"
 )
 
 //go:embed flighthub_controlled_operations.json
@@ -104,7 +105,7 @@ func (s *Server) fhControlledOperations(c *gin.Context) {
 		if !verified[code] {
 			missing = append(missing, "缺少 field-write 现场验收")
 		}
-		d["href"] = fmt.Sprintf("/projects/%s?projectId=%d", fhString(d["href"]), pid)
+		d["href"] = fmt.Sprintf("/projects/%d/%s/", pid, strings.Trim(fhString(d["href"]), "/"))
 		d["connectorReady"], d["permissionReady"], d["featureEnabled"], d["capabilityVerified"], d["available"], d["missing"] = ready, allowed, enabled, verified[code], len(missing) == 0, missing
 		actions = append(actions, d)
 	}

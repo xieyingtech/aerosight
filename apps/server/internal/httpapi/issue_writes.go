@@ -98,16 +98,42 @@ func (s *Server) mutateIssue(c *gin.Context) {
 		bad()
 		return
 	}
-	ctx := c.Request.Context()
-	uid := currentUser(c).ID
+	result, err := s.executeIssueMutation(c.Request.Context(), currentUser(c).ID, pid, iid, m, expected, key, input, c.GetHeader("X-Request-ID"), "")
+	if err != nil {
+		s.issueMutationFailure(c, err)
+		return
+	}
+	c.JSON(200, result)
+}
+
+func (s *Server) executeIssueMutation(ctx context.Context, uid, pid, iid int32, m issue.Mutation, expected int32, key string, input map[string]any, requestID, approvalID string) (gin.H, error) {
 	permission := issue.MutationPermission(m.Action)
 	access, err := s.projectAccess(ctx, s.queries, uid, pid, permission)
 	if err != nil {
-		s.issueMutationFailure(c, errors.New("PROJECT_ACCESS_DENIED"))
-		return
+		return nil, errors.New("PROJECT_ACCESS_DENIED")
 	}
-	audit := database.AuditContext{ProjectID: pid, TeamID: access.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "issue." + m.Action, ResourceType: "issue", ResourceID: strconv.FormatInt(id, 10), Input: input, PolicyResult: map[string]any{"permission": permission, "optimisticConcurrency": true}}
+	audit := database.AuditContext{ProjectID: pid, TeamID: access.TeamID, ActorUserID: uid, RequestID: requestID, IdempotencyKey: key, Action: "issue." + m.Action, ResourceType: "issue", ResourceID: strconv.Itoa(int(iid)), Input: input, PolicyResult: map[string]any{"permission": permission, "optimisticConcurrency": true, "userApproved": approvalID != ""}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, access.TeamID, permission, false), func(w *database.WriteTx) (gin.H, error) {
+		if approvalID != "" {
+			if e := s.authorizeWrite(uid, pid, access.TeamID, "agent:use", false)(ctx, w); e != nil {
+				return nil, e
+			}
+			var stored []byte
+			e := w.Tx.QueryRowContext(ctx, `SELECT arguments FROM agent_write_approvals WHERE id=$1 AND project_id=$2 AND session_id IN (SELECT id FROM agent_sessions WHERE project_id=$2 AND started_by_user_id=$3 AND status='open') AND user_id=$3 AND tool_name='mutate_issue' AND status='pending' AND expires_at>now() FOR UPDATE`, approvalID, pid, uid).Scan(&stored)
+			if errors.Is(e, sql.ErrNoRows) {
+				return nil, errors.New("AGENT_APPROVAL_NOT_FOUND")
+			}
+			if e != nil {
+				return nil, e
+			}
+			var approved map[string]any
+			if e = json.Unmarshal(stored, &approved); e != nil {
+				return nil, e
+			}
+			if approved["clientKey"] != key || approved["issueId"] != float64(iid) {
+				return nil, errors.New("AGENT_APPROVAL_NOT_FOUND")
+			}
+		}
 		version, e := w.Queries.LockIssueMutation(ctx, sqlcgen.LockIssueMutationParams{ProjectID: pid, ID: iid})
 		if errors.Is(e, sql.ErrNoRows) {
 			return nil, errors.New("ISSUE_NOT_FOUND")
@@ -120,7 +146,13 @@ func (s *Server) mutateIssue(c *gin.Context) {
 			return nil, e
 		}
 		if replay {
-			return gin.H{"issueId": iid, "stateVersion": version, "replayed": true}, nil
+			result := gin.H{"issueId": iid, "stateVersion": version, "replayed": true}
+			if approvalID != "" {
+				if e := finishAgentApproval(ctx, w, approvalID, result); e != nil {
+					return nil, e
+				}
+			}
+			return result, nil
 		}
 		// Re-read the rows locked by authorizeWrite; auxiliary agent permission must
 		// be current too, rather than coming from the pre-transaction access check.
@@ -145,7 +177,13 @@ func (s *Server) mutateIssue(c *gin.Context) {
 				return nil, e
 			}
 			if !changed {
-				return gin.H{"issueId": iid, "stateVersion": version, "replayed": true, "noOp": true}, nil
+				result := gin.H{"issueId": iid, "stateVersion": version, "replayed": true, "noOp": true}
+				if approvalID != "" {
+					if e := finishAgentApproval(ctx, w, approvalID, result); e != nil {
+						return nil, e
+					}
+				}
+				return result, nil
 			}
 		}
 		update := sqlcgen.UpdateIssueMutationParams{ProjectID: pid, IssueID: iid, ExpectedVersion: version, NextVersion: plan.NextVersion}
@@ -197,13 +235,24 @@ func (s *Server) mutateIssue(c *gin.Context) {
 		if e != nil {
 			return nil, e
 		}
-		return gin.H{"issueId": iid, "stateVersion": version, "replayed": false, "copilotJobId": jobID}, nil
+		result := gin.H{"issueId": iid, "stateVersion": version, "replayed": false, "copilotJobId": jobID}
+		if approvalID != "" {
+			if e := finishAgentApproval(ctx, w, approvalID, result); e != nil {
+				return nil, e
+			}
+		}
+		return result, nil
 	})
+	return result, err
+}
+
+func finishAgentApproval(ctx context.Context, w *database.WriteTx, approvalID string, result gin.H) error {
+	raw, err := json.Marshal(result)
 	if err != nil {
-		s.issueMutationFailure(c, err)
-		return
+		return err
 	}
-	c.JSON(200, result)
+	_, err = w.Tx.ExecContext(ctx, `UPDATE agent_write_approvals SET status='succeeded', result=$2, decided_at=now() WHERE id=$1`, approvalID, raw)
+	return err
 }
 
 func applyIssueAssignment(ctx context.Context, q *sqlcgen.Queries, pid, team, iid, uid int32, m issue.Mutation, permissions map[string]bool) (int32, bool, error) {

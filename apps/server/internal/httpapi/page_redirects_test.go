@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -13,7 +14,7 @@ func TestProjectPageURLScopeAndEncoding(t *testing.T) {
 	parameters := url.Values{"projectId": {"99"}, "selected": {"a&b 中文"}, "layer": {"one", "two"}}
 	href := projectPageURL(42, "/projects/assets/", parameters)
 	u, err := url.Parse(href)
-	if err != nil || u.Path != "/projects/assets/" || u.Query().Get("projectId") != "42" || u.Query().Get("selected") != "a&b 中文" || len(u.Query()["layer"]) != 2 {
+	if err != nil || u.Path != "/projects/42/assets/" || u.Query().Has("projectId") || u.Query().Get("selected") != "a&b 中文" || len(u.Query()["layer"]) != 2 {
 		t.Fatal(href)
 	}
 	if parameters.Get("projectId") != "99" {
@@ -24,6 +25,10 @@ func TestProjectPageURLScopeAndEncoding(t *testing.T) {
 func TestLegacyPageRedirects(t *testing.T) {
 	id := "01234567-89ab-cdef-0123-456789abcdef"
 	cases := map[string]string{
+		"/projects/42/realtime/devices/7":            "/projects/realtime/?deviceId=7&projectId=42",
+		"/projects/42/reports/" + id:                 "/projects/reports/detail/?projectId=42&reportId=" + id,
+		"/projects/42/inspection/runs/7":             "/projects/inspection/summary/?projectId=42&runId=7",
+		"/projects/42/inspection/observations/" + id: "/projects/inspection/observation/?observationId=" + id + "&projectId=42",
 		"/teams/42":                          "/teams/detail/?teamId=42",
 		"/projects/42":                       "/projects/detail/?projectId=42",
 		"/projects/42/tasks/runs/56":         "/projects/tasks/runs/detail/?projectId=42&runId=56",
@@ -36,13 +41,22 @@ func TestLegacyPageRedirects(t *testing.T) {
 	}
 	router := gin.New()
 	s := &Server{}
+	s.AttachStaticPages(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method == "GET" {
+			_, _ = w.Write([]byte(r.URL.String()))
+		}
+	}))
 	router.NoRoute(s.pageNotFound)
 	for old, target := range cases {
 		for _, method := range []string{"GET", "HEAD"} {
 			for _, suffix := range []string{"", "/"} {
 				w := httptest.NewRecorder()
 				router.ServeHTTP(w, httptest.NewRequest(method, old+suffix, nil))
-				if w.Code != 307 || w.Header().Get("Location") != target || w.Header().Get("Cache-Control") != "no-cache" {
+				if w.Code != 200 || w.Header().Get("Location") != "" || method == "GET" && w.Body.String() != target {
 					t.Fatalf("%s %s: %d %+v", method, old+suffix, w.Code, w.Header())
 				}
 				if method == "HEAD" && w.Body.Len() != 0 {

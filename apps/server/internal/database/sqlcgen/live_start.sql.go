@@ -96,7 +96,7 @@ SELECT device.status,device.type AS device_type,device.adapter_id,adapter.adapte
  WHERE c.device_id=device.id AND c.project_id=device.project_id AND c.capability_code IN ('stream.video.control','camera.live') AND c.availability='available'
  ORDER BY c.capability_code='stream.video.control' DESC LIMIT 1),1)::int AS max_concurrent_sessions,
  profile.media_ingest_base_url,adapter.credential_envelope_json,definition.connector_key,
- coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,false)::boolean as live_action_enabled,
+ coalesce((flags.flighthub_action_flags_json->>'live.control')::boolean,true)::boolean as live_action_enabled,
  exists(select 1 from connector_capability_snapshots capability where capability.project_id=device.project_id
  and capability.connector_instance_id=adapter.id and capability.capability_code='live.control' and capability.status='supported'
  and capability.account_fingerprint=adapter.discovery_scope_json->>'accountFingerprint'

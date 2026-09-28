@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -33,7 +35,7 @@ export function AlgorithmCatalog({ projectId, entries, canRun }: { projectId: nu
         parameters: coerceSchemaParameters(entry.schemas.parameters, values)
       })
     });
-    router.push(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${encodeURIComponent(result.runId)}`);
+    router.push(canonicalPageHref(`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${encodeURIComponent(result.runId)}`));
     } catch (error) { setError(error instanceof APIError ? error.code : "算法运行提交失败，请稍后重试。"); }
     finally { setPending(false); }
   }

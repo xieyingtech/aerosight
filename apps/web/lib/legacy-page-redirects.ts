@@ -13,6 +13,10 @@ export function legacyPageRedirects() {
     { source: `${project}/algorithms/runs/:runId(${uuid})`, destination: "/projects/algorithms/runs/detail/?projectId=:id&runId=:runId" },
     { source: `${project}/issues/:issueId(${integer})`, destination: "/projects/issues/detail/?projectId=:id&issueId=:issueId" },
     { source: `${project}/events/:eventId(${uuid})`, destination: "/projects/events/detail/?projectId=:id&eventId=:eventId" }
+    ,{ source: `${project}/realtime/devices/:deviceId(${integer})`, destination: "/projects/realtime/?projectId=:id&deviceId=:deviceId" }
+    ,{ source: `${project}/reports/:reportId(${uuid})`, destination: "/projects/reports/detail/?projectId=:id&reportId=:reportId" }
+    ,{ source: `${project}/inspection/runs/:runId(${integer})`, destination: "/projects/inspection/summary/?projectId=:id&runId=:runId" }
+    ,...[["observations","observation","observationId"],["evidence-sets","evidence","evidenceSetId"],["assessments","assessment","assessmentId"]].map(([plural,page,key]) => ({source: `${project}/inspection/${plural}/:${key}(${uuid})`,destination: `/projects/inspection/${page}/?projectId=:id&${key}=:${key}`}))
   ];
   return rules.map(rule => ({...rule, permanent: false}));
 }

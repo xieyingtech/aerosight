@@ -11,13 +11,13 @@ const fixed = {
   ],
   tracks: [], activeTasks: [],
   taskSteps: [{ id: 10, name: "采集", status: "succeeded", occurredAt: "2026-08-24T10:02:00Z" }],
-  algorithmRuns: [{ id: "algorithm-1", definitionName: "疑似违建", status: "succeeded", occurredAt: "2026-08-24T10:03:00Z" }],
+  algorithmRuns: [{ id: "algorithm-1", definitionName: "算法识别结果", status: "succeeded", occurredAt: "2026-08-24T10:03:00Z" }],
   liveStreams: [],
   mediaPoints: [
     { id: 1, deviceId: 1, kind: "image", capturedAt: "2026-08-24T10:01:00Z" },
     { id: 2, deviceId: 1, kind: "image", capturedAt: "2026-08-24T10:01:01Z" }
   ],
-  suspectedConstruction: [{ id: 7, label: "疑似违建", status: "active", capturedAt: "2026-08-24T10:04:00Z" }],
+  algorithmResults: [{ id: 7, label: "算法识别结果", status: "active", capturedAt: "2026-08-24T10:04:00Z" }],
   openIssues: [{ id: 8, title: "现场复核", status: "open", updatedAt: "2026-08-24T10:05:00Z" }], openAlerts: [], regions: [],
   freshness: { latestCapturedAt: null, isRealtime: false }, availability: {}
 } satisfies ProjectSituationSnapshot;

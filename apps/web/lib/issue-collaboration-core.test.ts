@@ -10,8 +10,8 @@ test("issue handling permission and optimistic version are required", () => {
 test("comments and labels are normalized without widening permissions", () => {
   const comment = planIssueMutation({ mutation: { action: "comment", body: "  请复核原图  " }, permissions: new Set(["issue:handle"]), actualVersion: 0, expectedVersion: 0 });
   assert.equal(comment.body, "请复核原图");
-  const labels = planIssueMutation({ mutation: { action: "labels", labels: [" 违建 ", "违建", "高风险"] }, permissions: new Set(["issue:handle"]), actualVersion: 1, expectedVersion: 1 });
-  assert.deepEqual(labels.metadata, { labels: ["违建", "高风险"] });
+  const labels = planIssueMutation({ mutation: { action: "labels", labels: [" 检测结果 ", "检测结果", "高风险"] }, permissions: new Set(["issue:handle"]), actualVersion: 1, expectedVersion: 1 });
+  assert.deepEqual(labels.metadata, { labels: ["检测结果", "高风险"] });
   assert.throws(() => planIssueMutation({ mutation: { action: "assign", assigneeType: "agent", assigneeId: 3 }, permissions: new Set(["issue:handle"]), actualVersion: 1, expectedVersion: 1 }), /PROJECT_ACCESS_DENIED/);
 });
 

@@ -42,7 +42,7 @@ function TeamsView({ teams, params, onCreated }: { teams: Record<string, unknown
             key: "name",
             label: "团队",
             render: (item) => (
-              <Link className="font-medium text-primary hover:underline" href={`/teams/detail/?teamId=${String(item.id)}`}>
+              <Link className="font-medium text-primary hover:underline" href={`/teams/${String(item.id)}/`}>
                 {String(item.name)}
               </Link>
             )

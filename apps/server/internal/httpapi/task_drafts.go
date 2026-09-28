@@ -104,7 +104,7 @@ func (s *Server) taskDraft(c *gin.Context) {
 			if lockErr != nil {
 				return nil, lockErr
 			}
-			if definition["apiVersion"] == "aerosight/v2" || locked["apiVersion"] == "aerosight/v2" {
+			if body["expectedRevision"] != nil || definition["apiVersion"] == "aerosight/v2" || locked["apiVersion"] == "aerosight/v2" {
 				revision, ok := body["expectedRevision"].(float64)
 				if !ok || revision != float64(fhOptionalNumber(locked, "revision")) {
 					return nil, errors.New("TASK_REVISION_CONFLICT")
@@ -135,6 +135,9 @@ func (s *Server) taskDraft(c *gin.Context) {
 		}
 		if row["status"] != "draft" {
 			return nil, errors.New("TASK_VERSION_NOT_DRAFT")
+		}
+		if expected, present := body["expectedRevision"]; present && expected != float64(fhOptionalNumber(row, "revision")) {
+			return nil, errors.New("TASK_REVISION_CONFLICT")
 		}
 		raw, e = q.TaskDraftSteps(ctx, sqlcgen.TaskDraftStepsParams{P1: pid, P2: vid})
 		steps, e := decodeFHRows(raw, e)

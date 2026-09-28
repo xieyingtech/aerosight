@@ -13,7 +13,7 @@ export const projectMapLayers = [
   { id: "regions", label: "巡检区域", kind: "region" },
   { id: "mission-routes", label: "任务航线", kind: "mission-route" },
   { id: "tracks", label: "运行轨迹", kind: "track" },
-  { id: "suspected-construction", label: "疑似违建", kind: "suspected-construction" },
+  { id: "algorithm-results", label: "算法识别结果", kind: "algorithm-results" },
   { id: "media", label: "媒体点", kind: "media" },
   { id: "issues", label: "案件", kind: "issue" },
   { id: "drones", label: "无人机", kind: "device-drone" },
@@ -117,11 +117,11 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
       layerKind: "media", entityId: String(item.id), label: String(item.kind ?? "媒体"), capturedAt: item.capturedAt ? String(item.capturedAt) : undefined
     }));
   }
-  for (const item of snapshot.suspectedConstruction) {
+  for (const item of snapshot.algorithmResults) {
     if (!scoped(item, projectId)) continue;
     const shape = geometry(item.geometry);
     if (shape) features.push(feature(projectId, shape, {
-      layerKind: "suspected-construction", entityId: String(item.id), label: String(item.label ?? "疑似违建"), status: String(item.status ?? "open")
+      layerKind: "algorithm-results", entityId: String(item.id), label: String(item.label ?? "算法识别结果"), status: String(item.status ?? "open")
     }));
   }
   for (const item of snapshot.openIssues) {

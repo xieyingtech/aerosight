@@ -1,4 +1,6 @@
 "use client";
+import { canonicalPageHref } from "@/lib/page-routes";
+
 
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -31,7 +33,7 @@ export function InspectionAlertPolicy({projectId,connectorId}:{projectId:number;
    <ul className="space-y-2">{policy.heldAlerts.map(alert=><li key={alert.resourceId} className="space-y-1 rounded border p-2 text-xs">
     <div>证据 #{alert.resourceId} · {alert.summary.label??"司空告警"} · {alert.ownership==="task"?"Task 已接管":"归属待确认"}{alert.status==="missing"?" · 上游已缺失":""}</div>
     {alert.summary.capturedAt&&<div className="text-muted-foreground">观测时间 {alert.summary.capturedAt}</div>}
-    {(alert.taskRunId??alert.summary.taskRunId)&&<Link className="underline" href={`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${alert.taskRunId??alert.summary.taskRunId}`}>查看关联运行</Link>}
+    {(alert.taskRunId??alert.summary.taskRunId)&&<Link className="underline" href={canonicalPageHref(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${alert.taskRunId??alert.summary.taskRunId}`)}>查看关联运行</Link>}
     {policy.canConfigure&&alert.ownership==="pending"&&<Button size="sm" variant="outline" disabled={pending} onClick={()=>change({action:"confirm-legacy",resourceId:alert.resourceId})}>确认该架次沿用旧建案规则</Button>}
    </li>)}</ul>
    {policy.heldAlerts.length===0&&<p className="text-xs text-muted-foreground">暂无待确认或已接管的告警证据。</p>}

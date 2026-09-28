@@ -1,6 +1,6 @@
 -- name: ListLegacyPerceptionEvents :many
 SELECT to_jsonb(r) FROM (
-select event.id,'疑似违建' as title,event.severity,event.status,
+select event.id,event.title,event.severity,event.status,
     event.occurrence_count as "occurrenceCount",event.state_version as "stateVersion",
     event.first_detected_at as "firstDetectedAt",event.last_detected_at as "lastDetectedAt",
     group_row.location_quality as "locationQuality",ST_AsGeoJSON(group_row.geographic_geometry)::json as geometry,
@@ -13,7 +13,7 @@ select event.id,'疑似违建' as title,event.severity,event.status,
 
 -- name: GetLegacyPerceptionEvent :one
 SELECT to_jsonb(r) FROM (
-select event.id,'疑似违建' as title,event.severity,event.status,
+select event.id,event.title,event.severity,event.status,
     event.occurrence_count as "occurrenceCount",event.state_version as "stateVersion",event.assigned_user_id as "assignedUserId",
     event.first_detected_at as "firstDetectedAt",event.last_detected_at as "lastDetectedAt",
     event.detection_group_id::text as "detectionGroupId",version.version as "ruleVersion",rule.name as "ruleName"
@@ -28,7 +28,7 @@ select detection.id::text,detection.label,detection.confidence,
     detection.location_quality as "locationQuality",ST_AsGeoJSON(detection.geographic_geometry)::json as "geographicGeometry",
     detection.horizontal_error_meters as "horizontalErrorMeters",detection.projection_method as "projectionMethod",
     detection.pixel_geometry_json as "pixelGeometry",version.model_or_process as "modelOrProcess",version.version as "modelVersion",
-    coalesce(version.protocol_config_json->>'mappingVersion','suspected-construction/v1') as "mappingVersion",
+    nullif(version.protocol_config_json->>'mappingVersion','') as "mappingVersion",
     asset.id as "inputAssetId",asset.version as "assetVersion",asset.checksum_sha256 as "assetChecksumSha256",
     asset.mime_type as "mimeType",detection.captured_at as "capturedAt"
     from detection_group_members member join detections detection on detection.id=member.detection_id and detection.project_id=member.project_id

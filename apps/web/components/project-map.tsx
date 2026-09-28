@@ -8,7 +8,7 @@ import { createProjectMapModel, filterProjectMapModelByTime, firstMapCoordinate,
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 
-const interactiveLayers = ["media-points", "issue-points", "suspected-points", "device-drones", "device-docks", "device-ground"];
+const interactiveLayers = ["media-points", "issue-points", "algorithm-results-points", "device-drones", "device-docks", "device-ground"];
 
 export function ProjectMap({ snapshot, className, selection, range, onSelect }: {
   snapshot: ProjectSituationSnapshot;
@@ -51,12 +51,12 @@ export function ProjectMap({ snapshot, className, selection, range, onSelect }: 
         <NavigationControl position="bottom-right" />
         <Source data={model} id="project-situation" type="geojson">
           {visible.has("regions") && <Layer id="regions-fill" type="fill" filter={["==", ["get", "layerKind"], "region"]} paint={{ "fill-color": "#14b8a6", "fill-opacity": 0.14, "fill-outline-color": "#0f766e" }} />}
-          {visible.has("suspected-construction") && <Layer id="suspected-fill" type="fill" filter={["==", ["get", "layerKind"], "suspected-construction"]} paint={{ "fill-color": "#f97316", "fill-opacity": 0.38, "fill-outline-color": "#c2410c" }} />}
+          {visible.has("algorithm-results") && <Layer id="algorithm-results-fill" type="fill" filter={["==", ["get", "layerKind"], "algorithm-results"]} paint={{ "fill-color": "#f97316", "fill-opacity": 0.38, "fill-outline-color": "#c2410c" }} />}
           {visible.has("mission-routes") && <Layer id="mission-routes-line" type="line" filter={["==", ["get", "layerKind"], "mission-route"]} paint={{ "line-color": "#8b5cf6", "line-dasharray": [2, 1.5], "line-width": 3 }} />}
           {visible.has("tracks") && <Layer id="tracks-line" type="line" filter={["==", ["get", "layerKind"], "track"]} paint={{ "line-color": "#2563eb", "line-opacity": 0.8, "line-width": 3 }} />}
           {visible.has("media") && <Layer id="media-points" type="circle" filter={["==", ["get", "layerKind"], "media"]} paint={{ "circle-color": "#a855f7", "circle-radius": 5, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("issues") && <Layer id="issue-points" type="circle" filter={["==", ["get", "layerKind"], "issue"]} paint={{ "circle-color": "#ef4444", "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
-          {visible.has("suspected-construction") && <Layer id="suspected-points" type="circle" filter={["all", ["==", ["get", "layerKind"], "suspected-construction"], ["==", ["geometry-type"], "Point"]]} paint={{ "circle-color": "#f97316", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
+          {visible.has("algorithm-results") && <Layer id="algorithm-results-points" type="circle" filter={["all", ["==", ["get", "layerKind"], "algorithm-results"], ["==", ["geometry-type"], "Point"]]} paint={{ "circle-color": "#f97316", "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
           {visible.has("drones") && <Layer id="device-drones" type="circle" filter={["==", ["get", "layerKind"], "device-drone"]} paint={{ "circle-color": ["match", ["get", "positionStatus"], "unverified", "#f59e0b", "stale", "#64748b", "invalid", "#ef4444", "#0ea5e9"], "circle-radius": 8, "circle-stroke-color": "#fff", "circle-stroke-width": 2.5 }} />}
 			{visible.has("drones") && <Layer id="device-drone-icons" type="symbol" filter={["==", ["get", "layerKind"], "device-drone"]} layout={{ "text-field": ["get", "markerGlyph"], "text-size": 12, "text-allow-overlap": true }} paint={{ "text-color": "#ffffff" }} />}
           {visible.has("docks") && <Layer id="device-docks" type="circle" filter={["==", ["get", "layerKind"], "device-dock"]} paint={{ "circle-color": ["match", ["get", "positionStatus"], "unverified", "#f59e0b", "stale", "#64748b", "invalid", "#ef4444", "#334155"], "circle-radius": 7, "circle-stroke-color": "#fff", "circle-stroke-width": 2 }} />}
