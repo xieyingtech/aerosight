@@ -1,4 +1,6 @@
 const queryNames: Record<string, string> = {
+  load_skill: "加载行业技能",
+  query_objects: "影像目标查询",
   query_devices: "设备状态",
   query_tasks: "任务进展",
   query_issues: "案件",
@@ -23,9 +25,11 @@ const queryNames: Record<string, string> = {
   generate_report: "生成报告草稿",
 };
 export const agentToolLabel = (name: string) => queryNames[name] ?? name;
-const isWriteTool = (name?: string) => Boolean(name && name !== "query_inspection" && !name.startsWith("query_") && queryNames[name]);
+const isWriteTool = (name?: string) => Boolean(name && name !== "load_skill" && name !== "query_inspection" && !name.startsWith("query_") && queryNames[name]);
 
 const queryDescriptions: Record<string, string> = {
+  load_skill: "加载巡检目标查询、证据检查和复核规则，供智能体执行。",
+  query_objects: "按需求筛选实际检测目标，并提供可重开的原图与目标框。",
   query_devices: "查询设备的类型、驱动、运行状态和数据新鲜度。",
   query_tasks: "查询任务列表及最近运行状态，了解任务执行进展。",
   query_issues: "查询案件的状态、优先级和证据质量。",
@@ -72,7 +76,7 @@ export function AgentQueryEvidence({ toolCalls, inline = false }: { toolCalls: u
           {summary && <p className="mt-1 leading-5">{isWriteTool(item.name) ? "操作内容" : "返回结果"}：{summary}</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.length > 0 && <p className="mt-2 font-medium">相关依据</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.map((ref, refIndex) => <p className="mt-1 break-words text-muted-foreground" key={refIndex}>
-            {ref.href?.startsWith("/") && !ref.href.startsWith("//") ? <a className="text-primary underline underline-offset-2" href={ref.href}>{ref.type}:{ref.id}</a> : <span>{ref.type}:{ref.id}</span>} · {ref.version}
+            {ref.href?.startsWith("/") && !ref.href.startsWith("//") ? <a className="text-primary underline underline-offset-2" href={ref.href}>{item.name === 'query_objects' ? '查看目标框与筛选结果' : `${ref.type}:${ref.id}`}</a> : <span>{ref.type}:{ref.id}</span>} · {ref.version}
           </p>)}
         </div>;
       })}

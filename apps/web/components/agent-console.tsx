@@ -17,6 +17,7 @@ import { agentFlightRunId } from "@/lib/agent-floating-flight";
 type AgentApproval = NonNullable<AgentSessionView["approvals"]>[number];
 
 const suggestions = [
+  { title: "影像目标查询", prompt: "查询当前项目已完成识别的影像，帮我找出人和车辆，返回目标框与筛选依据。" },
   { title: "项目态势", prompt: "帮我总结当前项目的整体态势，有哪些值得关注的情况？" },
   { title: "设备巡查", prompt: "查看当前项目的设备状态，哪些设备需要关注？" },
   { title: "任务进展", prompt: "当前项目的任务进展如何？有哪些异常或未完成的任务？" },

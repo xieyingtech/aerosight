@@ -20,10 +20,12 @@ import (
 	"github.com/openai/openai-go/v3/responses"
 )
 
-const chatInstructions = "你是 AeroSight 项目 Copilot。先使用平台查询工具核对事实，再用中文回答。巡检前使用 query_inspection 检查就绪配置、任务版本、飞行和识别结果。不得把旧告警事件说成案件。所有写工具只生成待确认请求，必须让用户在界面手动点击授权。文字同意不能代替点击。不得伪造资源 ID、预检或飞行审批。启用定时任务、运行任务、提交飞行可能产生真实设备动作，必须清楚说明。平台 API 接受或入队不等于起飞、照片回传、识别或报告完成，要查询实际状态。不能声称未验收的实机链已验证。"
+const chatInstructions = "巡检影像目标查询、属性筛选和追问前，先用 load_skill 加载 inspection-object-query，再按技能调用 query_objects 并交付稳定筛选结果链接。 你是 AeroSight 项目 Copilot。先使用平台查询工具核对事实，再用中文回答。巡检前使用 query_inspection 检查就绪配置、任务版本、飞行和识别结果。不得把旧告警事件说成案件。所有写工具只生成待确认请求，必须让用户在界面手动点击授权。文字同意不能代替点击。不得伪造资源 ID、预检或飞行审批。启用定时任务、运行任务、提交飞行可能产生真实设备动作，必须清楚说明。平台 API 接受或入队不等于起飞、照片回传、识别或报告完成，要查询实际状态。不能声称未验收的实机链已验证。"
 
 func chatTools() []responses.ToolUnionParam {
 	tools := []responses.ToolUnionParam{}
+	tools = append(tools, responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{Name: "load_skill", Description: openai.String("加载平台内置行业 Skill。目标查询、候选筛选和视觉复核前加载 inspection-object-query；返回规则必须用于接下来的操作。"), Strict: openai.Bool(false), Parameters: agentObject(map[string]any{"skillName": agentEnum(objectSkillName)}, "skillName")}})
+	tools = append(tools, responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{Name: "query_objects", Description: openai.String("只读查询真实检测目标。先 load_skill。省略 algorithmRunId 列出当前项目最近算法运行；指定成功检测运行后按实际模型 labels 和 minConfidence 筛选。includeImage 默认 true：经版本和 checksum 校验的整图与最多8张候选裁剪会作为图片输入送给当前 AI Provider。看图后再次调用，selectedDetectionKeys 与 selectionReason 提交保留 ID 和理由（空数组代表零匹配）；服务核验 ID 并返回稳定筛选结果链接。不执行新识别，不认定违规。"), Strict: openai.Bool(false), Parameters: objectQuerySchema()}})
 	for _, entry := range []struct{ name, description string }{{"query_devices", "查询当前项目设备、类型、驱动、状态和数据新鲜度"}, {"query_tasks", "查询当前项目 Tasks 及其最近运行状态"}, {"query_issues", "查询当前项目案件、状态、优先级和证据质量"}, {"query_assets", "查询当前项目可用数据资产及版本"}, {"query_tracks", "查询当前项目设备轨迹摘要"}, {"query_map_context", "查询当前项目地图态势摘要"}} {
 		properties := map[string]any{}
 		switch entry.name {
@@ -158,6 +160,11 @@ func chatToolEvidence(name string, result gin.H) gin.H {
 		refs = append(refs, gin.H{"type": ref["type"], "id": ref["id"], "href": ref["href"], "version": versionText})
 	}
 	summary := fmt.Sprintf("返回 %d 条项目内记录", len(items))
+	if name == "load_skill" || name == "query_objects" {
+		if specific, ok := result["summary"].(string); ok {
+			summary = specific
+		}
+	}
 	if result["truncated"] == true {
 		summary = "结果已安全截断"
 	}
@@ -310,6 +317,8 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 			}
 			photo, hasPhoto := result["_image"].(agentPhoto)
 			delete(result, "_image")
+			photos, _ := result["_images"].([]agentPhoto)
+			delete(result, "_images")
 			raw, e := json.Marshal(result)
 			if e != nil {
 				return nil, e
@@ -317,6 +326,12 @@ func (s *Server) runChatTurn(ctx context.Context, uid, pid, sid int32, content, 
 			input = append(input, responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{CallID: openai.String(call.CallID), Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: openai.String(string(raw))}}})
 			if hasPhoto {
 				input = append(input, responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{Role: "user", Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: responses.ResponseInputMessageContentListParam{{OfInputImage: &responses.ResponseInputImageParam{ImageURL: openai.String(photo.dataURL), Detail: "auto"}}}}}})
+			}
+			for _, preview := range photos {
+				input = append(input, responses.ResponseInputItemUnionParam{OfMessage: &responses.EasyInputMessageParam{Role: "user", Content: responses.EasyInputMessageContentUnionParam{OfInputItemContentList: responses.ResponseInputMessageContentListParam{
+					{OfInputText: &responses.ResponseInputTextParam{Text: preview.caption}},
+					{OfInputImage: &responses.ResponseInputImageParam{ImageURL: openai.String(preview.dataURL), Detail: "auto"}},
+				}}}})
 			}
 			var evidence gin.H
 			if agentIsWriteTool(call.Name) {

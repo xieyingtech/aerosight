@@ -652,6 +652,7 @@ func agentInspectionTemplates() []gin.H {
 type agentPhoto struct {
 	dataURL       string
 	width, height int
+	caption       string
 }
 
 func agentPhotoPreview(body []byte) (agentPhoto, error) {

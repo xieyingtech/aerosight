@@ -21,6 +21,7 @@ func (s *Server) algorithmRunRoutes() {
 	group := s.router.Group("/api/projects/:id/algorithm-runs", s.requireUser, s.timeout)
 	group.POST("", s.startAlgorithmRun)
 	group.POST("/:runId/retry", s.retryAlgorithmRun)
+	group.GET("/:runId/image", s.readObjectQueryImage)
 	group.GET("", func(c *gin.Context) {
 		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
 			rows, err := q.ListAlgorithmRuns(c.Request.Context(), a.ProjectID)

@@ -48,7 +48,7 @@ func TestChatToolInputAndFormatting(t *testing.T) {
 	for _, name := range []string{"query_tasks", "query_issues", "query_assets", "query_tracks", "query_map_context"} {
 		ref := chatEvidenceReference(17, name, "a&b")
 		u, err := url.Parse(ref["href"].(string))
-		if err != nil || u.Query().Get("projectId") != "17" || strings.Contains(u.RawQuery, "a&b") {
+		if err != nil || !strings.HasPrefix(u.Path, "/projects/17/") || strings.Contains(u.RawQuery, "a&b") {
 			t.Fatalf("URL %+v %v", ref, err)
 		}
 	}

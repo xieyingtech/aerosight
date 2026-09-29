@@ -7,22 +7,32 @@ import { AlgorithmRunRetryButton } from "@/components/algorithm-run-retry-button
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
+import { positiveParam, uuidParam, StaticAPIPage, type PageQuery } from "@/components/static-api-page";
+import { resolveObjectSelection, objectReviewExport } from "@/lib/algorithm-object-selection";
 import { apiJSON } from "@/lib/api-client";
 import { useAPI } from "@/lib/use-api";
 import { assetName, formatDuration, runDetections, runStatus, type AlgorithmAsset } from "@/lib/algorithm-workspace";
 import type { AlgorithmRunDetail } from "@/lib/web-api-types";
 
 type Section = "result" | "summary" | "logs";
-function RunDetail({ initial, projectId }: { initial: AlgorithmRunDetail; projectId: number }) {
+function RunDetail({ initial, projectId, query }: { initial: AlgorithmRunDetail; projectId: number; query: PageQuery }) {
  const [model, setModel] = useState(initial);
  const [section, setSection] = useState<Section>("result");
  const [showBoxes, setShowBoxes] = useState(true);
+ const [showAll, setShowAll] = useState(false);
  const [refreshError, setRefreshError] = useState(false);
  const {run, attempts, view} = model;
  const assets = useAPI<AlgorithmAsset[]>(`/api/projects/${projectId}/assets`);
  const asset = assets.data?.find(a => a.id === run.inputAssetId);
- const detections = runDetections(run.canonicalResult);
+ const allDetections = runDetections(run.canonicalResult);
+ const selection = resolveObjectSelection(allDetections, query);
+ const detections = showAll ? allDetections : selection.detections;
+ const selectionActive = selection.active && !showAll;
+ const downloadReview = () => {
+  const data=objectReviewExport(run.id,run.inputAssetId,view.input.assetVersion,detections,selectionActive?selection.reason:'全部检测候选');
+  const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  const link=document.createElement('a');link.href=url;link.download=`object-review-${run.id.slice(0,8)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
  const isDetection = run.canonicalResult.kind === "detection";
  const durations = attempts.map(a => a.durationMs).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
  const duration = durations.length ? durations.reduce((a,b)=>a+b,0) : null;
@@ -55,10 +65,16 @@ function RunDetail({ initial, projectId }: { initial: AlgorithmRunDetail; projec
    </nav>
    <div className="min-w-0 space-y-5">
     {section==='result' && <>
+     {selectionActive && <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+      <p className="font-medium">{selection.valid?`查询结果：保留 ${detections.length} / ${allDetections.length} 个检测候选`:'筛选链接包含失效目标，无法展示该选择。'}</p>
+      {selection.reason && <p>{selection.reason}</p>}
+      <button className="text-primary underline underline-offset-2" onClick={()=>setShowAll(true)}>查看全部检测目标</button>
+     </div>}
+     {isDetection && run.status==='succeeded' && <div className="flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-muted-foreground">检测与筛选结果需要人工核查，目标框为原图像素坐标。</p><button disabled={selectionActive&&!selection.valid} className="text-primary underline underline-offset-2 disabled:opacity-50" onClick={downloadReview}>导出待核查清单</button></div>}
      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{isDetection?'识别结果':'算法结果'}{isDetection && <Badge variant="secondary" className="ml-2">{detections.length} 个目标</Badge>}</h2>{isDetection && <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={showBoxes} onChange={e=>setShowBoxes(e.target.checked)}/>显示目标框</label>}</div>
      {active ? <p className="py-12 text-center text-sm text-muted-foreground">{runStatus(run.status)}，结果将自动更新。</p> : <div className={`grid items-start gap-4 ${isDetection ? 'xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]' : ''}`}>
-      {view.input.mimeType?.startsWith('image/') && <div className="rounded-lg border bg-muted/20 p-4"><AlgorithmAssetPreview key={run.inputAssetId} projectId={projectId} assetId={run.inputAssetId} detections={showBoxes?detections:[]}/><p className="mt-3 text-center text-xs text-muted-foreground">{asset?assetName(asset):`素材 #${run.inputAssetId}`}</p></div>}
-      {isDetection ? <div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-20">目标</TableHead><TableHead>类别</TableHead><TableHead className="text-right">置信度</TableHead></TableRow></TableHeader><TableBody>{detections.map((d,i)=><TableRow key={d.detectionKey||i}><TableCell className="text-muted-foreground">{i+1}</TableCell><TableCell>{d.label}</TableCell><TableCell className="text-right tabular-nums">{(d.confidence*100).toFixed(1)}%</TableCell></TableRow>)}{!detections.length && <TableRow><TableCell colSpan={3} className="py-8 text-center text-muted-foreground">{run.status==='succeeded'?'未识别到目标':'暂无识别结果'}</TableCell></TableRow>}</TableBody></Table></div> : <pre className="max-h-96 overflow-auto rounded-md border bg-muted/30 p-4 text-xs">{JSON.stringify(run.canonicalResult.result??run.canonicalResult,null,2)}</pre>}
+      {view.input.mimeType?.startsWith('image/') && <div className="rounded-lg border bg-muted/20 p-4"><AlgorithmAssetPreview key={run.inputAssetId} projectId={projectId} assetId={run.inputAssetId} runId={run.status==='succeeded'?run.id:undefined} detections={showBoxes?detections:[]}/><p className="mt-3 text-center text-xs text-muted-foreground">{asset?assetName(asset):`素材 #${run.inputAssetId}`}</p></div>}
+      {isDetection ? <div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-20">目标 ID</TableHead><TableHead>类别</TableHead><TableHead className="text-right">置信度</TableHead></TableRow></TableHeader><TableBody>{detections.map((d,i)=><TableRow key={d.detectionKey||i}><TableCell className="text-muted-foreground">{d.detectionKey??i+1}</TableCell><TableCell>{d.label}</TableCell><TableCell className="text-right tabular-nums">{(d.confidence*100).toFixed(1)}%</TableCell></TableRow>)}{!detections.length && <TableRow><TableCell colSpan={3} className="py-8 text-center text-muted-foreground">{selectionActive?'本次筛选未匹配目标':run.status==='succeeded'?'未识别到目标':'暂无识别结果'}</TableCell></TableRow>}</TableBody></Table></div> : <pre className="max-h-96 overflow-auto rounded-md border bg-muted/30 p-4 text-xs">{JSON.stringify(run.canonicalResult.result??run.canonicalResult,null,2)}</pre>}
      </div>}
      {!!view.diagnostics.length && <div className="text-sm text-destructive">{view.diagnostics.map(d=><p key={d}>{d}</p>)}</div>}
      <details className="rounded-lg border p-4 text-sm"><summary className="cursor-pointer text-muted-foreground">标准化结果 JSON</summary><pre className="mt-3 max-h-96 overflow-auto text-xs">{JSON.stringify(run.canonicalResult,null,2)}</pre></details>
@@ -83,5 +99,5 @@ function RunDetail({ initial, projectId }: { initial: AlgorithmRunDetail; projec
  </Page>;
 }
 export default function DetailPage() {
- return <StaticAPIPage<AlgorithmRunDetail> endpoint={query=>{const pid=positiveParam(query);const id=uuidParam(query,'runId');return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>{(model,query)=><RunDetail key={model.run.id} initial={model} projectId={positiveParam(query)!}/>}</StaticAPIPage>;
+ return <StaticAPIPage<AlgorithmRunDetail> endpoint={query=>{const pid=positiveParam(query);const id=uuidParam(query,'runId');return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>{(model,query)=><RunDetail key={`${model.run.id}:${query.toString()}`} initial={model} projectId={positiveParam(query)!} query={query}/>}</StaticAPIPage>;
 }
