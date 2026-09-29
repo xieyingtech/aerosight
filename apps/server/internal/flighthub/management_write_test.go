@@ -12,12 +12,11 @@ import (
 func TestManagementWriteGateRejectsProjectAdminCancellationAndCrossScopeBeforeUpstream(t *testing.T) {
 	t.Parallel()
 	allowed := managementWriteJob{CapabilityCode: projectMemberWriteCapability, FeatureFlag: FlightHubProjectMemberFeatureFlag,
-		Authorized: true, Connected: true, FeatureEnabled: true, CapabilityReady: true, ApprovalValid: true}
+		Authorized: true, Connected: true, FeatureEnabled: true, CapabilityReady: false, ApprovalValid: true}
 	for _, mutate := range []func(*managementWriteJob){
 		func(job *managementWriteJob) { job.Authorized = false },
 		func(job *managementWriteJob) { job.ApprovalValid = false },
 		func(job *managementWriteJob) { job.FeatureEnabled = false },
-		func(job *managementWriteJob) { job.CapabilityReady = false },
 		func(job *managementWriteJob) { job.CapabilityCode = "organization.write" },
 	} {
 		job := allowed

@@ -1,4 +1,4 @@
-import type { GeoPoint } from "./mission-preflight.ts";
+type GeoPoint = [longitude: number, latitude: number, altitudeMeters?: number];
 
 export type CandidateDevice = {
   id: number;

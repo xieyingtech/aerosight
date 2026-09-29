@@ -232,7 +232,7 @@ func presentFHModels(pid int32, d map[string][]gin.H) gin.H {
 			}
 			item := fhFields(a, "action:code flagEnabled capabilityVerified")
 			status := scoped[i]["status"]
-			item["available"] = can && (status == "connecting" || status == "connected" || status == "degraded") && a["flagEnabled"] == true && a["capabilityVerified"] == true
+			item["available"] = can && (status == "connecting" || status == "connected" || status == "degraded") && a["flagEnabled"] == true
 			actions = append(actions, item)
 		}
 		r["actions"] = actions

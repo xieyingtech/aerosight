@@ -37,7 +37,7 @@ export function LiveChannelControls({ projectId, device, activeStreamKeys = [], 
   };
 
   return <section className="space-y-2 rounded-xl border bg-card p-4" aria-label="视频频道控制">
-    <div><h2 className="font-medium">视频频道</h2><p className="mt-1 text-xs text-muted-foreground">选择驱动声明的视频通道，启动后将在当前页面播放。</p></div>
+    <div><h2 className="font-medium">{device.name} · 视频频道</h2><p className="mt-1 text-xs text-muted-foreground">启动后将在当前页面播放。</p></div>
     <div className="grid gap-2 sm:grid-cols-2">
       {channels.map((channel) => {
         const alreadyActive = activeStreamKeys.includes(channel.channelKey);

@@ -19,9 +19,10 @@ type DeviceDetail struct {
 }
 
 type DeviceStateSnapshot struct {
-	SN    string                     `json:"device_sn"`
-	Model DeviceModel                `json:"device_model"`
-	State map[string]json.RawMessage `json:"device_state"`
+	CameraList json.RawMessage            `json:"-"`
+	SN         string                     `json:"device_sn"`
+	Model      DeviceModel                `json:"device_model"`
+	State      map[string]json.RawMessage `json:"device_state"`
 }
 
 type HMSAlert struct {

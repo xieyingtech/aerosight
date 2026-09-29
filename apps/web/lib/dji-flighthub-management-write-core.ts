@@ -76,7 +76,7 @@ export function authorizeProjectMemberWrite(projectId: number, input: FlightHubP
     throw new Error("FLIGHTHUB_MANAGEMENT_WRITE_SCOPE_MISMATCH");
   }
   if (authorization.connectorStatus !== "connected") throw new Error("FLIGHTHUB_MANAGEMENT_WRITE_CONNECTOR_OFFLINE");
-  if (!authorization.featureEnabled || !authorization.capabilityVerified) throw new Error("FLIGHTHUB_MANAGEMENT_WRITE_DISABLED");
+  if (!authorization.featureEnabled) throw new Error("FLIGHTHUB_MANAGEMENT_WRITE_DISABLED");
   if (authorization.targetCount !== input.members.length || authorization.currentPreviewDigest !== input.previewDigest) {
     throw new Error("FLIGHTHUB_MANAGEMENT_WRITE_TARGET_MISMATCH");
   }

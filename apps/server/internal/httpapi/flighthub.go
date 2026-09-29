@@ -37,6 +37,10 @@ func (s *Server) AttachFlightHub(client flightHubProjectClient, enabled bool, se
 	s.flightHub = &flightHubService{client: client, enabled: enabled, secret: secret, discoveryRate: httprate.NewRateLimiter(5, time.Minute)}
 }
 func (s *Server) flightHubRoutes() {
+	s.router.GET("/api/projects/:id/devices/:deviceId/flight-launch", s.requireUser, s.timeout, s.fhFlightLaunch)
+	s.router.POST("/api/projects/:id/devices/:deviceId/flight-launch", s.requireUser, s.timeout, s.fhFlightLaunch)
+	s.router.GET("/api/projects/:id/devices/:deviceId/flighthub-operations", s.requireUser, s.timeout, s.fhRealtimeOperations)
+	s.router.POST("/api/projects/:id/devices/:deviceId/flighthub-operations", s.requireUser, s.timeout, s.fhRealtimeOperations)
 	group := s.router.Group("/api/projects/:id/connectors/dji-flighthub", s.requireUser, s.timeout, func(c *gin.Context) { c.Header("Cache-Control", "no-store, max-age=0") })
 	s.router.POST("/api/projects/:id/devices/:deviceId/flighthub-control-sessions", s.requireUser, s.timeout, s.fhControlSession)
 	s.router.PATCH("/api/projects/:id/devices/:deviceId/flighthub-control-sessions/:sessionId", s.requireUser, s.timeout, s.fhControlSession)

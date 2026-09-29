@@ -16,9 +16,8 @@ test("a second operator cannot acquire an occupied device", () => {
   const now = new Date("2026-09-02T10:00:00Z");
   const allowed = {
     projectId: 3, teamId: 2, deviceId: 11, connectorProjectId: 3, connectorTeamId: 2, deviceProjectId: 3,
-    connectorStatus: "connected", featureEnabled: true, capabilityFieldVerified: true, deviceOnline: true,
+    connectorStatus: "connected", featureEnabled: true, capabilityFieldVerified: false, deviceOnline: true,
     stateCapturedAt: new Date("2026-09-02T09:59:55Z"), now,
-    requestedSafetyPolicyVersionId: 8, currentSafetyPolicyVersionId: 8,
     approvalProjectId: 3, approvalTeamId: 2, approvalResourceType: "device", approvalResourceId: "11",
     approvalAction: "flighthub.control.acquire", approvalStatus: "approved", approvalUnexpired: true,
     conflictingSessionCount: 0

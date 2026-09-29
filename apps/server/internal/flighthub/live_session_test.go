@@ -87,7 +87,7 @@ func (flightHubLiveResolverFixture) ResolveToken(context.Context, connector.Inst
 
 func flightHubLiveSessionFixture(now time.Time) FlightHubLiveSession {
 	return FlightHubLiveSession{
-		ID: 9, ProjectID: 41, TeamID: 7, DeviceID: 12, ConnectorInstanceID: 5,
+		ID: 9, ProjectID: 41, TeamID: 7, DeviceID: 12, DeviceType: "dock", ConnectorInstanceID: 5,
 		CameraIndex: "165-0-7", DeviceSerial: "AIRCRAFT_REDACTED", Status: "requested",
 		ConnectorStatus: "connected", ActionEnabled: true, CapabilityVerified: true,
 		Instance: connector.Instance{
@@ -105,7 +105,7 @@ func TestFlightHubLiveStartEncryptsCredentialAndNeverRepeatsWrite(t *testing.T) 
 	now := time.Date(2026, 9, 2, 1, 0, 0, 0, time.UTC)
 	expiresAt := now.Add(time.Hour)
 	store := &memoryFlightHubLiveStore{session: flightHubLiveSessionFixture(now)}
-	store.session.DeviceType = "dock"
+	store.session.DeviceType = "drone"
 	store.session.CapabilityVerified = false
 	client := &flightHubLiveClientFixture{value: LiveStreamAuthorization{ExpireTimestamp: expiresAt.Unix(), URL: "supplier-secret", URLType: "volc", ExpiresAt: expiresAt}}
 	playback := NormalizedLivePlayback{Description: LivePlaybackDescription{
@@ -155,6 +155,8 @@ func TestFlightHubLiveStartUnknownAndUnsupportedSupplierFailClosed(t *testing.T)
 	}{
 		{name: "response unknown", clientError: &APIError{SafeCode: "request_timeout", Retryable: true},
 			wantStatus: "starting", wantReason: "FLIGHTHUB_LIVE_START_RESPONSE_UNKNOWN"},
+		{name: "gateway unavailable", clientError: &APIError{SafeCode: "streaming_gateway_not_found"},
+			wantStatus: "failed", wantReason: "FLIGHTHUB_LIVE_START_REJECTED_STREAMING_GATEWAY_NOT_FOUND"},
 		{name: "supplier unsupported", normalizerError: &APIError{SafeCode: "live_supplier_unsupported"},
 			wantStatus: "failed", wantReason: "FLIGHTHUB_LIVE_SUPPLIER_UNSUPPORTED_REMOTE_UNCONFIRMED", remoteUnconfirmed: true},
 	} {
@@ -210,6 +212,12 @@ func TestFlightHubLiveEvidenceFakeClockConvergesOnlyWithEvidence(t *testing.T) {
 
 	unknown := FlightHubLiveEvidence{Status: "starting", StartedAt: started,
 		StartAttemptedAt: sql.NullTime{Time: started, Valid: true}, DeviceStatus: "online"}
+	stopping := unknown
+	stopping.Status = "stopping"
+	localStopped := decideFlightHubLiveSession(started.Add(time.Minute), stopping)
+	if !localStopped.Terminal || localStopped.Status != "stopped" || localStopped.Reason != "FLIGHTHUB_LIVE_LOCAL_STOPPED_REMOTE_UNCONFIRMED" {
+		t.Fatalf("stop without playback authorization remained stuck: %#v", localStopped)
+	}
 	withoutEvidence := decideFlightHubLiveSession(started.Add(time.Hour), unknown)
 	if withoutEvidence.Status != "starting" || withoutEvidence.Terminal {
 		t.Fatalf("unknown response was falsely completed: %#v", withoutEvidence)
@@ -367,12 +375,12 @@ func TestFlightHubLiveStartEventRejectsWrongScope(t *testing.T) {
 	}
 }
 
-func TestFlightHubLiveStartKeepsFeatureAndAircraftAcceptanceGates(t *testing.T) {
+func TestFlightHubLiveStartKeepsFeatureAndUnknownDeviceGates(t *testing.T) {
 	for _, tc := range []struct {
 		name, deviceType string
 		enabled          bool
 	}{
-		{"dock feature disabled", "dock", false}, {"aircraft without acceptance", "drone", true},
+		{"dock feature disabled", "dock", false}, {"unknown device without acceptance", "unknown", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			now := time.Now().UTC()

@@ -119,8 +119,18 @@ insert into device_capabilities(
 -- name: DiscoveryRelationship :exec
 insert into device_relationships(
       project_id,team_id,from_device_id,to_device_id,relation_type,source_type,metadata_json
-    ) select sqlc.arg(p1),sqlc.arg(p2),parent.device_id,sqlc.arg(p3),'contains','discovery',sqlc.arg(p6)
-      from device_external_identities parent where parent.project_id=sqlc.arg(p1) and parent.adapter_id=sqlc.arg(p4)
-        and parent.external_device_id=sqlc.arg(p5) and parent.device_id is not null
+    ) select sqlc.arg(p1),sqlc.arg(p2),pair.parent_id,pair.child_id,'contains','discovery',sqlc.arg(p6)
+      from (
+        select parent.device_id as parent_id,sqlc.arg(p3)::int as child_id
+        from device_external_identities parent where parent.project_id=sqlc.arg(p1) and parent.team_id=sqlc.arg(p2)
+          and parent.adapter_id=sqlc.arg(p4) and parent.external_device_id=sqlc.arg(p5) and parent.device_id is not null
+        union
+        select parent.device_id,child.device_id
+        from device_external_identities parent join device_external_identities child
+          on child.project_id=parent.project_id and child.team_id=parent.team_id and child.adapter_id=parent.adapter_id
+          and child.identity_json->>'parentExternalId'=parent.external_device_id
+        where parent.project_id=sqlc.arg(p1) and parent.team_id=sqlc.arg(p2) and parent.adapter_id=sqlc.arg(p4)
+          and parent.device_id=sqlc.arg(p3) and child.device_id is not null
+      ) pair where pair.parent_id<>pair.child_id
         and not exists(select 1 from device_relationships relation where relation.project_id=sqlc.arg(p1)
-          and relation.from_device_id=parent.device_id and relation.to_device_id=sqlc.arg(p3) and relation.valid_until is null);
+          and relation.from_device_id=pair.parent_id and relation.to_device_id=pair.child_id and relation.valid_until is null);

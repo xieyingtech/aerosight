@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -146,10 +147,12 @@ type Topology struct {
 }
 
 type APIError struct {
-	SafeCode   string
-	Retryable  bool
-	HTTPStatus int
-	RetryAfter time.Duration
+	SafeCode     string
+	Retryable    bool
+	HTTPStatus   int
+	RetryAfter   time.Duration
+	BusinessCode *int
+	RequestID    string
 }
 
 func (err *APIError) Error() string { return "DJI_FLIGHTHUB_" + strings.ToUpper(err.SafeCode) }
@@ -315,6 +318,8 @@ func classifyBusinessCode(code, status int, emptyCodes map[int]struct{}) (*APIEr
 		return &APIError{SafeCode: "scope_not_found", HTTPStatus: status}, false
 	case 200610:
 		return &APIError{SafeCode: "configuration_required", HTTPStatus: status}, false
+	case 213003:
+		return &APIError{SafeCode: "streaming_gateway_not_found", HTTPStatus: status}, false
 	case 210429:
 		return &APIError{SafeCode: "rate_limited", Retryable: true, HTTPStatus: status}, false
 	case 200500, 210318, 210500, 210504:
@@ -454,7 +459,8 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 			request.Header.Set("Content-Type", "application/json")
 		}
 		request.Header.Set("X-User-Token", token)
-		request.Header.Set("X-Request-Id", client.requestID())
+		requestID := client.requestID()
+		request.Header.Set("X-Request-Id", requestID)
 		request.Header.Set("X-Language", "zh")
 		if projectUUID != "" {
 			request.Header.Set("X-Project-Uuid", projectUUID)
@@ -491,6 +497,19 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 		}
 		var decoded envelope
 		decodeErr := json.Unmarshal(body, &decoded)
+		recordRejection := func(apiErr *APIError) {
+			apiErr.RequestID = requestID
+			if decodeErr == nil {
+				code := decoded.Code
+				apiErr.BusinessCode = &code
+			}
+			// Keep vendor diagnostics without logging tokens, signed URLs or response messages.
+			attributes := []any{"method", spec.Method, "path", spec.Path, "http_status", response.StatusCode, "request_id", requestID, "safe_code", apiErr.SafeCode}
+			if apiErr.BusinessCode != nil {
+				attributes = append(attributes, "business_code", *apiErr.BusinessCode)
+			}
+			slog.WarnContext(ctx, "FlightHub request rejected", attributes...)
+		}
 		if statusErr := classifyStatus(response.StatusCode, response.Header.Get("Retry-After"), client.now()); statusErr != nil {
 			if statusErr.SafeCode == "upstream_error" && decodeErr == nil {
 				if businessErr, _ := classifyBusinessCode(decoded.Code, response.StatusCode, emptyCodes); businessErr != nil {
@@ -498,6 +517,7 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 				}
 			}
 			if !statusErr.Retryable || attempt == maxRetries {
+				recordRejection(statusErr)
 				return envelope{}, statusErr
 			}
 			delay := statusErr.RetryAfter
@@ -509,18 +529,22 @@ func (client *Client) request(ctx context.Context, token, projectUUID string, sp
 			}
 			continue
 		}
-		if decodeErr != nil || (decoded.Data == nil && !spec.DataOptional) {
+		if decodeErr != nil {
 			return envelope{}, &APIError{SafeCode: "schema_incompatible", HTTPStatus: response.StatusCode}
 		}
 		businessErr, empty := classifyBusinessCode(decoded.Code, response.StatusCode, emptyCodes)
 		if businessErr != nil {
 			if !businessErr.Retryable || attempt == maxRetries {
+				recordRejection(businessErr)
 				return envelope{}, businessErr
 			}
 			if err := client.sleep(ctx, client.retryDelay(attempt)); err != nil {
 				return envelope{}, err
 			}
 			continue
+		}
+		if decoded.Data == nil && !spec.DataOptional && !empty {
+			return envelope{}, &APIError{SafeCode: "schema_incompatible", HTTPStatus: response.StatusCode}
 		}
 		decoded.Empty = empty
 		return decoded, nil

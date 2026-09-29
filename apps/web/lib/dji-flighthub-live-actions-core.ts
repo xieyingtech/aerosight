@@ -70,7 +70,7 @@ export function authorizeFlightHubLiveAction(projectId: number, input: FlightHub
   if (!new Set(["connecting", "connected", "degraded"]).has(authorization.connectorStatus)) {
     throw new Error("FLIGHTHUB_LIVE_ACTION_CONNECTOR_DISABLED");
   }
-  if (!authorization.actionEnabled || !authorization.capabilityFieldVerified) {
+  if (!authorization.actionEnabled) {
     throw new Error("FLIGHTHUB_LIVE_ACTION_DISABLED");
   }
   if ("deviceId" in input) {

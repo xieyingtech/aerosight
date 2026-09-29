@@ -169,6 +169,44 @@ func TestEndpointBusinessCodeProfiles(t *testing.T) {
 	}
 }
 
+func TestBusinessRejectionWithoutDataIsNotSchemaFailure(t *testing.T) {
+	for _, item := range []struct{ body, code string }{
+		{`{"code":213003,"message":"no streaming gateway found"}`, "streaming_gateway_not_found"},
+		{`{"code":200403,"message":"Forbidden"}`, "scope_forbidden"},
+		{`{"code":0,"message":"OK"}`, "schema_incompatible"},
+	} {
+		client := testClient(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return response(200, json.RawMessage(item.body), nil), nil
+		}), nil)
+		_, err := client.request(context.Background(), "redacted", "project-redacted", requestSpec{Method: http.MethodPost, Path: "/openapi/v2.0/live-stream/start"})
+		if !IsSafeCode(err, item.code) {
+			t.Fatalf("error=%v want=%s", err, item.code)
+		}
+	}
+}
+
+func TestRejectionRetainsVendorDiagnosticsWithoutExposingMessage(t *testing.T) {
+	for _, status := range []int{200, 400, 403, 500} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			attempts := 0
+			client := testClient(t, roundTripFunc(func(*http.Request) (*http.Response, error) {
+				attempts++
+				return response(status, []byte(`{"code":219999,"message":"secret-token signed-url"}`), nil), nil
+			}), func(config *Config) { config.MaxRetries = 3 })
+			_, err := client.request(context.Background(), "secret-token", "project-redacted", requestSpec{
+				Method: http.MethodPost, Path: "/openapi/v2.0/flight-task", DisableRetry: true,
+			})
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) || apiErr.BusinessCode == nil || *apiErr.BusinessCode != 219999 || apiErr.HTTPStatus != status || apiErr.RequestID != "request-redacted" {
+				t.Fatalf("missing vendor diagnostics: %#v", apiErr)
+			}
+			if attempts != 1 || strings.Contains(err.Error(), "secret-token") || strings.Contains(err.Error(), "signed-url") {
+				t.Fatalf("unsafe rejection handling: attempts=%d error=%v", attempts, err)
+			}
+		})
+	}
+}
+
 func TestTemporaryLinkPurposeHostAndExpiryValidation(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	client := testClient(t, roundTripFunc(func(*http.Request) (*http.Response, error) {

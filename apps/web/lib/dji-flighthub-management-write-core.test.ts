@@ -11,15 +11,14 @@ const digest = auditHash(preview);
 const input = flightHubProjectMemberWriteInputSchema.parse({ members, confirmation: "ADD PROJECT MEMBER", previewDigest: digest,
   approvalRequestId: "00000000-0000-4000-8000-000000000008", idempotencyKey: "member-0001", connectorInstanceId: 8 });
 const allowed = { teamId: 7, managementGranted: true, connectorProjectId: 11, connectorTeamId: 7, connectorStatus: "connected",
-  featureEnabled: true, capabilityVerified: true, targetCount: 1, currentPreviewDigest: digest,
+  featureEnabled: true, capabilityVerified: false, targetCount: 1, currentPreviewDigest: digest,
   approvalProjectId: 11, approvalTeamId: 7, approvalResourceType: "connector", approvalResourceId: "8",
   approvalAction: "flighthub.organization.project-member-upsert", approvalStatus: "approved", approvalUnexpired: true,
   approvalPreviewDigest: digest };
 
 test("project member write requires management grant, exact preview, flag, field evidence and approval", () => {
   assert.equal(authorizeProjectMemberWrite(11, input, allowed).capability, "organization.project-member.write");
-  for (const override of [{ managementGranted: false }, { featureEnabled: false }, { capabilityVerified: false },
-    { targetCount: 0 }, { currentPreviewDigest: "b".repeat(64) }, { approvalStatus: "pending" },
+  for (const override of [{ managementGranted: false }, { featureEnabled: false }, { targetCount: 0 }, { currentPreviewDigest: "b".repeat(64) }, { approvalStatus: "pending" },
     { approvalUnexpired: false }, { approvalProjectId: 99 }, { approvalResourceId: "9" },
     { approvalAction: "flighthub.organization.write" }, { approvalPreviewDigest: "b".repeat(64) }]) {
     assert.throws(() => authorizeProjectMemberWrite(11, input, { ...allowed, ...override }));

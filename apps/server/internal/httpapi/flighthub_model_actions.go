@@ -56,7 +56,7 @@ func authorizeFHModel(pid int32, cid int64, input map[string]any, row gin.H) err
 	if row["connectorStatus"] != "connecting" && row["connectorStatus"] != "connected" && row["connectorStatus"] != "degraded" {
 		return fail("CONNECTOR_DISABLED")
 	}
-	if row["actionEnabled"] != true || row["capabilityFieldVerified"] != true {
+	if row["actionEnabled"] != true {
 		return fail("DISABLED")
 	}
 	if row["targetProjectId"] != float64(pid) || row["targetConnectorId"] != float64(cid) || row["targetKind"] != p.targetKind || row["targetStatus"] != "active" {
@@ -166,7 +166,7 @@ func (s *Server) fhModelAction(c *gin.Context) {
 	}
 	envelopeJSON, _ := json.Marshal(envelope)
 	digestInput["request"] = gin.H{"confirmed": true}
-	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector." + action, ResourceType: "connector_remote_resource", ResourceID: strconv.FormatInt(target, 10), Input: digestInput, PolicyResult: map[string]any{"permission": "project:admin", "capability": policy.capability, "featureFlag": policy.flag, "evidence": "field-write", "approval": "approved", "completion": "worker-final"}}
+	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector." + action, ResourceType: "connector_remote_resource", ResourceID: strconv.FormatInt(target, 10), Input: digestInput, PolicyResult: map[string]any{"permission": "project:admin", "capability": policy.capability, "featureFlag": policy.flag, "fieldAcceptanceRequired": false, "approval": "approved", "completion": "worker-final"}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, a.TeamID, "project:view", false), func(w *database.WriteTx) (gin.H, error) {
 		q := w.Queries
 		raw, e := q.FHModelTarget(ctx, sqlcgen.FHModelTargetParams{P1: pid, P2: cid, P3: a.TeamID, P4: uid, P5: target})

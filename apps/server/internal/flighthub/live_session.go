@@ -203,7 +203,7 @@ func parseFlightHubLiveStartEvent(event outbox.Event) (int64, error) {
 
 func knownLiveStartRejection(err error) bool {
 	switch SafeCode(err) {
-	case "request_invalid", "credential_invalid", "scope_forbidden", "capability_not_supported", "configuration_required":
+	case "request_invalid", "credential_invalid", "scope_forbidden", "scope_not_found", "capability_not_supported", "configuration_required", "streaming_gateway_not_found":
 		return true
 	default:
 		return false
@@ -222,7 +222,7 @@ func (handler *FlightHubLiveStartHandler) Handler(ctx context.Context, _ *sql.Tx
 	if session.TeamID != event.TeamID || session.Instance.ConnectorKey != ConnectorKey || session.Instance.Version != ConnectorVersion || !isActiveConnectorStatus(session.ConnectorStatus) {
 		return handler.store.Fail(ctx, session, "FLIGHTHUB_LIVE_CONNECTOR_UNAVAILABLE", false, handler.now().UTC())
 	}
-	if !session.ActionEnabled || (session.DeviceType != "dock" && !session.CapabilityVerified) {
+	if !session.ActionEnabled || !SupportsLiveViewing(session.DeviceType) {
 		return handler.store.Fail(ctx, session, "FLIGHTHUB_LIVE_ACTION_DISABLED", false, handler.now().UTC())
 	}
 	if session.Status == "failed" || session.Status == "stopped" || session.Status == "stopping" || session.StartAttemptedAt.Valid {
@@ -339,6 +339,12 @@ func decideFlightHubLiveSession(now time.Time, evidence FlightHubLiveEvidence) F
 		}
 		return decision
 	}
+	// Without a playback authorization there is no local viewing session to
+	// keep stopping. This does not assert that an uncertain remote start stopped.
+	if evidence.Status == "stopping" && !evidence.StartAcceptedAt.Valid {
+		decision.Status, decision.Reason, decision.Terminal = "stopped", "FLIGHTHUB_LIVE_LOCAL_STOPPED_REMOTE_UNCONFIRMED", true
+		return decision
+	}
 	credentialExpired := evidence.CredentialExpiresAt.Valid && !now.Before(evidence.CredentialExpiresAt.Time)
 	lastViewer := evidence.LastPlaybackAt
 	if !lastViewer.Valid {
@@ -430,6 +436,9 @@ func (reconciler *FlightHubLiveReconciler) ReconcileLiveSessions(ctx context.Con
 	summary := FlightHubLiveReconcileSummary{Candidates: len(candidates)}
 	for _, item := range candidates {
 		decision := decideFlightHubLiveSession(now, item.evidence)
+		if decision.Status == item.evidence.Status && decision.Reason == "FLIGHTHUB_LIVE_EVIDENCE_UNAVAILABLE" && item.currentReason != "" {
+			decision.Reason = item.currentReason
+		}
 		tx, err := reconciler.db.BeginTx(ctx, nil)
 		if err != nil {
 			return summary, err

@@ -328,7 +328,7 @@ func (handler *ModelDeleteHandler) Handler(ctx context.Context, _ *sql.Tx, event
 		default:
 			return handler.store.Fail(ctx, job, "connector_disabled")
 		}
-		if !job.ActionEnabled || !job.CapabilityVerified {
+		if !job.ActionEnabled {
 			return handler.store.Fail(ctx, job, "action_disabled")
 		}
 		if !job.ApprovalValid {

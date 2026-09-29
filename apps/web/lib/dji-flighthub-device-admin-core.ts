@@ -38,7 +38,7 @@ export function authorizeFlightHubDeviceAdmin(projectId: number, input: FlightHu
   if (!new Set(["owner", "admin"]).has(authorization.role)) throw new Error("FLIGHTHUB_DEVICE_ADMIN_PERMISSION_DENIED");
   if (authorization.connectorProjectId !== projectId || authorization.connectorTeamId !== authorization.teamId) throw new Error("FLIGHTHUB_DEVICE_ADMIN_SCOPE_MISMATCH");
   if (authorization.connectorStatus !== "connected") throw new Error("FLIGHTHUB_DEVICE_ADMIN_CONNECTOR_OFFLINE");
-  if (!authorization.featureEnabled || !authorization.capabilityVerified) throw new Error("FLIGHTHUB_DEVICE_ADMIN_DISABLED");
+  if (!authorization.featureEnabled) throw new Error("FLIGHTHUB_DEVICE_ADMIN_DISABLED");
   const deviceId = "deviceId" in input ? input.deviceId : null;
   if (deviceId !== null && (authorization.deviceProjectId !== projectId || !authorization.identityPresent
       || !authorization.deviceOnline || !authorization.stateFresh)) throw new Error("FLIGHTHUB_DEVICE_ADMIN_DEVICE_UNAVAILABLE");

@@ -192,6 +192,12 @@ func mapDevice(projectUUID string, device *Device, parent string) connector.Exte
 		},
 		"readOnly": true, "capabilities": []string{"state.read"}, "knownProduct": known,
 	}
+	if len(device.CameraList) > 0 {
+		var cameras []map[string]any
+		if json.Unmarshal(device.CameraList, &cameras) == nil {
+			attributes["cameraList"] = cameras
+		}
+	}
 	if !known {
 		attributes["reviewReason"] = "DJI_PRODUCT_ENUM_UNKNOWN"
 	}

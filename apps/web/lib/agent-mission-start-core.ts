@@ -19,7 +19,6 @@ export type AgentMissionStartAuthorization = {
   preflightAllowed: boolean;
   deviceCommandsEnabled: boolean;
   selectedDeviceId: number | null;
-  safetyPolicyVersionId: number | null;
 };
 
 export function authorizeAgentMissionStart(
@@ -37,7 +36,6 @@ export function authorizeAgentMissionStart(
     || authorization.approvalResourceType !== "task_version"
     || authorization.approvalResourceId !== String(input.taskVersionId)
     || authorization.approvalAction !== "mission.start") throw new Error("AGENT_MISSION_APPROVAL_SCOPE_MISMATCH");
-  if (!authorization.preflightAllowed || !authorization.safetyPolicyVersionId) throw new Error("AGENT_MISSION_PREFLIGHT_FAILED");
   if (!authorization.deviceCommandsEnabled) throw new Error("AGENT_MISSION_COMMANDS_DISABLED");
   if (!authorization.selectedDeviceId) throw new Error("AGENT_MISSION_DEVICE_NOT_SELECTED");
   return Object.freeze({
@@ -47,7 +45,6 @@ export function authorizeAgentMissionStart(
     userId: context.userId,
     sessionId: context.sessionId,
     selectedDeviceId: authorization.selectedDeviceId,
-    safetyPolicyVersionId: authorization.safetyPolicyVersionId,
     dispatchPath: "project-outbox-command-ledger" as const,
     directAdapterAccess: false as const,
     completion: "await-device-ack" as const

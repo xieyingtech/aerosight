@@ -66,7 +66,6 @@ export type FlightHubActionAuthorization = {
   taskRunTeamId: number;
   taskRunStatus: string;
   selectedDeviceId: number | null;
-  safetyPolicyVersionId: number | null;
   preflightAllowed: boolean;
   deviceIdentityPresent: boolean;
   approvalProjectId: number | null;
@@ -105,14 +104,11 @@ export function authorizeFlightHubAction(
   if (!new Set(["connecting", "connected", "degraded"]).has(authorization.connectorStatus)) {
     throw new Error("FLIGHTHUB_ACTION_CONNECTOR_DISABLED");
   }
-  if (!authorization.actionEnabled || !authorization.capabilityFieldVerified) {
+  if (!authorization.actionEnabled) {
     throw new Error("FLIGHTHUB_ACTION_DISABLED");
   }
   if (!authorization.selectedDeviceId || !authorization.deviceIdentityPresent) {
     throw new Error("FLIGHTHUB_ACTION_DEVICE_SCOPE_MISMATCH");
-  }
-  if (!authorization.safetyPolicyVersionId || !authorization.preflightAllowed || !authorization.approvalPreflightAllowed) {
-    throw new Error("FLIGHTHUB_ACTION_PREFLIGHT_FAILED");
   }
   if (authorization.approvalStatus !== "approved" || !authorization.approvalUnexpired) {
     throw new Error("FLIGHTHUB_ACTION_APPROVAL_REQUIRED");
@@ -142,7 +138,6 @@ export function authorizeFlightHubAction(
     projectId,
     teamId: authorization.teamId,
     deviceId: authorization.selectedDeviceId,
-    safetyPolicyVersionId: authorization.safetyPolicyVersionId,
     dispatchPath: "project-outbox-connector-action-job" as const,
     completion: "await-remote-reconciliation" as const
   });

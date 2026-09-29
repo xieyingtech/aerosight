@@ -38,6 +38,7 @@ export type ProjectSituationSnapshot = {
   generatedAt: string;
   consistency: "repeatable-read";
   devices: ProjectSnapshotDevice[];
+  deviceRelations?: Array<{ fromDeviceId: number; toDeviceId: number; relationType: string }>;
   tracks: Array<Record<string, unknown>>;
   activeTasks: Array<Record<string, unknown>>;
   taskSteps: Array<Record<string, unknown>>;

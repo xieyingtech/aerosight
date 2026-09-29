@@ -56,7 +56,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     });
     const result = await response.json() as AdapterSummary & { error?: string; issues?: SetupIssue[]; configurationSummary?: ConfigurationSummary };
     if (!response.ok) {
-      setError(result.error === "NETWORK_PROFILE_INVALID" ? "网络配置未通过安全策略" : (result.error ?? "创建失败"));
+      setError(result.error === "NETWORK_PROFILE_INVALID" ? "网络配置不符合要求" : (result.error ?? "创建失败"));
       setIssues(result.issues ?? []);
       return;
     }

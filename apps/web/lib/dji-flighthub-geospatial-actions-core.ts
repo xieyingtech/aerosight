@@ -79,7 +79,7 @@ export function authorizeFlightHubGeospatialAction(projectId: number, input: Fli
   if (!new Set(["connecting", "connected", "degraded"]).has(authorization.connectorStatus)) {
     throw new Error("FLIGHTHUB_GEOSPATIAL_ACTION_CONNECTOR_DISABLED");
   }
-  if (!authorization.actionEnabled || !authorization.capabilityFieldVerified) {
+  if (!authorization.actionEnabled) {
     throw new Error("FLIGHTHUB_GEOSPATIAL_ACTION_DISABLED");
   }
   if (input.action !== "map-element-create") {

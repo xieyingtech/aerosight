@@ -76,7 +76,7 @@ func fhAuthorizeResourceAction(kind string, pid int32, cid int64, input map[stri
 	if row["connectorStatus"] != "connecting" && row["connectorStatus"] != "connected" && row["connectorStatus"] != "degraded" {
 		return errors.New(prefix + "CONNECTOR_DISABLED")
 	}
-	if row["actionEnabled"] != true || row["capabilityFieldVerified"] != true {
+	if row["actionEnabled"] != true {
 		return errors.New(prefix + "DISABLED")
 	}
 	if kind == "live" && input["deviceId"] != nil {
@@ -213,7 +213,7 @@ func (s *Server) fhResourceAction(kind string) gin.HandlerFunc {
 		if policy.ownerOnly {
 			permission = "project:admin"
 		}
-		audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector." + action, ResourceType: resourceType, ResourceID: resourceID, Input: auditInput, PolicyResult: map[string]any{"permission": permission, "capability": policy.capability, "featureFlag": policy.flag, "evidence": "field-write", "completion": "worker-final"}}
+		audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector." + action, ResourceType: resourceType, ResourceID: resourceID, Input: auditInput, PolicyResult: map[string]any{"permission": permission, "capability": policy.capability, "featureFlag": policy.flag, "fieldAcceptanceRequired": false, "completion": "worker-final"}}
 		if kind == "geospatial" {
 			audit.PolicyResult["concurrency"] = "remote-version"
 		}

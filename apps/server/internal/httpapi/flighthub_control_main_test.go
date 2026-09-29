@@ -32,11 +32,6 @@ func TestFlightHubMainControlAndLivePostgres(t *testing.T) {
 	exec("insert into device_external_identities(project_id,team_id,adapter_id,device_id,external_device_id,discovery_status) values($1,$2,$3,$4,'device-test','managed')", pid, team, cid, did)
 	exec("insert into project_feature_flags(project_id,flighthub_action_flags_json) values($1,'{\"device.control\":true,\"live.control\":true}') on conflict(project_id) do update set flighthub_action_flags_json=excluded.flighthub_action_flags_json", pid)
 	exec("insert into connector_capability_snapshots(project_id,team_id,connector_instance_id,capability_code,status,evidence_level,region,deployment,account_fingerprint,device_model,firmware_version,verified_at) values($1,$2,$3,'device.control','supported','field-write','cn','cn-public-cloud',repeat('a',64),'test-model','test-fw',now()),($1,$2,$3,'live.control','supported','field-write','cn','cn-public-cloud',repeat('a',64),'test-model',null,now())", pid, team, cid)
-	var policy int
-	if e := f.db.QueryRow("insert into safety_policy_versions(project_id,team_id,version,status,max_altitude_meters,max_speed_meters_per_second,minimum_battery_percent) values($1,$2,1,'published',100,10,20) returning id", pid, team).Scan(&policy); e != nil {
-		t.Fatal(e)
-	}
-	exec("update projects set current_safety_policy_version_id=$1 where id=$2", policy, pid)
 	exec("insert into device_latest_telemetry(device_id,project_id,adapter_id,event_id,telemetry_type,captured_at,received_at,payload_json) values($1,$2,$3,'state-test','dji.flighthub.state',now(),now(),'{}')", did, pid, cid)
 	const approval = "ab111111-1111-4111-8111-111111111111"
 	exec("insert into approval_requests(id,project_id,team_id,resource_type,resource_id,action,requested_by_user_id,status,expires_at) select $1,$2,$3,'device',$4,'flighthub.control.acquire',id,'approved',now()+interval '1 hour' from users where email='admin@example.com'", approval, pid, team, fmt.Sprint(did))
@@ -45,7 +40,7 @@ func TestFlightHubMainControlAndLivePostgres(t *testing.T) {
 	if _, e := fmt.Sscan(cid, &connectorID); e != nil {
 		t.Fatal(e)
 	}
-	body := gin.H{"connectorInstanceId": connectorID, "safetyPolicyVersionId": policy, "approvalRequestId": approval, "idempotencyKey": "control-main-test", "controls": gin.H{"flight": true}}
+	body := gin.H{"connectorInstanceId": connectorID, "approvalRequestId": approval, "idempotencyKey": "control-main-test", "controls": gin.H{"flight": true}}
 	first := call("POST", controlURL, body, 202)
 	if replay := call("POST", controlURL, body, 200); replay["id"] != first["id"] || replay["reused"] != true {
 		t.Fatalf("replay %+v", replay)
@@ -111,8 +106,10 @@ func TestMainDiscoveryBindAndMigrate(t *testing.T) {
 	if _, e := f.db.Exec("update device_adapters set name='original-discovery' where id=$1", adapter); e != nil {
 		t.Fatal(e)
 	}
-	if _,e:=f.db.Exec("update devices set name=name||'-original' where project_id=$1",pid);e!=nil{t.Fatal(e)}
- other, _ := f.device(t, team, pid)
+	if _, e := f.db.Exec("update devices set name=name||'-original' where project_id=$1", pid); e != nil {
+		t.Fatal(e)
+	}
+	other, _ := f.device(t, team, pid)
 	if _, e := f.db.Exec("update device_adapters set status='connected' where id=$1", other); e != nil {
 		t.Fatal(e)
 	}

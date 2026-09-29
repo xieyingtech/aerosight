@@ -5,6 +5,7 @@ import (
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
 	"aerosight/server/internal/device"
+	"aerosight/server/internal/flighthub"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -94,7 +95,7 @@ func (s *Server) startLiveStream(c *gin.Context) {
 			return nil, errors.New("LIVE_STREAM_DEVICE_OFFLINE")
 		}
 		isFlightHub := target.ConnectorKey.String == "dji.flighthub2" && target.AdapterType.String == "dji-flighthub2"
-		if isFlightHub && (!target.LiveActionEnabled || (target.DeviceType != "dock" && !target.LiveCapabilityVerified)) {
+		if isFlightHub && (!target.LiveActionEnabled || !flighthub.SupportsLiveViewing(target.DeviceType)) {
 			return nil, errors.New("FLIGHTHUB_LIVE_ACTION_DISABLED")
 		}
 		control := slices.Contains(target.Capabilities, "stream.video.control") || isFlightHub

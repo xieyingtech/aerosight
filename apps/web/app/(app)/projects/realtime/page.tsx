@@ -9,8 +9,9 @@ export default function RealtimeOperationsPage() {
     {(snapshot, query) => {
   return (
     <Page description={`${snapshot.project.name} 的在线设备、直播与任务控制`} title="实时作业" variant="workspace">
-      <RealtimeOperationsWorkbench key={snapshot.project.id} initialDeviceId={query.get("deviceId") ?? undefined} initialSnapshot={snapshot} initialStreamId={query.get("streamId") ?? undefined} />
+      <RealtimeOperationsWorkbench key={snapshot.project.id} initialDeviceId={query.get("deviceId") ?? undefined} initialSnapshot={snapshot} autoLive={query.get("autoLive")==="1"} initialStreamId={query.get("streamId") ?? undefined} />
     </Page>
   );
     }}</StaticAPIPage>;
 }
+

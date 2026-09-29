@@ -29,7 +29,6 @@ export function authorizeControlSession(input: {
   connectorProjectId: number; connectorTeamId: number; deviceProjectId: number;
   connectorStatus: string; featureEnabled: boolean; capabilityFieldVerified: boolean;
   deviceOnline: boolean; stateCapturedAt: Date | null; now: Date;
-  requestedSafetyPolicyVersionId: number; currentSafetyPolicyVersionId: number | null;
   approvalProjectId: number | null; approvalTeamId: number | null; approvalResourceType: string | null;
   approvalResourceId: string | null; approvalAction: string | null; approvalStatus: string | null; approvalUnexpired: boolean;
   conflictingSessionCount: number;
@@ -37,13 +36,10 @@ export function authorizeControlSession(input: {
   if (input.connectorProjectId !== input.projectId || input.connectorTeamId !== input.teamId
       || input.deviceProjectId !== input.projectId) throw new Error("FLIGHTHUB_CONTROL_SCOPE_MISMATCH");
   if (input.connectorStatus !== "connected") throw new Error("FLIGHTHUB_CONTROL_CONNECTOR_UNAVAILABLE");
-  if (!input.featureEnabled || !input.capabilityFieldVerified) throw new Error("FLIGHTHUB_CONTROL_NOT_ENABLED");
+  if (!input.featureEnabled) throw new Error("FLIGHTHUB_CONTROL_NOT_ENABLED");
   if (!input.deviceOnline || !input.stateCapturedAt
       || input.now.getTime() - input.stateCapturedAt.getTime() > 30_000
       || input.stateCapturedAt.getTime() > input.now.getTime() + 1_000) throw new Error("FLIGHTHUB_CONTROL_DEVICE_STALE");
-  if (input.requestedSafetyPolicyVersionId !== input.currentSafetyPolicyVersionId) {
-    throw new Error("FLIGHTHUB_CONTROL_SAFETY_POLICY_STALE");
-  }
   if (input.approvalProjectId !== input.projectId || input.approvalTeamId !== input.teamId
       || input.approvalResourceType !== "device" || input.approvalResourceId !== String(input.deviceId)
       || input.approvalAction !== "flighthub.control.acquire" || input.approvalStatus !== "approved"

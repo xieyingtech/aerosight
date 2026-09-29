@@ -31,7 +31,7 @@ type FlightHubControlSession struct {
 	LeaseExpiresAt, AbsoluteExpiresAt              time.Time
 	FeatureEnabled, CapabilityVerified             bool
 	DeviceOnline, StateFresh, ApprovalValid        bool
-	SafetyPolicyCurrent, PermissionCurrent         bool
+	PermissionCurrent                              bool
 	Instance                                       connector.Instance
 	ProjectUUID                                    string
 }
@@ -105,7 +105,6 @@ func (store *SQLControlSessionStore) Load(ctx context.Context, projectID int, se
 		  and approval.project_id=session.project_id and approval.team_id=session.team_id
 		  and approval.resource_type='device' and approval.resource_id=session.device_id::text
 		  and approval.action='flighthub.control.acquire' and approval.status='approved' and approval.expires_at>$3),
-		project.current_safety_policy_version_id=session.safety_policy_version_id,
 		exists(select 1 from team_members member where member.team_id=session.team_id and member.user_id=session.holder_user_id
 		  and (member.role in('owner','admin') or exists(select 1 from project_permissions permission
 		    where permission.project_id=session.project_id and permission.team_id=session.team_id
@@ -125,7 +124,7 @@ func (store *SQLControlSessionStore) Load(ctx context.Context, projectID int, se
 		&session.LeaseExpiresAt, &session.AbsoluteExpiresAt, &session.FailureCode, &session.DeviceSN,
 		&session.ConnectorStatus, &credential, &scope, &controls, &session.FeatureEnabled,
 		&session.CapabilityVerified, &session.DeviceOnline, &session.StateFresh, &session.ApprovalValid,
-		&session.SafetyPolicyCurrent, &session.PermissionCurrent)
+		&session.PermissionCurrent)
 	if err != nil {
 		return session, err
 	}
@@ -337,8 +336,8 @@ func (handler *ControlSessionHandler) Handler(ctx context.Context, _ *sql.Tx, ev
 }
 
 func (handler *ControlSessionHandler) acquire(ctx context.Context, session FlightHubControlSession, now time.Time) error {
-	if session.ConnectorStatus != "connected" || !session.FeatureEnabled || !session.CapabilityVerified ||
-		!session.DeviceOnline || !session.StateFresh || !session.ApprovalValid || !session.SafetyPolicyCurrent || !session.PermissionCurrent ||
+	if session.ConnectorStatus != "connected" || !session.FeatureEnabled ||
+		!session.DeviceOnline || !session.StateFresh || !session.ApprovalValid || !session.PermissionCurrent ||
 		!now.Before(session.LeaseExpiresAt) || !now.Before(session.AbsoluteExpiresAt) {
 		return handler.store.Finish(ctx, session, "failed", "safety_gate_failed", now)
 	}

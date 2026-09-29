@@ -8,7 +8,7 @@ import { authorizeFlightHubGeospatialAction, flightHubGeospatialActionInputSchem
 const allowed: FlightHubGeospatialActionAuthorization = {
   teamId: 7, role: "admin", hasOperatePermission: true,
   connectorProjectId: 41, connectorTeamId: 7, connectorStatus: "connected",
-  actionEnabled: true, capabilityFieldVerified: true,
+  actionEnabled: true, capabilityFieldVerified: false,
   targetProjectId: 41, targetConnectorId: 12, targetKind: "map-element", targetStatus: "active",
   targetRemoteVersion: "version-2"
 };
@@ -28,7 +28,6 @@ test("map element writes fail closed behind RBAC capability and feature gates", 
   for (const denied of [
     { ...allowed, hasOperatePermission: false },
     { ...allowed, actionEnabled: false },
-    { ...allowed, capabilityFieldVerified: false },
     { ...allowed, connectorStatus: "disabled" },
     { ...allowed, targetConnectorId: 999 },
     { ...allowed, targetKind: "flight-area" }

@@ -58,7 +58,7 @@ func TestLiveControlAcceptanceIsModelBoundUntilFirmwareBecomesObservable(t *test
 	firmwareNowKnown := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, CapabilityEvaluationScope{
 		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "3-2-0", FirmwareVersion: "01.00", Now: now,
 	})[0]
-	if firmwareNowKnown.Status == ProbeSupported {
+	if firmwareNowKnown.Layers.Acceptance == ProbeSupported {
 		t.Fatalf("model-only live acceptance survived newly observable firmware: %#v", firmwareNowKnown)
 	}
 }
@@ -76,7 +76,7 @@ func TestFieldAcceptanceNeverCrossesAccountOrDeployment(t *testing.T) {
 		"unresolved": {Region: "cn", Deployment: "cn-public-cloud", Now: now},
 	} {
 		result := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, scope)[0]
-		if result.Status == ProbeSupported {
+		if result.Layers.Acceptance == ProbeSupported {
 			t.Fatalf("%s scope inherited incompatible field acceptance: %#v", name, result)
 		}
 	}
@@ -189,7 +189,7 @@ func TestCapabilityProbeResultsPersistSanitizedEvidenceScope(t *testing.T) {
 	}
 }
 
-func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t *testing.T) {
+func TestFieldAcceptanceMetadataDoesNotGateSupportedCapability(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
 	expiresAt := now.Add(time.Hour)
@@ -219,13 +219,13 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	changed := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
 		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.03.0000", Now: now,
 	})[0]
-	if changed.Status != ProbeUnverified || changed.Layers.Acceptance != ProbeUnverified || changed.Reason != "firmware_acceptance_changed" {
+	if changed.Status != ProbeSupported || changed.Layers.Acceptance != ProbeUnverified || changed.Reason != "firmware_acceptance_changed" {
 		t.Fatalf("old firmware acceptance widened new firmware: %#v", changed)
 	}
 	expired := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{snapshot}, CapabilityEvaluationScope{
 		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: expiresAt,
 	})[0]
-	if expired.Status != ProbeUnverified || expired.Layers.Acceptance != ProbeUnverified || expired.Reason != "field_acceptance_expired" {
+	if expired.Status != ProbeSupported || expired.Layers.Acceptance != ProbeUnverified || expired.Reason != "field_acceptance_expired" {
 		t.Fatalf("expired field acceptance remained enabled: %#v", expired)
 	}
 	generic := snapshot
@@ -233,7 +233,7 @@ func TestHighRiskCapabilityRequiresCurrentFirmwareAndUnexpiredFieldAcceptance(t 
 	notInherited := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{generic}, CapabilityEvaluationScope{
 		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "dock-model", FirmwareVersion: "01.02.0300", Now: now,
 	})[0]
-	if notInherited.Status != ProbeUnverified || notInherited.Layers.Acceptance != ProbeUnverified {
+	if notInherited.Status != ProbeSupported || notInherited.Layers.Acceptance != ProbeUnverified {
 		t.Fatalf("generic evidence widened firmware-bound action: %#v", notInherited)
 	}
 }
@@ -254,7 +254,7 @@ func TestCameraCapabilityNeverInheritsAnotherModelOrFirmwareAcceptance(t *testin
 		{Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: strings.Repeat("a", 64), DeviceModel: "", FirmwareVersion: "", Now: now},
 	} {
 		result := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{evidence}, scope)[0]
-		if result.Status == ProbeSupported {
+		if result.Layers.Acceptance == ProbeSupported {
 			t.Fatalf("scope %#v inherited incompatible evidence", scope)
 		}
 	}

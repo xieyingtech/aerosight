@@ -24,8 +24,7 @@
     "permission": "mission:operate",
     "prerequisites": [
       "设备在线",
-      "状态新鲜",
-      "安全策略"
+      "状态新鲜"
     ],
     "approval": "设备与 action 精确审批",
     "resultEvidence": "指令状态或物模型",

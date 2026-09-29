@@ -85,6 +85,13 @@ func TestInspectionFlightBindingRejectsMisassociation(t *testing.T) {
 		t.Fatal(err)
 	}
 	store := flighthub.NewSQLFlightActionStore(f.db)
+	for _, runID := range []int64{business, flight} {
+		res := f.request(t, "GET", fmt.Sprintf("/api/projects/%d/task-runs/%d", pid, runID), "")
+		out := decodedResponse(t, res)
+		if res.StatusCode != 200 || out["run"].(map[string]any)["realtimeFlight"] != nil {
+			t.Fatalf("unaccepted flight exposed: %d %+v", res.StatusCode, out)
+		}
+	}
 	action := flighthub.FlightActionJob{ID: job, ProjectID: pid, TeamID: team, ConnectorInstanceID: int64(cid), TaskRunID: int(flight)}
 	if _, err := f.db.Exec(`insert into inspection_flight_ownership(project_id,connector_instance_id,remote_flight_id,ownership) values($1,$2,'legacy-conflict','legacy')`, pid, cid); err != nil {
 		t.Fatal(err)
@@ -98,6 +105,14 @@ func TestInspectionFlightBindingRejectsMisassociation(t *testing.T) {
 
 	if err := store.RecordAccepted(context.Background(), action, "remote-binding"); err != nil {
 		t.Fatal(err)
+	}
+	for _, runID := range []int64{business, flight} {
+		res := f.request(t, "GET", fmt.Sprintf("/api/projects/%d/task-runs/%d", pid, runID), "")
+		out := decodedResponse(t, res)
+		live, _ := out["run"].(map[string]any)["realtimeFlight"].(map[string]any)
+		if res.StatusCode != 200 || live["taskUuid"] != "remote-binding" || live["deviceId"] != float64(did) {
+			t.Fatalf("accepted flight absent: %d %+v", res.StatusCode, out)
+		}
 	}
 	var owner, canonical int64
 	if err := f.db.QueryRow(`select task_run_id from inspection_flight_ownership where project_id=$1 and remote_flight_id='remote-binding'`, pid).Scan(&owner); err != nil || owner != business {

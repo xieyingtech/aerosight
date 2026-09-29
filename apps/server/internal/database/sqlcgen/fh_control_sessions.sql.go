@@ -27,7 +27,6 @@ select adapter.project_id as "connectorProjectId",adapter.team_id as "connectorT
           and capability.status='supported' and capability.evidence_level='field-write'
           and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
         device.status='online' as "deviceOnline",latest.captured_at as "stateCapturedAt",
-        project.current_safety_policy_version_id::text as "currentSafetyPolicyVersionId",
         approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",
         approval.resource_type as "approvalResourceType",approval.resource_id as "approvalResourceId",
         approval.action as "approvalAction",approval.status as "approvalStatus",
@@ -166,7 +165,7 @@ func (q *Queries) FHControlEnqueueRelease(ctx context.Context, arg FHControlEnqu
 const fHControlExisting = `-- name: FHControlExisting :many
 SELECT to_jsonb(r) FROM (
 select id::text,status,holder_user_id as "holderUserId",connector_instance_id::text as "connectorInstanceId",
-        approval_request_id::text as "approvalRequestId",safety_policy_version_id::text as "safetyPolicyVersionId",
+        approval_request_id::text as "approvalRequestId",
         controls_json=$1::jsonb as "controlsMatch" from connector_control_sessions
        where project_id=$2 and device_id=$3 and idempotency_key=$4
 ) r
@@ -250,9 +249,9 @@ func (q *Queries) FHControlHeartbeat(ctx context.Context, arg FHControlHeartbeat
 const fHControlInsert = `-- name: FHControlInsert :one
 insert into connector_control_sessions(
         id,project_id,team_id,connector_instance_id,device_id,holder_user_id,approval_request_id,
-        safety_policy_version_id,idempotency_key,controls_json,last_heartbeat_at,lease_expires_at,
+        idempotency_key,controls_json,last_heartbeat_at,lease_expires_at,
         absolute_expires_at,operation_window_started_at
-      ) values($1,$2,$3,$4,$5,$6,$7::uuid,$8,$9,$10::jsonb,$11,$12,$13,$11) returning id::text,status
+      ) values($1,$2,$3,$4,$5,$6,$7::uuid,$8,$9::jsonb,$10,$11,$12,$10) returning id::text,status
 `
 
 type FHControlInsertParams struct {
@@ -263,7 +262,6 @@ type FHControlInsertParams struct {
 	P5  int32           `json:"p5"`
 	P6  int32           `json:"p6"`
 	P7  uuid.UUID       `json:"p7"`
-	P8  int64           `json:"p8"`
 	P9  string          `json:"p9"`
 	P10 json.RawMessage `json:"p10"`
 	P11 time.Time       `json:"p11"`
@@ -285,7 +283,6 @@ func (q *Queries) FHControlInsert(ctx context.Context, arg FHControlInsertParams
 		arg.P5,
 		arg.P6,
 		arg.P7,
-		arg.P8,
 		arg.P9,
 		arg.P10,
 		arg.P11,

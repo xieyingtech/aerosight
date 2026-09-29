@@ -125,6 +125,11 @@ func (sink *SQLResourceStreamSink) ApplyDeviceState(ctx context.Context, instanc
 			return err
 		}
 	}
+	// The state endpoint can serve cached OSD for a powered-off aircraft.
+	// Only the device directory can establish that it is currently online.
+	if !poll.Device.Online {
+		return nil
+	}
 	heartbeatInterval := poll.FreshnessInterval
 	if heartbeatInterval < 5*time.Second {
 		heartbeatInterval = 30 * time.Second

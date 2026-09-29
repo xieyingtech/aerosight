@@ -79,7 +79,7 @@ export function authorizeFlightHubModelDelete(projectId: number, input: FlightHu
   if (!new Set(["connecting", "connected", "degraded"]).has(authorization.connectorStatus)) {
     throw new Error("FLIGHTHUB_MODEL_DELETE_CONNECTOR_DISABLED");
   }
-  if (!authorization.actionEnabled || !authorization.capabilityFieldVerified) {
+  if (!authorization.actionEnabled) {
     throw new Error("FLIGHTHUB_MODEL_DELETE_DISABLED");
   }
   if (authorization.targetProjectId !== projectId || authorization.targetConnectorId !== input.connectorInstanceId

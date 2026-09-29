@@ -41,7 +41,7 @@ function Workspace({ workspace, projectId }: { workspace: FlightHubModelsWorkspa
     <div className="space-y-8">
       <Card size="sm"><CardHeader><CardTitle>{workspace.access.canOperate ? "操作者视图" : "只读视图"}</CardTitle>
         <CardDescription>{workspace.access.canOperate
-          ? "操作入口仍受连接状态、默认关闭功能开关、field-write 现场验收和操作自身审批约束。"
+          ? "操作入口根据连接状态、账号权限和项目设置开放。"
           : "当前身份只能查看目录、进度、产物和失败原因，不提供模型写操作。"}</CardDescription>
         <CardAction><Badge variant={workspace.access.canOperate ? "default" : "secondary"}>{workspace.access.mode}</Badge></CardAction>
       </CardHeader></Card>

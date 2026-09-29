@@ -1,4 +1,4 @@
-import type { ComplianceValue } from "./mission-preflight.ts";
+export type ComplianceValue = { reference: string; validUntil?: Date };
 
 export const aviationComplianceFields = [
   "realNameRegistration",

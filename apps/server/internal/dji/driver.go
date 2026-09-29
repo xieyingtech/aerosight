@@ -14,6 +14,8 @@ const (
 )
 
 var commandCapabilities = []driver.CapabilityDefinition{
+	{Code: "camera.payload.control", Kind: driver.CapabilityCommand, Risk: driver.RiskMedium, InputSchema: json.RawMessage(`{"type":"object"}`)},
+	{Code: "stream.video.quality", Kind: driver.CapabilityCommand, Risk: driver.RiskLow, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "mission.execute", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "mission.cancel", Kind: driver.CapabilityCommand, Risk: driver.RiskHigh, InputSchema: json.RawMessage(`{"type":"object"}`)},
 	{Code: "flight.return_home", Kind: driver.CapabilityCommand, Risk: driver.RiskCritical, InputSchema: json.RawMessage(`{"type":"object"}`)},

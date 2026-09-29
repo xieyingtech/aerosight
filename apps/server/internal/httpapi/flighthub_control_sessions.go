@@ -57,7 +57,7 @@ func normalizeFHControl(value any) (gin.H, error) {
 	sort.Strings(payload)
 	return gin.H{"flight": flight, "payloadIndex": payload}, nil
 }
-func authorizeFHControl(pid, tid, did int32, policy int64, row gin.H, now time.Time) error {
+func authorizeFHControl(pid, tid, did int32, row gin.H, now time.Time) error {
 	fail := func(s string) error { return errors.New("FLIGHTHUB_CONTROL_" + s) }
 	if row["connectorProjectId"] != float64(pid) || row["connectorTeamId"] != float64(tid) || row["deviceProjectId"] != float64(pid) {
 		return fail("SCOPE_MISMATCH")
@@ -65,15 +65,12 @@ func authorizeFHControl(pid, tid, did int32, policy int64, row gin.H, now time.T
 	if row["connectorStatus"] != "connected" {
 		return fail("CONNECTOR_UNAVAILABLE")
 	}
-	if row["featureEnabled"] != true || row["capabilityFieldVerified"] != true {
+	if row["featureEnabled"] != true {
 		return fail("NOT_ENABLED")
 	}
 	captured, e := time.Parse(time.RFC3339Nano, fhString(row["stateCapturedAt"]))
 	if e != nil || row["deviceOnline"] != true || now.Sub(captured) > 30*time.Second || captured.After(now.Add(time.Second)) {
 		return fail("DEVICE_STALE")
-	}
-	if row["currentSafetyPolicyVersionId"] != strconv.FormatInt(policy, 10) {
-		return fail("SAFETY_POLICY_STALE")
 	}
 	if row["approvalProjectId"] != float64(pid) || row["approvalTeamId"] != float64(tid) || row["approvalResourceType"] != "device" || row["approvalResourceId"] != strconv.FormatInt(int64(did), 10) || row["approvalAction"] != "flighthub.control.acquire" || row["approvalStatus"] != "approved" || row["approvalUnexpired"] != true {
 		return fail("APPROVAL_REQUIRED")
@@ -99,7 +96,7 @@ func fhControlFailure(c *gin.Context, err error) {
 			status = 429
 		}
 	} else {
-		allowed := map[string]bool{"FLIGHTHUB_CONTROL_SELECTION_INVALID": true, "FLIGHTHUB_CONTROL_SCOPE_MISMATCH": true, "FLIGHTHUB_CONTROL_CONNECTOR_UNAVAILABLE": true, "FLIGHTHUB_CONTROL_NOT_ENABLED": true, "FLIGHTHUB_CONTROL_DEVICE_STALE": true, "FLIGHTHUB_CONTROL_SAFETY_POLICY_STALE": true, "FLIGHTHUB_CONTROL_APPROVAL_REQUIRED": true, "FLIGHTHUB_CONTROL_SESSION_CONFLICT": true, "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST": true}
+		allowed := map[string]bool{"FLIGHTHUB_CONTROL_SELECTION_INVALID": true, "FLIGHTHUB_CONTROL_SCOPE_MISMATCH": true, "FLIGHTHUB_CONTROL_CONNECTOR_UNAVAILABLE": true, "FLIGHTHUB_CONTROL_NOT_ENABLED": true, "FLIGHTHUB_CONTROL_DEVICE_STALE": true, "FLIGHTHUB_CONTROL_APPROVAL_REQUIRED": true, "FLIGHTHUB_CONTROL_SESSION_CONFLICT": true, "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST": true}
 		if !allowed[code] {
 			code = "FLIGHTHUB_CONTROL_SESSION_FAILED"
 		}
@@ -184,10 +181,9 @@ func (s *Server) fhControlSession(c *gin.Context) {
 		return
 	}
 	cid, ok := fhSafePositive(body["connectorInstanceId"])
-	policy, pok := fhSafePositive(body["safetyPolicyVersionId"])
 	approval, e := uuid.Parse(fhString(body["approvalRequestId"]))
 	key, kok := body["idempotencyKey"].(string)
-	if !ok || !pok || e != nil || approval.Version() < 1 || approval.Version() > 5 || approval.Variant() != uuid.RFC4122 || !kok || utf16Length(key) < 8 || utf16Length(key) > 200 {
+	if !ok || e != nil || approval.Version() < 1 || approval.Version() > 5 || approval.Variant() != uuid.RFC4122 || !kok || utf16Length(key) < 8 || utf16Length(key) > 200 {
 		invalid()
 		return
 	}
@@ -203,7 +199,7 @@ func (s *Server) fhControlSession(c *gin.Context) {
 	}
 	controlsJSON, _ := json.Marshal(controls)
 	id := uuid.New()
-	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "flighthub.control_session.acquire", ResourceType: "device", ResourceID: strconv.FormatInt(did64, 10), Input: gin.H{"connectorInstanceId": cid, "controls": controls, "approvalRequestId": approval.String(), "safetyPolicyVersionId": policy}, PolicyResult: map[string]any{"capability": "device.control", "featureFlag": "device.control", "evidence": "field-write", "leaseSeconds": 15, "maximumSeconds": 300}}
+	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "flighthub.control_session.acquire", ResourceType: "device", ResourceID: strconv.FormatInt(did64, 10), Input: gin.H{"connectorInstanceId": cid, "controls": controls, "approvalRequestId": approval.String()}, PolicyResult: map[string]any{"capability": "device.control", "featureFlag": "device.control", "fieldAcceptanceRequired": false, "leaseSeconds": 15, "maximumSeconds": 300}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, a.TeamID, "mission:operate", false), func(w *database.WriteTx) (gin.H, error) {
 		q := w.Queries
 		locked, e := q.FHControlLockDevice(ctx, sqlcgen.FHControlLockDeviceParams{P1: pid, P2: did})
@@ -222,7 +218,7 @@ func (s *Server) fhControlSession(c *gin.Context) {
 			if e != nil {
 				return nil, e
 			}
-			if row["holderUserId"] != float64(uid) || row["connectorInstanceId"] != strconv.FormatInt(cid, 10) || row["approvalRequestId"] != approval.String() || row["safetyPolicyVersionId"] != strconv.FormatInt(policy, 10) || row["controlsMatch"] != true {
+			if row["holderUserId"] != float64(uid) || row["connectorInstanceId"] != strconv.FormatInt(cid, 10) || row["approvalRequestId"] != approval.String() || row["controlsMatch"] != true {
 				return nil, errors.New("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST")
 			}
 			return gin.H{"id": row["id"], "status": row["status"], "reused": true}, nil
@@ -233,10 +229,10 @@ func (s *Server) fhControlSession(c *gin.Context) {
 			return nil, e
 		}
 		now := time.Now().UTC()
-		if e = authorizeFHControl(pid, a.TeamID, did, policy, row, now); e != nil {
+		if e = authorizeFHControl(pid, a.TeamID, did, row, now); e != nil {
 			return nil, e
 		}
-		r, e := q.FHControlInsert(ctx, sqlcgen.FHControlInsertParams{P1: id, P2: pid, P3: a.TeamID, P4: cid, P5: did, P6: uid, P7: approval, P8: policy, P9: key, P10: controlsJSON, P11: now, P12: now.Add(15 * time.Second), P13: now.Add(5 * time.Minute)})
+		r, e := q.FHControlInsert(ctx, sqlcgen.FHControlInsertParams{P1: id, P2: pid, P3: a.TeamID, P4: cid, P5: did, P6: uid, P7: approval, P9: key, P10: controlsJSON, P11: now, P12: now.Add(15 * time.Second), P13: now.Add(5 * time.Minute)})
 		if e != nil {
 			return nil, e
 		}

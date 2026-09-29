@@ -334,18 +334,28 @@ func (q *Queries) DiscoveryMatch(ctx context.Context, arg DiscoveryMatchParams) 
 const discoveryRelationship = `-- name: DiscoveryRelationship :exec
 insert into device_relationships(
       project_id,team_id,from_device_id,to_device_id,relation_type,source_type,metadata_json
-    ) select $1,$2,parent.device_id,$3,'contains','discovery',$4
-      from device_external_identities parent where parent.project_id=$1 and parent.adapter_id=$5
-        and parent.external_device_id=$6 and parent.device_id is not null
+    ) select $1,$2,pair.parent_id,pair.child_id,'contains','discovery',$3
+      from (
+        select parent.device_id as parent_id,$4::int as child_id
+        from device_external_identities parent where parent.project_id=$1 and parent.team_id=$2
+          and parent.adapter_id=$5 and parent.external_device_id=$6 and parent.device_id is not null
+        union
+        select parent.device_id,child.device_id
+        from device_external_identities parent join device_external_identities child
+          on child.project_id=parent.project_id and child.team_id=parent.team_id and child.adapter_id=parent.adapter_id
+          and child.identity_json->>'parentExternalId'=parent.external_device_id
+        where parent.project_id=$1 and parent.team_id=$2 and parent.adapter_id=$5
+          and parent.device_id=$4 and child.device_id is not null
+      ) pair where pair.parent_id<>pair.child_id
         and not exists(select 1 from device_relationships relation where relation.project_id=$1
-          and relation.from_device_id=parent.device_id and relation.to_device_id=$3 and relation.valid_until is null)
+          and relation.from_device_id=pair.parent_id and relation.to_device_id=pair.child_id and relation.valid_until is null)
 `
 
 type DiscoveryRelationshipParams struct {
 	P1 int32           `json:"p1"`
 	P2 int32           `json:"p2"`
-	P3 int32           `json:"p3"`
 	P6 json.RawMessage `json:"p6"`
+	P3 int32           `json:"p3"`
 	P4 int64           `json:"p4"`
 	P5 string          `json:"p5"`
 }
@@ -354,8 +364,8 @@ func (q *Queries) DiscoveryRelationship(ctx context.Context, arg DiscoveryRelati
 	_, err := q.db.ExecContext(ctx, discoveryRelationship,
 		arg.P1,
 		arg.P2,
-		arg.P3,
 		arg.P6,
+		arg.P3,
 		arg.P4,
 		arg.P5,
 	)

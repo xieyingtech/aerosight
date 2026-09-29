@@ -58,7 +58,7 @@ func Load() (Config, error) {
 	config.FlightHubMaxResponseBytes = int64(responseBytes)
 	config.FlightHubAllowedLinkHosts, problems = hostnameList(
 		"DJI_FLIGHTHUB_ALLOWED_LINK_HOSTS",
-		"es-flight-api-cn.djigate.com,test-file-storage.djicdn.com,files-cdn.dbeta.me",
+		"es-flight-api-cn.djigate.com,file-storage.djicdn.com,test-file-storage.djicdn.com,files-cdn.dbeta.me",
 		problems,
 	)
 

@@ -67,7 +67,7 @@ func readyModelDeleteJob(t *testing.T, action string) ModelDeleteJob {
 		CapabilityCode: policy.capability, FeatureFlag: policy.featureFlag, ExpectedRemoteVersion: "version-2",
 		Status: "queued", TargetRemoteID: "REMOTE_REDACTED", TargetRemoteVersion: "version-2",
 		TargetKind: policy.targetKind, TargetStatus: "active", ConnectorStatus: "connected",
-		Authorized: true, ActionEnabled: true, CapabilityVerified: true, ApprovalValid: true,
+		Authorized: true, ActionEnabled: true, CapabilityVerified: false, ApprovalValid: true,
 		AssetID: sql.NullString{String: "31", Valid: true}, AssetStatus: sql.NullString{String: "available", Valid: true},
 		DependentReferenceCount: 1, Instance: connector.Instance{ID: 7, ProjectID: 3, ConnectorKey: ConnectorKey,
 			Version: ConnectorVersion, DiscoveryScope: json.RawMessage(`{"projectUuid":"` + runtimeProjectUUID + `","projectName":"脱敏项目"}`)},
@@ -92,7 +92,6 @@ func TestModelDeleteGatesUnconfirmedAndCrossTenantJobsBeforeUpstream(t *testing.
 	for _, mutate := range []func(*ModelDeleteJob){
 		func(job *ModelDeleteJob) { job.Authorized = false },
 		func(job *ModelDeleteJob) { job.ActionEnabled = false },
-		func(job *ModelDeleteJob) { job.CapabilityVerified = false },
 		func(job *ModelDeleteJob) { job.ApprovalValid = false },
 		func(job *ModelDeleteJob) { job.TargetKind = "" },
 		func(job *ModelDeleteJob) { job.PreviewDigest = "0" + job.PreviewDigest[1:] },

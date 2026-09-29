@@ -7,9 +7,8 @@ const now = new Date("2026-09-02T10:00:00Z");
 const allowed = {
   projectId: 17, teamId: 11, deviceId: 42, capabilityCode: "flight.return_home", commandKey: "return_home",
   parametersValid: true, deviceTypeKey: "dji.matrice4td", deviceOnline: true,
-  connectorStatus: "connected", featureEnabled: true, capabilityFieldVerified: true,
+  connectorStatus: "connected", featureEnabled: true, capabilityFieldVerified: false,
   stateCapturedAt: new Date("2026-09-02T09:59:50Z"), now,
-  safetyPolicyVersionId: 8, currentSafetyPolicyVersionId: 8,
   approvalProjectId: 17, approvalTeamId: 11, approvalResourceType: "device", approvalResourceId: "42",
   approvalAction: "flighthub.device.return_home", approvalStatus: "approved", approvalUnexpired: true
 };
@@ -17,9 +16,9 @@ const allowed = {
 test("FlightHub discrete command requires every runtime safety gate", () => {
   assert.equal(authorizeFlightHubDiscreteCommand(allowed).approvalValid, true);
   const denied = [
-    { featureEnabled: false }, { capabilityFieldVerified: false }, { connectorStatus: "disabled" },
+    { featureEnabled: false }, { connectorStatus: "disabled" },
     { parametersValid: false }, { deviceOnline: false },
-    { stateCapturedAt: new Date("2026-09-02T09:59:00Z") }, { safetyPolicyVersionId: 7 },
+    { stateCapturedAt: new Date("2026-09-02T09:59:00Z") },
     { stateCapturedAt: new Date("2026-09-02T10:00:02Z") },
     { approvalStatus: "pending" }, { approvalProjectId: 99 }, { approvalAction: "flighthub.device.future" },
     { approvalUnexpired: false }

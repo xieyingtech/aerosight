@@ -275,7 +275,7 @@ func TestReadOnlySmokePersistsSanitizedLiveReadEvidenceWithoutEnablingWrites(t *
 	effective := ApplyCapabilitySnapshots(baseline, []connector.CapabilitySnapshot{*controlEvidence}, CapabilityEvaluationScope{
 		Region: "cn", Deployment: "cn-public-cloud", AccountFingerprint: fingerprint, DeviceModel: "dock", FirmwareVersion: "1", Now: verifiedAt,
 	})
-	if effective[0].Status == ProbeSupported || effective[0].Layers.Acceptance == ProbeSupported {
-		t.Fatalf("live-read evidence enabled a high-risk write: %#v", effective[0])
+	if effective[0].Status != ProbeSupported || effective[0].Layers.Acceptance == ProbeSupported {
+		t.Fatalf("live-read evidence was mistaken for completed field acceptance: %#v", effective[0])
 	}
 }

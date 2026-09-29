@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+func TestAircraftVideoChannelsUseActualCameraIndices(t *testing.T) {
+	snapshot := DeviceStateSnapshot{Model: DeviceModel{Key: "0-91-1", Class: "drone"}, State: map[string]json.RawMessage{"81-0-0": json.RawMessage(`{"camera_mode":"photo"}`), "80-0-0": json.RawMessage(`null`)}, CameraList: json.RawMessage(`[{"camera_index":"81-0-0"},{"camera_index":"81-0-0"},{"camera_index":"invalid"}]`)}
+	mapped := MapDeviceState(snapshot)
+	if len(mapped.StreamChannels) != 1 || mapped.StreamChannels[0].CameraIndex != "81-0-0" || mapped.StreamChannels[0].Availability != "available" {
+		t.Fatalf("actual camera channel lost: %+v", mapped.StreamChannels)
+	}
+	snapshot.CameraList = json.RawMessage(`null`)
+	if channels := MapDeviceState(snapshot).StreamChannels; len(channels) != 1 || channels[0].Availability != "degraded" {
+		t.Fatalf("cached OSD camera without live directory must not be available: %+v", channels)
+	}
+	snapshot.State = map[string]json.RawMessage{}
+	snapshot.CameraList = json.RawMessage(`[]`)
+	if channels := MapDeviceState(snapshot).StreamChannels; len(channels) != 0 {
+		t.Fatalf("model invented camera indices: %+v", channels)
+	}
+}
+
 func mappedFixtureState(t *testing.T, name, serial string) MappedDeviceState {
 	t.Helper()
 	item := loadDeviceFixture(t)[name]

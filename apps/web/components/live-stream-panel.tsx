@@ -52,26 +52,28 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
   </div>;
 }
 
-export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStreamId, onStreamChanged }: {
+export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStreamId, onStreamChanged, compact = false }: {
   snapshot: ProjectSituationSnapshot;
   selection: SituationSelection | null;
   mode: "live" | "history";
   cursor: string | null;
   selectedStreamId?: number | null;
   onStreamChanged?: () => void | Promise<void>;
+  compact?: boolean;
 }) {
   const baseModel = useMemo(() => createLiveStreamPanelModel({ snapshot, selection, mode, cursor }), [snapshot, selection, mode, cursor]);
   const model = mode === "live" && selectedStreamId
     ? { ...baseModel, stream: snapshot.liveStreams.find((stream) => Number(stream.id) === selectedStreamId) ?? null }
     : baseModel;
   const [playback, setPlayback] = useState<PlaybackState>({ status: "idle" });
+  const [playbackRevision, setPlaybackRevision] = useState(0);
   const [stopState, setStopState] = useState<"idle" | "stopping" | "error">("idle");
   const streamId = model.mode === "live" ? Number(model.stream?.id) || null : null;
   const selectedDeviceId = selection?.lane.includes("device") ? Number(selection.entityId)
     : Number(model.stream?.deviceId) || null;
   const channels = useMemo(() => (snapshot.realtimeChannels ?? [])
     .filter((channel) => Number(channel.deviceId) === selectedDeviceId), [selectedDeviceId, snapshot.realtimeChannels]);
-  const dataChannels = channels.filter((channel) => channel.dataType !== "video" && channel.dataType !== "audio");
+  const dataChannels = compact ? [] : channels.filter((channel) => channel.dataType !== "video" && channel.dataType !== "audio");
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const activeChannel = dataChannels.find((channel) => String(channel.stableChannelId) === activeChannelId)
     ?? dataChannels[0] ?? null;
@@ -133,7 +135,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       controller.abort();
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [model.stream?.status, snapshot.project.id, streamId]);
+  }, [model.stream?.status, snapshot.project.id, streamId, playbackRevision]);
 
   if (model.mode === "history") {
     return <div className="space-y-3 p-4">
@@ -178,15 +180,15 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   };
   const lastActive = model.stream.lastActiveAt ? Date.parse(String(model.stream.lastActiveAt)) : NaN;
   const latencySeconds = Number.isFinite(lastActive) ? Math.max(0, Math.round((Date.now() - lastActive) / 1000)) : null;
-  return <div className="space-y-3 p-4">
-    <div className="flex items-center justify-between text-sm font-medium">
+  return <div className={compact ? "space-y-2" : "space-y-3 p-4"}>
+    {!compact && <div className="flex items-center justify-between text-sm font-medium">
       <span className="flex items-center gap-2"><RadioTowerIcon className="size-4" />设备 #{String(model.stream.deviceId)}</span>
       <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
-    </div>
-    <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border bg-slate-950 text-slate-200">
-      {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? "正在停止直播…" : "正在等待设备推流…"}</div>
+    </div>}
+    <div className={`flex aspect-video items-center justify-center overflow-hidden bg-slate-950 text-slate-200 ${compact ? "" : "rounded-lg border"}`}>
+      {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? sourceType === "dji_flighthub" ? "已停止观看，等待设备停止推流…" : "正在停止直播…" : "正在等待设备推流…"}</div>
         : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
-        : playback.status === "error" ? <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />直播连接失败或 locator 已过期</div>
+        : playback.status === "error" ? <div className="space-y-3 text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" /><p>直播连接失败</p><button className="rounded-md border px-3 py-2" type="button" onClick={() => setPlaybackRevision(value => value + 1)}>重新连接</button></div>
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "webrtc"
             ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
@@ -197,15 +199,15 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
               ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
               : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}
     </div>
-    <p className="text-xs text-muted-foreground">{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`} · {sourceType}</p>
+    {!compact && <p className="text-xs text-muted-foreground">{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`} · {sourceType}</p>}
     {playback.status === "ready" && playback.index + 1 < playback.candidates.length && <button className="rounded-md border px-2.5 py-1 text-xs" onClick={() => setPlayback({ ...playback, index: playback.index + 1 })} type="button">切换备用协议</button>}
-    <div className="flex items-center gap-2">
-      <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs disabled:opacity-50" disabled={stopState === "stopping"} onClick={stopStream} type="button">
+    <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2" : ""}`}>
+      <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs disabled:opacity-50" disabled={stopState === "stopping" || status === "stopping"} onClick={stopStream} type="button">
         {stopState === "stopping" ? <RefreshCwIcon className="size-3.5 animate-spin" /> : <SquareIcon className="size-3.5" />}
         {stopState === "stopping" ? "正在停止" : "停止直播"}
       </button>
       {stopState === "error" && <span className="text-xs text-destructive">停止失败，请重试</span>}
     </div>
-    {realtimeData}
+    {!compact && realtimeData}
   </div>;
 }

@@ -60,11 +60,10 @@ SELECT to_jsonb(r) FROM (
  run.current_step_position AS "currentStepPosition",run.preflight_snapshot_json AS preflight,
  run.created_at AS "createdAt",run.started_at AS "startedAt",run.finished_at AS "finishedAt",
  task.id AS "taskId",version.id AS "taskVersionId",task.name AS "taskName",version.version AS "taskVersion",device.id AS "deviceId",device.name AS "deviceName",
- device.status AS "deviceStatus",policy.version AS "safetyPolicyVersion",approval.status AS "approvalStatus"
+ device.status AS "deviceStatus",approval.status AS "approvalStatus"
  FROM task_runs run JOIN tasks task ON task.id=run.task_id AND task.project_id=run.project_id
  LEFT JOIN task_versions version ON version.id=run.task_version_id AND version.project_id=run.project_id
  LEFT JOIN devices device ON device.id=run.selected_device_id AND device.project_id=run.project_id
- LEFT JOIN safety_policy_versions policy ON policy.id=run.safety_policy_version_id AND policy.project_id=run.project_id
  LEFT JOIN approval_requests approval ON approval.id=run.approval_request_id AND approval.project_id=run.project_id
  WHERE run.project_id=$1 AND run.id=$2
 ) r

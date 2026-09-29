@@ -4,7 +4,6 @@ import test from "node:test";
 import { decideApproval } from "./approval-core.ts";
 import { assertStreamCanStart, transitionLiveStream } from "./live-stream-core.ts";
 import { planIssueMutation } from "./issue-collaboration-core.ts";
-import { evaluateMissionPreflight, type SafetyPolicy } from "./mission-preflight.ts";
 import { createProjectMapModel } from "./project-map-model.ts";
 import type { ProjectReplay } from "./project-replay-core.ts";
 import { applyReplayToSnapshot } from "./replay-model.ts";
@@ -45,18 +44,6 @@ test("simulator vertical acceptance covers manual and scheduled task through iss
   assert.equal(manualTrigger.triggerKey,"manual:manual-1");
   assert.equal(scheduledTrigger.triggerKey,"schedule:schedule-1");
 
-  const policy: SafetyPolicy = {
-    policyVersionId: "sim-policy-v1",
-    projectBoundary: [[120, 30], [121, 30], [121, 31], [120, 31], [120, 30]],
-    restrictedAreas: [], maxAltitudeMeters: 120, maxSpeedMetersPerSecond: 15, minimumBatteryPercent: 30,
-    requiredCompliance: ["flightApproval", "remoteIdentification"]
-  };
-  const preflight = evaluateMissionPreflight(policy, {
-    route: [[120.15, 30.27, 80], [120.16, 30.28, 85]], plannedSpeedMetersPerSecond: 8,
-    batteryPercent: 82, plannedStartAt: new Date(startedAt),
-    compliance: { flightApproval: { reference: "SIM-APPROVAL" }, remoteIdentification: { reference: "SIM-RID" } }
-  });
-  assert.equal(preflight.allowed, true);
   const approval = decideApproval({
     id: "approval-1", requestedByUserId: 9, status: "pending", requiredApprovals: 1,
     requireSeparation: true, expiresAt: new Date("2026-08-27T09:00:00Z")

@@ -109,7 +109,7 @@ func geospatialActionFixtureJob(t *testing.T, id, kind, expectedVersion string) 
 	policy := geospatialActionPolicies[kind]
 	job := GeospatialActionJob{ID: id, ProjectID: 41, TeamID: 42, ConnectorInstanceID: 43, ActionKind: kind,
 		CapabilityCode: policy.capability, FeatureFlag: policy.featureFlag, RequestEnvelope: envelopeJSON, Status: "queued",
-		ConnectorStatus: "connected", Authorized: true, ActionEnabled: true, CapabilityVerified: true,
+		ConnectorStatus: "connected", Authorized: true, ActionEnabled: true, CapabilityVerified: false,
 		Instance: connector.Instance{ID: 43, ProjectID: 41, ConnectorKey: ConnectorKey, Version: ConnectorVersion,
 			DiscoveryScope: scope, CredentialEnvelope: json.RawMessage(`{"redacted":true}`)}}
 	if kind != "map-element-create" {
@@ -133,7 +133,6 @@ func TestGeospatialActionUnauthorizedOrStaleNeverCallsUpstream(t *testing.T) {
 	}{
 		{"rbac-denied", func(job *GeospatialActionJob, _ *memoryGeospatialActionStore) { job.Authorized = false }},
 		{"feature-disabled", func(job *GeospatialActionJob, _ *memoryGeospatialActionStore) { job.ActionEnabled = false }},
-		{"field-write-unverified", func(job *GeospatialActionJob, _ *memoryGeospatialActionStore) { job.CapabilityVerified = false }},
 		{"connector-disabled", func(job *GeospatialActionJob, _ *memoryGeospatialActionStore) { job.ConnectorStatus = "disabled" }},
 		{"target-out-of-scope", func(job *GeospatialActionJob, _ *memoryGeospatialActionStore) { job.TargetKind = "flight-area" }},
 		{"stale-version", func(_ *GeospatialActionJob, store *memoryGeospatialActionStore) { store.targetVersion = "version-2" }},

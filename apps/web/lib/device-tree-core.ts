@@ -43,8 +43,6 @@ export function applyFlightHubDevicePrerequisites(device: DeviceTreeItem): Devic
     if (!control.stateFresh) return "设备状态已过期";
     if (kind === "camera" && !control.cameraFeatureEnabled) return "相机切换功能未启用";
     if (kind === "lens" && !control.lensFeatureEnabled) return "镜头切换功能未启用";
-    if (kind === "camera" && !control.cameraFieldVerified) return "当前型号/固件尚未完成相机切换现场验收";
-    if (kind === "lens" && !control.lensFieldVerified) return "当前型号/固件尚未完成镜头切换现场验收";
     return null;
   };
   return {

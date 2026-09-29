@@ -19,7 +19,7 @@ select coalesce(flags.flighthub_action_flags_json @> jsonb_build_object(sqlc.arg
             and capability.status='supported' and capability.evidence_level='field-write'
             and capability.device_model=device.device_model and capability.firmware_version=device.firmware_version
             and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
-          latest.captured_at as "stateCapturedAt",project.current_safety_policy_version_id::text as "currentSafetyPolicyVersionId",
+          latest.captured_at as "stateCapturedAt",
           approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",
           approval.resource_type as "approvalResourceType",approval.resource_id as "approvalResourceId",
           approval.action as "approvalAction",approval.status as "approvalStatus",

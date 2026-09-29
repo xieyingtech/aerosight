@@ -16,6 +16,29 @@ export function findProjectDevice(snapshot: ProjectSituationSnapshot, deviceId: 
   return snapshot.devices.find((device) => Number(device.id) === deviceId) ?? null;
 }
 
+export function deviceHasLiveSignal(snapshot: ProjectSituationSnapshot, deviceId: number, now = Date.now()) {
+  if (findProjectDevice(snapshot, deviceId)?.status !== "online") return false;
+  return (snapshot.realtimeChannels ?? []).some(channel => {
+    if (Number(channel.deviceId) !== deviceId) return false;
+    const captured = Date.parse(String(channel.latestCapturedAt ?? ""));
+    const payload = channel.latestPayload as { live?: { available?: boolean; active?: boolean } } | null;
+    return Number.isFinite(captured) && captured <= now + 1000 && now - captured <= 30_000
+      && payload?.live?.available === true && payload.live.active === true;
+  });
+}
+
+export function relatedLiveDevices(snapshot: ProjectSituationSnapshot, deviceId: number | null) {
+  const selected = findProjectDevice(snapshot, deviceId);
+  if (!selected) return [];
+  const ids = new Set([Number(selected.id)]);
+  for (const relation of snapshot.deviceRelations ?? []) {
+    if (!["contains", "mounted-on"].includes(relation.relationType)) continue;
+    if (relation.fromDeviceId === deviceId) ids.add(relation.toDeviceId);
+    if (relation.toDeviceId === deviceId) ids.add(relation.fromDeviceId);
+  }
+  return snapshot.devices.filter(device => ids.has(Number(device.id)) && realtimeDeviceModules(device).live);
+}
+
 export function realtimeDeviceModules(device: ProjectSnapshotDevice | null) {
   const codes = new Set((device?.capabilities ?? []).map((capability) => capability.code));
   return {

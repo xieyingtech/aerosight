@@ -6,10 +6,10 @@ import { CrosshairIcon, InfoIcon, MapPinOffIcon, RefreshCwIcon, WrenchIcon } fro
 import { projectPageHref, scopedPageQuery } from "@/lib/page-routes";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ActiveStreamSwitcher } from "@/components/active-stream-switcher";
+
 import { DeviceActionPanel } from "@/components/device-action-panel";
-import { LiveChannelControls } from "@/components/live-channel-controls";
-import { LiveStreamPanel } from "@/components/live-stream-panel";
+import { FlightHubDeviceOperations } from "@/components/flighthub-device-operations";
+import { LiveDeviceWindow } from "@/components/live-device-window";
 import { OperationDiagnostics } from "@/components/operation-diagnostics";
 import { ProjectMap } from "@/components/project-map";
 import { ProjectTimeline } from "@/components/project-timeline";
@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { InputSelect } from "@/components/ui/input-select";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import {
-  activeProjectStreams, findProjectDevice, liveStreamPollDecision, realtimeDeviceModules, resolveWorkbenchSelection,
+  activeProjectStreams, findProjectDevice, liveStreamPollDecision, realtimeDeviceModules, relatedLiveDevices, resolveWorkbenchSelection,
   type RealtimeWorkbenchSelection
 } from "@/lib/realtime-workbench-core";
 import type { SituationSelection } from "@/lib/situation-state";
@@ -39,10 +39,11 @@ function scopedTimelineSnapshot(snapshot: ProjectSituationSnapshot, deviceId: nu
   };
 }
 
-export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, initialStreamId }: {
+export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, initialStreamId, autoLive = false }: {
   initialSnapshot: ProjectSituationSnapshot;
   initialDeviceId?: string | null;
   initialStreamId?: string | null;
+  autoLive?: boolean;
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [selection, setSelection] = useState<RealtimeWorkbenchSelection>(() => resolveWorkbenchSelection(initialSnapshot, {
@@ -51,6 +52,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const [refreshing, setRefreshing] = useState(false);
   const [transitionTimeout, setTransitionTimeout] = useState(false);
   const pollCount = useRef(0);
+  const autoLiveDeviceId = useRef(selection.deviceId);
 
   const syncSelection = useCallback((next: RealtimeWorkbenchSelection, replace = true) => {
     setSelection(next);
@@ -85,19 +87,18 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   useEffect(() => {
     const device = findProjectDevice(snapshot, selection.deviceId);
     const pollingSnapshot = selection.deviceId && realtimeDeviceModules(device).live
-      ? scopedTimelineSnapshot(snapshot, selection.deviceId) : { ...snapshot, liveStreams: [] };
+      ? snapshot : { ...snapshot, liveStreams: [] };
     const decision = liveStreamPollDecision(pollingSnapshot, pollCount.current);
-    if (decision === "stable") { pollCount.current = 0; setTransitionTimeout(false); return; }
-    if (decision === "timeout") { setTransitionTimeout(true); return; }
+    if (!selection.deviceId) return;
+    if (decision === "stable") { pollCount.current = 0; setTransitionTimeout(false); }
+    if (decision === "timeout") setTransitionTimeout(true);
     const timer = window.setInterval(async () => {
       pollCount.current += 1;
       if (liveStreamPollDecision(pollingSnapshot, pollCount.current) === "timeout") {
-        window.clearInterval(timer);
         setTransitionTimeout(true);
-        return;
       }
       await refresh();
-    }, 2000);
+    }, decision === "poll" ? 2000 : 5000);
     return () => window.clearInterval(timer);
   }, [refresh, snapshot, selection.deviceId]);
 
@@ -123,8 +124,11 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     keywords: [String(device.typeKey ?? ""), String(device.driverKey ?? ""), String(device.category ?? "")]
   }));
   const deviceSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
-  const hasActiveStreams = deviceSnapshot ? activeProjectStreams(deviceSnapshot).length > 0 : false;
-  const actions = (selectedDevice?.capabilities ?? []).flatMap((capability) => capability.actions).filter((action) => action.kind !== "live");
+  const liveDevices = relatedLiveDevices(snapshot, selection.deviceId);
+  const liveDeviceIds = new Set(liveDevices.map(device => Number(device.id)));
+  const hasActiveStreams = activeProjectStreams(snapshot).some(stream => liveDeviceIds.has(Number(stream.deviceId)));
+  const isFlightHub = selectedDevice?.connectorKey === "dji.flighthub2";
+  const actions = (selectedDevice?.capabilities ?? []).flatMap((capability) => capability.actions).filter((action) => action.kind !== "live" && (!isFlightHub || action.kind === "workflow"));
   const diagnostics = selectedDevice && selection.deviceId
     ? (snapshot.diagnostics ?? []).filter((item) => item.deviceId == null || Number(item.deviceId) === selection.deviceId) : [];
 
@@ -132,48 +136,51 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     const next = resolveWorkbenchSelection(snapshot, { deviceId });
     syncSelection(next);
   };
-  const selectStream = (streamId: number, deviceId: number) => syncSelection({ deviceId, streamId });
-  const activeStreamKeys = snapshot.liveStreams
-    .filter((stream) => Number(stream.deviceId) === selection.deviceId)
-    .map((stream) => String(stream.streamKey));
-  const handleStreamStarted = (session: Record<string, unknown> & { id: number; status: string }) => {
-    const optimisticSession = { ...session, deviceId: Number(selectedDevice?.id), status: session.status || "requested" };
+
+  const handleStreamStarted = (session: Record<string, unknown> & { id: number; status: string }, deviceId = Number(selectedDevice?.id)) => {
+    const optimisticSession = { ...session, deviceId, status: session.status || "requested" };
     setSnapshot((current) => ({
       ...current,
       liveStreams: [optimisticSession, ...current.liveStreams.filter((stream) => Number(stream.id) !== session.id)]
     }));
-    syncSelection({ deviceId: Number(selectedDevice?.id), streamId: session.id });
-    window.setTimeout(() => { void refresh(session.id); }, 500);
+
+    window.setTimeout(() => { void refresh(); }, 500);
   };
 
-  return <div className="grid min-h-[600px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
-    <ProjectMap className="h-[65svh] min-h-[520px] xl:h-full xl:min-h-0" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
-    <aside className="min-h-0 space-y-3 xl:overflow-y-auto xl:pr-1">
+  return <div className="flex min-h-0 flex-1 flex-col gap-3">
       <section className="rounded-xl border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索并选择设备</p></div>
           <button aria-label="刷新状态" className="inline-flex size-8 items-center justify-center rounded-md border disabled:opacity-50" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} /></button>
         </div>
-        <div className="mt-3"><InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按名称、类型或驱动搜索" value={selection.deviceId ? String(selection.deviceId) : null} /></div>
+        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+          <InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按名称、类型或驱动搜索" value={selection.deviceId ? String(selection.deviceId) : null} />
+          {selectedDevice && <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-sm"><span>{String(selectedDevice.typeName ?? selectedDevice.category ?? "设备")}</span><Badge variant="outline">{String(selectedDevice.status ?? "unknown")}</Badge><span className="text-xs text-muted-foreground">{String(selectedDevice.driverKey ?? "未绑定驱动")}@{String(selectedDevice.driverVersion ?? "-")}</span></div>
+            {!hasPosition(selectedDevice) && <p className="flex items-center gap-2 text-xs text-amber-800"><MapPinOffIcon className="size-4" />该设备暂无位置，操作与实时数据仍可使用。</p>}
+            <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">设备能力</summary><div className="mt-2 flex flex-wrap gap-1.5">{(selectedDevice.capabilities ?? []).map(capability => <Badge key={capability.code} variant="secondary">{capability.code}</Badge>)}</div></details>
+          </div>}
+        </div>
+        {selectedDevice && <div className="mt-4">
+          {(actions.length > 0 || isFlightHub) && <section className="space-y-3 border-t pt-4">
+            <h2 className="flex items-center gap-2 font-medium"><WrenchIcon className="size-4" />设备操作</h2>
+            {!isFlightHub && actions.length > 0 && <DeviceActionPanel deviceName={selectedDevice.name} actions={actions} deviceId={Number(selectedDevice.id)} onChanged={async () => { await refresh(); }} projectId={snapshot.project.id} />}
+            {isFlightHub && <FlightHubDeviceOperations compact workflowActions={actions} key={String(selectedDevice.id)} projectId={snapshot.project.id} deviceId={Number(selectedDevice.id)} deviceName={String(selectedDevice.name)} onChanged={async()=>{await refresh();}} />}
+          </section>}</div>}
       </section>
-        {selectedDevice ? <>
-          <section className="rounded-xl border bg-card p-4">
-            <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">{String(selectedDevice.typeName ?? selectedDevice.category ?? "设备")}</p><h2 className="text-lg font-medium">{String(selectedDevice.name)}</h2><p className="mt-1 text-xs text-muted-foreground">{String(selectedDevice.driverKey ?? "未绑定驱动")}@{String(selectedDevice.driverVersion ?? "-")}</p></div><Badge variant="outline">{String(selectedDevice.status ?? "unknown")}</Badge></div>
-            {!hasPosition(selectedDevice) && <p className="mt-3 flex items-center gap-2 rounded-md bg-amber-50 p-2 text-xs text-amber-800"><MapPinOffIcon className="size-4" />该设备暂无位置，操作与实时数据仍可使用。</p>}
-            <div className="mt-3 flex flex-wrap gap-1.5">{(selectedDevice.capabilities ?? []).map((capability) => <Badge key={capability.code} variant="secondary">{capability.code}</Badge>)}</div>
-          </section>
-          {actions.length ? <section className="rounded-xl border bg-card p-4"><h2 className="flex items-center gap-2 font-medium"><WrenchIcon className="size-4" />设备操作</h2><DeviceActionPanel deviceName={selectedDevice.name} actions={actions} deviceId={Number(selectedDevice.id)} onChanged={async () => { await refresh(); }} projectId={snapshot.project.id} /></section> : null}
-          {modules.live && deviceSnapshot && <>
-            <LiveChannelControls key={String(selectedDevice.id)} activeStreamKeys={activeStreamKeys} device={selectedDevice} onStarted={handleStreamStarted} projectId={snapshot.project.id} />
-            {hasActiveStreams && <>
-              <ActiveStreamSwitcher onSelect={selectStream} selectedStreamId={selection.streamId} snapshot={deviceSnapshot} />
-              <section className="overflow-hidden rounded-xl border bg-card"><LiveStreamPanel cursor={null} mode="live" onStreamChanged={async () => { await refresh(); }} selectedStreamId={selection.streamId} selection={mapSelection} snapshot={deviceSnapshot} /></section>
-            </>}
-          </>}
-        </> : <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
+    <div className="grid min-h-[600px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="flex min-h-0 flex-col gap-3 xl:overflow-y-auto">
+      {liveDevices.length > 0 && <section aria-label="设备直播" className="grid gap-3 md:grid-cols-2">
+        {liveDevices.map(device => <LiveDeviceWindow key={String(device.id)} snapshot={snapshot} device={device} selectedStreamId={selection.streamId} autoStart={autoLive && selection.deviceId === autoLiveDeviceId.current} onStarted={session => handleStreamStarted(session, Number(device.id))} onChanged={async () => { await refresh(); }} />)}
+      </section>}
+      <ProjectMap className="h-[50svh] min-h-[360px] flex-1 xl:min-h-[360px]" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
+    </div>
+    <aside className="min-h-0 space-y-3 xl:overflow-y-auto xl:pr-1">
+      {!selectedDevice && <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
       {modules.live && hasActiveStreams && transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
       {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
       {modules.timeline && deviceSnapshot && <ProjectTimeline snapshot={deviceSnapshot} />}
     </aside>
+    </div>
   </div>;
 }

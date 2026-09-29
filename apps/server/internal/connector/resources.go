@@ -83,6 +83,7 @@ type ManagedConnectorDevice struct {
 	ModelKey   string
 	Class      string
 	Online     bool
+	CameraList json.RawMessage
 }
 
 type CapabilitySnapshot struct {
@@ -382,7 +383,8 @@ func (repository *SQLResourceRepository) ListManagedDevices(
 		       identity.identity_json#>>'{attributes,serialNumber}',
 		       identity.identity_json#>>'{attributes,model,key}',
 		       identity.identity_json#>>'{attributes,model,class}',
-		       coalesce((identity.identity_json#>>'{attributes,online}')::boolean,false)
+		       coalesce((identity.identity_json#>>'{attributes,online}')::boolean,false),
+               coalesce(identity.identity_json#>'{attributes,cameraList}','[]'::jsonb)
 		  from device_external_identities identity
 		  join device_connector_bindings binding
 		    on binding.project_id=identity.project_id
@@ -400,7 +402,7 @@ func (repository *SQLResourceRepository) ListManagedDevices(
 	devices := make([]ManagedConnectorDevice, 0)
 	for rows.Next() {
 		var device ManagedConnectorDevice
-		if err := rows.Scan(&device.DeviceID, &device.TeamID, &device.ExternalID, &device.Serial, &device.ModelKey, &device.Class, &device.Online); err != nil {
+		if err := rows.Scan(&device.DeviceID, &device.TeamID, &device.ExternalID, &device.Serial, &device.ModelKey, &device.Class, &device.Online, &device.CameraList); err != nil {
 			return nil, err
 		}
 		if device.DeviceID <= 0 || device.TeamID <= 0 || strings.TrimSpace(device.ExternalID) == "" || strings.TrimSpace(device.Serial) == "" {

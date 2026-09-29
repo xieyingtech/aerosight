@@ -20,7 +20,6 @@ import (
 type deviceCommandInput struct {
 	DeviceID                                int32
 	ApprovalRequestID                       string
-	SafetyPolicyVersionID                   int64
 	Capability, Key, IdempotencyKey, Reason string
 	Parameters                              map[string]any
 	Confirmation                            *string
@@ -76,13 +75,6 @@ func parseDeviceCommand(c *gin.Context) (deviceCommandInput, error) {
 		}
 		out.ApprovalRequestID = id.String()
 	}
-	if v, ok := body["safetyPolicyVersionId"]; ok && v != nil {
-		var valid bool
-		out.SafetyPolicyVersionID, valid = fhSafePositive(v)
-		if !valid {
-			return out, bad
-		}
-	}
 	out.Deadline = math.Min(300, math.Max(5, out.Deadline))
 	return out, nil
 }
@@ -132,7 +124,7 @@ func (s *Server) submitDeviceCommand(c *gin.Context) {
 		return
 	}
 	confirmationPresent := input.Confirmation != nil && *input.Confirmation != ""
-	audit := database.AuditContext{ProjectID: pid, TeamID: access.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: input.IdempotencyKey, Action: "device_command.submit", ResourceType: "device", ResourceID: strconv.Itoa(int(input.DeviceID)), Input: gin.H{"deviceId": input.DeviceID, "capabilityCode": input.Capability, "commandKey": input.Key, "parameters": input.Parameters, "reason": input.Reason, "confirmationPresent": confirmationPresent, "approvalRequestId": input.ApprovalRequestID, "safetyPolicyVersionId": input.SafetyPolicyVersionID}, PolicyResult: map[string]any{"boundary": "capability-rbac+safety-interlock+second-confirmation+connector-worker-recheck"}}
+	audit := database.AuditContext{ProjectID: pid, TeamID: access.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: input.IdempotencyKey, Action: "device_command.submit", ResourceType: "device", ResourceID: strconv.Itoa(int(input.DeviceID)), Input: gin.H{"deviceId": input.DeviceID, "capabilityCode": input.Capability, "commandKey": input.Key, "parameters": input.Parameters, "reason": input.Reason, "confirmationPresent": confirmationPresent, "approvalRequestId": input.ApprovalRequestID}, PolicyResult: map[string]any{"boundary": "capability-rbac+safety-interlock+second-confirmation+connector-worker-recheck"}}
 	result, err := database.AuditedWrite(c.Request.Context(), s.db, audit, s.authorizeWrite(uid, pid, access.TeamID, "project:view", false), func(w *database.WriteTx) (gin.H, error) {
 		return s.writeDeviceCommand(c.Request.Context(), w, uid, pid, access.TeamID, input)
 	})
@@ -190,7 +182,8 @@ func (s *Server) writeDeviceCommand(ctx context.Context, w *database.WriteTx, ui
 	if input.Confirmation != nil {
 		confirmation = *input.Confirmation
 	}
-	safety, err := device.CheckCommandSafety(device.CommandSafetyInput{ProjectID: pid, DeviceProjectID: target.ProjectID, DeviceID: input.DeviceID, Capability: input.Capability, Risk: target.RiskLevel, Availability: target.Availability, Status: target.Status, ActiveTasks: conflicts, Confirmation: confirmation})
+	flightTaskControl := routes[0]["connectorKey"] == "dji.flighthub2" && (input.Key == "flighttask_pause" || input.Key == "flighttask_recovery")
+	safety, err := device.CheckCommandSafety(device.CommandSafetyInput{ProjectID: pid, DeviceProjectID: target.ProjectID, DeviceID: input.DeviceID, Capability: input.Capability, Risk: target.RiskLevel, Availability: target.Availability, Status: target.Status, ActiveTasks: conflicts, Confirmation: confirmation, FlightTaskControl: flightTaskControl})
 	if err != nil {
 		return nil, err
 	}

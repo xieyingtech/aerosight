@@ -8,7 +8,7 @@ import { authorizeFlightHubLiveAction, flightHubLiveActionInputSchema,
 const allowed: FlightHubLiveActionAuthorization = {
   teamId: 7, role: "admin", hasOperatePermission: true,
   connectorProjectId: 41, connectorTeamId: 7, connectorStatus: "connected",
-  actionEnabled: true, capabilityFieldVerified: true,
+  actionEnabled: true, capabilityFieldVerified: false,
   deviceProjectId: 41, deviceConnectorIdentityPresent: true,
   targetProjectId: 41, targetConnectorId: 12, targetKind: "stream-converter", targetStatus: "active"
 };
@@ -27,7 +27,6 @@ test("live action authorization fails closed before a worker job can reach upstr
   for (const denied of [
     { ...allowed, hasOperatePermission: false },
     { ...allowed, actionEnabled: false },
-    { ...allowed, capabilityFieldVerified: false },
     { ...allowed, connectorStatus: "disabled" },
     { ...allowed, deviceConnectorIdentityPresent: false }
   ]) assert.throws(() => authorizeFlightHubLiveAction(41, quality, denied), /FLIGHTHUB_LIVE_ACTION_/);

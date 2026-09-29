@@ -54,7 +54,6 @@ type loadedControlCommand struct {
 	FeatureEnabled, CapabilityVerified                   bool
 	Parameters                                           json.RawMessage
 	DeviceOnline, StateFresh, ApprovalValid              bool
-	SafetyPolicyCurrent                                  bool
 }
 
 func NewControlCommandDispatcher(client DiscreteControlClient, resolver TokenResolver, now func() time.Time) (*ControlCommandDispatcher, error) {
@@ -167,9 +166,9 @@ func controlCommandGate(command loadedControlCommand, policy controlCommandPolic
 		policy.featureFlag != command.RecordedFeatureFlag {
 		return "policy_mismatch"
 	}
-	if command.ConnectorStatus != "connected" || !command.FeatureEnabled || !command.CapabilityVerified ||
+	if command.ConnectorStatus != "connected" || !command.FeatureEnabled ||
 		!validControlCommandParameters(command.CommandKey, command.Parameters) || !command.DeviceOnline || !command.StateFresh ||
-		!command.ApprovalValid || !command.SafetyPolicyCurrent {
+		!command.ApprovalValid {
 		return "safety_gate_failed"
 	}
 	if len(policy.deviceTypes) > 0 && !policy.deviceTypes[command.DeviceTypeKey] {
@@ -249,8 +248,7 @@ func loadControlCommand(ctx context.Context, tx *sql.Tx, projectID int, commandI
 		exists(select 1 from approval_requests approval where approval.id::text=command.safety_context_json->>'approvalRequestId'
 		  and approval.project_id=command.project_id and approval.team_id=command.team_id and approval.resource_type='device'
 		  and approval.resource_id=command.device_id::text and approval.action='flighthub.device.'||command.command_key
-		  and approval.status='approved' and approval.expires_at>$3),
-		(project.current_safety_policy_version_id is not null and project.current_safety_policy_version_id::text=command.safety_context_json->>'safetyPolicyVersionId')
+		  and approval.status='approved' and approval.expires_at>$3)
 	 from device_commands command
 	 join devices device on device.id=command.device_id and device.project_id=command.project_id
 	 join device_types device_type on device_type.id=device.device_type_id
@@ -270,7 +268,7 @@ func loadControlCommand(ctx context.Context, tx *sql.Tx, projectID int, commandI
 		&command.DeviceTypeKey, &command.DeviceModel, &command.FirmwareVersion,
 		&command.Parameters, &command.AdapterID, &command.ConnectorStatus, &credential, &scope,
 		&command.FeatureEnabled, &command.CapabilityVerified, &command.DeviceOnline, &command.StateFresh,
-		&command.ApprovalValid, &command.SafetyPolicyCurrent)
+		&command.ApprovalValid)
 	if err != nil {
 		return command, err
 	}

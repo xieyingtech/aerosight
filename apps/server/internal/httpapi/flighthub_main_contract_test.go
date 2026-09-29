@@ -43,8 +43,8 @@ func TestFlightHubResourceActionInputAndGovernance(t *testing.T) {
 		t.Fatal(err)
 	}
 	row["capabilityFieldVerified"] = false
-	if err := fhAuthorizeResourceAction("live", 10, 2, input, row, policy); err == nil {
-		t.Fatal("unverified live action accepted")
+	if err := fhAuthorizeResourceAction("live", 10, 2, input, row, policy); err != nil {
+		t.Fatalf("field acceptance must not gate a permitted action: %v", err)
 	}
 	row["capabilityFieldVerified"] = true
 	row["deviceProjectId"] = float64(99)

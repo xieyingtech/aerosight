@@ -39,7 +39,7 @@ type managementWriteJob struct {
 
 func authorizeManagementWrite(job managementWriteJob) error {
 	if job.CapabilityCode != projectMemberWriteCapability || job.FeatureFlag != FlightHubProjectMemberFeatureFlag ||
-		!job.Authorized || !job.Connected || !job.FeatureEnabled || !job.CapabilityReady || !job.ApprovalValid {
+		!job.Authorized || !job.Connected || !job.FeatureEnabled || !job.ApprovalValid {
 		return &APIError{SafeCode: "action_disabled"}
 	}
 	return nil

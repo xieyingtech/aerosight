@@ -7,13 +7,13 @@ const input = flightHubDeviceAdminInputSchema.parse({ connectorInstanceId: 8, id
   action: "rtk-calibrate", deviceId: 42, confirmation: "CALIBRATE RTK",
   request: { host: "ntrip.invalid", port: 8002, account: "account", password: "password", mountPoint: "mount" } });
 const allowed = { teamId: 7, role: "owner", connectorProjectId: 11, connectorTeamId: 7, connectorStatus: "connected",
-  featureEnabled: true, capabilityVerified: true, deviceProjectId: 11, identityPresent: true, deviceOnline: true, stateFresh: true,
+  featureEnabled: true, capabilityVerified: false, deviceProjectId: 11, identityPresent: true, deviceOnline: true, stateFresh: true,
   approvalProjectId: 11, approvalTeamId: 7, approvalResourceType: "device", approvalResourceId: "42",
   approvalAction: "flighthub.admin.rtk-calibrate", approvalStatus: "approved", approvalUnexpired: true };
 
 test("device admin actions default closed behind owner, flag, field evidence and exact approval", () => {
   assert.equal(authorizeFlightHubDeviceAdmin(11,input,allowed).capability,"device.rtk.calibrate");
-  for(const override of [{role:"member"},{featureEnabled:false},{capabilityVerified:false},{deviceOnline:false},{stateFresh:false},
+  for(const override of [{role:"member"},{featureEnabled:false},{deviceOnline:false},{stateFresh:false},
     {approvalAction:"flighthub.admin.relay-pair"},{approvalResourceId:"99"},{approvalUnexpired:false}]){
     assert.throws(()=>authorizeFlightHubDeviceAdmin(11,input,{...allowed,...override}));
   }

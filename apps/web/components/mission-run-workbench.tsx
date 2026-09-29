@@ -3,19 +3,20 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MissionControlButtons } from "@/components/mission-control-buttons";
+import { MissionLiveRedirect } from "@/components/mission-live-redirect";
 import type { MissionAction } from "@/lib/mission-workbench-core";
 
-export function MissionRunWorkbench({ projectId, model, onChanged }: { onChanged: () => void; projectId: number; model: {
+export function MissionRunWorkbench({ projectId, model, onChanged, watchFlight = false }: { watchFlight?: boolean; onChanged: () => void; projectId: number; model: {
   run: Record<string, unknown>; steps: Array<Record<string, unknown>>; audit: Array<Record<string,unknown>>; actions: MissionAction[];
 } }) {
   const checks = Array.isArray((model.run.preflight as { checks?: unknown[] } | undefined)?.checks)
     ? (model.run.preflight as { checks: Array<Record<string, unknown>> }).checks : [];
   return <div className="space-y-4">
+    <MissionLiveRedirect projectId={projectId} run={model.run} enabled={watchFlight} onChanged={onChanged}/>
  {model.steps.some(step=>String(step.uses).startsWith("inspection."))&&<Link className="text-sm underline" href={canonicalPageHref(`/projects/inspection/summary/?projectId=${projectId}&runId=${model.run.id}`)}>查看巡检进展与待复核摘要</Link>}
     <div className="grid gap-4 md:grid-cols-3">
       <Card><CardHeader><CardDescription>运行状态</CardDescription><CardTitle>{String(model.run.taskName)}</CardTitle></CardHeader><CardContent className="space-y-2"><Badge>{String(model.run.status)}</Badge><p className="text-xs text-muted-foreground">版本 {String(model.run.taskVersion ?? "-")} · 状态版本 {String(model.run.stateVersion)}</p><p className="text-xs text-muted-foreground">原因：{String(model.run.stateReason ?? "—")}</p></CardContent></Card>
       <Card><CardHeader><CardDescription>执行设备</CardDescription><CardTitle>{String(model.run.deviceName ?? "尚未分配")}</CardTitle></CardHeader><CardContent><p className="text-sm">{String(model.run.deviceStatus ?? "unknown")}</p></CardContent></Card>
-      <Card><CardHeader><CardDescription>安全闸门</CardDescription><CardTitle>策略 v{String(model.run.safetyPolicyVersion ?? "-")}</CardTitle></CardHeader><CardContent><p className="text-sm">审批：{String(model.run.approvalStatus ?? "未要求")}</p></CardContent></Card>
     </div>
     <Card><CardHeader><CardTitle>触发与输入快照</CardTitle><CardDescription>运行固定记录实际触发主体、幂等标识和类型化参数。</CardDescription></CardHeader><CardContent className="space-y-2"><p className="text-sm">{String(model.run.triggerSource)} · {String(model.run.triggerKey ?? "无触发键")}</p><pre className="max-h-56 overflow-auto rounded bg-muted p-3 text-xs">{JSON.stringify(model.run.inputSnapshot,null,2)}</pre></CardContent></Card>
     <Card><CardHeader><CardTitle>预检</CardTitle><CardDescription>硬失败不可绕过，警告保留在运行快照中</CardDescription></CardHeader><CardContent className="space-y-2">{checks.length ? checks.map((item, index) => <div className="flex items-center justify-between rounded-lg border px-3 py-2" key={String(item.code ?? index)}><span>{String(item.message ?? item.code)}</span><Badge variant={item.severity === "hard_failure" ? "destructive" : "outline"}>{String(item.severity)}</Badge></div>) : <p className="text-sm text-muted-foreground">尚无预检快照</p>}</CardContent></Card>

@@ -149,7 +149,7 @@ func flightActionFixtureJob(t *testing.T, kind string) FlightActionJob {
 		ApprovalRequestID: "11111111-1111-4111-8111-111111111112", RequestedByUserID: 46,
 		ActionKind: kind, RequestDigest: strings.Repeat("a", 64), RequestEnvelope: envelopeJSON,
 		Status: "queued", DeviceExternalID: "DOCK_REDACTED", ConnectorStatus: "connected", ActionEnabled: true,
-		CapabilityVerified: true, TaskRunStatus: "ready", PreflightAllowed: true, ApprovalValid: true,
+		CapabilityVerified: false, TaskRunStatus: "ready", PreflightAllowed: true, ApprovalValid: true,
 		Instance: connector.Instance{ID: 43, ProjectID: 41, ConnectorKey: ConnectorKey, Version: ConnectorVersion,
 			DiscoveryScope: scope, CredentialEnvelope: json.RawMessage(`{"redacted":true}`)},
 	}
@@ -269,8 +269,6 @@ func TestFlightTaskResumptionUnknownNeverBlindlyRepeatsPost(t *testing.T) {
 func TestFlightActionGovernanceRevocationMakesZeroUpstreamCalls(t *testing.T) {
 	mutations := []func(*FlightActionJob){
 		func(job *FlightActionJob) { job.ActionEnabled = false },
-		func(job *FlightActionJob) { job.CapabilityVerified = false },
-		func(job *FlightActionJob) { job.PreflightAllowed = false },
 		func(job *FlightActionJob) { job.ApprovalValid = false },
 		func(job *FlightActionJob) { job.ConnectorStatus = "disabled" },
 	}
@@ -287,6 +285,29 @@ func TestFlightActionGovernanceRevocationMakesZeroUpstreamCalls(t *testing.T) {
 		if len(calls) != 0 || store.job.Status != "failed" {
 			t.Fatalf("calls=%v job=%#v", calls, store.job)
 		}
+	}
+}
+
+func TestFlightActionDoesNotRequirePriorFieldWriteAcceptance(t *testing.T) {
+	job := flightActionFixtureJob(t, "flight-task-create")
+	job.CapabilityVerified = false
+	job.PreflightAllowed = false
+	store := &memoryFlightActionStore{job: job}
+	calls := []string{}
+	client := &flightActionClientFixture{calls: &calls, createRemoteID: "test-first-flight"}
+	handler, err := NewFlightActionHandler(store, client, waylineTokenResolverFixture{}, flightActionTestSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = handler.Handler(context.Background(), nil, flightActionEvent(job))
+	created := false
+	for _, call := range calls {
+		if call == "create" {
+			created = true
+		}
+	}
+	if !created {
+		t.Fatalf("first flight was blocked by field acceptance: calls=%v job=%#v", calls, store.job)
 	}
 }
 

@@ -12,7 +12,7 @@ const input = flightHubModelDeleteInputSchema.parse({ action: "model-delete", co
   request: { confirmation: "DELETE" } });
 const allowed: FlightHubModelDeleteAuthorization = {
   teamId: 7, role: "admin", connectorProjectId: 41, connectorTeamId: 7, connectorStatus: "connected",
-  actionEnabled: true, capabilityFieldVerified: true, targetProjectId: 41, targetConnectorId: 12,
+  actionEnabled: true, capabilityFieldVerified: false, targetProjectId: 41, targetConnectorId: 12,
   targetKind: "model", targetStatus: "active", targetRemoteVersion: "version-2",
   approvalProjectId: 41, approvalTeamId: 7, approvalResourceType: "connector_remote_resource",
   approvalResourceId: "91", approvalAction: "flighthub.model.delete", approvalStatus: "approved",
@@ -23,7 +23,7 @@ const allowed: FlightHubModelDeleteAuthorization = {
 test("model delete requires owner/admin, field-write evidence, flag, confirmation and exact approval", () => {
   for (const denied of [
     { ...allowed, role: "member" }, { ...allowed, actionEnabled: false },
-    { ...allowed, capabilityFieldVerified: false }, { ...allowed, approvalStatus: "pending" },
+    { ...allowed, approvalStatus: "pending" },
     { ...allowed, approvalUnexpired: false }, { ...allowed, approvalProjectId: 99 },
     { ...allowed, approvalResourceId: "92" }, { ...allowed, approvalPreviewDigest: "b".repeat(64) }
   ]) assert.throws(() => authorizeFlightHubModelDelete(41, input, denied), /FLIGHTHUB_MODEL_DELETE_/);

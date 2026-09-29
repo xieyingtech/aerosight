@@ -6,7 +6,7 @@ select id from devices where project_id=sqlc.arg(p1) and id=sqlc.arg(p2) for upd
 -- name: FHControlExisting :many
 SELECT to_jsonb(r) FROM (
 select id::text,status,holder_user_id as "holderUserId",connector_instance_id::text as "connectorInstanceId",
-        approval_request_id::text as "approvalRequestId",safety_policy_version_id::text as "safetyPolicyVersionId",
+        approval_request_id::text as "approvalRequestId",
         controls_json=sqlc.arg(p4)::jsonb as "controlsMatch" from connector_control_sessions
        where project_id=sqlc.arg(p1) and device_id=sqlc.arg(p2) and idempotency_key=sqlc.arg(p3)
 ) r;
@@ -24,7 +24,6 @@ select adapter.project_id as "connectorProjectId",adapter.team_id as "connectorT
           and capability.status='supported' and capability.evidence_level='field-write'
           and (capability.expires_at is null or capability.expires_at>now())) as "capabilityFieldVerified",
         device.status='online' as "deviceOnline",latest.captured_at as "stateCapturedAt",
-        project.current_safety_policy_version_id::text as "currentSafetyPolicyVersionId",
         approval.project_id as "approvalProjectId",approval.team_id as "approvalTeamId",
         approval.resource_type as "approvalResourceType",approval.resource_id as "approvalResourceId",
         approval.action as "approvalAction",approval.status as "approvalStatus",
@@ -45,9 +44,9 @@ select adapter.project_id as "connectorProjectId",adapter.team_id as "connectorT
 -- name: FHControlInsert :one
 insert into connector_control_sessions(
         id,project_id,team_id,connector_instance_id,device_id,holder_user_id,approval_request_id,
-        safety_policy_version_id,idempotency_key,controls_json,last_heartbeat_at,lease_expires_at,
+        idempotency_key,controls_json,last_heartbeat_at,lease_expires_at,
         absolute_expires_at,operation_window_started_at
-      ) values(sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7)::uuid,sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10)::jsonb,sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13),sqlc.arg(p11)) returning id::text,status;
+      ) values(sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7)::uuid,sqlc.arg(p9),sqlc.arg(p10)::jsonb,sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13),sqlc.arg(p11)) returning id::text,status;
 
 -- name: FHControlEnqueueAcquire :exec
 insert into outbox_events(project_id,team_id,event_id,event_type,aggregate_type,aggregate_id,payload_json,max_attempts)

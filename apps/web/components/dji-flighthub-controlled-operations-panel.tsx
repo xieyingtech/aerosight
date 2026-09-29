@@ -24,7 +24,7 @@ export function DjiFlightHubControlledOperationsPanel({ projectId, connectorId }
   useEffect(()=>{void load();},[projectId,connectorId]); // eslint-disable-line react-hooks/exhaustive-deps
   return <section className="space-y-3 rounded-lg border p-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="flex items-center gap-2 text-sm font-medium"><ShieldAlertIcon className="size-4"/>受控操作</h3>
-      <p className="mt-1 text-xs text-muted-foreground">可用性由服务端对官方契约、连接状态、权限、功能开关与 field-write 证据求交集；页面状态不能替代 API 门禁。</p></div>
+      <p className="mt-1 text-xs text-muted-foreground">根据设备能力、连接状态、账号权限和项目设置提供操作。</p></div>
       <Button disabled={loading} onClick={()=>void load()} size="sm" type="button" variant="ghost"><RefreshCwIcon className={loading?"animate-spin":""}/>刷新</Button></div>
     {error&&<p className="rounded-md bg-destructive/5 p-2 text-xs text-destructive" role="alert">{error}</p>}
     {payload&&<><div className="grid gap-2 lg:grid-cols-2">{payload.actions.map(action=><article className="space-y-2 rounded-md border p-3" key={action.capabilityCode}>

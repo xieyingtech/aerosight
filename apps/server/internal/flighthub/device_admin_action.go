@@ -144,7 +144,7 @@ func (handler *DeviceAdminActionHandler) Handler(ctx context.Context, _ *sql.Tx,
 		return err
 	}
 	policy, ok := deviceAdminPolicies[job.ActionKind]
-	if !ok || policy.capability != job.CapabilityCode || policy.feature != job.FeatureFlag || !job.Authorized || !job.ConnectorConnected || !job.FeatureEnabled || !job.CapabilityVerified || !job.DeviceAvailable || !job.ApprovalValid {
+	if !ok || policy.capability != job.CapabilityCode || policy.feature != job.FeatureFlag || !job.Authorized || !job.ConnectorConnected || !job.FeatureEnabled || !job.DeviceAvailable || !job.ApprovalValid {
 		if job.Status == "queued" {
 			_, err = handler.db.ExecContext(ctx, `update connector_device_admin_jobs set status='failed',attempt_count=0,last_error_code='action_disabled',completed_at=now(),updated_at=now() where project_id=$1 and id=$2::uuid and status='queued'`, job.ProjectID, job.ID)
 		}

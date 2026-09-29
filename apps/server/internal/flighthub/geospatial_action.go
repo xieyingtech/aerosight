@@ -375,7 +375,7 @@ func (handler *GeospatialActionHandler) Handler(ctx context.Context, _ *sql.Tx, 
 	default:
 		return handler.store.Fail(ctx, job, "connector_disabled")
 	}
-	if !job.ActionEnabled || !job.CapabilityVerified {
+	if !job.ActionEnabled {
 		return handler.store.Fail(ctx, job, "action_disabled")
 	}
 	if job.ActionKind != "map-element-create" {

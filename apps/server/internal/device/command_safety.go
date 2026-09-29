@@ -11,6 +11,7 @@ type CommandSafetyInput struct {
 	Capability, Risk, Availability, Status string
 	ActiveTasks                            int32
 	Confirmation                           string
+	FlightTaskControl                      bool
 }
 type CommandSafety struct {
 	Allowed              bool `json:"allowed"`
@@ -30,14 +31,15 @@ func CheckCommandSafety(in CommandSafetyInput) (CommandSafety, error) {
 		return out, errors.New("DEVICE_COMMAND_DEVICE_NOT_ONLINE")
 	}
 	returnHome := in.Capability == "flight.return_home"
-	if in.ActiveTasks > 0 && !returnHome {
+	flightTaskControl := in.FlightTaskControl && in.Capability == "mission.execute"
+	if in.ActiveTasks > 0 && !returnHome && !flightTaskControl {
 		return out, errors.New("DEVICE_COMMAND_ACTIVE_TASK_CONFLICT")
 	}
 	critical := in.Risk == "high" || in.Risk == "critical"
 	if critical && in.Confirmation != fmt.Sprintf("CONFIRM %d %s", in.DeviceID, in.Capability) {
 		return out, errors.New("DEVICE_COMMAND_CONFIRMATION_REQUIRED")
 	}
-	return CommandSafety{Allowed: true, ConfirmationRequired: critical, ActiveTaskOverride: returnHome && in.ActiveTasks > 0}, nil
+	return CommandSafety{Allowed: true, ConfirmationRequired: critical, ActiveTaskOverride: (returnHome || flightTaskControl) && in.ActiveTasks > 0}, nil
 }
 
 type CommandGrant struct{ Action, Effect string }

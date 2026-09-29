@@ -27,6 +27,7 @@ type InspectionFlightActionContract struct {
 }
 
 type FlightActionRequest struct {
+	ManualDeviceFlight         bool                            `json:"manualDeviceFlight,omitempty"`
 	Inspection                 *InspectionFlightActionContract `json:"inspection,omitempty"`
 	Name                       string                          `json:"name"`
 	TimeZone                   string                          `json:"timeZone"`
@@ -120,8 +121,7 @@ func (store *SQLFlightActionStore) Load(ctx context.Context, projectID int, jobI
 		run.status,coalesce((run.preflight_snapshot_json->>'allowed')::boolean,false),
 		(approval.status='approved' and approval.expires_at>now()
 		  and approval.project_id=job.project_id and approval.team_id=job.team_id
-		  and approval.resource_type='task_run' and approval.resource_id=job.task_run_id::text
-		  and coalesce((approval.context_json#>>'{preflight,allowed}')::boolean,false)),approval.action,
+		  and approval.resource_type='task_run' and approval.resource_id=job.task_run_id::text),approval.action,
 		definition.connector_key,definition.version,adapter.credential_envelope_json,adapter.discovery_scope_json
 	 from connector_action_jobs job
 	 join device_adapters adapter on adapter.id=job.connector_instance_id and adapter.project_id=job.project_id
@@ -448,10 +448,10 @@ func (handler *FlightActionHandler) Handler(ctx context.Context, _ *sql.Tx, even
 		job.Instance.Version != ConnectorVersion || !isActiveConnectorStatus(job.ConnectorStatus) {
 		return handler.store.Fail(ctx, job, "connector_disabled")
 	}
-	if !job.ActionEnabled || !job.CapabilityVerified {
+	if !job.ActionEnabled {
 		return handler.store.Fail(ctx, job, "action_disabled")
 	}
-	if !job.PreflightAllowed || !job.ApprovalValid || job.ApprovalAction != expectedApprovalAction(job.ActionKind) {
+	if !job.ApprovalValid || job.ApprovalAction != expectedApprovalAction(job.ActionKind) {
 		return handler.store.Fail(ctx, job, "governance_revoked")
 	}
 	if strings.TrimSpace(job.DeviceExternalID) == "" ||
@@ -480,6 +480,35 @@ func (handler *FlightActionHandler) Handler(ctx context.Context, _ *sql.Tx, even
 	if job.Status == "reconciling" {
 		return handler.reconcile(ctx, job, request, token, scope.ProjectUUID)
 	}
+	if request.ManualDeviceFlight {
+		reader, ok := handler.client.(interface {
+			GetWayline(context.Context, string, string, string) (WaylineDetail, error)
+			ListDevices(context.Context, string, string) ([]Topology, error)
+		})
+		if !ok {
+			return handler.store.Fail(ctx, job, "flight_device_reader_unavailable")
+		}
+		line, err := reader.GetWayline(ctx, token, scope.ProjectUUID, job.WaylineRemoteID)
+		if err != nil {
+			return handler.store.Fail(ctx, job, safeWorkflowCode(err))
+		}
+		if line.WaypointCount < 2 {
+			return handler.store.Fail(ctx, job, "wayline_requires_two_waypoints")
+		}
+		devices, err := reader.ListDevices(ctx, token, scope.ProjectUUID)
+		if err != nil {
+			return handler.store.Fail(ctx, job, safeWorkflowCode(err))
+		}
+		ready := false
+		for _, device := range devices {
+			if device.Gateway != nil && device.Gateway.SN == job.DeviceExternalID && device.Gateway.Online && device.Gateway.ModeCode == 0 && device.Drone != nil {
+				ready = line.DeviceModelKey == device.Drone.Model.Key
+			}
+		}
+		if !ready {
+			return handler.store.Fail(ctx, job, "flight_device_not_ready_or_model_mismatch")
+		}
+	}
 	if job.ActionKind == "flight-task-create" && (job.Status == "queued" || (request.Inspection != nil && job.Status == "prepared")) {
 		check, err := handler.client.CheckFlightTaskDispatch(ctx, token, scope.ProjectUUID, job.DeviceExternalID, job.WaylineRemoteID)
 		if err != nil {
@@ -494,7 +523,7 @@ func (handler *FlightActionHandler) Handler(ctx context.Context, _ *sql.Tx, even
 		hasWarning := false
 		for _, warning := range check.Warnings {
 			codes = append(codes, warning.Code)
-			hasWarning = hasWarning || warning.Type == "warning"
+			hasWarning = hasWarning || warning.Type == "warning" || request.ManualDeviceFlight
 		}
 		if hasWarning {
 			return handler.store.Fail(ctx, job, "dispatch_check_warning")

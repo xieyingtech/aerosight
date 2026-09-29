@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const StateMapperVersion = "dji-flighthub-state/v2"
+const StateMapperVersion = "dji-flighthub-state/v4"
 
 type StateFieldDiagnostic struct {
 	Name     string `json:"name"`
@@ -151,6 +151,12 @@ func MapDeviceState(snapshot DeviceStateSnapshot) MappedDeviceState {
 		result.Environment = mapEnvironment(snapshot.State)
 		result.Live = mapLive(snapshot.State)
 		result.StreamChannels = mapStreamChannels(mapper.Channels, result.Live)
+		if mapper.Kind == "aircraft" {
+			result.StreamChannels = mapAircraftCameraChannels(snapshot)
+			if len(result.StreamChannels) > 0 {
+				result.CapabilityEvidence = append(result.CapabilityEvidence, "stream.video.read")
+			}
+		}
 		result.HorizontalSpeedMPS, _ = numberValue(snapshot.State["horizontal_speed"])
 		result.VerticalSpeedMPS, _ = numberValue(snapshot.State["vertical_speed"])
 	}
@@ -160,6 +166,48 @@ func MapDeviceState(snapshot DeviceStateSnapshot) MappedDeviceState {
 		}
 	}
 	sort.Slice(result.Diagnostics, func(left, right int) bool { return result.Diagnostics[left].Name < result.Diagnostics[right].Name })
+	return result
+}
+
+// Use camera indices actually reported by the scoped device, never infer a
+// payload index from its model. Some FH states use the index as an object key.
+func mapAircraftCameraChannels(snapshot DeviceStateSnapshot) []StreamChannelState {
+	indices := map[string]bool{}
+	var cameras []struct {
+		Index string `json:"camera_index"`
+	}
+	if json.Unmarshal(snapshot.CameraList, &cameras) == nil {
+		for _, camera := range cameras {
+			if flightHubCameraIndexPattern.MatchString(camera.Index) {
+				indices[camera.Index] = true
+			}
+		}
+	}
+	for index, raw := range snapshot.State {
+		if !flightHubCameraIndexPattern.MatchString(index) {
+			continue
+		}
+		var camera map[string]json.RawMessage
+		if json.Unmarshal(raw, &camera) == nil && len(camera) > 0 {
+			indices[index] = true
+		}
+	}
+	keys := make([]string, 0, len(indices))
+	for index := range indices {
+		keys = append(keys, index)
+	}
+	sort.Strings(keys)
+	result := make([]StreamChannelState, 0, len(keys))
+	for _, index := range keys {
+		channel := StreamChannelState{CameraIndex: index, DisplayName: "飞行器相机 " + index, Availability: "degraded", AvailabilityReason: "飞行器相机当前不可用，请确认飞行器已开机并刷新设备目录"}
+		for _, camera := range cameras {
+			if camera.Index == index {
+				channel.Availability, channel.AvailabilityReason = "available", ""
+				break
+			}
+		}
+		result = append(result, channel)
+	}
 	return result
 }
 

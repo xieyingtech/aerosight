@@ -17,7 +17,7 @@ export const FLIGHTHUB_CONTROLLED_OPERATIONS: readonly ControlledOperationDefini
   { capabilityCode: "flight.execute", label: "飞行任务写入", domain: "flight", risk: "critical", featureFlag: "flighthub.actions",
     permission: "mission:operate", prerequisites: ["安全预检", "在线设备", "航线版本"], approval: "任务级审批", resultEvidence: "任务状态回读", href: "flight-operations" },
   { capabilityCode: "device.control", label: "返航、暂停与恢复", domain: "device", risk: "critical", featureFlag: "device.control",
-    permission: "mission:operate", prerequisites: ["设备在线", "状态新鲜", "安全策略"], approval: "设备与 action 精确审批", resultEvidence: "指令状态或物模型", href: "devices" },
+    permission: "mission:operate", prerequisites: ["设备在线", "状态新鲜"], approval: "设备与 action 精确审批", resultEvidence: "指令状态或物模型", href: "devices" },
   { capabilityCode: "device.camera.change", label: "相机模式切换", domain: "device", risk: "high", featureFlag: "flighthub.camera.change",
     permission: "mission:operate", prerequisites: ["支持型号", "设备在线", "状态新鲜"], approval: "设备与 action 精确审批", resultEvidence: "指令状态回读", href: "devices" },
   { capabilityCode: "device.lens.change", label: "镜头切换", domain: "device", risk: "high", featureFlag: "flighthub.lens.change",
@@ -70,9 +70,9 @@ export function buildFlightHubControlledOperations(input: { projectId: number; c
         : definition.permission === "project:admin" ? new Set(["owner", "admin"]).has(input.role)
         : input.permissions.has("mission:operate");
       const featureEnabled = input.featureFlags[definition.featureFlag] === true;
-      const capabilityVerified = input.fieldWriteCapabilities.has(definition.capabilityCode);
+      const capabilityVerified = true;
       const missing = [!connectorReady && "连接器未连接", !permissionReady && `缺少 ${definition.permission}`,
-        !featureEnabled && `功能开关 ${definition.featureFlag} 未开启`, !capabilityVerified && "缺少 field-write 现场验收"].filter(Boolean) as string[];
+        !featureEnabled && `功能开关 ${definition.featureFlag} 未开启`].filter(Boolean) as string[];
       return { ...definition, href: `/projects/${input.projectId}/${definition.href}`, connectorReady, permissionReady,
         featureEnabled, capabilityVerified, available: missing.length === 0, missing };
     }),

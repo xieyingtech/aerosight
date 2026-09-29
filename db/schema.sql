@@ -1353,7 +1353,7 @@ CREATE TABLE public.connector_control_sessions (
     device_id integer NOT NULL,
     holder_user_id integer NOT NULL,
     approval_request_id uuid NOT NULL,
-    safety_policy_version_id bigint NOT NULL,
+    safety_policy_version_id bigint,
     idempotency_key text NOT NULL,
     controls_json jsonb NOT NULL,
     status text DEFAULT 'requested'::text NOT NULL,

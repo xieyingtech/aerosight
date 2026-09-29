@@ -849,7 +849,14 @@ func (coordinator *ResourceStreamCoordinator) pollFlightTasks(ctx context.Contex
 		complete = false
 	}
 	cursor := map[string]any{"resources": len(tasks), "pages": len(docks), "completePages": completedPages, "complete": complete}
-	return cursor, coordinator.config.CatalogInterval, errors.Join(pageErrors...)
+	interval := coordinator.config.CatalogInterval
+	for _, task := range tasks {
+		if task.Status == "executing" || task.Status == "paused" {
+			interval = coordinator.config.OnlineInterval
+			break
+		}
+	}
+	return cursor, interval, errors.Join(pageErrors...)
 }
 
 func (coordinator *ResourceStreamCoordinator) runStream(
@@ -948,6 +955,36 @@ func (coordinator *ResourceStreamCoordinator) pollDeviceStates(ctx context.Conte
 	if err != nil {
 		return nil, 0, err
 	}
+	// Refresh directory presence at the telemetry cadence. An aircraft can
+	// power on between the slower inventory scans when a flight is launched.
+	if directory, ok := coordinator.client.(interface {
+		ListDevices(context.Context, string, string) ([]Topology, error)
+	}); ok && len(devices) > 0 {
+		topologies, readErr := directory.ListDevices(ctx, token, scope.ProjectUUID)
+		if readErr != nil {
+			return nil, 0, readErr
+		}
+		bySerial := map[string]*Device{}
+		for _, topology := range topologies {
+			for _, device := range []*Device{topology.Gateway, topology.Drone} {
+				if device != nil {
+					bySerial[device.SN] = device
+				}
+			}
+		}
+		for index := range devices {
+			current := bySerial[devices[index].Serial]
+			if current != nil && current.Online && !devices[index].Online {
+				coordinator.mu.Lock()
+				delete(coordinator.nextPoll, fmt.Sprintf("%d/%d", instance.ID, devices[index].DeviceID))
+				coordinator.mu.Unlock()
+			}
+			devices[index].Online = current != nil && current.Online
+			if current != nil {
+				devices[index].CameraList = current.CameraList
+			}
+		}
+	}
 	now := coordinator.config.Now().UTC()
 	processed := 0
 	var pollErrors []error
@@ -973,6 +1010,7 @@ func (coordinator *ResourceStreamCoordinator) pollDeviceStates(ctx context.Conte
 			pollErrors = append(pollErrors, stateErr)
 			continue
 		}
+		snapshot.CameraList = device.CameraList
 		poll := DeviceStatePoll{Device: device, Snapshot: snapshot, Mapped: MapDeviceState(snapshot), ReceivedAt: now, FreshnessInterval: interval}
 		if sinkErr := coordinator.sink.ApplyDeviceState(ctx, instance, poll); sinkErr != nil {
 			pollErrors = append(pollErrors, sinkErr)

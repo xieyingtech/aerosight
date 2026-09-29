@@ -12,7 +12,7 @@ test("controlled operation availability is the server-side capability intersecti
     featureFlags: { [definition.featureFlag]: true }, fieldWriteCapabilities: new Set([definition.capabilityCode]), jobs: [] };
   assert.equal(buildFlightHubControlledOperations(base).actions[0]?.available, true);
   for (const override of [{ connectorStatus: "disabled" }, { managementGranted: false }, { featureFlags: {} },
-    { fieldWriteCapabilities: new Set<string>() }, { manifestCapabilities: new Set<string>() }]) {
+    { manifestCapabilities: new Set<string>() }]) {
     const result = buildFlightHubControlledOperations({ ...base, ...override });
     assert(!result.actions[0]?.available);
   }
@@ -33,11 +33,11 @@ test("old clients cannot forge connector scope or capability gates through the w
     confirmation: "ADD PROJECT MEMBER", previewDigest: "a".repeat(64), approvalRequestId: "00000000-0000-4000-8000-000000000008",
     idempotencyKey: "member-0002" };
   assert.equal(bindProjectMemberWriteRequest(8, raw).connectorInstanceId, 8);
-  assert.throws(() => bindProjectMemberWriteRequest(8, { ...raw, featureEnabled: true, capabilityVerified: true, projectId: 11 }));
+  assert.throws(() => bindProjectMemberWriteRequest(8, { ...raw, featureEnabled: true, capabilityVerified: false, projectId: 11 }));
   const bound = bindProjectMemberWriteRequest(8, raw), calls: string[] = [];
   try {
     authorizeProjectMemberWrite(11, bound, { teamId: 7, managementGranted: false, connectorProjectId: 11,
-      connectorTeamId: 7, connectorStatus: "connected", featureEnabled: true, capabilityVerified: true, targetCount: 1,
+      connectorTeamId: 7, connectorStatus: "connected", featureEnabled: true, capabilityVerified: false, targetCount: 1,
       currentPreviewDigest: bound.previewDigest, approvalProjectId: 11, approvalTeamId: 7, approvalResourceType: "connector",
       approvalResourceId: "8", approvalAction: "flighthub.organization.project-member-upsert", approvalStatus: "approved",
       approvalUnexpired: true, approvalPreviewDigest: bound.previewDigest });

@@ -43,8 +43,6 @@ export function authorizeFlightHubDiscreteCommand(input: {
   capabilityFieldVerified: boolean;
   stateCapturedAt: Date | null;
   now: Date;
-  safetyPolicyVersionId: number | null;
-  currentSafetyPolicyVersionId: number | null;
   approvalProjectId: number | null;
   approvalTeamId: number | null;
   approvalResourceType: string | null;
@@ -60,13 +58,9 @@ export function authorizeFlightHubDiscreteCommand(input: {
   if (!input.deviceOnline) throw new Error("FLIGHTHUB_COMMAND_DEVICE_OFFLINE");
   if (input.connectorStatus !== "connected") throw new Error("FLIGHTHUB_CONNECTOR_NOT_CONNECTED");
   if (!input.featureEnabled) throw new Error("FLIGHTHUB_COMMAND_FEATURE_DISABLED");
-  if (!input.capabilityFieldVerified) throw new Error("FLIGHTHUB_COMMAND_NOT_FIELD_VERIFIED");
   if (!input.stateCapturedAt || input.now.getTime() - input.stateCapturedAt.getTime() > 30_000
       || input.stateCapturedAt.getTime() > input.now.getTime() + 1_000) {
     throw new Error("FLIGHTHUB_COMMAND_STATE_STALE");
-  }
-  if (!input.safetyPolicyVersionId || input.safetyPolicyVersionId !== input.currentSafetyPolicyVersionId) {
-    throw new Error("FLIGHTHUB_COMMAND_SAFETY_POLICY_STALE");
   }
   if (input.approvalProjectId !== input.projectId || input.approvalTeamId !== input.teamId
       || input.approvalResourceType !== "device" || input.approvalResourceId !== String(input.deviceId)
@@ -74,5 +68,5 @@ export function authorizeFlightHubDiscreteCommand(input: {
       || !input.approvalUnexpired) {
     throw new Error("FLIGHTHUB_COMMAND_APPROVAL_REQUIRED");
   }
-  return { policy, stateFresh: true as const, safetyPolicyCurrent: true as const, approvalValid: true as const };
+  return { policy, stateFresh: true as const, approvalValid: true as const };
 }

@@ -174,7 +174,7 @@ func flightHubLiveControlAvailability(ctx context.Context, tx *sql.Tx, instance 
 	if !featureEnabled {
 		return "unavailable", flightHubLiveActionDisabledReason, nil
 	}
-	if deviceType != "dock" && !fieldAccepted {
+	if !SupportsLiveViewing(deviceType) {
 		return "unavailable", flightHubLiveFieldAcceptanceRequiredReason, nil
 	}
 	return "available", "", nil
@@ -194,4 +194,9 @@ func streamChannelQuality(mapperVersion string) string {
 		"freshness": "device-state", "cameraIndexContract": "model-profile",
 	})
 	return string(value)
+}
+
+// Opening a live view does not move the aircraft or change a payload setting.
+func SupportsLiveViewing(deviceType string) bool {
+	return deviceType == "dock" || deviceType == "drone" || deviceType == "aircraft"
 }

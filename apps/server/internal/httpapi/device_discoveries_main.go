@@ -218,10 +218,8 @@ func (s *Server) bindDiscoveryMain(c *gin.Context, pid int32, iid int64, body ma
 		if e = q.DiscoveryCapabilities(ctx, sqlcgen.DiscoveryCapabilitiesParams{P1: did, P2: pid, P3: adapter, P4: typeID}); e != nil {
 			return nil, e
 		}
-		if parent != "" {
-			if e = q.DiscoveryRelationship(ctx, sqlcgen.DiscoveryRelationshipParams{P1: pid, P2: a.TeamID, P3: did, P4: cid, P5: parent, P6: metadata}); e != nil {
-				return nil, e
-			}
+		if e = q.DiscoveryRelationship(ctx, sqlcgen.DiscoveryRelationshipParams{P1: pid, P2: a.TeamID, P3: did, P4: cid, P5: parent, P6: metadata}); e != nil {
+			return nil, e
 		}
 		return gin.H{"deviceId": did, "replayed": false, "migrated": target > 0}, nil
 	})

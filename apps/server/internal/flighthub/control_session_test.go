@@ -80,8 +80,8 @@ func validControlSession(now time.Time) FlightHubControlSession {
 		ConnectorInstanceID: 7, Status: "requested", DeviceSN: "AIRCRAFT_REDACTED", ConnectorStatus: "connected",
 		Controls:       ControlSelection{Flight: true, PayloadIndex: []string{"0-0"}},
 		LeaseExpiresAt: now.Add(15 * time.Second), AbsoluteExpiresAt: now.Add(5 * time.Minute),
-		FeatureEnabled: true, CapabilityVerified: true, DeviceOnline: true, StateFresh: true,
-		ApprovalValid: true, SafetyPolicyCurrent: true, PermissionCurrent: true,
+		FeatureEnabled: true, CapabilityVerified: false, DeviceOnline: true, StateFresh: true,
+		ApprovalValid: true, PermissionCurrent: true,
 		Instance: connector.Instance{ID: 7, ProjectID: 3}, ProjectUUID: "PROJECT_REDACTED",
 	}
 }

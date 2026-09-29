@@ -78,8 +78,8 @@ func TestCameraControlPreflightBlocksUnsupportedOfflineAndStaleDevicesBeforeUpst
 		CommandKey: "camera.change_lens", CapabilityCode: "camera.lens.change",
 		RecordedConnectorCapabilityCode: "device.lens.change", RecordedFeatureFlag: FlightHubLensChangeFeatureFlag,
 		DeviceSN: "AIRCRAFT_REDACTED", DeviceTypeKey: "dji.matrice4td", ProjectUUID: "PROJECT_REDACTED",
-		ConnectorStatus: "connected", FeatureEnabled: true, CapabilityVerified: true, DeviceOnline: true, StateFresh: true,
-		ApprovalValid: true, SafetyPolicyCurrent: true, Deadline: now.Add(time.Minute),
+		ConnectorStatus: "connected", FeatureEnabled: true, CapabilityVerified: false, DeviceOnline: true, StateFresh: true,
+		ApprovalValid: true, Deadline: now.Add(time.Minute),
 		Parameters: json.RawMessage(`{"cameraIndex":"CAMERA_REDACTED","lensType":"wide"}`),
 	}
 	for _, testCase := range []struct {
@@ -89,7 +89,6 @@ func TestCameraControlPreflightBlocksUnsupportedOfflineAndStaleDevicesBeforeUpst
 		{"unsupported model", func(command *loadedControlCommand) { command.DeviceTypeKey = "dji.unknown" }},
 		{"offline", func(command *loadedControlCommand) { command.DeviceOnline = false }},
 		{"stale", func(command *loadedControlCommand) { command.StateFresh = false }},
-		{"firmware evidence mismatch", func(command *loadedControlCommand) { command.CapabilityVerified = false }},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			command := valid

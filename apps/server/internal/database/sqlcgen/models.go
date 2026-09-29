@@ -493,7 +493,7 @@ type ConnectorControlSession struct {
 	DeviceID                 int32           `json:"device_id"`
 	HolderUserID             int32           `json:"holder_user_id"`
 	ApprovalRequestID        uuid.UUID       `json:"approval_request_id"`
-	SafetyPolicyVersionID    int64           `json:"safety_policy_version_id"`
+	SafetyPolicyVersionID    sql.NullInt64   `json:"safety_policy_version_id"`
 	IdempotencyKey           string          `json:"idempotency_key"`
 	ControlsJson             json.RawMessage `json:"controls_json"`
 	Status                   string          `json:"status"`

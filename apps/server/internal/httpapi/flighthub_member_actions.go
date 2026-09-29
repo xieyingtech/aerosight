@@ -76,7 +76,7 @@ func authorizeFHMember(pid int32, cid int64, input map[string]any, row gin.H, di
 	if row["connectorStatus"] != "connected" {
 		return fail("CONNECTOR_OFFLINE")
 	}
-	if row["featureEnabled"] != true || row["capabilityVerified"] != true {
+	if row["featureEnabled"] != true {
 		return fail("DISABLED")
 	}
 	if row["targetCount"] != float64(len(input["members"].([]any))) || digest != input["previewDigest"] {
@@ -197,7 +197,7 @@ func (s *Server) fhMemberAction(c *gin.Context) {
 	params.P8 = uuid.NullUUID{UUID: approval, Valid: true}
 	job := uuid.New()
 	key := fhString(input["idempotencyKey"])
-	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector.project-member-upsert", ResourceType: "connector", ResourceID: strconv.FormatInt(cid, 10), Input: gin.H{"connectorInstanceId": cid, "previewDigest": input["previewDigest"], "confirmed": true}, PolicyResult: map[string]any{"permission": "organization:manage", "capability": fhMemberCapability, "featureFlag": fhMemberFlag, "evidence": "field-write", "approval": "approved", "completion": "worker-readback"}}
+	audit := database.AuditContext{ProjectID: pid, TeamID: a.TeamID, ActorUserID: uid, RequestID: c.GetHeader("X-Request-ID"), IdempotencyKey: key, Action: "connector.project-member-upsert", ResourceType: "connector", ResourceID: strconv.FormatInt(cid, 10), Input: gin.H{"connectorInstanceId": cid, "previewDigest": input["previewDigest"], "confirmed": true}, PolicyResult: map[string]any{"permission": "organization:manage", "capability": fhMemberCapability, "featureFlag": fhMemberFlag, "fieldAcceptanceRequired": false, "approval": "approved", "completion": "worker-readback"}}
 	result, err := database.AuditedWrite(ctx, s.db, audit, s.authorizeWrite(uid, pid, a.TeamID, "project:view", false), func(w *database.WriteTx) (gin.H, error) {
 		q := w.Queries
 		raw, e := q.FHMemberTarget(ctx, params)

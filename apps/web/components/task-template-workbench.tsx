@@ -66,7 +66,8 @@ export function TaskTemplateWorkbench({ projectId,taskId,model,onChanged }: { pr
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.error || "TASK_TRIGGER_FAILED"));
       manualAttempt.current=null;
-      router.push(canonicalPageHref(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(result.taskRunId)}`));
+      const watchesFlight = model.steps.some(step => step.capabilityCode === "mission.execute" || (step.uses === "inspection.observe" && flightStepIndex >= 0));
+      router.push(canonicalPageHref(`/projects/tasks/runs/detail/?projectId=${projectId}&runId=${String(result.taskRunId)}${watchesFlight ? "&watchFlight=1" : ""}`));
     } catch (error) { setMessage(error instanceof Error ? error.message : "触发失败"); }
     finally { setPending(false); }
   }

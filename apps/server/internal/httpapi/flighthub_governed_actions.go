@@ -39,7 +39,7 @@ func authorizeFHAdmin(pid int32, cid int64, input map[string]any, row gin.H) err
 	if row["connectorStatus"] != "connected" {
 		return fail("CONNECTOR_OFFLINE")
 	}
-	if row["featureEnabled"] != true || row["capabilityVerified"] != true {
+	if row["featureEnabled"] != true {
 		return fail("DISABLED")
 	}
 	did := fhOptionalNumber(input, "deviceId")
@@ -66,14 +66,11 @@ func authorizeFHFlight(pid int32, cid int64, input map[string]any, row gin.H) er
 	if row["connectorStatus"] != "connecting" && row["connectorStatus"] != "connected" && row["connectorStatus"] != "degraded" {
 		return fail("CONNECTOR_DISABLED")
 	}
-	if row["actionEnabled"] != true || row["capabilityFieldVerified"] != true {
+	if row["actionEnabled"] != true {
 		return fail("DISABLED")
 	}
 	if row["selectedDeviceId"] == nil || row["deviceIdentityPresent"] != true {
 		return fail("DEVICE_SCOPE_MISMATCH")
-	}
-	if row["safetyPolicyVersionId"] == nil || row["preflightAllowed"] != true || row["approvalPreflightAllowed"] != true {
-		return fail("PREFLIGHT_FAILED")
 	}
 	if row["approvalStatus"] != "approved" || row["approvalUnexpired"] != true {
 		return fail("APPROVAL_REQUIRED")
@@ -238,7 +235,7 @@ func (s *Server) fhGovernedAction(kind string) gin.HandlerFunc {
 			auditInput[k] = v
 		}
 		auditInput["request"] = gin.H{"digest": digest}
-		policyResult := map[string]any{"permission": "project:admin", "capability": policy.capability, "featureFlag": policy.flag, "evidence": "field-write", "approval": input["approvalRequestId"]}
+		policyResult := map[string]any{"permission": "project:admin", "capability": policy.capability, "featureFlag": policy.flag, "fieldAcceptanceRequired": false, "approval": input["approvalRequestId"]}
 		if kind == "flight" {
 			auditInput = gin.H{}
 			for k, v := range input {

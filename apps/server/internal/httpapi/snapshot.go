@@ -80,7 +80,7 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 		key  string
 		read func(context.Context, int32) ([]json.RawMessage, error)
 	}{
-		{"devices", q.SnapshotDevices}, {"tracks", q.SnapshotTracks}, {"activeTasks", q.SnapshotActiveTasks}, {"taskSteps", q.SnapshotTaskSteps}, {"algorithmRuns", q.SnapshotAlgorithmRuns}, {"liveStreams", q.SnapshotLiveStreams}, {"realtimeChannels", q.SnapshotRealtimeChannels}, {"diagnostics", q.SnapshotDiagnostics}, {"mediaPoints", q.SnapshotMedia}, {"algorithmResults", q.SnapshotAlgorithmResults}, {"openAlerts", q.SnapshotAlerts}, {"openIssues", q.SnapshotIssues},
+		{"devices", q.SnapshotDevices}, {"deviceRelations", q.ReadDeviceRelations}, {"tracks", q.SnapshotTracks}, {"activeTasks", q.SnapshotActiveTasks}, {"taskSteps", q.SnapshotTaskSteps}, {"algorithmRuns", q.SnapshotAlgorithmRuns}, {"liveStreams", q.SnapshotLiveStreams}, {"realtimeChannels", q.SnapshotRealtimeChannels}, {"diagnostics", q.SnapshotDiagnostics}, {"mediaPoints", q.SnapshotMedia}, {"algorithmResults", q.SnapshotAlgorithmResults}, {"openAlerts", q.SnapshotAlerts}, {"openIssues", q.SnapshotIssues},
 	}
 	for _, read := range reads {
 		raw, err := read.read(ctx, pid)
@@ -93,7 +93,24 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 		}
 		result[read.key] = rows
 	}
+	deviceControlRaw, err := q.ReadDeviceTree(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
+	deviceControls, err := decodeSnapshotRows(deviceControlRaw)
+	if err != nil {
+		return nil, err
+	}
+	controlsByID := map[any]any{}
+	for _, device := range deviceControls {
+		controlsByID[device["id"]] = device["flightHubControl"]
+	}
 	for _, device := range result["devices"].([]gin.H) {
+		if device["connectorKey"] == "dji.flighthub2" {
+			device["flightHubControl"] = controlsByID[device["id"]]
+			device["capabilities"] = device["rawCapabilities"]
+			applyFHDevicePrerequisites(device)
+		}
 		projectCapabilities(device, project.Role, grants)
 	}
 	now := time.Now()

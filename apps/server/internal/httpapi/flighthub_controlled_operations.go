@@ -46,16 +46,6 @@ func (s *Server) fhControlledOperations(c *gin.Context) {
 		fail()
 		return
 	}
-	raw, e = q.FHControlledCapabilities(ctx, sqlcgen.FHControlledCapabilitiesParams{P1: pid, P2: cid, P3: sql.NullString{String: fhString(row["accountFingerprint"]), Valid: row["accountFingerprint"] != nil}})
-	caps, e := decodeFHRows(raw, e)
-	if e != nil {
-		fail()
-		return
-	}
-	verified := map[string]bool{}
-	for _, r := range caps {
-		verified[fhString(r["capabilityCode"])] = true
-	}
 	raw, e = q.FHControlledJobs(ctx, sqlcgen.FHControlledJobsParams{P1: pid, P2: cid})
 	jobs, e := decodeFHRows(raw, e)
 	if e != nil {
@@ -102,11 +92,8 @@ func (s *Server) fhControlledOperations(c *gin.Context) {
 		if !enabled {
 			missing = append(missing, "功能开关 "+fhString(d["featureFlag"])+" 未开启")
 		}
-		if !verified[code] {
-			missing = append(missing, "缺少 field-write 现场验收")
-		}
 		d["href"] = fmt.Sprintf("/projects/%d/%s/", pid, strings.Trim(fhString(d["href"]), "/"))
-		d["connectorReady"], d["permissionReady"], d["featureEnabled"], d["capabilityVerified"], d["available"], d["missing"] = ready, allowed, enabled, verified[code], len(missing) == 0, missing
+		d["connectorReady"], d["permissionReady"], d["featureEnabled"], d["capabilityVerified"], d["available"], d["missing"] = ready, allowed, enabled, available[code], len(missing) == 0, missing
 		actions = append(actions, d)
 	}
 	if tx.Commit() != nil {

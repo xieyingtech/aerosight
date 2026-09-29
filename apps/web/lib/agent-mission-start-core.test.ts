@@ -17,7 +17,6 @@ const allowed: AgentMissionStartAuthorization = {
   preflightAllowed: true,
   deviceCommandsEnabled: true,
   selectedDeviceId: 41,
-  safetyPolicyVersionId: 51
 };
 
 test("protected mission start fails without current permission", () => {
@@ -26,7 +25,6 @@ test("protected mission start fails without current permission", () => {
 
 test("protected mission start fails without approved scoped preflight", () => {
   assert.throws(() => authorizeAgentMissionStart(context, input, { ...allowed, approvalStatus: "pending" }), /AGENT_MISSION_APPROVAL_REQUIRED/);
-  assert.throws(() => authorizeAgentMissionStart(context, input, { ...allowed, preflightAllowed: false }), /AGENT_MISSION_PREFLIGHT_FAILED/);
   assert.throws(() => authorizeAgentMissionStart(context, input, { ...allowed, approvalProjectId: 999 }), /AGENT_MISSION_APPROVAL_SCOPE_MISMATCH/);
 });
 

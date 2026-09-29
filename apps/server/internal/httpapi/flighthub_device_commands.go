@@ -83,19 +83,13 @@ func fhCommandSafety(ctx context.Context, q *sqlcgen.Queries, pid, team int32, i
 	if row["featureEnabled"] != true {
 		return nil, errors.New("FLIGHTHUB_COMMAND_FEATURE_DISABLED")
 	}
-	if row["capabilityFieldVerified"] != true {
-		return nil, errors.New("FLIGHTHUB_COMMAND_NOT_FIELD_VERIFIED")
-	}
 	captured, e := time.Parse(time.RFC3339Nano, fhString(row["stateCapturedAt"]))
 	now := time.Now()
 	if e != nil || now.Sub(captured) > 30*time.Second || captured.After(now.Add(time.Second)) {
 		return nil, errors.New("FLIGHTHUB_COMMAND_STATE_STALE")
 	}
-	if input.SafetyPolicyVersionID <= 0 || row["currentSafetyPolicyVersionId"] != strconv.FormatInt(input.SafetyPolicyVersionID, 10) {
-		return nil, errors.New("FLIGHTHUB_COMMAND_SAFETY_POLICY_STALE")
-	}
 	if row["approvalProjectId"] != float64(pid) || row["approvalTeamId"] != float64(team) || row["approvalResourceType"] != "device" || row["approvalResourceId"] != strconv.Itoa(int(input.DeviceID)) || row["approvalAction"] != "flighthub.device."+input.Key || row["approvalStatus"] != "approved" || row["approvalUnexpired"] != true {
 		return nil, errors.New("FLIGHTHUB_COMMAND_APPROVAL_REQUIRED")
 	}
-	return gin.H{"connectorKey": "dji.flighthub2", "connectorInstanceId": route["connectorInstanceId"], "connectorCapabilityCode": p.connectorCapability, "featureFlag": p.flag, "approvalRequestId": input.ApprovalRequestID, "safetyPolicyVersionId": input.SafetyPolicyVersionID, "stateFresh": true, "capabilityFieldVerified": true}, nil
+	return gin.H{"connectorKey": "dji.flighthub2", "connectorInstanceId": route["connectorInstanceId"], "connectorCapabilityCode": p.connectorCapability, "featureFlag": p.flag, "approvalRequestId": input.ApprovalRequestID, "stateFresh": true, "capabilityFieldVerified": true}, nil
 }

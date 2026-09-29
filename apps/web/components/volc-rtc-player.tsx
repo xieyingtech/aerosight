@@ -107,7 +107,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
           <RefreshCwIcon className="size-3.5" />重试观看
         </button>
       </div>
-        : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? `正在加入 RTC 房间…${connectionState ? `（${connectionState}）` : ""}` : "已加入，等待 Dock 视频流…"}</div>}
+        : <div><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "joining" ? `正在加入 RTC 房间…${connectionState ? `（${connectionState}）` : ""}` : "已加入，等待设备视频流…"}</div>}
     </div>}
   </div>;
 }

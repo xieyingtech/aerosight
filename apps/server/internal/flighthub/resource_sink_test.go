@@ -203,6 +203,13 @@ func TestResourceSinkBuildsTransactionalStateAndPoseBatch(t *testing.T) {
 	if len(freshness.signals) != 1 || !freshness.signals[0].ObservedAt.Equal(poseItem.CapturedAt) || freshness.signals[0].ReceivedAt != receivedAt {
 		t.Fatalf("freshness signal lost upstream/local time separation: %#v", freshness.signals)
 	}
+	poll.Device.Online = false
+	if err := sink.ApplyDeviceState(context.Background(), connector.Instance{ID: 7, ProjectID: 3}, poll); err != nil {
+		t.Fatal(err)
+	}
+	if len(freshness.signals) != 1 {
+		t.Fatal("cached OSD revived a device reported offline by the directory")
+	}
 }
 
 func TestResourceSinkKeepsInvalidCoordinatesOutOfPoseButRetainsState(t *testing.T) {

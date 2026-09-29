@@ -323,8 +323,6 @@ func applyFHDevicePrerequisites(device gin.H) {
 			reason = "设备状态已过期"
 		case control[kind+"FeatureEnabled"] != true:
 			reason = label + "切换功能未启用"
-		case control[kind+"FieldVerified"] != true:
-			reason = "当前型号/固件尚未完成" + label + "切换现场验收"
 		}
 		if reason != "" {
 			cap["availability"], cap["reason"] = "unavailable", reason

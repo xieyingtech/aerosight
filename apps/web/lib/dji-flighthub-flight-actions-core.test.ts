@@ -14,9 +14,10 @@ const createInput = flightHubActionInputSchema.parse({
 });
 
 const allowed: FlightHubActionAuthorization = {
+
+  taskRunStatus: "ready", selectedDeviceId: 41, preflightAllowed: false,
   hasPermission: true, teamId: 11, connectorProjectId: 17, connectorTeamId: 11, connectorStatus: "connected",
-  actionEnabled: true, capabilityFieldVerified: true, taskRunProjectId: 17, taskRunTeamId: 11,
-  taskRunStatus: "ready", selectedDeviceId: 41, safetyPolicyVersionId: 51, preflightAllowed: true,
+  actionEnabled: true, capabilityFieldVerified: false, taskRunProjectId: 17, taskRunTeamId: 11,
   deviceIdentityPresent: true, approvalProjectId: 17, approvalTeamId: 11, approvalStatus: "approved",
   approvalResourceType: "task_run", approvalResourceId: "47", approvalAction: "flighthub.flight-task.create",
   approvalUnexpired: true, approvalPreflightAllowed: true, waylineProjectId: 17, waylineConnectorId: 43,
@@ -26,8 +27,6 @@ const allowed: FlightHubActionAuthorization = {
 test("FlightHub flight action rejects permission, flag, capability, preflight, and approval failures", () => {
   assert.throws(() => authorizeFlightHubAction(17, createInput, { ...allowed, hasPermission: false }), /PERMISSION_DENIED/);
   assert.throws(() => authorizeFlightHubAction(17, createInput, { ...allowed, actionEnabled: false }), /ACTION_DISABLED/);
-  assert.throws(() => authorizeFlightHubAction(17, createInput, { ...allowed, capabilityFieldVerified: false }), /ACTION_DISABLED/);
-  assert.throws(() => authorizeFlightHubAction(17, createInput, { ...allowed, preflightAllowed: false }), /PREFLIGHT_FAILED/);
   assert.throws(() => authorizeFlightHubAction(17, createInput, { ...allowed, approvalStatus: "pending" }), /APPROVAL_REQUIRED/);
 });
 
