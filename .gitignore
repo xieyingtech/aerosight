@@ -23,3 +23,8 @@ node_modules/
 
 # Logs
 *.log
+
+# Local document preview exports
+docs/report_render/
+docs/report_render_final/
+docs/report_render_final2/
