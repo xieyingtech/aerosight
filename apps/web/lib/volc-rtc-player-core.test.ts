@@ -16,9 +16,10 @@ test("Volc RTC credential parser rejects missing, oversized, and structured secr
   }
 });
 
-test("Volc RTC viewer becomes invisible before joining with default network negotiation", () => {
+test("Volc RTC viewer keeps visible presence without publishing local media", () => {
   const source = readFileSync(new URL("../components/volc-rtc-player.tsx", import.meta.url), "utf8");
-  assert.ok(source.indexOf("await engine.setUserVisibility(false)") < source.indexOf("engine.joinRoom("));
+  assert.doesNotMatch(source, /setUserVisibility\(false\)/);
+  assert.match(source, /isAutoPublish: false/);
   assert.doesNotMatch(source, /JOIN_ROOM_CONFIG|joinWithTcpOnly/);
 });
 

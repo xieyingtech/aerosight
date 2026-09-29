@@ -200,6 +200,12 @@ func mapAircraftCameraChannels(snapshot DeviceStateSnapshot) []StreamChannelStat
 	result := make([]StreamChannelState, 0, len(keys))
 	for _, index := range keys {
 		channel := StreamChannelState{CameraIndex: index, DisplayName: "飞行器相机 " + index, Availability: "degraded", AvailabilityReason: "飞行器相机当前不可用，请确认飞行器已开机并刷新设备目录"}
+		// DJI's camera enum identifies 176 as Vision Assist, not the gimbal.
+		if strings.HasPrefix(index, "176-") {
+			channel.DisplayName = "视觉辅助相机"
+		} else if strings.HasPrefix(index, "81-") && snapshot.Model.Key == "0-91-1" {
+			channel.DisplayName = "云台主相机"
+		}
 		for _, camera := range cameras {
 			if camera.Index == index {
 				channel.Availability, channel.AvailabilityReason = "available", ""

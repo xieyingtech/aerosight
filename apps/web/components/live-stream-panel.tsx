@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
-import { VolcRTCPlayer } from "@/components/volc-rtc-player";
+import { IsolatedRTCPlayer } from "@/components/isolated-rtc-player";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 import { isLiveStreamPlayable } from "@/lib/realtime-workbench-core";
@@ -102,6 +102,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     const controller = new AbortController();
     const retryUntil = Date.now() + 25_000;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     setPlayback({ status: "loading" });
     const loadPlayback = async () => {
       try {
@@ -121,6 +122,9 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
           ...(result.locator ? [{ protocol: "simulator" as const, url: result.locator.url }] : [])];
         if (!result.available || candidates.length === 0) throw new Error("playback unavailable");
         setPlayback({ status: "ready", candidates, index: 0 });
+        // Renew the platform viewing lease while this panel is mounted. The
+        // opaque RTC credential stays unchanged, so this does not rejoin RTC.
+        refreshTimer = setTimeout(() => { void loadPlayback(); }, 20_000);
       } catch (error) {
         if ((error as { name?: string })?.name === "AbortError" || controller.signal.aborted) return;
         if (acceptedFlightHubStart && Date.now() < retryUntil) {
@@ -134,6 +138,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     return () => {
       controller.abort();
       if (retryTimer) clearTimeout(retryTimer);
+      if (refreshTimer) clearTimeout(refreshTimer);
     };
   }, [model.stream?.status, snapshot.project.id, streamId, playbackRevision]);
 
@@ -194,7 +199,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
             ? <video autoPlay className="h-full w-full object-contain" controls muted onError={() => setPlayback((current) => current.status === "ready" && current.index + 1 < current.candidates.length ? { ...current, index: current.index + 1 } : { status: "error" })} src={playback.candidates[playback.index].url} />
           : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "volc-rtc"
-            ? <VolcRTCPlayer credential={playback.candidates[playback.index].url} />
+            ? <IsolatedRTCPlayer credential={playback.candidates[playback.index].url} />
             : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "simulator"
               ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
               : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}

@@ -23,6 +23,7 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   useEffect(() => {
     let disposed = false;
     let cleanup: (() => Promise<void>) | null = null;
+    let rtcError: string | null = null;
     setStatus("joining");
     setErrorCode(null);
     setConnectionState(null);
@@ -61,12 +62,15 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
         });
         engine.on(rtc.default.events.onError, ({ errorCode: code }) => {
           if (!disposed) {
+            rtcError = code;
             setErrorCode(code);
             setStatus("error");
           }
         });
         let joinTimeout: ReturnType<typeof setTimeout> | null = null;
-        await engine.setUserVisibility(false);
+        // Keep the default visible viewer presence. DJI must be able to observe
+        // join/leave events to maintain its live viewing session. No local media
+        // is captured or published by this receive-only engine.
         const joined = engine.joinRoom(parsed.token, parsed.roomId, { userId: parsed.userId }, {
           isAutoPublish: false, isAutoSubscribeAudio: false, isAutoSubscribeVideo: false
         });
@@ -79,8 +83,8 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
         cleanup = null;
         if (release) await enqueueVolcRTCCleanup(release);
         if (!disposed) {
-          setErrorCode(error instanceof Error && error.message === "VOLC_RTC_JOIN_TIMEOUT"
-            ? "JOIN_TIMEOUT" : "CLIENT_INIT_FAILED");
+          setErrorCode(rtcError ?? (error instanceof Error && error.message === "VOLC_RTC_JOIN_TIMEOUT"
+            ? "JOIN_TIMEOUT" : "CLIENT_INIT_FAILED"));
           setStatus("error");
         }
       }
@@ -93,7 +97,9 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
     };
   }, [credential, viewerAttempt]);
 
-  const viewerError = errorCode === "JOIN_TIMEOUT"
+  const viewerError = errorCode === "KICKED_OUT"
+    ? "RTC 服务端已结束当前观看会话。"
+    : errorCode === "JOIN_TIMEOUT"
     ? "直播已启动，但当前浏览器未建立 RTC 观看连接。"
     : "直播已启动，但当前浏览器的 RTC 观看连接失败。";
 

@@ -24,6 +24,15 @@ func TestAircraftVideoChannelsUseActualCameraIndices(t *testing.T) {
 	}
 }
 
+func TestM3TDVideoChannelsIdentifyVisionAssistAndGimbal(t *testing.T) {
+	snapshot := DeviceStateSnapshot{Model: DeviceModel{Key: "0-91-1", Class: "drone"},
+		CameraList: json.RawMessage(`[{"camera_index":"176-0-0"},{"camera_index":"81-0-0"}]`)}
+	channels := MapDeviceState(snapshot).StreamChannels
+	if len(channels) != 2 || channels[0].DisplayName != "视觉辅助相机" || channels[1].DisplayName != "云台主相机" {
+		t.Fatalf("camera roles must remain distinguishable: %+v", channels)
+	}
+}
+
 func mappedFixtureState(t *testing.T, name, serial string) MappedDeviceState {
 	t.Helper()
 	item := loadDeviceFixture(t)[name]

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PlayIcon, RefreshCwIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api-client";
 import { activeProjectStreams, deviceHasLiveSignal } from "@/lib/realtime-workbench-core";
+import { defaultVideoChannel } from "@/lib/device-video-channel";
 import type { ProjectSituationSnapshot, ProjectSnapshotDevice } from "@/lib/project-snapshot-core";
 import { LiveStreamPanel } from "@/components/live-stream-panel";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ export function LiveDeviceWindow({ snapshot, device, selectedStreamId, autoStart
  const [channelKey, setChannelKey] = useState("");
  const channel = channels.find(item => item.channelKey === channelKey)
   ?? channels.find(item => item.channelKey === preferred?.streamKey)
-  ?? channels.find(item => item.availability === "available") ?? channels[0];
+  ?? defaultVideoChannel(channels);
  const stream = streams.find(item => item.streamKey === channel?.channelKey) ?? (!channelKey ? preferred : null);
  const action = device.capabilities?.find(capability => capability.code === "stream.video.control")?.actions.find(action => action.kind === "live");
  const [pending, setPending] = useState(false), [error, setError] = useState("");
