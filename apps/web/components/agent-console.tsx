@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, AudioLines, Bot, Check, History, Loader2, MessageSquare, PhoneOff, Plus, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowUp, AudioLines, Bot, Check, History, Loader2, MessageSquare, PhoneOff, Plus, Sparkles, PanelsTopLeft } from "lucide-react";
 import { apiJSON, apiFetch, APIError } from "@/lib/api-client";
 import { readChatStream } from "@/lib/agent-chat-stream";
 import { AgentRealtimeCall, mergeRealtimeMessage, realtimeErrorMessage } from "@/lib/agent-realtime";
 import { Button } from "@/components/ui/button";
 import { AgentQueryEvidence, agentToolLabel } from "@/components/agent-query-evidence";
 import { ChatMarkdown } from "@/components/chat-markdown";
-import { SiteHeaderActions } from "@/components/site-header";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { AgentSessionView } from "@/lib/web-api-types";
+import { useAgentWorkspace } from "@/components/agent-workspace-context";
+import { missionLiveHref } from "@/lib/mission-live-core";
+import { agentFlightRunId } from "@/lib/agent-floating-flight";
 
 type AgentApproval = NonNullable<AgentSessionView["approvals"]>[number];
 
@@ -34,8 +36,50 @@ function errorMessage(error: unknown) {
 }
 
 export function AgentConsole({ projectId, sessions: initialSessions }: { projectId: number; sessions: AgentSessionView[] }) {
+  const { attach } = useAgentWorkspace();
+  const slot = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (slot.current) return attach(projectId, initialSessions, slot.current);
+  }, [attach, projectId, initialSessions]);
+  return <div ref={slot} className="min-h-0 flex-1" />;
+}
+
+export function AgentConversation({ projectId, sessions: initialSessions, initiallyBlank = false, floating = false, visible = true, unavailableSessions = [], onHeaderChange, onActivity, onFloat, onFlightAccepted }: {
+  projectId: number; sessions: AgentSessionView[]; initiallyBlank?: boolean; floating?: boolean; visible?: boolean; unavailableSessions?: number[];
+  onActivity: (sessionId: number | null, active: boolean, title: string) => void;
+  onHeaderChange: (header: ReactNode) => void;
+  onFloat: () => void; onFlightAccepted: (href: string) => void;
+}) {
   const [sessions, setSessions] = useState(initialSessions);
-  const [activeId, setActiveId] = useState<number | null>(initialSessions[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<number | null>(initiallyBlank ? null : initialSessions[0]?.id ?? null);
+  const [flightRunId, setFlightRunId] = useState<number | null>(null);
+  const flightNavigation = useRef(onFlightAccepted);
+  flightNavigation.current = onFlightAccepted;
+  useEffect(() => {
+    if (!flightRunId) return;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const deadline = Date.now() + 5 * 60_000;
+    const poll = async () => {
+      try {
+        const model = await apiJSON<{ run: Record<string, unknown> }>(`/api/projects/${projectId}/task-runs/${flightRunId}`, { signal: abort.signal });
+        const href = missionLiveHref(projectId, model.run);
+        if (href) { setFlightRunId(null); flightNavigation.current(href); return; }
+        if (["failed", "canceled", "succeeded", "blocked"].includes(String(model.run.status))) {
+          setFlightRunId(null);
+          if (["failed", "blocked"].includes(String(model.run.status))) setError(`飞行任务未被受理：${String(model.run.stateReason || model.run.status)}。请核对任务状态后重新发起授权。`);
+          return;
+        }
+      } catch (failure) {
+        if (abort.signal.aborted) return;
+        if (failure instanceof APIError && [401, 403, 404].includes(failure.status)) { setFlightRunId(null); return; }
+      }
+      if (!abort.signal.aborted && Date.now() < deadline) timer = setTimeout(poll, 2000);
+      else if (!abort.signal.aborted) { setFlightRunId(null); setError("尚未收到飞行任务受理结果，请查看任务状态。"); }
+    };
+    void poll();
+    return () => { abort.abort(); clearTimeout(timer); };
+  }, [flightRunId, projectId]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -84,6 +128,10 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
     });
   }
   const occupied = busy || voice !== "off";
+  const activityCallback = useRef(onActivity);
+  activityCallback.current = onActivity;
+  const conversationTitle = session ? titleOf(session) : "新对话";
+  useEffect(() => { activityCallback.current(activeId, occupied || Boolean(deciding) || flightRunId !== null || Boolean(draft.trim()), conversationTitle); }, [activeId, occupied, deciding, flightRunId, draft, conversationTitle]);
   const voiceButton = !draft.trim();
   // One user message starts a turn; its assistant steps share one identity.
   const messageGroups: Array<AgentSessionView["messages"]> = [];
@@ -217,8 +265,30 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
   async function decide(approvalId: string, decision: "approve" | "reject") {
     if (activeId === null || deciding) return;
     setDeciding(approvalId); setError(null);
+    const approval = approvals.find(item => item.id === approvalId);
+    const receiptMonitor = new AbortController();
+    let receiptTimer: ReturnType<typeof setTimeout> | undefined;
+    let watching = false;
+    const watchFlight = (status: string, receipt: unknown) => {
+      if (watching || !approval || decision !== "approve") return;
+      const flight = agentFlightRunId(approval.toolName, status, approval.input, receipt);
+      if (flight) { watching = true; setFlightRunId(flight); }
+    };
+    // The authorization endpoint also waits for the AI's follow-up reply.
+    // Observe its persisted receipt so live monitoring can open immediately,
+    // while that reply continues in the same floating conversation.
+    const readReceipt = async () => {
+      try {
+        const refreshed = await apiJSON<AgentSessionView[]>(base, { signal: receiptMonitor.signal });
+        const decided = refreshed.find(item => item.id === activeId)?.approvals?.find(item => item.id === approvalId);
+        if (decided) watchFlight(decided.status, decided.result);
+      } catch { /* The original authorization request reports any failure. */ }
+      if (!receiptMonitor.signal.aborted && !watching && mounted.current) receiptTimer = setTimeout(readReceipt, 2000);
+    };
+    if (decision === "approve" && approval && ["launch_flight", "submit_flight", "run_task"].includes(approval.toolName)) receiptTimer = setTimeout(readReceipt, 1000);
     try {
-      const result = await apiJSON<{ status: string; followupStatus?: string }>(`${base}/${activeId}/approvals/${approvalId}`, { method: "POST", body: JSON.stringify({ decision }) });
+      const result = await apiJSON<{ status: string; followupStatus?: string; result?: unknown }>(`${base}/${activeId}/approvals/${approvalId}`, { method: "POST", body: JSON.stringify({ decision }) });
+      watchFlight(result.status, result.result);
       setSessions(await apiJSON<AgentSessionView[]>(base));
       if (decision === "approve" && result.followupStatus === "failed") setError("授权结果已保存，但智能体回复暂未生成，请查看工具结果。");
     } catch (failure) {
@@ -229,7 +299,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
       else if (failure instanceof APIError && failure.status === 404) setError("授权记录已失效，请让智能体重新发起操作。");
       else setError("授权处理失败，请稍后重试。");
       try { setSessions(await apiJSON<AgentSessionView[]>(base)); } catch { /* keep current view */ }
-    } finally { setDeciding(null); }
+    } finally { receiptMonitor.abort(); clearTimeout(receiptTimer); setDeciding(null); }
   }
 
   function approvalDescription(approval: NonNullable<AgentSessionView["approvals"]>[number]) {
@@ -250,9 +320,8 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
     return linked.length > 0 && linked.every(approval => approval.status !== "pending" || Date.parse(approval.expiresAt) <= now);
   }
 
-  return <section aria-label="项目智能体聊天" className="flex h-[calc(100dvh-6rem)] min-h-0 flex-col">
-    <h1 className="sr-only">项目智能体</h1>
-    <SiteHeaderActions>
+  const header = <>
+      <Button size="icon" variant="ghost" title="悬浮当前会话" aria-label="悬浮当前会话" onClick={onFloat} disabled={activeId === null && !pending && !draft.trim() && voice === "off"}><PanelsTopLeft className="size-5" /></Button>
       <Button size="icon" variant="ghost" title="新对话" aria-label="新对话" onClick={() => select(null)} disabled={occupied}><Plus className="size-5" /></Button>
       <DropdownMenu open={historyOpen} onOpenChange={setHistoryOpen}>
         <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" title="历史会话" aria-label="历史会话" disabled={occupied}><History className="size-5" /></Button></DropdownMenuTrigger>
@@ -260,7 +329,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
           <DropdownMenuLabel>历史会话</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <div className="max-h-80 overflow-y-auto">
-            {sessions.map(item => <DropdownMenuItem key={item.id} onSelect={() => select(item.id)} className="gap-3 px-3 py-3" aria-current={activeId === item.id ? "true" : undefined}>
+            {sessions.filter(item => !unavailableSessions.includes(item.id)).map(item => <DropdownMenuItem key={item.id} onSelect={() => select(item.id)} className="gap-3 px-3 py-3" aria-current={activeId === item.id ? "true" : undefined}>
               <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1"><span className="block truncate">{titleOf(item)}</span><span className="mt-1 block text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}</span></span>
               {activeId === item.id && <Check className="size-4 shrink-0 text-primary" />}
@@ -271,8 +340,17 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
           <p className="px-3 py-2 text-xs text-muted-foreground">仅显示你在当前项目的对话</p>
         </DropdownMenuContent>
       </DropdownMenu>
-    </SiteHeaderActions>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8" role="log" aria-label="对话消息" aria-live="polite">
+    </>;
+  const headerCallback = useRef(onHeaderChange);
+  headerCallback.current = onHeaderChange;
+  useEffect(() => {
+    headerCallback.current(!floating && visible ? header : null);
+  }, [floating, visible, sessions, activeId, occupied, pending, Boolean(draft.trim()), historyOpen, unavailableSessions.join(",")]);
+  useEffect(() => () => headerCallback.current(null), []);
+
+  return <section aria-label="项目智能体聊天" className={`flex min-h-0 flex-col ${floating ? "h-full" : "h-[calc(100dvh-6rem)]"}`}>
+    <h1 className="sr-only">项目智能体</h1>
+      <div className={`min-h-0 flex-1 overflow-y-auto px-4 py-4 ${floating ? "" : "sm:px-8"}`} role="log" aria-label="对话消息" aria-live="polite">
         {!messages.length && !pending && voice === "off" ? <div className="mx-auto flex min-h-full max-w-2xl flex-col justify-center py-1">
           <div className="mb-3 flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Sparkles className="size-5" /></div>
           <p className="mb-2 text-2xl font-semibold tracking-tight">今天想了解项目的什么？</p>
@@ -293,17 +371,7 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
                   const evidence = approval ? { ...call, status: expired ? "expired" : approval.status === "pending" ? "confirmation_required" : approval.status, summary: approvalDescription(approval) } : call;
                   return <div key={index}>
                     <AgentQueryEvidence toolCalls={[evidence]} inline />
-                    {approval?.status === "pending" && !expired && session?.status === "open" ? <div className="rounded-lg border bg-card px-3 py-3 text-sm">
-                      <p className="font-medium">请确认 · {agentToolLabel(approval.toolName)}{approval.taskId ? ` · 任务 #${approval.taskId}` : approval.issueId ? ` · 案件 #${approval.issueId}` : ""}</p>
-                      <p className="mt-1 whitespace-pre-wrap break-words">{approvalDescription(approval)}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{approval.toolName === "mutate_issue" ? `基于案件版本 ${approval.expectedVersion}，执行时会重新检查权限和版本。` : "执行时会重新检查当前账号权限及平台资源状态。"}</p>
-                      {approval.input && <details className="mt-2"><summary className="cursor-pointer text-xs text-muted-foreground">查看本次执行参数</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">{JSON.stringify(approval.input, null, 2)}</pre></details>}
-                      {["run_task", "set_task_state", "submit_flight", "control_flight", "control_task_run"].includes(approval.toolName) && <p className="mt-2 font-medium text-amber-700 dark:text-amber-400">此操作可能影响真实设备或后续定时运行。提交成功不等于飞机已起飞或停止。</p>}
-                      <div className="mt-3 flex gap-2">
-                        <Button size="sm" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "approve")}>{deciding === approval.id ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}授权执行</Button>
-                        <Button size="sm" variant="outline" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "reject")}>拒绝</Button>
-                      </div>
-                    </div> : null}
+                    {approval?.status === "pending" && !expired && <p className="mt-1 text-xs text-muted-foreground">已请求授权 · 请在下方确认</p>}
                     {expired ? <p className="mt-1 text-xs text-muted-foreground">本次授权已过期，请重新向智能体发起操作。</p> : null}
                     {approval?.status === "executing" && <p className="mt-1 text-xs text-muted-foreground">授权已提交，正在处理；若长时间未更新，请核对平台任务或飞行作业，勿重复提交。</p>}
                     {approval?.result != null && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">查看平台返回结果</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(approval.result, null, 2)}</pre></details>}
@@ -327,8 +395,24 @@ export function AgentConsole({ projectId, sessions: initialSessions }: { project
         </div>}
         <div ref={end} />
       </div>
-      <div className="shrink-0 px-4 pb-4 sm:px-8">
+      <div className={`sticky bottom-0 z-20 shrink-0 bg-background/95 px-4 pb-4 pt-3 backdrop-blur-sm ${floating ? "" : "sm:px-8"}`}>
+        {flightRunId && <p role="status" className="mb-2 text-xs text-muted-foreground">等待飞行任务受理，随后自动打开直播…</p>}
         <div className="mx-auto max-w-3xl">
+          {session?.status === "open" && approvals.some(approval => approval.status === "pending" && Date.parse(approval.expiresAt) > now) && <section aria-label="待授权操作" className="mb-3 max-h-[min(18rem,35dvh)] space-y-2 overflow-y-auto">
+            {approvals.filter(approval => approval.status === "pending" && Date.parse(approval.expiresAt) > now).map(approval => <div key={approval.id} className="rounded-xl border bg-card p-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-medium">请确认 · {agentToolLabel(approval.toolName)}{approval.taskId ? ` · 任务 #${approval.taskId}` : approval.issueId ? ` · 案件 #${approval.issueId}` : ""}</p>
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "approve")}>{deciding === approval.id ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}授权执行</Button>
+                  <Button size="sm" variant="outline" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "reject")}>拒绝</Button>
+                </div>
+              </div>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm">{approvalDescription(approval)}</p>
+              {approval.input && <details className="mt-2"><summary className="cursor-pointer text-xs text-muted-foreground">查看本次执行参数</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">{JSON.stringify(approval.input, null, 2)}</pre></details>}
+              <p className="mt-2 text-xs text-muted-foreground">{approval.toolName === "mutate_issue" ? `基于案件版本 ${approval.expectedVersion}，执行时重新检查权限和版本。` : "执行时重新检查当前账号权限及资源状态。"}</p>
+              {["launch_flight", "run_task", "set_task_state", "submit_flight", "control_flight", "control_task_run"].includes(approval.toolName) && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">可能影响真实设备或后续定时运行；提交成功不等于飞机已起飞或停止。</p>}
+            </div>)}
+          </section>}
           {error && <p role="alert" className="mb-3 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
           {session && session.status !== "open" ? <p className="mb-3 text-sm text-muted-foreground">此对话已结束，可以新建对话继续交流。</p> : null}
           <form onSubmit={event => { event.preventDefault(); void send(); }} className="rounded-2xl border bg-muted/15 p-3 shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">

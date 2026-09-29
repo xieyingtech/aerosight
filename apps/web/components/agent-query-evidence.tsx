@@ -16,6 +16,7 @@ const queryNames: Record<string, string> = {
   run_task: "启动任务",
   control_task_run: "任务运行控制",
   submit_flight: "提交真实飞行",
+  launch_flight: "执行航线飞行",
   control_flight: "飞行控制",
   run_algorithm: "图片算法识别",
   review_inspection: "巡检人工复核",

@@ -7,6 +7,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { SessionProvider, useSessionUser } from "@/components/session-provider";
 import { APIStateView } from "@/components/api-state";
 import { useAPI } from "@/lib/use-api";
+import { AgentWorkspace } from "@/components/agent-workspace";
 
 function Shell({ children }: { children: ReactNode }) {
   const user = useSessionUser();
@@ -14,7 +15,7 @@ function Shell({ children }: { children: ReactNode }) {
   if (!user) return null;
   return <APIStateView state={projects}>{(projects) => <SidebarProvider>
     <Suspense><AppSidebar projects={projects} user={user} /></Suspense>
-    <SidebarInset><SiteHeaderLayout><main className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</main></SiteHeaderLayout></SidebarInset>
+    <SidebarInset><SiteHeaderLayout><AgentWorkspace projects={projects}><main className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</main></AgentWorkspace></SiteHeaderLayout></SidebarInset>
   </SidebarProvider>}</APIStateView>;
 }
 

@@ -92,12 +92,51 @@ func TestManualFlightLaunchScopedIdempotentRBAC(t *testing.T) {
 	body["waylineResourceId"] = route + 1000
 	body["idempotencyKey"] = "foreign-wayline-test"
 	call("POST", endpoint, body, 403)
+	// The Copilot wrapper must not enqueue anything until a scoped human click.
+	call("POST", "/api/admin/ai-providers", json.RawMessage(aiProviderBody), 201)
+	stubApprovalFollowup(t, f, "飞行操作已入队，等待司空受理。")
+	session := call("POST", fmt.Sprintf("/api/projects/%d/agent-sessions", pid), nil, 201)
+	sid := int32(session["id"].(float64))
+	var uid int32
+	if err := f.db.QueryRow("select id from users where email='admin@example.com'").Scan(&uid); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(gin.H{"deviceId": aircraft, "waylineResourceId": route, "name": "测试", "waylinePrecisionType": "gps", "rthAltitude": 50})
+	proposal, err := f.server.proposeWorkflowWrite(context.Background(), uid, int32(pid), sid, "launch_flight", raw, "agent-flight-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var beforeClick int
+	if err := f.db.QueryRow("select count(*) from connector_action_jobs where project_id=$1", pid).Scan(&beforeClick); err != nil || beforeClick != 1 {
+		t.Fatal("flight queued before human click", beforeClick, err)
+	}
+	approvalPath := fmt.Sprintf("/api/projects/%d/agent-sessions/%d/approvals/%s", pid, sid, proposal["approvalId"])
+	approved := call("POST", approvalPath, gin.H{"decision": "approve"}, 200)
+	if approved["status"] != "succeeded" {
+		t.Fatal(approved)
+	}
+	output := approved["result"].(map[string]any)["output"].(map[string]any)
+	if output["runId"] == nil {
+		t.Fatal("no run ID for realtime navigation", approved)
+	}
+	call("POST", approvalPath, gin.H{"decision": "approve"}, 409)
+	agentJob, err := store.Load(context.Background(), int(pid), output["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
 	exec(`update team_members set role='member' where team_id=$1 and user_id=(select id from users where email='admin@example.com')`, team)
 	body["waylineResourceId"] = route
 	body["idempotencyKey"] = "no-permission-test"
 	call("POST", endpoint, body, 403)
 	var count int
-	if err := f.db.QueryRow(`select count(*) from connector_action_jobs where project_id=$1`, pid).Scan(&count); err != nil || count != 1 {
+	if err := f.db.QueryRow(`select count(*) from connector_action_jobs where project_id=$1`, pid).Scan(&count); err != nil || count != 2 {
 		t.Fatal("unexpected queued writes", count, err)
+	}
+	if err := store.Fail(context.Background(), agentJob, "request_invalid"); err != nil {
+		t.Fatal(err)
+	}
+	var runStatus, reason string
+	if err := f.db.QueryRow("select status,state_reason from task_runs where project_id=$1 and id=$2", pid, agentJob.TaskRunID).Scan(&runStatus, &reason); err != nil || runStatus != "failed" || reason != "request_invalid" {
+		t.Fatal("failed flight left its run dispatching", runStatus, reason, err)
 	}
 }

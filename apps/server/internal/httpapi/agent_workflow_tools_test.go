@@ -18,6 +18,7 @@ func TestAgentWorkflowInputBoundaries(t *testing.T) {
 		{"run_task", `{"taskId":1,"expectedVersionId":2,"inputs":{}}`},
 		{"run_algorithm", `{"configurationSnapshotId":1,"assetId":2,"parameters":{}}`},
 		{"publish_task", `{"taskId":1,"versionId":2,"expectedRevision":1}`},
+		{"launch_flight", `{"deviceId":1,"waylineResourceId":2,"name":"测试","waylinePrecisionType":"gps","rthAltitude":50}`},
 	} {
 		if _, _, err := parseAgentWorkflowInput(tc.name, json.RawMessage(tc.raw)); err != nil {
 			t.Fatalf("%s: %v", tc.name, err)
@@ -29,6 +30,9 @@ func TestAgentWorkflowInputBoundaries(t *testing.T) {
 		{"run_algorithm", `{"configurationSnapshotId":1,"assetId":2,"parameters":{},"url":"https://evil.example"}`},
 		{"publish_task", `{"taskId":1.5,"versionId":2,"expectedRevision":1}`},
 		{"generate_report", `{"taskRunId":0}`},
+		{"launch_flight", `{"deviceId":1,"waylineResourceId":2,"name":"测试","waylinePrecisionType":"gps","rthAltitude":19}`},
+		{"launch_flight", `{"deviceId":1,"waylineResourceId":2,"name":"测试","waylinePrecisionType":"gnss","rthAltitude":50}`},
+		{"launch_flight", `{"deviceId":1,"waylineResourceId":2,"name":"测试","waylinePrecisionType":"gps","rthAltitude":50,"idempotencyKey":"model-key"}`},
 		{"http_request", `{"path":"/admin"}`},
 		{"submit_flight", `{"connectorId":1,"taskRunId":2,"approvalRequestId":"missing","waylineResourceId":3,"request":{"taskType":"recurring"}}`},
 	} {

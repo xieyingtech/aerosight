@@ -53,6 +53,7 @@ func agentJSON() map[string]any { return map[string]any{"type": "object"} }
 // business handlers used by the platform enforce their resource and safety gates.
 func agentWorkflowTools() []agentWorkflowTool {
 	return []agentWorkflowTool{
+		{"launch_flight", "申请从已有设备和司空航线创建并执行一次真实立即飞行。先用 query_inspection 的 flight_launch_options（deviceId）查询可用航线及实际执行机场；无需先创建业务任务或额外审批 ID。定位 gps 表示 GNSS，rtk 表示 RTK，返航高度范围 20–500 米。只生成待授权操作，必须等用户手动点击后执行；入队不代表已经起飞，禁止重复申请下发同一飞行。", "mission:operate", agentObject(map[string]any{"deviceId": agentID(), "waylineResourceId": agentID(), "name": agentText(), "waylinePrecisionType": agentEnum("gps", "rtk"), "rthAltitude": map[string]any{"type": "integer", "minimum": 20, "maximum": 500}}, "deviceId", "waylineResourceId", "name", "waylinePrecisionType", "rthAltitude")},
 		{"sync_flight_resources", "申请同步司空飞行记录与媒体目录。只更新平台资源，不会启动飞行；需连接器管理权限。", "device:configure", agentObject(map[string]any{"connectorId": agentID()}, "connectorId")},
 		{"create_inspection_task", "申请创建停用的巡检任务及草稿。definition 使用 AeroSight Task JSON；创建不会发布、启用或运行。", "mission:operate", agentObject(map[string]any{"definition": agentJSON()}, "definition")},
 		{"save_task_draft", "申请保存任务草稿配置。先查询任务工作台获得 versionId 和 expectedRevision。", "mission:operate", agentObject(map[string]any{"taskId": agentID(), "versionId": agentID(), "expectedRevision": agentID(), "definition": agentJSON()}, "taskId", "versionId", "expectedRevision", "definition")},
@@ -109,7 +110,7 @@ func parseAgentWorkflowInput(name string, raw json.RawMessage) (agentWorkflowToo
 func validateAgentResources(ctx context.Context, q *sqlcgen.Queries, db interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, pid int32, args map[string]any) error {
-	tables := map[string]string{"taskId": "tasks", "versionId": "task_versions", "taskRunId": "task_runs", "connectorId": "device_adapters", "assetId": "assets", "configurationSnapshotId": "algorithm_definition_versions", "assessmentId": "inspection_assessments", "waylineResourceId": "connector_remote_resources", "targetResourceId": "connector_remote_resources"}
+	tables := map[string]string{"deviceId": "devices", "taskId": "tasks", "versionId": "task_versions", "taskRunId": "task_runs", "connectorId": "device_adapters", "assetId": "assets", "configurationSnapshotId": "algorithm_definition_versions", "assessmentId": "inspection_assessments", "waylineResourceId": "connector_remote_resources", "targetResourceId": "connector_remote_resources"}
 	for key, table := range tables {
 		if id, ok := args[key]; ok {
 			var exists bool
@@ -168,6 +169,12 @@ func (s *Server) proposeWorkflowWrite(ctx context.Context, uid, pid, sid int32, 
 
 func workflowApprovalSummary(name string, args map[string]any) string {
 	switch name {
+	case "launch_flight":
+		precision := "GNSS"
+		if args["waylinePrecisionType"] == "rtk" {
+			precision = "RTK"
+		}
+		return fmt.Sprintf("执行一次真实飞行：设备 #%v，航线 #%v，名称“%v”，%s 定位，返航高度 %v 米。点击授权后立即下发。", args["deviceId"], args["waylineResourceId"], args["name"], precision, args["rthAltitude"])
 	case "sync_flight_resources":
 		return fmt.Sprintf("同步连接器 #%v 的飞行记录和照片目录；不会启动飞行。", args["connectorId"])
 	case "create_inspection_task":
@@ -226,6 +233,11 @@ func (s *Server) workflowHandler(name string, args map[string]any, key string) (
 		delete(call.body, "taskRunId")
 	}
 	switch name {
+	case "launch_flight":
+		call.params = append(call.params, agentParam("deviceId", args["deviceId"]))
+		delete(call.body, "deviceId")
+		call.body["idempotencyKey"] = key
+		call.handler = s.fhFlightLaunch
 	case "sync_flight_resources":
 		call.params = append(call.params, agentParam("connectorId", args["connectorId"]))
 		call.body = map[string]any{}
@@ -414,14 +426,34 @@ func (s *Server) decideWorkflowWrite(c *gin.Context, uid, pid, sid int32, id, na
 	}
 	followup := "sent"
 	message := fmt.Sprintf("用户已手动授权工具 %s。平台 API 返回状态 %d，授权处理结果 %s，返回内容：%s。只根据返回状态说明结果；入队或接受不代表运行、起飞、识别或报告已完成。", name, status, terminal, string(encoded))
-	if e := s.appendApprovalFollowup(ctx, uid, pid, sid, message, c.GetHeader("X-Request-ID")); e != nil {
+	var followupErr error
+	if name == "launch_flight" {
+		// Flight receipts must retain the exact run identity and execution state.
+		// A generated paraphrase cannot establish whether physical flight occurred.
+		message = "飞行授权处理结果尚需核对，请查看平台运行记录，勿重复下发。"
+		var flightReceipt struct {
+			Output struct {
+				RunID int32 `json:"runId"`
+			} `json:"output"`
+		}
+		_ = json.Unmarshal(encoded, &flightReceipt)
+		if terminal == "succeeded" && flightReceipt.Output.RunID > 0 {
+			message = fmt.Sprintf("已收到你的手动授权，真实飞行操作已入队，运行编号 #%d。入队不代表已起飞；平台会在司空受理后打开实时作业，请观察设备状态和直播。", flightReceipt.Output.RunID)
+		} else if terminal == "failed" {
+			message = "飞行授权处理失败，请查看平台错误和运行记录；本次操作不会自动重复下发。"
+		}
+		_, followupErr = s.appendAgentMessage(ctx, uid, pid, sid, "assistant", message, nil, c.GetHeader("X-Request-ID"))
+	} else {
+		followupErr = s.appendApprovalFollowup(ctx, uid, pid, sid, message, c.GetHeader("X-Request-ID"))
+	}
+	if followupErr != nil {
 		followup = "failed"
 	}
 	c.JSON(200, gin.H{"status": terminal, "result": receipt, "followupStatus": followup})
 }
 
 func agentInspectionQuerySchema() map[string]any {
-	p := map[string]any{"resource": agentEnum("readiness", "task_templates", "validate_task", "task", "task_run", "task_run_audit", "flight_operations", "flight_plan_options", "flight_plan", "flight_job", "observation", "photo", "evidence_set", "assessment", "report", "algorithms", "algorithm_run"), "definition": agentJSON()}
+	p := map[string]any{"resource": agentEnum("readiness", "task_templates", "validate_task", "task", "task_run", "task_run_audit", "flight_operations", "flight_launch_options", "flight_plan_options", "flight_plan", "flight_job", "observation", "photo", "evidence_set", "assessment", "report", "algorithms", "algorithm_run"), "definition": agentJSON()}
 	for _, k := range []string{"taskId", "taskRunId", "connectorId", "deviceId", "waylineResourceId", "assetId"} {
 		p[k] = agentID()
 	}
@@ -450,6 +482,9 @@ func (s *Server) executeInspectionQuery(ctx context.Context, uid, pid int32, raw
 	}
 	valid := true
 	switch args["resource"] {
+	case "flight_launch_options":
+		valid = require("deviceId")
+		call.handler = s.fhFlightLaunch
 	case "task_templates":
 		call.handler = func(c *gin.Context) {
 			if _, e := s.projectAccess(ctx, s.queries, uid, pid, "project:view"); e != nil {
