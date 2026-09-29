@@ -62,6 +62,9 @@ func TestManualFlightChecksAndSingleDispatch(t *testing.T) {
 			if creates != 1 || client.request.WaylinePrecisionType != "gps" || client.request.RTHAltitude != 50 || store.completedTask.Status != "waiting" {
 				t.Fatal("incorrect dispatch", calls, client.request, store.completedTask)
 			}
+			if _, err := validateFlightTaskCreate(client.request); err != nil {
+				t.Fatal("standalone build rejected the validated GNSS flight", err)
+			}
 		})
 	}
 }

@@ -313,8 +313,25 @@ func (store *SQLFlightActionStore) Complete(ctx context.Context, job FlightActio
 }
 
 func (store *SQLFlightActionStore) Fail(ctx context.Context, job FlightActionJob, code string) error {
-	return store.update(ctx, `update connector_action_jobs set status='failed',last_error_code=$3,updated_at=now()
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `update connector_action_jobs set status='failed',last_error_code=$3,updated_at=now()
 		where id=$1::uuid and project_id=$2 and status not in('succeeded','failed','blocked')`, job.ID, job.ProjectID, code)
+	if err != nil {
+		return err
+	}
+	if count, _ := result.RowsAffected(); count > 0 {
+		// Workflow runs are finalized by their step engine. Direct device flights
+		// have no steps, so finalize their execution record with the failed job.
+		_, err = tx.ExecContext(ctx, `update task_runs set status='failed',state_version=state_version+1,state_reason=$3,finished_at=coalesce(finished_at,now()) where id=$1 and project_id=$2 and input_snapshot_json->>'source'='manual-device-flight' and status not in('succeeded','failed','canceled')`, job.TaskRunID, job.ProjectID, code)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (store *SQLFlightActionStore) Block(ctx context.Context, job FlightActionJob, code string) (returnedErr error) {

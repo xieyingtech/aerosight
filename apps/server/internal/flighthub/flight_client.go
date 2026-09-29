@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	_ "time/tzdata" // Keep IANA zones available in standalone Windows/trimpath builds.
 )
 
 const maxFlightTaskBatch = 100
