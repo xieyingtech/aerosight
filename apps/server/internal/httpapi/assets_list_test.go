@@ -41,11 +41,21 @@ func TestProjectAssetListContract(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("available rows %+v", rows)
 	}
-	if len(rows[0]) != 5 || rows[0]["mimeType"] != nil || rows[0]["capturedAt"] != nil || rows[0]["createdAt"] != "2026-09-01T02:00:00.000Z" || rows[1]["createdAt"] != "2026-09-01T00:00:00.000Z" {
+	if len(rows[0]) != 7 || rows[0]["mimeType"] != nil || rows[0]["capturedAt"] != nil || rows[0]["createdAt"] != "2026-09-01T02:00:00.000Z" || rows[1]["createdAt"] != "2026-09-01T00:00:00.000Z" {
 		t.Fatalf("DTO/order %+v", rows)
 	}
 	if _, ok := rows[0]["id"].(float64); !ok {
 		t.Fatal("asset ID must be JSON number")
+	}
+	if _, err := f.db.Exec(`update assets set metadata_json='{"fileName":"inspection.jpg","sourceDescription":"Flight capture"}' where project_id=$1 and logical_key='2'`, pid); err != nil {
+		t.Fatal(err)
+	}
+	named := read()[0]
+	if named["name"] != "inspection.jpg" || named["sourceDescription"] != "Flight capture" {
+		t.Fatalf("missing selector metadata %+v", named)
+	}
+	if _, ok := named["storageKey"]; ok {
+		t.Fatal("private storage key exposed")
 	}
 	otherTeam, otherPID := f.project(t)
 	if _, err := f.db.Exec(`insert into assets(project_id,team_id,kind,storage_key,logical_key,status) values($1,$2,'image','other','other','available')`, otherPID, otherTeam); err != nil {

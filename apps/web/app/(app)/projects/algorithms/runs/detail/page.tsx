@@ -1,31 +1,87 @@
 "use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft, CheckCircle2, CircleDashed, FileText, ImageIcon, List, XCircle } from "lucide-react";
+import { AlgorithmAssetPreview } from "@/components/algorithm-asset-preview";
 import { AlgorithmRunRetryButton } from "@/components/algorithm-run-retry-button";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
+import { apiJSON } from "@/lib/api-client";
+import { useAPI } from "@/lib/use-api";
+import { assetName, formatDuration, runDetections, runStatus, type AlgorithmAsset } from "@/lib/algorithm-workspace";
 import type { AlgorithmRunDetail } from "@/lib/web-api-types";
 
-import { positiveParam, uuidParam, StaticAPIPage } from "@/components/static-api-page";
-type Model = AlgorithmRunDetail;
+type Section = "result" | "summary" | "logs";
+function RunDetail({ initial, projectId }: { initial: AlgorithmRunDetail; projectId: number }) {
+ const [model, setModel] = useState(initial);
+ const [section, setSection] = useState<Section>("result");
+ const [showBoxes, setShowBoxes] = useState(true);
+ const [refreshError, setRefreshError] = useState(false);
+ const {run, attempts, view} = model;
+ const assets = useAPI<AlgorithmAsset[]>(`/api/projects/${projectId}/assets`);
+ const asset = assets.data?.find(a => a.id === run.inputAssetId);
+ const detections = runDetections(run.canonicalResult);
+ const isDetection = run.canonicalResult.kind === "detection";
+ const durations = attempts.map(a => a.durationMs).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
+ const duration = durations.length ? durations.reduce((a,b)=>a+b,0) : null;
+ const active = ["queued", "running", "polling", "waiting_callback"].includes(run.status);
+ useEffect(() => {
+  if (!active) return;
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout>;
+  async function refresh() {
+   try { const next = await apiJSON<AlgorithmRunDetail>(`/api/projects/${projectId}/algorithm-runs/${initial.run.id}`, {signal:controller.signal}); if (!controller.signal.aborted) {setModel(next); setRefreshError(false);} }
+   catch {if (!controller.signal.aborted) setRefreshError(true);}
+   if (!controller.signal.aborted) timer = setTimeout(refresh, 3000);
+  }
+  timer = setTimeout(refresh, 1500);
+  return () => {controller.abort(); clearTimeout(timer);};
+ }, [active, projectId, initial.run.id]);
+ const StatusIcon = run.status === "succeeded" ? CheckCircle2 : ["failed", "timed_out"].includes(run.status) ? XCircle : CircleDashed;
+ return <Page title={run.definitionName} description={`运行 #${run.id.slice(0,8)}`} actions={view.retryAllowed ? <AlgorithmRunRetryButton projectId={projectId} runId={run.id}/> : undefined}>
+  <Link href={`/projects/${projectId}/algorithms/`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4"/>所有运行</Link>
+  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-y py-4 text-sm">
+   <span className="inline-flex items-center gap-2"><StatusIcon className={`size-4 ${run.status==='succeeded'?'text-green-600':['failed','timed_out'].includes(run.status)?'text-destructive':''}`}/>{runStatus(run.status)}</span>
+   <span>{run.providerName}</span><span className="text-muted-foreground">调用耗时 {formatDuration(duration)}</span>
+   <time className="text-muted-foreground">{new Date(run.createdAt).toLocaleString('zh-CN')}</time>
+  </div>
+  {run.errorCode && <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{run.errorMessage || run.errorCode}</p>}
+  {refreshError && <p role="status" className="mt-3 text-sm text-muted-foreground">状态更新暂时失败，正在重试。</p>}
+  <div className="mt-6 grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)]">
+   <nav aria-label="运行详情" className="flex gap-1 lg:flex-col">
+    {([{id:'result',label:'识别结果',icon:ImageIcon},{id:'summary',label:'运行概览',icon:FileText},{id:'logs',label:'调用记录',icon:List}] as const).map(item=><button key={item.id} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined} className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${section===item.id?'bg-muted font-medium':'text-muted-foreground hover:bg-muted/60'}`}><item.icon className="size-4"/>{item.label}</button>)}
+   </nav>
+   <div className="min-w-0 space-y-5">
+    {section==='result' && <>
+     <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{isDetection?'识别结果':'算法结果'}{isDetection && <Badge variant="secondary" className="ml-2">{detections.length} 个目标</Badge>}</h2>{isDetection && <label className="flex items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" checked={showBoxes} onChange={e=>setShowBoxes(e.target.checked)}/>显示目标框</label>}</div>
+     {active ? <p className="py-12 text-center text-sm text-muted-foreground">{runStatus(run.status)}，结果将自动更新。</p> : <div className={`grid items-start gap-4 ${isDetection ? 'xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]' : ''}`}>
+      {view.input.mimeType?.startsWith('image/') && <div className="rounded-lg border bg-muted/20 p-4"><AlgorithmAssetPreview key={run.inputAssetId} projectId={projectId} assetId={run.inputAssetId} detections={showBoxes?detections:[]}/><p className="mt-3 text-center text-xs text-muted-foreground">{asset?assetName(asset):`素材 #${run.inputAssetId}`}</p></div>}
+      {isDetection ? <div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead className="w-20">目标</TableHead><TableHead>类别</TableHead><TableHead className="text-right">置信度</TableHead></TableRow></TableHeader><TableBody>{detections.map((d,i)=><TableRow key={d.detectionKey||i}><TableCell className="text-muted-foreground">{i+1}</TableCell><TableCell>{d.label}</TableCell><TableCell className="text-right tabular-nums">{(d.confidence*100).toFixed(1)}%</TableCell></TableRow>)}{!detections.length && <TableRow><TableCell colSpan={3} className="py-8 text-center text-muted-foreground">{run.status==='succeeded'?'未识别到目标':'暂无识别结果'}</TableCell></TableRow>}</TableBody></Table></div> : <pre className="max-h-96 overflow-auto rounded-md border bg-muted/30 p-4 text-xs">{JSON.stringify(run.canonicalResult.result??run.canonicalResult,null,2)}</pre>}
+     </div>}
+     {!!view.diagnostics.length && <div className="text-sm text-destructive">{view.diagnostics.map(d=><p key={d}>{d}</p>)}</div>}
+     <details className="rounded-lg border p-4 text-sm"><summary className="cursor-pointer text-muted-foreground">标准化结果 JSON</summary><pre className="mt-3 max-h-96 overflow-auto text-xs">{JSON.stringify(run.canonicalResult,null,2)}</pre></details>
+    </>}
+    {section==='summary' && <>
+     <h2 className="font-semibold">运行概览</h2>
+     <dl className="grid grid-cols-[100px_minmax(0,1fr)] gap-x-5 gap-y-4 border-y py-5 text-sm">
+      <dt className="text-muted-foreground">输入素材</dt><dd>{asset?assetName(asset):`素材 #${run.inputAssetId}`} · v{view.input.assetVersion??'—'}</dd>
+      <dt className="text-muted-foreground">算法服务</dt><dd>{run.providerName}</dd>
+      <dt className="text-muted-foreground">模型</dt><dd>{view.provenance.modelOrProcess??'—'}</dd>
+      <dt className="text-muted-foreground">模型版本</dt><dd>{view.provenance.modelRevision??'—'}</dd>
+      <dt className="text-muted-foreground">开始时间</dt><dd>{run.startedAt?new Date(run.startedAt).toLocaleString('zh-CN'):'—'}</dd>
+      <dt className="text-muted-foreground">结束时间</dt><dd>{run.finishedAt?new Date(run.finishedAt).toLocaleString('zh-CN'):'—'}</dd>
+     </dl>
+     <h3 className="text-sm font-medium">运行参数</h3><pre className="overflow-auto rounded-md border bg-muted/30 p-4 text-xs">{JSON.stringify(view.input.parameters,null,2)}</pre>
+     {asset?.sourceDescription && <p className="text-sm text-muted-foreground">{asset.sourceDescription}</p>}
+     <details className="rounded-lg border p-4 text-sm"><summary className="cursor-pointer text-muted-foreground">结果溯源</summary><pre className="mt-3 overflow-auto text-xs">{JSON.stringify({provenance:view.provenance,rawResult:view.rawResult},null,2)}</pre></details>
+    </>}
+    {section==='logs' && <><h2 className="font-semibold">调用记录</h2><div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead>尝试</TableHead><TableHead>状态</TableHead><TableHead>HTTP</TableHead><TableHead>耗时</TableHead><TableHead>错误</TableHead></TableRow></TableHeader><TableBody>{attempts.map(a=><TableRow key={String(a.attempt)}><TableCell>#{String(a.attempt)}</TableCell><TableCell>{runStatus(String(a.status))}</TableCell><TableCell>{String(a.responseStatus??'—')}</TableCell><TableCell>{formatDuration(typeof a.durationMs==='number'?a.durationMs:null)}</TableCell><TableCell className="text-muted-foreground">{String(a.errorCategory??'—')}</TableCell></TableRow>)}{!attempts.length && <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted-foreground">尚无调用记录</TableCell></TableRow>}</TableBody></Table></div></>}
+   </div>
+  </div>
+ </Page>;
+}
 export default function DetailPage() {
- return <StaticAPIPage<Model> endpoint={(query)=>{const pid=positiveParam(query);const id=uuidParam(query,"runId");return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>
- {(model,query)=>{const projectId=positiveParam(query)!;const {run,attempts,view}=model;
-  return <Page title={run.definitionName} description={`算法运行 ${run.id}`} actions={view.retryAllowed ? <AlgorithmRunRetryButton projectId={projectId} runId={run.id} /> : undefined}>
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card><CardHeader><CardDescription>状态</CardDescription><CardTitle><Badge variant={run.status === "failed" || run.status === "timed_out" ? "destructive" : "outline"}>{run.status}</Badge></CardTitle></CardHeader><CardContent className="text-sm text-muted-foreground">{run.errorCode ? `${run.errorCode}：${run.errorMessage ?? "无错误详情"}` : "运行未报告错误"}</CardContent></Card>
-        <Card><CardHeader><CardDescription>耗时</CardDescription><CardTitle>{view.durationMs === null ? "尚未开始" : `${(view.durationMs / 1000).toFixed(2)} 秒`}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">开始 {run.startedAt ? new Date(run.startedAt).toLocaleString("zh-CN") : "-"}<br />结束 {run.finishedAt ? new Date(run.finishedAt).toLocaleString("zh-CN") : "-"}</CardContent></Card>
-        <Card><CardHeader><CardDescription>运行来源</CardDescription><CardTitle>{view.provenance.modelRevision ?? "Provider 未提供 revision"}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">{view.provenance.providerType} · {view.provenance.modelOrProcess}<br />{view.provenance.modelDigest ?? "未提供模型 digest"}</CardContent></Card>
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card><CardHeader><CardTitle>输入</CardTitle><CardDescription>短时签名地址和 callback token 不展示</CardDescription></CardHeader><CardContent className="space-y-3 text-sm"><p>资产 #{view.input.assetId ?? run.inputAssetId} · v{view.input.assetVersion ?? "-"} · {view.input.mimeType ?? "未知类型"}</p><pre className="overflow-auto rounded-lg bg-muted p-3 text-xs">{JSON.stringify({ parameters: view.input.parameters, context: view.input.context }, null, 2)}</pre></CardContent></Card>
-        <Card><CardHeader><CardTitle>原始结果引用</CardTitle><CardDescription>原始响应保存在受控对象存储，不写入数据库正文</CardDescription></CardHeader><CardContent className="space-y-2 text-xs">{view.rawResult ? <><p className="break-all font-mono">{view.rawResult.objectKey}</p><p className="break-all text-muted-foreground">SHA-256 {view.rawResult.checksumSha256}</p></> : <p className="text-muted-foreground">尚无原始结果</p>}</CardContent></Card>
-      </div>
-      <Card><CardHeader><CardTitle>Mapping 诊断</CardTitle></CardHeader><CardContent>{view.diagnostics.length ? <ul className="space-y-2">{view.diagnostics.map((diagnostic) => <li className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm" key={diagnostic}>{diagnostic}</li>)}</ul> : <p className="text-sm text-muted-foreground">无 mapping 诊断</p>}</CardContent></Card>
-      <Card><CardHeader><CardTitle>标准化结果</CardTitle><CardDescription>按定义输出 schema 保存的通用结果，不绑定固定识别类别</CardDescription></CardHeader><CardContent><pre className="max-h-96 overflow-auto rounded-lg bg-muted p-3 text-xs">{JSON.stringify(run.canonicalResult, null, 2)}</pre></CardContent></Card>
-      <Card><CardHeader><CardTitle>调用尝试</CardTitle></CardHeader><CardContent className="space-y-2">{attempts.length ? attempts.map((attempt) => <div className="grid gap-2 rounded-lg border p-3 text-sm md:grid-cols-[70px_120px_120px_1fr]" key={String(attempt.attempt)}><span>#{String(attempt.attempt)}</span><Badge variant="outline">{String(attempt.status)}</Badge><span>{String(attempt.durationMs ?? "-")} ms</span><span className="text-muted-foreground">HTTP {String(attempt.responseStatus ?? "-")} · {String(attempt.errorCategory ?? "无错误")}</span></div>) : <p className="text-sm text-muted-foreground">尚无 attempt 记录</p>}</CardContent></Card>
-      {!view.retryAllowed && ["failed", "timed_out"].includes(run.status) ? <p className="text-sm text-muted-foreground">当前账号无权重试此失败运行。</p> : null}
-    </div>
-  </Page>;
- }}</StaticAPIPage>;
+ return <StaticAPIPage<AlgorithmRunDetail> endpoint={query=>{const pid=positiveParam(query);const id=uuidParam(query,'runId');return pid&&id?`/api/projects/${pid}/algorithm-runs/${id}`:null;}}>{(model,query)=><RunDetail key={model.run.id} initial={model} projectId={positiveParam(query)!}/>}</StaticAPIPage>;
 }

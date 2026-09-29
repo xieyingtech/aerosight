@@ -50,7 +50,9 @@ export function InputSelect({ value, options, onValueChange, placeholder = "æœç
     setOpen(false);
   };
 
-  return <div className="relative" ref={rootRef}>
+  return <div className="relative" ref={rootRef} onBlur={(event) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+  }}>
     <SearchIcon className="pointer-events-none absolute left-3 top-2.5 z-10 size-4 text-muted-foreground" />
     <input
       aria-label={ariaLabel}
