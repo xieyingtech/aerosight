@@ -4,6 +4,7 @@ import {useRef, useState} from "react";
 import {DownloadIcon, FileIcon, FilmIcon, ImageIcon, Loader2Icon, Maximize2Icon, PlusIcon, RefreshCwIcon, SearchIcon, UploadCloudIcon, XIcon} from "lucide-react";
 import {apiJSON} from "@/lib/api-client";
 import {useAPI} from "@/lib/use-api";
+import {useMediaPlayback} from "@/lib/use-media-playback";
 import {assetName, type AlgorithmAsset} from "@/lib/algorithm-workspace";
 import {Button} from "@/components/ui/button";
 import {Input} from "@/components/ui/input";
@@ -16,7 +17,8 @@ function MediaIcon({asset, className}: {asset: AlgorithmAsset; className?: strin
 
 function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAsset}) {
   const kind = mediaType(asset);
-  const access = useAPI<{url: string}>(kind === "file" ? null : `/api/projects/${projectId}/assets/${asset.id}/access?action=${kind === "video" ? "play" : "preview"}`);
+  const video = useRef<HTMLVideoElement>(null);
+  const access = useMediaPlayback(kind === "file" ? null : `/api/projects/${projectId}/assets/${asset.id}/access?action=${kind === "video" ? "play" : "preview"}`,video);
   const [failed, setFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -38,7 +40,7 @@ function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAss
     <div className="flex h-[340px] items-center justify-center bg-slate-950 p-3 sm:h-[460px]">
       {access.error || failed ? <div className="space-y-3 text-center text-sm text-slate-300"><p>暂时无法预览此素材</p><Button variant="secondary" onClick={()=>{setFailed(false); access.reload();}}><RefreshCwIcon/>重新加载</Button></div>
         : access.loading ? <Loader2Icon aria-label="加载预览" className="size-6 animate-spin text-slate-400"/>
-        : kind === "video" ? <video key={access.data?.url} src={access.data?.url} controls playsInline preload="metadata" className="h-full w-full" onError={()=>setFailed(true)} onLoadedMetadata={e=>{const v=e.currentTarget; setDimensions(`${v.videoWidth} × ${v.videoHeight}`); if(Number.isFinite(v.duration)) setDuration(`${v.duration.toFixed(1)} 秒`);}}/>
+        : kind === "video" ? <video ref={video} key={access.data?.url} src={access.data?.url} controls playsInline preload="metadata" className="h-full w-full" onError={()=>{if(!access.recover())setFailed(true);}} onLoadedMetadata={e=>{access.loaded();const v=e.currentTarget; setDimensions(`${v.videoWidth} × ${v.videoHeight}`); if(Number.isFinite(v.duration)) setDuration(`${v.duration.toFixed(1)} 秒`);}}/>
         : kind === "image" ? image : <div className="space-y-3 text-center text-slate-400"><FileIcon className="mx-auto size-10"/><p className="text-sm">此文件暂不支持在线预览，可以下载查看</p></div>}
     </div>
     <div className="space-y-4 px-5 py-4">

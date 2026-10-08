@@ -13,7 +13,9 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -53,8 +55,9 @@ func LoadS3Config() (S3Config, error) {
 }
 
 type S3ObjectStorage struct {
-	client *minio.Client
-	bucket string
+	client    *minio.Client
+	bucket    string
+	ossBucket *oss.Bucket
 }
 
 func NewConfiguredObjectStorage(root string, cfg S3Config) (ObjectStorage, error) {
@@ -134,7 +137,53 @@ func NewS3ObjectStorage(cfg S3Config) (*S3ObjectStorage, error) {
 	if err != nil {
 		return nil, errors.New("invalid S3 configuration")
 	}
-	return &S3ObjectStorage{client: client, bucket: cfg.Bucket}, nil
+	store := &S3ObjectStorage{client: client, bucket: cfg.Bucket}
+	if strings.HasSuffix(u.Hostname(), ".aliyuncs.com") {
+		ossClient, err := oss.New(cfg.Endpoint, cfg.AccessKeyID, cfg.SecretAccessKey, oss.SecurityToken(cfg.SessionToken))
+		if err != nil {
+			return nil, err
+		}
+		store.ossBucket, err = ossClient.Bucket(cfg.Bucket)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return store, nil
+}
+
+// Browser requests cannot attach the OSS S3 compatibility header. Use OSS's
+// native URL signer there, and standard S3 query signing for other providers.
+func (s *S3ObjectStorage) PresignRead(ctx context.Context, key string, ttl time.Duration) (*Access, error) {
+	if !validObjectKey(key) || ttl < time.Second || ttl > 24*time.Hour {
+		return nil, errors.New("invalid signed object access")
+	}
+	if _, err := s.client.StatObject(ctx, s.bucket, key, minio.StatObjectOptions{}); err != nil {
+		return nil, err
+	}
+	expires := time.Now().Add(ttl)
+	var signed string
+	var err error
+	if s.ossBucket != nil {
+		signed, err = s.ossBucket.SignURL(key, oss.HTTPGet, int64(ttl/time.Second))
+	} else {
+		var result *url.URL
+		result, err = s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+		if err == nil {
+			signed = result.String()
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Access{URL: signed, ExpiresAt: expires.UTC().Format("2006-01-02T15:04:05.000Z")}, nil
+}
+
+func (s *s3WithLocalFallback) PresignRead(ctx context.Context, key string, ttl time.Duration) (*Access, error) {
+	access, err := s.S3ObjectStorage.PresignRead(ctx, key, ttl)
+	if err != nil && missingS3Object(err) {
+		return nil, nil
+	}
+	return access, err
 }
 
 type ossCompatTransport struct{ base http.RoundTripper }

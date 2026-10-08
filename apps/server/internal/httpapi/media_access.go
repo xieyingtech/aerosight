@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -78,6 +79,22 @@ func (s *Server) issueMediaAccess(c *gin.Context) {
 		return
 	}
 	issue := func() (media.Access, error) {
+		if action == "play" && asset.MimeType.Valid && strings.HasPrefix(asset.MimeType.String, "video/") {
+			if !strings.HasPrefix(asset.StorageKey, fmt.Sprintf("projects/%d/", pid)) {
+				return media.Access{}, errors.New("invalid media scope")
+			}
+			if signer, ok := s.mediaObjectStorage.(interface {
+				PresignRead(context.Context, string, time.Duration) (*media.Access, error)
+			}); ok {
+				access, err := signer.PresignRead(ctx, asset.StorageKey, time.Hour)
+				if err != nil {
+					return media.Access{}, err
+				}
+				if access != nil {
+					return *access, nil
+				}
+			}
+		}
 		return media.IssueAccess(s.credentialSecret, pid, aid, action, time.Now(), 120)
 	}
 	var result media.Access
@@ -96,6 +113,7 @@ func (s *Server) issueMediaAccess(c *gin.Context) {
 		fail()
 		return
 	}
+	c.Header("Cache-Control", "private, no-store")
 	c.JSON(200, result)
 }
 func (s *Server) readMediaContent(c *gin.Context) {
