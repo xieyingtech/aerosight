@@ -15,3 +15,10 @@ test("legacy definition version input maps to an internal configuration snapshot
   const input = startAlgorithmRunInputSchema.parse({ definitionVersionId: 31, assetId: 9 });
   assert.deepEqual(input, { configurationSnapshotId: 31, assetId: 9, parameters: {} });
 });
+
+test("array algorithm parameters accept numeric class lists and JSON", () => {
+  const schema = { properties: { classes: { type: "array", items: { type: "integer" } } } };
+  assert.deepEqual(coerceSchemaParameters(schema, { classes: "0, 2" }), { classes: [0, 2] });
+  assert.deepEqual(coerceSchemaParameters(schema, { classes: "[0,2]" }), { classes: [0, 2] });
+  assert.throws(() => coerceSchemaParameters(schema, { classes: "[invalid" }));
+});

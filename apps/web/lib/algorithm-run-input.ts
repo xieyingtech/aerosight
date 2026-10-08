@@ -23,6 +23,13 @@ export function coerceSchemaParameters(schema: Record<string, unknown>, values: 
     if (typeof raw !== "string" || raw === "") continue;
     if (definition.type === "number" || definition.type === "integer") result[key] = Number(raw);
     else if (definition.type === "boolean") result[key] = raw === "true";
+    else if (definition.type === "array") {
+      const trimmed = raw.trim();
+      const parsed: unknown = trimmed.startsWith("[") ? JSON.parse(trimmed) : trimmed.split(",").map(value => value.trim());
+      if (!Array.isArray(parsed)) throw new Error(`${key} 必须是数组`);
+      const itemType = (definition.items as Record<string, unknown> | undefined)?.type;
+      result[key] = itemType === "number" || itemType === "integer" ? parsed.map(Number) : parsed;
+    }
     else result[key] = raw;
   }
   return result;

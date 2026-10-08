@@ -8,6 +8,8 @@ import { AlgorithmAssetPreview } from "@/components/algorithm-asset-preview";
 import type { CapturedVideoFrame } from "@/lib/video-frame";
 import type { AlgorithmCatalogEntry } from "@/lib/web-api-types";
 
+type SampleResult = { runId: string; assetId: number; detections: Detection[]; payload: Record<string, unknown>; capturedAt: string; mediaTimeSeconds: number; latency: number; count: number };
+
 export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, capture }: {
   projectId: number; streamId?: number; videoAssetId?: number;
   capture: (signal: AbortSignal, offsetSeconds?: number) => Promise<CapturedVideoFrame | null>;
@@ -20,7 +22,8 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
   const [active, setActive] = useState(false);
   const [status, setStatus] = useState("选择算法后开始识别");
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ runId: string; assetId: number; detections: Detection[]; payload: Record<string, unknown>; capturedAt: string; mediaTimeSeconds: number; latency: number; count: number } | null>(null);
+  const [result, setResult] = useState<SampleResult | null>(null);
+  const [history, setHistory] = useState<SampleResult[]>([]);
   const controller = useRef<AbortController | null>(null);
   const parameters = useRef<HTMLFormElement>(null);
   const captureRef = useRef(capture); captureRef.current = capture;
@@ -31,9 +34,8 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
     if (!entry || controller.current) return;
     const worker = new AbortController(); controller.current = worker;
     const signal = worker.signal;
-    setActive(true); setError(null); setResult(null);
+    setActive(true); setError(null); setResult(null); setHistory([]);
     const values = parameters.current ? Object.fromEntries(new FormData(parameters.current).entries()) : {};
-    const params = coerceSchemaParameters(entry.schemas.parameters, values);
     const delay = (ms: number) => new Promise<void>((resolve, reject) => {
       signal.throwIfAborted();
       const abort = () => { clearTimeout(timer); reject(signal.reason); };
@@ -41,6 +43,7 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
       signal.addEventListener("abort", abort, { once: true });
     });
     try {
+      const params = coerceSchemaParameters(entry.schemas.parameters, values);
       let offset = 0, count = 0;
       while (!signal.aborted) {
         setStatus(videoAssetId ? `正在读取视频 ${offset.toFixed(1)} 秒处` : "正在抽取直播画面");
@@ -69,7 +72,9 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
         if (run.status !== "succeeded") throw new Error(run.errorCode ?? `算法执行${run.status}`);
         signal.throwIfAborted(); count++;
         const latency = performance.now() - started;
-        setResult({ runId: submitted.runId, assetId: asset.assetId, detections: runDetections(run.canonicalResult), payload: run.canonicalResult.result as Record<string, unknown> ?? {}, capturedAt: frame.capturedAt, mediaTimeSeconds: frame.mediaTimeSeconds, latency, count });
+        const completed: SampleResult = { runId: submitted.runId, assetId: asset.assetId, detections: runDetections(run.canonicalResult), payload: run.canonicalResult.result as Record<string, unknown> ?? {}, capturedAt: frame.capturedAt, mediaTimeSeconds: frame.mediaTimeSeconds, latency, count };
+        setResult(completed);
+        setHistory(previous => [...previous.slice(-199), completed]);
         setStatus(videoAssetId ? `已分析 ${count} 帧` : "识别完成，等待下一帧");
         if (videoAssetId) { offset += intervalSeconds; }
         else await delay(Math.max(100, intervalSeconds * 1000 - latency));
@@ -90,13 +95,17 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
       <button className="rounded border px-2 py-1.5 disabled:opacity-50" type="button" disabled={!entry} onClick={active ? stop : () => void start()}>{active ? "停止识别" : videoAssetId ? "分析视频" : "开始直播识别"}</button>
     </div>
     <form ref={parameters} className="flex flex-wrap gap-2">{Object.entries(properties ?? {}).map(([key, property]) => <label className="text-xs" key={`${entry?.id}-${key}`}>{String(property.title ?? key)} <input name={key} className="w-24 rounded border bg-background p-1" disabled={active} defaultValue={String(property.default ?? "")} placeholder="默认值" type={property.type === "number" || property.type === "integer" ? "number" : "text"} step="any" /></label>)}</form>
-    <p className="text-xs text-muted-foreground">{status}{result ? ` · ${result.count} 帧 · 最近一次 ${(result.latency / 1000).toFixed(2)} 秒` : ""}</p>
+    <p className="text-xs text-muted-foreground">{status}{history.length ? ` · ${history.at(-1)!.count} 帧 · 最近一次 ${(history.at(-1)!.latency / 1000).toFixed(2)} 秒` : ""}</p>
     {(error || catalog.error) && <p className="text-xs text-destructive" role="alert">{error ?? "算法列表读取失败"}</p>}
+    {!!history.length && <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">已识别帧 · 点击回看{history.length === 200 ? "（显示最近 200 帧）" : ""}</p>
+      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-auto">{history.map(frame => <button type="button" key={frame.runId} aria-pressed={result?.runId === frame.runId} className={`rounded border px-2 py-1 text-xs ${result?.runId === frame.runId ? "bg-primary text-primary-foreground" : ""}`} onClick={() => setResult(frame)}>{videoAssetId ? `${frame.mediaTimeSeconds.toFixed(1)} 秒` : new Date(frame.capturedAt).toLocaleTimeString()} · {frame.detections.length} 个目标</button>)}</div>
+    </div>}
     {result && <div className="space-y-2">
       <p className="text-xs text-muted-foreground">{videoAssetId ? `视频 ${result.mediaTimeSeconds.toFixed(2)} 秒处` : `抽帧时间 ${new Date(result.capturedAt).toLocaleTimeString()}`} · {result.detections.length} 个目标</p>
       <AlgorithmAssetPreview key={result.runId} projectId={projectId} assetId={result.assetId} runId={result.runId} detections={result.detections} />
       <p className="text-xs">{result.detections.map(d => `${d.label} ${(d.confidence * 100).toFixed(0)}%`).join(" · ")}</p>
-      {!Array.isArray(result.payload.detections) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(result.payload, null, 2)}</pre>}
+      {result.payload.kind !== "detection" && !Array.isArray(result.payload.detections) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(result.payload, null, 2)}</pre>}
       <a className="text-xs underline" href={`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${result.runId}`}>查看本帧运行详情</a>
     </div>}
     <p className="text-xs text-muted-foreground">{videoAssetId ? "逐帧等待识别完成后再读取下一个时间点，结果保存在算法运行记录。" : "显示最近已识别帧；处理完成后再抽下一帧，识别速度随算法耗时调整。"}</p>
