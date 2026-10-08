@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"regexp"
 	"strings"
@@ -56,11 +55,8 @@ func ValidateProviderConfig(config ProviderConfig) error {
 		return errors.New("algorithm provider identity, project, adapter type, and endpoint are required")
 	}
 	target, err := url.Parse(config.BaseURL)
-	if err != nil || target.Scheme != "https" || target.Hostname() == "" || target.User != nil {
-		return errors.New("algorithm provider endpoint must be an HTTPS URL without embedded credentials")
-	}
-	if restrictedProviderHost(target.Hostname()) {
-		return errors.New("algorithm provider endpoint host is restricted")
+	if err != nil || (target.Scheme != "http" && target.Scheme != "https") || target.Hostname() == "" || target.User != nil {
+		return errors.New("algorithm provider endpoint must be an HTTP(S) URL without embedded credentials")
 	}
 	switch config.AuthType {
 	case "none":
@@ -89,15 +85,6 @@ func ValidateProviderConfig(config ProviderConfig) error {
 		seen[header] = struct{}{}
 	}
 	return nil
-}
-
-func restrictedProviderHost(host string) bool {
-	host = strings.TrimSuffix(strings.ToLower(host), ".")
-	if host == "localhost" || strings.HasSuffix(host, ".localhost") || host == "metadata.google.internal" {
-		return true
-	}
-	address := net.ParseIP(host)
-	return address != nil && (address.IsLoopback() || address.IsPrivate() || address.IsLinkLocalUnicast() || address.IsUnspecified())
 }
 
 func RedactProvider(config ProviderConfig) PublicProvider {

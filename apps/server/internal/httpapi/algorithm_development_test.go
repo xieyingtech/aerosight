@@ -2,26 +2,27 @@ package httpapi
 
 import (
 	"context"
+	"net/netip"
 	"testing"
 )
 
-func TestDevelopmentAlgorithmEndpointIsExactAndScoped(t *testing.T) {
+func TestAdminAlgorithmEndpointsAllowPrivateNetwork(t *testing.T) {
 	s := &Server{}
-	s.cfg.AlgorithmDevelopmentEndpoint = "https://127.0.0.1:8444/infer"
+	s.networkResolver = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("10.1.2.3")}, nil
+	}
 	ctx := context.Background()
-	if _, _, err := s.validateAlgorithmURL(ctx, s.cfg.AlgorithmDevelopmentEndpoint); err == nil {
-		t.Fatal("production accepted loopback")
-	}
-	s.cfg.Development = true
-	if _, _, err := s.validateAlgorithmURL(ctx, s.cfg.AlgorithmDevelopmentEndpoint); err != nil {
-		t.Fatal(err)
-	}
-	for _, u := range []string{"http://127.0.0.1:8444/infer", "https://127.0.0.1:8445/infer", "https://127.0.0.1:8444/other", "https://127.0.0.1:8444/infer?x=1", "https://10.0.0.1:8444/infer"} {
-		if _, _, err := s.validateAlgorithmURL(ctx, u); err == nil {
-			t.Fatalf("accepted %s", u)
+	for _, endpoint := range []string{"http://aerosight-algo-demo.zeabur.internal:8080/infer", "https://10.0.0.2/infer", "http://127.0.0.1:8091/infer"} {
+		if _, n, err := s.validateAlgorithmURL(ctx, endpoint); err != nil || n != 1 {
+			t.Fatalf("administrator endpoint %s: %d %v", endpoint, n, err)
 		}
 	}
-	if _, _, err := s.validateOutboundURL(ctx, s.cfg.AlgorithmDevelopmentEndpoint, []string{"127.0.0.1"}); err == nil {
+	for _, endpoint := range []string{"file:///etc/passwd", "ftp://10.0.0.2", "http://user:pass@10.0.0.2", "http://10.0.0.2?token=secret"} {
+		if _, _, err := s.validateAlgorithmURL(ctx, endpoint); err == nil {
+			t.Fatalf("accepted malformed endpoint %s", endpoint)
+		}
+	}
+	if _, _, err := s.validateOutboundURL(ctx, "https://10.0.0.2", []string{"10.0.0.2"}); err == nil {
 		t.Fatal("generic outbound policy was relaxed")
 	}
 }

@@ -33,7 +33,7 @@ func TestAlgorithmProviderPolicy(t *testing.T) {
 	if _, n, err := s.validateAlgorithmURL(context.Background(), "https://algorithm.example/v1"); err != nil || n != 1 {
 		t.Fatalf("public %d %v", n, err)
 	}
-	for _, target := range []string{"http://algorithm.example", "https://user:secret@algorithm.example", "https://example", "https://evil.example.net"} {
+	for _, target := range []string{"ftp://algorithm.example", "https://user:secret@algorithm.example", "https:///missing-host", "https://algorithm.example?token=secret"} {
 		if _, _, err := s.validateAlgorithmURL(context.Background(), target); err == nil {
 			t.Fatalf("accepted %s", target)
 		}
@@ -42,7 +42,7 @@ func TestAlgorithmProviderPolicy(t *testing.T) {
 		s.networkResolver = func(context.Context, string) ([]netip.Addr, error) {
 			return []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr(address)}, nil
 		}
-		if _, _, err := s.validateAlgorithmURL(context.Background(), "https://algorithm.example"); err == nil {
+		if _, _, err := s.validateOutboundURL(context.Background(), "https://algorithm.example", s.cfg.AlgorithmAllowedHosts); err == nil {
 			t.Fatalf("mixed DNS %s", address)
 		}
 	}

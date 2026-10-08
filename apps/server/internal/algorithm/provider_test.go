@@ -65,8 +65,8 @@ func providerRequestFixture() Request {
 	return Request{Endpoint: "https://attacker.invalid/override", Headers: map[string]string{"X-Trace-ID": "trace-1"}, Input: Input{ProjectID: 17}}
 }
 
-func TestProviderConfigRejectsSSRFAndInlineSecrets(t *testing.T) {
-	for _, endpoint := range []string{"http://models.example.test", "https://127.0.0.1/run", "https://10.0.0.2/run", "https://metadata.google.internal/latest", "https://user:pass@models.example.test"} {
+func TestProviderConfigRejectsInvalidURLsAndInlineSecrets(t *testing.T) {
+	for _, endpoint := range []string{"ftp://models.example.test", "https:///missing-host", "https://user:pass@models.example.test"} {
 		config := providerConfigFixture()
 		config.BaseURL = endpoint
 		if err := ValidateProviderConfig(config); err == nil {

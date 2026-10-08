@@ -142,13 +142,31 @@ func parseAlgorithmProvider(raw map[string]any) (algorithmProviderInput, error) 
 }
 
 func (s *Server) validateAlgorithmURL(ctx context.Context, raw string) (*url.URL, int, error) {
-	if s.cfg.Development && s.cfg.AlgorithmDevelopmentEndpoint != "" && raw == s.cfg.AlgorithmDevelopmentEndpoint {
-		target, err := url.Parse(raw)
-		if err == nil && target.Scheme == "https" && target.Hostname() == "127.0.0.1" && target.Port() != "" && target.User == nil && target.RawQuery == "" && target.Fragment == "" {
-			return target, 1, nil
-		}
+	// Algorithm endpoints are configured by platform administrators and may use
+	// HTTP and private DNS (for example Zeabur's project-internal network).
+	// Other outbound integrations retain their separate HTTPS/public-IP policy.
+	target, err := url.Parse(raw)
+	if err != nil || target.Hostname() == "" || target.RawQuery != "" || target.Fragment != "" || (target.Scheme != "http" && target.Scheme != "https") {
+		return nil, 0, errors.New("OUTBOUND_URL_INVALID")
 	}
-	return s.validateOutboundURL(ctx, raw, s.cfg.AlgorithmAllowedHosts)
+	if target.User != nil {
+		return nil, 0, errors.New("OUTBOUND_URL_CREDENTIALS_FORBIDDEN")
+	}
+	var addresses []netip.Addr
+	if ip, e := netip.ParseAddr(target.Hostname()); e == nil {
+		addresses = []netip.Addr{ip}
+	} else if s.networkResolver != nil {
+		addresses, err = s.networkResolver(ctx, target.Hostname())
+	} else {
+		addresses, err = net.DefaultResolver.LookupNetIP(ctx, "ip", target.Hostname())
+	}
+	if err != nil {
+		return nil, 0, errors.New("OUTBOUND_DNS_FAILED")
+	}
+	if len(addresses) == 0 {
+		return nil, 0, errors.New("OUTBOUND_DNS_EMPTY")
+	}
+	return target, len(addresses), nil
 }
 
 func (s *Server) validateOutboundURL(ctx context.Context, raw string, allowedHosts []string) (*url.URL, int, error) {

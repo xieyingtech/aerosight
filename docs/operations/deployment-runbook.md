@@ -28,7 +28,7 @@
 | `LOG_LEVEL` | 日志级别 | `info`/`warn`/`error`，排障时短时使用 `debug` |
 | `WORKER_NAME` | worker 实例名 | 每实例唯一，便于日志和指标定位 |
 | `DATA_DIR` | 媒体与算法原始结果目录 | 持久卷绝对路径；留空会明确降级且媒体内容不可读 |
-| `ALGORITHM_ALLOWED_HOSTS` | 算法出站 allowlist | 逗号分隔主机名；不放 URL、IP、通配符或凭据 |
+| `ALGORITHM_ALLOWED_HOSTS` | 历史兼容配置 | 管理员配置的算法地址不再受此 allowlist 限制，允许 HTTP(S) 和私网地址 |
 | `CALLBACK_LISTEN_ADDRESS` | worker callback/健康监听 | 内网 `host:port`，默认 `127.0.0.1:8081` |
 | `CALLBACK_PUBLIC_BASE_URL` | 外部算法 callback 根地址 | 必须 HTTPS；经入口转发到 worker |
 | `DJI_FLIGHTHUB_API_BASE_URL` | 司空公有云 OpenAPI 区域主机 | 中国大陆固定为 `https://es-flight-api-cn.djigate.com`，其他主机启动失败 |
@@ -70,7 +70,7 @@ DJI 连接器、算法 Provider 和平台 AI Provider 的凭据由 Web 使用 AE
 
 ### 算法 provider
 
-先配置 `ALGORITHM_ALLOWED_HOSTS`，再由平台管理员进入“系统管理 → 算法服务”，在列表中用“新建算法服务”或“编辑”弹窗配置全平台共享的 Provider：类型、HTTPS base URL、认证凭据、认证方式、允许 header、timeout、并发与速率限制。项目算法定义仍按项目隔离，但可引用任一平台 Provider。运行地址和协议测试，确认 DNS 满足 allowlist，再验证实际调用与 callback 签名，最后开启 `external_algorithms_enabled`。任何 SSRF 拒绝、mapping 漂移或 callback 重放告警都阻断启用。已有项目 Provider 会显示在平台列表中，其历史凭据保持原加密范围；新 Provider 使用平台加密范围。
+由平台管理员进入“系统管理 → 算法服务”，在列表中用“新建算法服务”或“编辑”弹窗配置全平台共享的 Provider：类型、HTTP(S) base URL、认证凭据、认证方式、允许 header、timeout、并发与速率限制。项目算法定义仍按项目隔离，但可引用任一平台 Provider。运行地址和协议测试，确认 DNS 可解析并可连接，再验证实际调用与 callback 签名，最后开启 `external_algorithms_enabled`。任何连接失败、mapping 漂移或 callback 重放告警都阻断启用。已有项目 Provider 会显示在平台列表中，其历史凭据保持原加密范围；新 Provider 使用平台加密范围。
 
 ### AI provider
 
