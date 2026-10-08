@@ -57,9 +57,15 @@ export async function verifyMediaFrame(page, context, detailURL, output, seedSQL
     assert(hlsRequests.includes('index.m3u8') && hlsRequests.some(name => name.endsWith('.ts')), 'HLS manifest or segments not fetched');
     assert.deepEqual(await page.evaluate(() => window.cspViolations), [], 'HLS CSP violations');
     await page.screenshot({ path: resolve(output, 'hls-playback.png'), fullPage: true });
-    await page.evaluate(() => { const frame = document.createElement('iframe'); frame.src = 'https://unapproved-media.example/'; document.body.append(frame); });
-    await page.waitForFunction(() => window.cspViolations.some(item => item.directive === 'frame-src' && item.blocked === 'https://unapproved-media.example'));
-    return { streamId: seed.streamId, allowedOrigin: frameURL.origin, signedTokenAccepted: true, unapprovedOriginBlocked: true, hlsRequests, playback, webrtc, authorizations: rtc.authorizations, mediaImage: rtc.image, scope: 'actual MediaMTX WebRTC decode over ICE/TCP with Go HTTP read authorization; controlled signaling routing and synthetic RTSP publisher; HLS fallback uses generated VOD segments' };
+    await page.route('https://unconfigured-media.example/', route => route.fulfill({ contentType: 'text/html', body: '<p>External media frame loaded</p>' }));
+    try {
+      await page.evaluate(() => { const frame = document.createElement('iframe'); frame.title = 'External media fixture'; frame.src = 'https://unconfigured-media.example/'; document.body.append(frame); });
+      await page.frameLocator('iframe[title="External media fixture"]').getByText('External media frame loaded').waitFor();
+      assert.deepEqual(await page.evaluate(() => window.cspViolations), [], 'unconfigured HTTPS media frame blocked');
+    } finally {
+      await page.unroute('https://unconfigured-media.example/');
+    }
+    return { streamId: seed.streamId, allowedOrigin: frameURL.origin, signedTokenAccepted: true, unconfiguredOriginLoaded: true, hlsRequests, playback, webrtc, authorizations: rtc.authorizations, mediaImage: rtc.image, scope: 'actual MediaMTX WebRTC decode over ICE/TCP with Go HTTP read authorization; controlled signaling routing and synthetic RTSP publisher; HLS fallback uses generated VOD segments' };
   } finally {
     await rtc.close();
     await page.unroute(hlsPattern);

@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRTCViewerFrameHeadersThroughHTTPBoundary(t *testing.T) {
+func TestWorkspaceResourcePoliciesThroughHTTPBoundary(t *testing.T) {
 	files := fstest.MapFS{}
-	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "rtc-viewer/index.html", "404.html"} {
+	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "projects/realtime/index.html", "rtc-viewer/index.html", "404.html"} {
 		files[name] = &fstest.MapFile{Data: []byte("<html>" + name + "</html>")}
 	}
 	pages, err := webassets.New(files)
@@ -29,6 +29,9 @@ func TestRTCViewerFrameHeadersThroughHTTPBoundary(t *testing.T) {
 	}{
 		{"/rtc-viewer/", "SAMEORIGIN", "'self'", 200},
 		{"/rtc-viewer/index.html", "SAMEORIGIN", "'self'", 200},
+		{"/projects/", "DENY", "'none'", 200},
+		{"/projects/realtime/", "DENY", "'none'", 200},
+		{"/projects/missing/", "DENY", "'none'", 404},
 		{"/login/", "DENY", "'none'", 200},
 		{"/", "DENY", "'none'", 200},
 		{"/rtc-viewer/missing/", "DENY", "'none'", 404},
@@ -40,14 +43,17 @@ func TestRTCViewerFrameHeadersThroughHTTPBoundary(t *testing.T) {
 			if w.Code != tc.status || w.Header().Get("X-Frame-Options") != tc.frameOptions || !strings.Contains(policy, "frame-ancestors "+tc.ancestors+";") {
 				t.Fatalf("%s %s: %d %+v", method, tc.path, w.Code, w.Header())
 			}
-			for _, source := range []string{"https://*.rtc.volcvideo.com", "wss://*.rtc.volcvideo.com", "https://*.volcvideos.com", "wss://*.volcvideos.com"} {
-				if strings.Contains(policy, source) != (tc.frameOptions == "SAMEORIGIN") {
-					t.Fatalf("%s: incorrect RTC connection scope for %s: %s", tc.path, source, policy)
+			projectPage := strings.HasPrefix(tc.path, "/projects/") && tc.status == 200
+			workspace := projectPage || tc.frameOptions == "SAMEORIGIN"
+			for _, directive := range strings.Split(policy, ";") {
+				fields := strings.Fields(directive)
+				if len(fields) == 0 {
+					continue
 				}
-				for _, directive := range strings.Split(policy, ";") {
-					if strings.Contains(directive, source) && !strings.HasPrefix(strings.TrimSpace(directive), "connect-src ") {
-						t.Fatalf("RTC source outside connect-src: %s", directive)
-					}
+				wantHTTPS := workspace && (fields[0] == "connect-src" || fields[0] == "font-src" || fields[0] == "img-src" || fields[0] == "media-src") || projectPage && fields[0] == "frame-src"
+				wantWSS := workspace && fields[0] == "connect-src"
+				if strings.Contains(" "+strings.Join(fields, " ")+" ", " https: ") != wantHTTPS || strings.Contains(" "+strings.Join(fields, " ")+" ", " wss: ") != wantWSS {
+					t.Fatalf("%s: incorrect secure resource scope: %s", tc.path, directive)
 				}
 			}
 			if tc.status == 200 {

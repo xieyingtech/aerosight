@@ -38,6 +38,21 @@ func (h *Handler) ConfigureCSP(mapOrigins, mediaOrigins []string) {
 			sockets = append(sockets, strings.Replace(strings.Replace(origin, "https://", "wss://", 1), "http://", "ws://", 1))
 		}
 		connections := strings.TrimSpace(media + " " + strings.Join(sockets, " "))
+		fonts := maps
+		images := strings.TrimSpace(maps + " " + media)
+		frames := media
+		mediaSources := media
+		// Project workspaces load configurable maps, media and supplier SDK
+		// endpoints. Permit secure resource URLs without per-CDN allowlists.
+		if strings.HasPrefix(name, "projects/") || name == "rtc-viewer/index.html" {
+			connections = strings.TrimSpace(connections + " https: wss:")
+			fonts = strings.TrimSpace(fonts + " https:")
+			images = strings.TrimSpace(images + " https:")
+			mediaSources = strings.TrimSpace(mediaSources + " https:")
+		}
+		if strings.HasPrefix(name, "projects/") {
+			frames = strings.TrimSpace(frames + " https:")
+		}
 		ancestors := "'none'"
 		frameOptions := "DENY"
 		// Only the isolated RTC player may be embedded by the same-origin UI.
@@ -45,16 +60,13 @@ func (h *Handler) ConfigureCSP(mapOrigins, mediaOrigins []string) {
 		if name == "rtc-viewer/index.html" {
 			ancestors = "'self'"
 			frameOptions = "SAMEORIGIN"
-			// The bundled Volcengine SDK uses these domains for access, config,
-			// logs and the region-specific signaling hosts returned by dispatch.
-			connections = strings.TrimSpace(connections + " https://*.rtc.volcvideo.com wss://*.rtc.volcvideo.com https://*.volcvideos.com wss://*.volcvideos.com")
 		}
 		policy := "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors " + ancestors + "; form-action 'self'; " +
 			"script-src " + scripts + "; script-src-attr 'none'; " +
-			"style-src 'self' 'unsafe-inline'; font-src 'self' " + maps + "; " +
-			"img-src 'self' data: blob: " + maps + " " + media + "; " +
+			"style-src 'self' 'unsafe-inline'; font-src 'self' " + fonts + "; " +
+			"img-src 'self' data: blob: " + images + "; " +
 			"connect-src 'self' " + maps + " " + connections + "; " +
-			"worker-src 'self' blob:; media-src 'self' blob: " + media + "; frame-src 'self' " + media + ";"
+			"worker-src 'self' blob:; media-src 'self' blob: " + mediaSources + "; frame-src 'self' " + frames + ";"
 		file.policy = secure.New(secure.Options{ContentSecurityPolicy: policy, CustomFrameOptionsValue: frameOptions, ReferrerPolicy: "same-origin"})
 		h.files[name] = file
 	}
