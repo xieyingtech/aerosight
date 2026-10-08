@@ -133,11 +133,7 @@ func (s *Server) readMediaContent(c *gin.Context) {
 	}
 	disposition := "inline"
 	if action == "download" {
-		var name *string
-		if asset.FileName.Valid {
-			name = &asset.FileName.String
-		}
-		disposition = fmt.Sprintf(`attachment; filename="%s"`, media.SafeDownloadName(name, fmt.Sprintf("asset-%d", aid)))
+		disposition = fmt.Sprintf(`attachment; filename="%s"`, media.SafeDownloadName(&asset.FileName, fmt.Sprintf("asset-%d", aid)))
 	}
 	c.Header("Content-Type", contentType)
 	c.Header("Content-Disposition", disposition)

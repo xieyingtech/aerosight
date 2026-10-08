@@ -11,7 +11,8 @@ import (
 )
 
 const readMediaAccessAsset = `-- name: ReadMediaAccessAsset :one
-SELECT asset.id,asset.project_id,asset.storage_key,asset.mime_type,asset.kind,intent.file_name,
+SELECT asset.id,asset.project_id,asset.storage_key,asset.mime_type,asset.kind,
+ coalesce(nullif(intent.file_name,''),nullif(asset.metadata_json->>'name',''),nullif(asset.metadata_json->>'fileName',''),nullif(asset.metadata_json->>'filename',''),'')::text AS file_name,
  (coalesce(asset.metadata_json->>'sensitive','false')='true' OR EXISTS(
  SELECT 1 FROM evidence_links evidence WHERE evidence.project_id=asset.project_id AND evidence.asset_id=asset.id AND evidence.is_published))::boolean AS sensitive
 FROM assets asset LEFT JOIN asset_upload_intents intent ON intent.project_id=asset.project_id AND intent.asset_id=asset.id
@@ -29,7 +30,7 @@ type ReadMediaAccessAssetRow struct {
 	StorageKey string         `json:"storage_key"`
 	MimeType   sql.NullString `json:"mime_type"`
 	Kind       string         `json:"kind"`
-	FileName   sql.NullString `json:"file_name"`
+	FileName   string         `json:"file_name"`
 	Sensitive  bool           `json:"sensitive"`
 }
 

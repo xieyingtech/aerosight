@@ -81,7 +81,7 @@ func TestMediaAccessHTTPRangeAndAuthorization(t *testing.T) {
 		t.Fatal(err)
 	}
 	var asset int
-	if err := f.db.QueryRow("insert into assets(project_id,team_id,kind,storage_key,logical_key,mime_type) values($1,$2,'video',$3,'video.mp4','video/mp4') returning id", pid, team, fmt.Sprintf("projects/%d/video.mp4", pid)).Scan(&asset); err != nil {
+	if err := f.db.QueryRow("insert into assets(project_id,team_id,kind,storage_key,logical_key,mime_type,metadata_json) values($1,$2,'video',$3,'video.mp4','video/mp4','{\"name\":\"original-video.mp4\"}') returning id", pid, team, fmt.Sprintf("projects/%d/video.mp4", pid)).Scan(&asset); err != nil {
 		t.Fatal(err)
 	}
 	base := fmt.Sprintf("/api/projects/%d/assets/%d", pid, asset)
@@ -114,6 +114,9 @@ func TestMediaAccessHTTPRangeAndAuthorization(t *testing.T) {
 			t.Fatalf("content %d %q want %d %q", res.StatusCode, body, status, want)
 		}
 		if status == 200 || status == 206 {
+			if strings.Contains(target, "action=download") && res.Header.Get("Content-Disposition") != `attachment; filename="original-video.mp4"` {
+				t.Fatalf("download filename lost: %s", res.Header.Get("Content-Disposition"))
+			}
 			if res.Header.Get("Accept-Ranges") != "bytes" || (status == 206 && !strings.HasPrefix(res.Header.Get("Content-Range"), "bytes ")) || (method == "HEAD" && res.Header.Get("Content-Length") != "10") {
 				t.Fatalf("range/HEAD headers %+v", res.Header)
 			}
