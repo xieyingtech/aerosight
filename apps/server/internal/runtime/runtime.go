@@ -32,7 +32,7 @@ import (
 )
 
 type algorithmRawStore struct {
-	storage *media.LocalObjectStorage
+	storage media.ObjectStorage
 }
 
 func (store algorithmRawStore) PutRawResult(
@@ -271,13 +271,13 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	var assetStore algorithm.AlgorithmAssetStore
 	var assetHandler outbox.Handler
 	var waylineSource flighthub.WaylineSourceReader
-	if workerConfig.ObjectStorageLocalRoot == "" {
+	if workerConfig.ObjectStorageLocalRoot == "" && workerConfig.ObjectStorageS3.Endpoint == "" {
 		assetHandler = func(context.Context, *sql.Tx, outbox.Event) error {
 			return errors.New("DATA_DIR is not configured")
 		}
 		logger.Warn("media derivative processing unavailable", "reason", "DATA_DIR is not configured")
 	} else {
-		storage, err := media.NewLocalObjectStorage(workerConfig.ObjectStorageLocalRoot)
+		storage, err := media.NewConfiguredObjectStorage(workerConfig.ObjectStorageLocalRoot, workerConfig.ObjectStorageS3)
 		if err != nil {
 			logger.Error("object storage initialization failed", "error", err.Error())
 			return nil, errors.New("background component initialization failed")

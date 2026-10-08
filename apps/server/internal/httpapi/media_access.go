@@ -15,7 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) AttachMediaStorage(root string) { s.mediaStorageRoot = root }
+func (s *Server) AttachMediaStorage(root string)                  { s.mediaStorageRoot = root }
+func (s *Server) AttachObjectStorage(storage media.ObjectStorage) { s.mediaObjectStorage = storage }
 func (s *Server) mediaAccessRoutes() {
 	s.router.POST("/api/projects/:id/assets/import", s.requireUser, s.importImageAsset)
 	group := s.router.Group("/api/projects/:id/assets/:assetId", s.requireUser)
@@ -120,7 +121,7 @@ func (s *Server) readMediaContent(c *gin.Context) {
 		fail()
 		return
 	}
-	file, err := media.OpenProjectObject(s.mediaStorageRoot, pid, asset.StorageKey)
+	file, err := media.OpenStoredProjectObject(c.Request.Context(), s.mediaObjectStorage, s.mediaStorageRoot, pid, asset.StorageKey)
 	if err != nil {
 		fail()
 		return

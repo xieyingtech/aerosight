@@ -5,6 +5,7 @@ import (
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/flighthub"
 	"aerosight/server/internal/httpapi"
+	"aerosight/server/internal/media"
 	"aerosight/server/internal/migrations"
 	"aerosight/server/internal/runtime"
 	"aerosight/server/internal/webassets"
@@ -108,6 +109,13 @@ func run(logger *slog.Logger) error {
 	api.AttachFlightHub(flightHubClient, true, workerCfg.AuthSecret)
 	api.AttachDeviceCredentials(workerCfg.AuthSecret)
 	api.AttachMediaStorage(workerCfg.ObjectStorageLocalRoot)
+	if workerCfg.ObjectStorageLocalRoot != "" || workerCfg.ObjectStorageS3.Endpoint != "" {
+		storage, storageErr := media.NewConfiguredObjectStorage(workerCfg.ObjectStorageLocalRoot, workerCfg.ObjectStorageS3)
+		if storageErr != nil {
+			return storageErr
+		}
+		api.AttachObjectStorage(storage)
+	}
 	server := newHTTPServer(ctx, httpCfg.Address, api.Handler())
 	listener, err := net.Listen("tcp", server.Addr)
 	if err != nil {

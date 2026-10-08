@@ -22,7 +22,8 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 FROM debian:bookworm-slim AS runtime
 COPY --from=server-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=server-build /usr/share/zoneinfo /usr/share/zoneinfo
-RUN groupadd --gid 10001 aerosight && useradd --uid 10001 --gid aerosight --no-create-home aerosight \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 aerosight && useradd --uid 10001 --gid aerosight --no-create-home aerosight \
     && mkdir -p /app /var/lib/aerosight/objects && chown -R aerosight:aerosight /var/lib/aerosight
 WORKDIR /app
 COPY --from=server-build /out/aerosight /usr/local/bin/aerosight

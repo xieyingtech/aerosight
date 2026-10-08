@@ -82,7 +82,7 @@ func (s *Server) readInspectionImage(c *gin.Context) {
 			s.failure(c, 503, "INSPECTION_IMAGE_READER_UNAVAILABLE")
 			return
 		}
-		file, openErr := media.OpenProjectObject(s.mediaStorageRoot, pid, asset.StorageKey)
+		file, openErr := media.OpenStoredProjectObject(c.Request.Context(), s.mediaObjectStorage, s.mediaStorageRoot, pid, asset.StorageKey)
 		if openErr != nil {
 			s.failure(c, 404, "INSPECTION_IMAGE_UNAVAILABLE")
 			return

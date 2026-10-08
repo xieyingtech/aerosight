@@ -279,7 +279,7 @@ func (s *Server) readObjectRunImage(ctx context.Context, uid, pid int32, run obj
 		if err = s.db.QueryRowContext(ctx, `select exists(select 1 from connector_asset_access_refs where project_id=$1 and id=$2)`, pid, input.AssetID).Scan(&isRemote); err != nil || isRemote {
 			return nil, errors.New("AGENT_TOOL_IMAGE_READER_UNAVAILABLE")
 		}
-		file, err := media.OpenProjectObject(s.mediaStorageRoot, pid, asset.StorageKey)
+		file, err := media.OpenStoredProjectObject(ctx, s.mediaObjectStorage, s.mediaStorageRoot, pid, asset.StorageKey)
 		if err != nil {
 			return nil, err
 		}

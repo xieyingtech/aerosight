@@ -1,8 +1,9 @@
 package media
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -51,8 +52,8 @@ func (storage *LocalObjectStorage) PutObject(_ context.Context, key string, read
 	}
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
-	var body bytes.Buffer
-	if _, err := io.Copy(io.MultiWriter(temporary, &body), reader); err != nil {
+	hash := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(temporary, hash), reader); err != nil {
 		temporary.Close()
 		return Object{}, err
 	}
@@ -66,8 +67,8 @@ func (storage *LocalObjectStorage) PutObject(_ context.Context, key string, read
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return Object{}, err
 	}
-	digest := checksum(body.Bytes())
-	return Object{Key: key, Body: body.Bytes(), ContentType: contentType, ChecksumSHA256: digest, VersionID: digest}, nil
+	digest := hex.EncodeToString(hash.Sum(nil))
+	return Object{Key: key, ContentType: contentType, ChecksumSHA256: digest, VersionID: digest}, nil
 }
 
 func (storage *LocalObjectStorage) resolve(key string) (string, error) {

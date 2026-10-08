@@ -1,6 +1,7 @@
 package config
 
 import (
+	"aerosight/server/internal/media"
 	"errors"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ type Config struct {
 	LogLevel                  string
 	WorkerName                string
 	ObjectStorageLocalRoot    string
+	ObjectStorageS3           media.S3Config
 	CallbackListenAddress     string
 	CallbackPublicBaseURL     string
 	AssetURLSigningSecret     string
@@ -48,6 +50,11 @@ func Load() (Config, error) {
 		MediaAPIPassword:       strings.TrimSpace(os.Getenv("MEDIA_ADMIN_PASSWORD")),
 	}
 	var problems []error
+	var storageErr error
+	config.ObjectStorageS3, storageErr = media.LoadS3Config()
+	if storageErr != nil {
+		problems = append(problems, storageErr)
+	}
 	config.FlightHubAPIBaseURL = valueOrDefault("DJI_FLIGHTHUB_API_BASE_URL", "https://es-flight-api-cn.djigate.com")
 	config.FlightHubHTTPTimeout, problems = durationMilliseconds("DJI_FLIGHTHUB_HTTP_TIMEOUT_MS", 8*time.Second, problems)
 	config.FlightHubMaxRetries, problems = integerValue("DJI_FLIGHTHUB_MAX_RETRIES", 2, 0, 3, problems)

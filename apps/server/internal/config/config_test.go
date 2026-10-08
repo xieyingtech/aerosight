@@ -40,7 +40,7 @@ func TestLoadDefaults(t *testing.T) {
 	if config.LogLevel != "info" || config.WorkerName != "aerosight-worker" || config.CallbackListenAddress != "127.0.0.1:8081" ||
 		config.FlightHubAPIBaseURL != "https://es-flight-api-cn.djigate.com" || config.FlightHubHTTPTimeout != 8*time.Second || config.FlightHubMaxRetries != 2 ||
 		config.FlightHubPollInterval != 5*time.Minute || config.FlightHubReconcileEvery != 15*time.Second || config.FlightHubMaxResponseBytes != 4<<20 ||
-		len(config.FlightHubAllowedLinkHosts) != 3 {
+		len(config.FlightHubAllowedLinkHosts) != 4 {
 		t.Fatalf("unexpected defaults: %#v", config)
 	}
 }

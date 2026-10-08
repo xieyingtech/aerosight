@@ -2,11 +2,14 @@
 
 import { apiFetch } from "@/lib/api-client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DownloadIcon, HistoryIcon, RadioTowerIcon, RefreshCwIcon, SquareIcon, VideoOffIcon } from "lucide-react";
 
 import { createLiveStreamPanelModel } from "@/lib/live-stream-panel-model";
 import { IsolatedRTCPlayer } from "@/components/isolated-rtc-player";
+import { captureRTCFrame } from "@/components/isolated-rtc-player";
+import { captureVideoFrame } from "@/lib/video-frame";
+import { SampledVideoAlgorithm } from "@/components/sampled-video-algorithm";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 import { isLiveStreamPlayable } from "@/lib/realtime-workbench-core";
@@ -66,6 +69,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
     ? { ...baseModel, stream: snapshot.liveStreams.find((stream) => Number(stream.id) === selectedStreamId) ?? null }
     : baseModel;
   const [playback, setPlayback] = useState<PlaybackState>({ status: "idle" });
+  const playbackElement = useRef<HTMLDivElement>(null);
   const [playbackRevision, setPlaybackRevision] = useState(0);
   const [stopState, setStopState] = useState<"idle" | "stopping" | "error">("idle");
   const streamId = model.mode === "live" ? Number(model.stream?.id) || null : null;
@@ -190,7 +194,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       <span className="flex items-center gap-2"><RadioTowerIcon className="size-4" />设备 #{String(model.stream.deviceId)}</span>
       <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
     </div>}
-    <div className={`flex aspect-video items-center justify-center overflow-hidden bg-slate-950 text-slate-200 ${compact ? "" : "rounded-lg border"}`}>
+    <div ref={playbackElement} className={`flex aspect-video items-center justify-center overflow-hidden bg-slate-950 text-slate-200 ${compact ? "" : "rounded-lg border"}`}>
       {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? sourceType === "dji_flighthub" ? "已停止观看，等待设备停止推流…" : "正在停止直播…" : "正在等待设备推流…"}</div>
         : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
         : playback.status === "error" ? <div className="space-y-3 text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" /><p>直播连接失败</p><button className="rounded-md border px-3 py-2" type="button" onClick={() => setPlaybackRevision(value => value + 1)}>重新连接</button></div>
@@ -204,6 +208,13 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
               ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
               : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}
     </div>
+    {streamId && playback.status === "ready" && ["volc-rtc", "hls"].includes(playback.candidates[playback.index]?.protocol) && <SampledVideoAlgorithm key={`${streamId}-${playback.candidates[playback.index].protocol}`} projectId={snapshot.project.id} streamId={streamId} capture={async signal => {
+      const iframe = playbackElement.current?.querySelector("iframe");
+      if (iframe) return captureRTCFrame(iframe, signal);
+      const video = playbackElement.current?.querySelector("video");
+      if (!video) throw new Error("等待直播视频画面");
+      signal.throwIfAborted(); return captureVideoFrame(video);
+    }} />}
     {!compact && <p className="text-xs text-muted-foreground">{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`} · {sourceType}</p>}
     {playback.status === "ready" && playback.index + 1 < playback.candidates.length && <button className="rounded-md border px-2.5 py-1 text-xs" onClick={() => setPlayback({ ...playback, index: playback.index + 1 })} type="button">切换备用协议</button>}
     <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2" : ""}`}>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshCwIcon, VideoOffIcon } from "lucide-react";
 
 import { parseVolcRTCPlaybackCredential } from "@/lib/volc-rtc-player-core";
+import { captureVideoFrame } from "@/lib/video-frame";
 
 let volcRTCCleanupTail = Promise.resolve();
 
@@ -19,6 +20,19 @@ export function VolcRTCPlayer({ credential }: { credential: string }) {
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<string | null>(null);
   const [viewerAttempt, setViewerAttempt] = useState(0);
+
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== window.parent || event.data?.type !== "aerosight.rtc.capture" || typeof event.data.requestId !== "string") return;
+      const requestId = event.data.requestId;
+      const video = containerRef.current?.querySelector("video");
+      const reply = (value: unknown) => window.parent.postMessage(value, window.location.origin);
+      if (!video) { reply({ type: "aerosight.rtc.frame", requestId, error: "直播尚未出现可抽取的视频画面" }); return; }
+      void captureVideoFrame(video).then(frame => reply({ type: "aerosight.rtc.frame", requestId, frame }), error => reply({ type: "aerosight.rtc.frame", requestId, error: error.message }));
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, []);
 
   useEffect(() => {
     let disposed = false;

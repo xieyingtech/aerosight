@@ -240,7 +240,27 @@ func (s *Server) startAlgorithmRun(c *gin.Context) {
 		if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(source.ChecksumSha256) {
 			return nil, errors.New("ALGORITHM_INPUT_ASSET_CHECKSUM_REQUIRED")
 		}
-		snapshot, e := json.Marshal(gin.H{"schemaVersion": "aerosight.algorithm.input/v1", "runId": id.String(), "projectId": pid, "definition": gin.H{"configurationSnapshotId": source.ConfigurationSnapshotID, "providerType": source.ProviderType, "modelOrProcess": source.ModelOrProcess, "executionMode": source.ExecutionMode, "mappingVersion": source.MappingVersion}, "inputAsset": gin.H{"assetId": source.AssetID, "version": source.AssetVersion, "checksumSha256": source.ChecksumSha256, "mimeType": source.MimeType, "accessUrl": "", "accessExpiresAt": "1970-01-01T00:00:00.000Z"}, "context": gin.H{"requestedByUserId": uid, "requestedAt": time.Now().UTC().Format("2006-01-02T15:04:05.000Z")}, "parameters": input.Parameters})
+		var captured sql.NullTime
+		var device sql.NullInt32
+		var metadata []byte
+		if e = w.Tx.QueryRowContext(ctx, `select captured_at,device_id,metadata_json from assets where id=$1 and project_id=$2`, source.AssetID, pid).Scan(&captured, &device, &metadata); e != nil {
+			return nil, e
+		}
+		contextSnapshot := gin.H{"requestedByUserId": uid, "requestedAt": time.Now().UTC().Format(time.RFC3339Nano), "position": nil, "coordinateReference": nil, "calibrationVersion": nil, "taskRunId": nil, "deviceId": nil, "quality": gin.H{"position": "unavailable"}}
+		if captured.Valid {
+			contextSnapshot["capturedAt"] = captured.Time.UTC().Format(time.RFC3339Nano)
+		}
+		if device.Valid {
+			contextSnapshot["deviceId"] = device.Int32
+		}
+		var meta map[string]any
+		json.Unmarshal(metadata, &meta)
+		for _, key := range []string{"source", "streamId", "videoAssetId", "mediaTimeSeconds", "timeQuality"} {
+			if value, ok := meta[key]; ok {
+				contextSnapshot[key] = value
+			}
+		}
+		snapshot, e := json.Marshal(gin.H{"schemaVersion": "aerosight.algorithm.input/v1", "runId": id.String(), "projectId": pid, "definition": gin.H{"configurationSnapshotId": source.ConfigurationSnapshotID, "providerType": source.ProviderType, "modelOrProcess": source.ModelOrProcess, "executionMode": source.ExecutionMode, "mappingVersion": source.MappingVersion}, "inputAsset": gin.H{"assetId": source.AssetID, "version": source.AssetVersion, "checksumSha256": source.ChecksumSha256, "mimeType": source.MimeType, "accessUrl": "", "accessExpiresAt": "1970-01-01T00:00:00.000Z"}, "context": contextSnapshot, "parameters": input.Parameters})
 		if e != nil {
 			return nil, e
 		}
@@ -248,7 +268,7 @@ func (s *Server) startAlgorithmRun(c *gin.Context) {
 		if e != nil {
 			return nil, e
 		}
-		e = w.Queries.InsertCatalogAlgorithmRun(ctx, sqlcgen.InsertCatalogAlgorithmRunParams{ID: id, ProjectID: pid, TeamID: source.TeamID, AlgorithmDefinitionVersionID: source.ConfigurationSnapshotID, InputAssetID: source.AssetID, IdempotencyKey: fmt.Sprintf("catalog:%d:asset:%d:%s", source.ConfigurationSnapshotID, source.AssetID, id), Parameters: parameters, Snapshot: snapshot})
+		e = w.Queries.InsertCatalogAlgorithmRun(ctx, sqlcgen.InsertCatalogAlgorithmRunParams{ID: id, ProjectID: pid, TeamID: source.TeamID, AlgorithmDefinitionVersionID: source.ConfigurationSnapshotID, InputAssetID: source.AssetID, DeviceID: device, IdempotencyKey: fmt.Sprintf("catalog:%d:asset:%d:%s", source.ConfigurationSnapshotID, source.AssetID, id), Parameters: parameters, Snapshot: snapshot})
 		if e != nil {
 			return nil, e
 		}

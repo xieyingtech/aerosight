@@ -6,6 +6,7 @@ import (
 	"aerosight/server/internal/database/sqlcgen"
 	"aerosight/server/internal/device"
 	"aerosight/server/internal/httptransport"
+	"aerosight/server/internal/media"
 	"aerosight/server/internal/observability"
 	"context"
 	"database/sql"
@@ -36,6 +37,7 @@ type Server struct {
 	staticPages         http.Handler
 	aiHTTPClientFactory func(*url.URL, []netip.Addr) *http.Client
 	mediaStorageRoot    string
+	mediaObjectStorage  media.ObjectStorage
 	networkResolver     device.HostResolver
 	networkProbe        device.EndpointProbe
 	credentialSecret    string
@@ -95,7 +97,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 			c.Header("Cache-Control", "no-store")
 			limit := int64(2 << 20)
 			if c.FullPath() == "/api/projects/:id/assets/import" {
-				limit = 41 << 20
+				limit = 513 << 20
 			}
 			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, limit)
 		}
