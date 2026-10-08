@@ -38,13 +38,21 @@ func (h *Handler) ConfigureCSP(mapOrigins, mediaOrigins []string) {
 			sockets = append(sockets, strings.Replace(strings.Replace(origin, "https://", "wss://", 1), "http://", "ws://", 1))
 		}
 		connections := strings.TrimSpace(media + " " + strings.Join(sockets, " "))
-		policy := "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; " +
+		ancestors := "'none'"
+		frameOptions := "DENY"
+		// Only the isolated RTC player may be embedded by the same-origin UI.
+		// Apply both headers to the resolved asset, including direct index requests.
+		if name == "rtc-viewer/index.html" {
+			ancestors = "'self'"
+			frameOptions = "SAMEORIGIN"
+		}
+		policy := "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors " + ancestors + "; form-action 'self'; " +
 			"script-src " + scripts + "; script-src-attr 'none'; " +
 			"style-src 'self' 'unsafe-inline'; font-src 'self' " + maps + "; " +
 			"img-src 'self' data: blob: " + maps + " " + media + "; " +
 			"connect-src 'self' " + maps + " " + connections + "; " +
 			"worker-src 'self' blob:; media-src 'self' blob: " + media + "; frame-src 'self' " + media + ";"
-		file.policy = secure.New(secure.Options{ContentSecurityPolicy: policy, ReferrerPolicy: "same-origin"})
+		file.policy = secure.New(secure.Options{ContentSecurityPolicy: policy, CustomFrameOptionsValue: frameOptions, ReferrerPolicy: "same-origin"})
 		h.files[name] = file
 	}
 }

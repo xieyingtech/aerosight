@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"aerosight/server/internal/webassets"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -9,6 +10,48 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func TestRTCViewerFrameHeadersThroughHTTPBoundary(t *testing.T) {
+	files := fstest.MapFS{}
+	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "rtc-viewer/index.html", "404.html"} {
+		files[name] = &fstest.MapFile{Data: []byte("<html>" + name + "</html>")}
+	}
+	pages, err := webassets.New(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := boundaryServer(t, io.Discard)
+	s.AttachStaticPages(pages)
+	handler := s.Handler()
+	for _, tc := range []struct {
+		path, frameOptions, ancestors string
+		status                        int
+	}{
+		{"/rtc-viewer/", "SAMEORIGIN", "'self'", 200},
+		{"/rtc-viewer/index.html", "SAMEORIGIN", "'self'", 200},
+		{"/login/", "DENY", "'none'", 200},
+		{"/", "DENY", "'none'", 200},
+		{"/rtc-viewer/missing/", "DENY", "'none'", 404},
+	} {
+		for _, method := range []string{"GET", "HEAD"} {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, httptest.NewRequest(method, tc.path, nil))
+			policy := w.Header().Get("Content-Security-Policy")
+			if w.Code != tc.status || w.Header().Get("X-Frame-Options") != tc.frameOptions || !strings.Contains(policy, "frame-ancestors "+tc.ancestors+";") {
+				t.Fatalf("%s %s: %d %+v", method, tc.path, w.Code, w.Header())
+			}
+			if tc.status == 200 {
+				r := httptest.NewRequest(method, tc.path, nil)
+				r.Header.Set("If-None-Match", w.Header().Get("ETag"))
+				cached := httptest.NewRecorder()
+				handler.ServeHTTP(cached, r)
+				if cached.Code != 304 || cached.Header().Get("X-Frame-Options") != tc.frameOptions || cached.Header().Get("Content-Security-Policy") != policy {
+					t.Fatalf("%s %s: cached response lost frame policy: %d %+v", method, tc.path, cached.Code, cached.Header())
+				}
+			}
+		}
+	}
+}
 
 func TestStaticPagesGinFallbackBoundary(t *testing.T) {
 	files := fstest.MapFS{}
