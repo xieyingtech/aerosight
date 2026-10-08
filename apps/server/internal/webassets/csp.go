@@ -45,6 +45,9 @@ func (h *Handler) ConfigureCSP(mapOrigins, mediaOrigins []string) {
 		if name == "rtc-viewer/index.html" {
 			ancestors = "'self'"
 			frameOptions = "SAMEORIGIN"
+			// The bundled Volcengine SDK uses these domains for access, config,
+			// logs and the region-specific signaling hosts returned by dispatch.
+			connections = strings.TrimSpace(connections + " https://*.rtc.volcvideo.com wss://*.rtc.volcvideo.com https://*.volcvideos.com wss://*.volcvideos.com")
 		}
 		policy := "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors " + ancestors + "; form-action 'self'; " +
 			"script-src " + scripts + "; script-src-attr 'none'; " +

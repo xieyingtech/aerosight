@@ -40,6 +40,16 @@ func TestRTCViewerFrameHeadersThroughHTTPBoundary(t *testing.T) {
 			if w.Code != tc.status || w.Header().Get("X-Frame-Options") != tc.frameOptions || !strings.Contains(policy, "frame-ancestors "+tc.ancestors+";") {
 				t.Fatalf("%s %s: %d %+v", method, tc.path, w.Code, w.Header())
 			}
+			for _, source := range []string{"https://*.rtc.volcvideo.com", "wss://*.rtc.volcvideo.com", "https://*.volcvideos.com", "wss://*.volcvideos.com"} {
+				if strings.Contains(policy, source) != (tc.frameOptions == "SAMEORIGIN") {
+					t.Fatalf("%s: incorrect RTC connection scope for %s: %s", tc.path, source, policy)
+				}
+				for _, directive := range strings.Split(policy, ";") {
+					if strings.Contains(directive, source) && !strings.HasPrefix(strings.TrimSpace(directive), "connect-src ") {
+						t.Fatalf("RTC source outside connect-src: %s", directive)
+					}
+				}
+			}
 			if tc.status == 200 {
 				r := httptest.NewRequest(method, tc.path, nil)
 				r.Header.Set("If-None-Match", w.Header().Get("ETag"))
