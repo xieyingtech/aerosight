@@ -12,6 +12,17 @@ import (
 )
 
 func TestAlgorithmRunInputAndDiagnostics(t *testing.T) {
+	for _, fps := range []float64{0.19, 5.01, 0, -1} {
+		if _, err := parseAlgorithmRunInput(map[string]any{"configurationSnapshotId": float64(31), "assetId": float64(9), "videoFps": fps}); err == nil {
+			t.Fatalf("accepted video FPS %v", fps)
+		}
+	}
+	for _, fps := range []float64{0.2, 1, 5} {
+		input, err := parseAlgorithmRunInput(map[string]any{"configurationSnapshotId": float64(31), "assetId": float64(9), "videoFps": fps})
+		if err != nil || input.VideoFPS == nil || *input.VideoFPS != fps {
+			t.Fatalf("rejected video FPS %v: %v", fps, err)
+		}
+	}
 	for _, body := range []string{`{"configurationSnapshotId":"31","assetId":9}`, `{"definitionVersionId":31,"assetId":"9","parameters":{}}`, `{"configurationSnapshotId":31,"definitionVersionId":30,"assetId":9}`} {
 		var raw map[string]any
 		json.Unmarshal([]byte(body), &raw)

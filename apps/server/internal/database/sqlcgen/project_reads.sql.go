@@ -47,7 +47,7 @@ select to_jsonb(result_row) as item from (
   select id, kind, mime_type as "mimeType", captured_at as "capturedAt", created_at as "createdAt",
     coalesce(nullif(metadata_json->>'name',''),nullif(metadata_json->>'fileName',''),nullif(metadata_json->>'filename','')) as name,
     metadata_json->>'sourceDescription' as "sourceDescription"
-  from assets where project_id=$1 and status='available' order by created_at desc
+  from assets where project_id=$1 and status='available' and coalesce(metadata_json->>'source','')<>'video-analysis-frame' order by created_at desc
 ) result_row
 `
 

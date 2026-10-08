@@ -4,6 +4,7 @@ export const startAlgorithmRunInputSchema = z.object({
   configurationSnapshotId: z.coerce.number().int().positive().optional(),
   definitionVersionId: z.coerce.number().int().positive().optional(),
   assetId: z.coerce.number().int().positive(),
+  videoFps: z.number().min(0.2).max(5).optional(),
   parameters: z.record(z.string(), z.unknown()).default({})
 }).strict().refine(
   (input) => input.configurationSnapshotId !== undefined || input.definitionVersionId !== undefined,
@@ -11,7 +12,8 @@ export const startAlgorithmRunInputSchema = z.object({
 ).transform((input) => ({
   configurationSnapshotId: input.configurationSnapshotId ?? input.definitionVersionId!,
   assetId: input.assetId,
-  parameters: input.parameters
+  parameters: input.parameters,
+  ...(input.videoFps === undefined ? {} : {videoFps: input.videoFps})
 }));
 
 export function coerceSchemaParameters(schema: Record<string, unknown>, values: Record<string, FormDataEntryValue>) {

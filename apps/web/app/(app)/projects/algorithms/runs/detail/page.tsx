@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, CircleDashed, FileText, ImageIcon, List, XCircle } from "lucide-react";
 import { AlgorithmAssetPreview } from "@/components/algorithm-asset-preview";
+import { AlgorithmVideoResult } from "@/components/algorithm-video-result";
 import { AlgorithmRunRetryButton } from "@/components/algorithm-run-retry-button";
 import { Page } from "@/components/page";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ function RunDetail({ initial, projectId, query }: { initial: AlgorithmRunDetail;
   const link=document.createElement('a');link.href=url;link.download=`object-review-${run.id.slice(0,8)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
  const isDetection = run.canonicalResult.kind === "detection";
+ const isVideo = view.input.mimeType?.startsWith('video/') ?? false;
  const durations = attempts.map(a => a.durationMs).filter((n): n is number => typeof n === "number" && Number.isFinite(n));
  const duration = durations.length ? durations.reduce((a,b)=>a+b,0) : null;
  const active = ["queued", "running", "polling", "waiting_callback"].includes(run.status);
@@ -64,7 +66,8 @@ function RunDetail({ initial, projectId, query }: { initial: AlgorithmRunDetail;
     {([{id:'result',label:'识别结果',icon:ImageIcon},{id:'summary',label:'运行概览',icon:FileText},{id:'logs',label:'调用记录',icon:List}] as const).map(item=><button key={item.id} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined} className={`flex items-center gap-2 rounded-md px-3 py-2 text-left text-sm ${section===item.id?'bg-muted font-medium':'text-muted-foreground hover:bg-muted/60'}`}><item.icon className="size-4"/>{item.label}</button>)}
    </nav>
    <div className="min-w-0 space-y-5">
-    {section==='result' && <>
+    {section==='result' && isVideo && <AlgorithmVideoResult projectId={projectId} runId={run.id} assetId={run.inputAssetId} status={run.status} summary={(run.canonicalResult.result as Record<string,unknown>)??(view.input.context.videoAnalysis as Record<string,unknown>)??{}}/>}
+    {section==='result' && !isVideo && <>
      {selectionActive && <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
       <p className="font-medium">{selection.valid?`查询结果：保留 ${detections.length} / ${allDetections.length} 个检测候选`:'筛选链接包含失效目标，无法展示该选择。'}</p>
       {selection.reason && <p>{selection.reason}</p>}

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"aerosight/server/internal/algorithm"
 	"aerosight/server/internal/database"
 	"aerosight/server/internal/database/sqlcgen"
 	"database/sql"
@@ -22,6 +23,7 @@ func (s *Server) algorithmRunRoutes() {
 	group.POST("", s.startAlgorithmRun)
 	group.POST("/:runId/retry", s.retryAlgorithmRun)
 	group.GET("/:runId/image", s.readObjectQueryImage)
+	group.GET("/:runId/annotations", s.readVideoAnnotations)
 	group.GET("", func(c *gin.Context) {
 		s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
 			rows, err := q.ListAlgorithmRuns(c.Request.Context(), a.ProjectID)
@@ -125,6 +127,7 @@ type algorithmRunInput struct {
 	SnapshotID int64
 	AssetID    int32
 	Parameters map[string]any
+	VideoFPS   *float64
 }
 
 func parseAlgorithmRunInput(raw map[string]any) (algorithmRunInput, error) {
@@ -151,7 +154,7 @@ func parseAlgorithmRunInput(raw map[string]any) (algorithmRunInput, error) {
 		return int64(n), !math.IsNaN(n) && n > 0 && n <= limit && math.Trunc(n) == n
 	}
 	for key := range raw {
-		if key != "configurationSnapshotId" && key != "definitionVersionId" && key != "assetId" && key != "parameters" {
+		if key != "configurationSnapshotId" && key != "definitionVersionId" && key != "assetId" && key != "parameters" && key != "videoFps" {
 			return out, bad
 		}
 	}
@@ -181,6 +184,13 @@ func parseAlgorithmRunInput(raw map[string]any) (algorithmRunInput, error) {
 		return out, bad
 	}
 	out.AssetID = int32(asset)
+	if value, present := raw["videoFps"]; present {
+		fps, ok := value.(float64)
+		if !ok || !algorithm.ValidVideoFPS(fps) {
+			return out, bad
+		}
+		out.VideoFPS = &fps
+	}
 	if value, present := raw["parameters"]; present {
 		out.Parameters, ok = value.(map[string]any)
 		if !ok || out.Parameters == nil {
@@ -198,7 +208,7 @@ func (s *Server) algorithmRunFailure(c *gin.Context, err error, retry bool) {
 	switch err.Error() {
 	case "PROJECT_ACCESS_DENIED":
 		code, status = err.Error(), 403
-	case "ALGORITHM_RUN_NOT_FOUND", "ALGORITHM_RUN_NOT_RETRYABLE", "ALGORITHM_RUN_SOURCE_NOT_AVAILABLE", "ALGORITHM_INPUT_ASSET_CHECKSUM_REQUIRED", "ALGORITHM_RUN_INPUT_INVALID":
+	case "ALGORITHM_RUN_NOT_FOUND", "ALGORITHM_RUN_NOT_RETRYABLE", "ALGORITHM_RUN_SOURCE_NOT_AVAILABLE", "ALGORITHM_INPUT_ASSET_CHECKSUM_REQUIRED", "ALGORITHM_RUN_INPUT_INVALID", "VIDEO_ANALYSIS_INPUT_UNSUPPORTED":
 		code = err.Error()
 	}
 	s.failure(c, status, code)
@@ -255,6 +265,19 @@ func (s *Server) startAlgorithmRun(c *gin.Context) {
 		}
 		var meta map[string]any
 		json.Unmarshal(metadata, &meta)
+		if strings.HasPrefix(source.MimeType, "video/") {
+			fps := 1.0
+			if input.VideoFPS != nil {
+				fps = *input.VideoFPS
+			}
+			duration, _ := meta["durationSeconds"].(float64)
+			if source.ExecutionMode != "synchronous" || duration <= 0 || math.Ceil(duration*fps) > algorithm.MaxVideoFrames {
+				return nil, errors.New("VIDEO_ANALYSIS_INPUT_UNSUPPORTED")
+			}
+			contextSnapshot["videoAnalysis"] = gin.H{"fps": fps}
+		} else if input.VideoFPS != nil {
+			return nil, errors.New("ALGORITHM_RUN_INPUT_INVALID")
+		}
 		for _, key := range []string{"source", "streamId", "videoAssetId", "mediaTimeSeconds", "timeQuality"} {
 			if value, ok := meta[key]; ok {
 				contextSnapshot[key] = value

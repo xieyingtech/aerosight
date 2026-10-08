@@ -1,6 +1,6 @@
 export type AlgorithmAsset = {id:number;kind:string;mimeType:string|null;name?:string|null;capturedAt:string|null;createdAt:string;sourceDescription?:string|null};
 export function assetName(asset: AlgorithmAsset) {return asset.name?.trim() || `${asset.mimeType?.startsWith('image/') ? '图片' : '素材'} #${asset.id}`;}
-export function eligibleAlgorithmAssets(assets:AlgorithmAsset[],imageOnly:boolean) {return assets.filter(a=>!imageOnly || a.mimeType?.startsWith('image/'));}
+export function eligibleAlgorithmAssets(assets:AlgorithmAsset[],imageOnly:boolean) {return assets.filter(a=>!imageOnly || a.mimeType?.startsWith('image/') || a.mimeType === 'video/mp4');}
 export type Detection = {detectionKey:string;label:string;confidence:number;pixelGeometry?:{type:string;x:number;y:number;width:number;height:number}};
 export function runDetections(canonical:Record<string,unknown>):Detection[] {
  const result=canonical.result as Record<string,unknown>|undefined;

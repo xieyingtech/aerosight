@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"aerosight/server/internal/credentials"
+	"aerosight/server/internal/media"
 	"aerosight/server/internal/outbox"
 )
 
@@ -38,6 +39,7 @@ type DetectionSink interface {
 
 type Processor struct {
 	inspectionDB    *sql.DB
+	videoStorage    media.ObjectStorage
 	client          HTTPDoer
 	breaker         *CircuitBreaker
 	store           RawResultStore
@@ -85,6 +87,13 @@ type preparedAlgorithm struct {
 }
 
 func (processor *Processor) Handler(ctx context.Context, tx *sql.Tx, event outbox.Event) error {
+	var video bool
+	if err := tx.QueryRowContext(ctx, `select exists(select 1 from algorithm_runs where id=($1::jsonb->>'runId')::uuid and project_id=$2 and input_snapshot_json#>'{context,videoAnalysis}' is not null)`, event.Payload, event.ProjectID).Scan(&video); err != nil {
+		return err
+	}
+	if video {
+		return nil
+	}
 	if processor.inspectionDB != nil {
 		var child bool
 		if err := tx.QueryRowContext(ctx, `select exists(select 1 from algorithm_runs r join task_run_steps rs on rs.id=r.task_run_step_id and rs.project_id=r.project_id join task_steps s on s.id=rs.task_step_id and s.uses='inspection.detect' where r.id=($1::jsonb->>'runId')::uuid and r.project_id=$2 and r.team_id=$3)`, event.Payload, event.ProjectID, event.TeamID).Scan(&child); err != nil {

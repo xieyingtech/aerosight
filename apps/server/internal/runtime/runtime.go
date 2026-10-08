@@ -268,6 +268,7 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	})
 	consumer.Register("command.ack", missionProcessor.Handler)
 	var rawStore algorithm.RawResultStore
+	var videoStorage media.ObjectStorage
 	var assetStore algorithm.AlgorithmAssetStore
 	var assetHandler outbox.Handler
 	var waylineSource flighthub.WaylineSourceReader
@@ -285,6 +286,7 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 		processor := media.NewProcessor(storage, media.NewSQLRepository())
 		assetHandler = processor.Handler
 		rawStore = algorithmRawStore{storage: storage}
+		videoStorage = storage
 		assetStore = algorithmRawStore{storage: storage}
 		waylineSource = algorithmRawStore{storage: storage}
 	}
@@ -426,12 +428,14 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 		workerConfig.CallbackPublicBaseURL, assetSigner, detectionSink, workerConfig.AuthSecret,
 	)
 	algorithmProcessor.WithInspectionWorker(database)
+	algorithmProcessor.WithVideoWorker(database, videoStorage)
 	consumer.Register("algorithm.run.requested", algorithmProcessor.Handler)
 
 	callbacks := http.NewServeMux()
 	callbacks.Handle("/callbacks/algorithms/", algorithm.NewCallbackHandler(database, rawStore, detectionSink))
 	callbacks.Handle("/algorithm-assets/", algorithm.NewAssetAccessHandler(database, assetStore, assetSigner).WithRemoteReader(algorithmRemoteAsset))
 	tasks := []func(context.Context) error{
+		func(ctx context.Context) error { return algorithmProcessor.RunVideo(ctx, time.Second) },
 		func(ctx context.Context) error { return algorithmProcessor.RunInspection(ctx, time.Second) },
 		func(ctx context.Context) error {
 			return consumer.RunWithWake(ctx, wakeup.Postgres(ctx, workerConfig.DatabaseURL, logger))
