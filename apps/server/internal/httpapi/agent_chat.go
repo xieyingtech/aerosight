@@ -24,6 +24,7 @@ const chatInstructions = "巡检影像目标查询、属性筛选和追问前，
 
 func chatTools() []responses.ToolUnionParam {
 	tools := []responses.ToolUnionParam{}
+	tools = append(tools, responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{Name: "search_media", Description: openai.String("按自然语言搜索当前项目图片和视频的视觉内容。返回模型描述、匹配分段和证据链接；描述需原素材复核，不能据此确定违规或断言不存在。start/end 为可选 RFC3339 可信拍摄时间区间，未知时间不匹配。不要传项目或用户 ID。"), Strict: openai.Bool(false), Parameters: agentObject(map[string]any{"query": agentText(), "limit": gin.H{"type": "integer", "minimum": 1, "maximum": 20}, "start": agentText(), "end": agentText()}, "query")}})
 	tools = append(tools, responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{Name: "load_skill", Description: openai.String("加载平台内置行业 Skill。目标查询、候选筛选和视觉复核前加载 inspection-object-query；返回规则必须用于接下来的操作。"), Strict: openai.Bool(false), Parameters: agentObject(map[string]any{"skillName": agentEnum(objectSkillName)}, "skillName")}})
 	tools = append(tools, responses.ToolUnionParam{OfFunction: &responses.FunctionToolParam{Name: "query_objects", Description: openai.String("只读查询真实检测目标。先 load_skill。省略 algorithmRunId 列出当前项目最近算法运行；指定成功检测运行后按实际模型 labels 和 minConfidence 筛选。includeImage 默认 true：经版本和 checksum 校验的整图与最多8张候选裁剪会作为图片输入送给当前 AI Provider。看图后再次调用，selectedDetectionKeys 与 selectionReason 提交保留 ID 和理由（空数组代表零匹配）；服务核验 ID 并返回稳定筛选结果链接。不执行新识别，不认定违规。"), Strict: openai.Bool(false), Parameters: objectQuerySchema()}})
 	for _, entry := range []struct{ name, description string }{{"query_devices", "查询当前项目设备、类型、驱动、状态和数据新鲜度"}, {"query_tasks", "查询当前项目 Tasks 及其最近运行状态"}, {"query_issues", "查询当前项目案件、状态、优先级和证据质量"}, {"query_assets", "查询当前项目可用数据资产及版本"}, {"query_tracks", "查询当前项目设备轨迹摘要"}, {"query_map_context", "查询当前项目地图态势摘要"}} {
@@ -160,7 +161,7 @@ func chatToolEvidence(name string, result gin.H) gin.H {
 		refs = append(refs, gin.H{"type": ref["type"], "id": ref["id"], "href": ref["href"], "version": versionText})
 	}
 	summary := fmt.Sprintf("返回 %d 条项目内记录", len(items))
-	if name == "load_skill" || name == "query_objects" {
+	if name == "load_skill" || name == "query_objects" || name == "search_media" {
 		if specific, ok := result["summary"].(string); ok {
 			summary = specific
 		}

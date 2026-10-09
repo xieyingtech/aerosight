@@ -2,6 +2,7 @@ package config
 
 import (
 	"aerosight/server/internal/media"
+	"aerosight/server/internal/semantic"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 )
 
 type Config struct {
+	Semantic                  semantic.Config
 	DatabaseURL               string
 	AlgorithmCAFile           string
 	LogLevel                  string
@@ -50,6 +52,11 @@ func Load() (Config, error) {
 		MediaAPIPassword:       strings.TrimSpace(os.Getenv("MEDIA_ADMIN_PASSWORD")),
 	}
 	var problems []error
+	var semanticErr error
+	config.Semantic, semanticErr = semantic.LoadConfig()
+	if semanticErr != nil {
+		problems = append(problems, semanticErr)
+	}
 	var storageErr error
 	config.ObjectStorageS3, storageErr = media.LoadS3Config()
 	if storageErr != nil {

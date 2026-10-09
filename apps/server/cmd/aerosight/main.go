@@ -102,6 +102,7 @@ func run(logger *slog.Logger) error {
 	api.AttachStaticPages(pages)
 	api.AttachRuntime(bg.Callbacks)
 	api.AttachInspectionMedia(bg.InspectionMedia)
+	api.AttachSemanticIndex(bg.SemanticIndex)
 	flightHubClient, err := flighthub.NewChinaClient(flighthub.Config{Timeout: workerCfg.FlightHubHTTPTimeout, MaxRetries: workerCfg.FlightHubMaxRetries, MaxProjectPages: workerCfg.FlightHubMaxProjectPages, MaxResponseBytes: workerCfg.FlightHubMaxResponseBytes, RequestID: uuid.NewString})
 	if err != nil {
 		return err

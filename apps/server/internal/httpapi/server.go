@@ -8,6 +8,7 @@ import (
 	"aerosight/server/internal/httptransport"
 	"aerosight/server/internal/media"
 	"aerosight/server/internal/observability"
+	"aerosight/server/internal/semantic"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -31,6 +32,7 @@ import (
 )
 
 type Server struct {
+	semanticIndex       *semantic.Service
 	realtimeConnect     func(context.Context) (*websocket.Conn, error)
 	realtimeUsers       sync.Map
 	inspectionMedia     algorithm.RemoteAlgorithmAssetReader
@@ -124,6 +126,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.deviceTypePresentationRoutes()
 	s.agentSessionRoutes()
 	s.mediaAccessRoutes()
+	s.semanticRoutes()
 	s.router.POST("/api/media-auth", s.timeout, s.mediaAuth)
 	s.router.GET("/api/projects/:id/live-streams/:streamId/playback", s.requireUser, s.timeout, s.getLivePlayback)
 	s.router.POST("/api/projects/:id/live-streams/:streamId/stop", s.requireUser, s.timeout, s.stopLiveStream)

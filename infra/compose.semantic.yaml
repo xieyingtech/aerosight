@@ -1,0 +1,15 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    ports: ["127.0.0.1:6333:6333"]
+    volumes: ["qdrant:/qdrant/storage"]
+  embedding:
+    build: ./embedding
+    ports: ["127.0.0.1:6335:6335"]
+    volumes: ["models:/models"]
+    environment:
+      EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      EMBEDDING_REVISION: 614241f622f53c4eeff9890bdc4f31cfecc418b3
+volumes:
+  qdrant:
+  models:

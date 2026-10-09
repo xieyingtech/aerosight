@@ -1,6 +1,7 @@
 "use client";
 
-import {useRef, useState} from "react";
+import {useEffect, useRef, useState} from "react";
+import {MediaIndexStatus, MediaSemanticSearch, type MediaMatch} from "@/components/media-semantic-panel";
 import {DownloadIcon, FileIcon, FilmIcon, ImageIcon, Loader2Icon, Maximize2Icon, PlusIcon, RefreshCwIcon, SearchIcon, UploadCloudIcon, XIcon} from "lucide-react";
 import {apiJSON} from "@/lib/api-client";
 import {useAPI} from "@/lib/use-api";
@@ -15,7 +16,7 @@ function mediaType(asset: AlgorithmAsset) {return asset.mimeType?.startsWith("vi
 function date(value: string | null) {return value ? new Date(value).toLocaleString("zh-CN", {hour12: false}) : "未记录";}
 function MediaIcon({asset, className}: {asset: AlgorithmAsset; className?: string}) {const Icon = mediaType(asset) === "video" ? FilmIcon : mediaType(asset) === "image" ? ImageIcon : FileIcon; return <Icon className={className}/>;}
 
-function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAsset}) {
+function AssetViewer({projectId, asset, startMs = 0, endMs}: {projectId: number; asset: AlgorithmAsset; startMs?: number; endMs?: number}) {
   const kind = mediaType(asset);
   const video = useRef<HTMLVideoElement>(null);
   const access = useMediaPlayback(kind === "file" ? null : `/api/projects/${projectId}/assets/${asset.id}/access?action=${kind === "video" ? "play" : "preview"}`,video);
@@ -25,6 +26,7 @@ function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAss
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<string | null>(null);
   const [duration, setDuration] = useState<string | null>(null);
+  useEffect(()=>{if(video.current && video.current.readyState >= 1) video.current.currentTime=startMs/1000;},[startMs]);
   async function download() {
     setDownloading(true); setDownloadError(null);
     try {const result = await apiJSON<{url: string}>(`/api/projects/${projectId}/assets/${asset.id}/access?action=download`); const anchor = document.createElement("a"); anchor.href = result.url; anchor.download = assetName(asset); anchor.click();}
@@ -40,10 +42,11 @@ function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAss
     <div className="flex h-[340px] items-center justify-center bg-slate-950 p-3 sm:h-[460px]">
       {access.error || failed ? <div className="space-y-3 text-center text-sm text-slate-300"><p>暂时无法预览此素材</p><Button variant="secondary" onClick={()=>{setFailed(false); access.reload();}}><RefreshCwIcon/>重新加载</Button></div>
         : access.loading ? <Loader2Icon aria-label="加载预览" className="size-6 animate-spin text-slate-400"/>
-        : kind === "video" ? <video ref={video} key={access.data?.url} src={access.data?.url} controls playsInline preload="metadata" className="h-full w-full" onError={()=>{if(!access.recover())setFailed(true);}} onLoadedMetadata={e=>{access.loaded();const v=e.currentTarget; setDimensions(`${v.videoWidth} × ${v.videoHeight}`); if(Number.isFinite(v.duration)) setDuration(`${v.duration.toFixed(1)} 秒`);}}/>
+        : kind === "video" ? <video ref={video} key={access.data?.url} src={access.data?.url} controls playsInline preload="metadata" className="h-full w-full" onError={()=>{if(!access.recover())setFailed(true);}} onLoadedMetadata={e=>{access.loaded();const v=e.currentTarget; setDimensions(`${v.videoWidth} × ${v.videoHeight}`); if(Number.isFinite(v.duration)) setDuration(`${v.duration.toFixed(1)} 秒`);if(startMs>0)v.currentTime=Math.min(startMs/1000,v.duration);}} onTimeUpdate={e=>{if(endMs !== undefined && e.currentTarget.currentTime >= endMs/1000)e.currentTarget.pause();}}/>
         : kind === "image" ? image : <div className="space-y-3 text-center text-slate-400"><FileIcon className="mx-auto size-10"/><p className="text-sm">此文件暂不支持在线预览，可以下载查看</p></div>}
     </div>
     <div className="space-y-4 px-5 py-4">
+      <MediaIndexStatus projectId={projectId} assetId={asset.id}/>
       {downloadError && <p role="alert" className="text-sm text-destructive">{downloadError}</p>}
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm xl:grid-cols-4">{[["拍摄时间",date(asset.capturedAt)],["导入时间",date(asset.createdAt)],["分辨率",dimensions ?? "未记录"],[kind === "video" ? "时长" : "格式",kind === "video" ? duration ?? "未记录" : asset.mimeType?.split("/")[1]?.toUpperCase() ?? "未记录"]].map(([label,value])=><div key={label}><dt className="mb-1 text-xs text-muted-foreground">{label}</dt><dd className="break-words text-xs leading-5">{value}</dd></div>)}</dl>
       <div className="border-t pt-3"><p className="mb-1 text-xs text-muted-foreground">来源说明</p><p className="whitespace-pre-wrap break-words text-sm leading-6">{asset.sourceDescription || "暂无来源说明"}</p></div>
@@ -55,6 +58,9 @@ function AssetViewer({projectId, asset}: {projectId: number; asset: AlgorithmAss
 export function AssetLibrary({projectId}: {projectId: number}) {
   const assets = useAPI<AlgorithmAsset[]>(`/api/projects/${projectId}/assets`);
   const [selected, setSelected] = useState<number | null>(null);
+  const [segment, setSegment] = useState<{assetId:number;startMs:number;endMs?:number} | null>(null);
+  useEffect(()=>{const params=new URLSearchParams(window.location.search);const id=Number(params.get("assetId"));const start=Number(params.get("startMs"));const end=Number(params.get("endMs"));if(Number.isSafeInteger(id)&&id>0){setSelected(id);setSegment({assetId:id,startMs:Number.isFinite(start)&&start>=0?start:0,endMs:Number.isFinite(end)&&end>start?end:undefined});}},[projectId]);
+  function selectMatch(match:MediaMatch){setSelected(match.assetId);setSegment(match);setQuery("");setFilter("all");window.history.replaceState(null,"",match.reference.href);}
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MediaType>("all");
   const [open, setOpen] = useState(false);
@@ -64,7 +70,7 @@ export function AssetLibrary({projectId}: {projectId: number}) {
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const list = (assets.data ?? []).filter(a=>(filter === "all" || mediaType(a) === filter) && `${assetName(a)} ${a.sourceDescription ?? ""} ${a.id}`.toLowerCase().includes(query.toLowerCase()));
-  const asset = list.find(a=>a.id === selected) ?? list[0];
+  const asset = (assets.data ?? []).find(a=>a.id === selected) ?? list[0];
   function chooseFile(value: File | null) {
     setError(null); setFile(null);
     if (!value) return;
@@ -83,6 +89,7 @@ export function AssetLibrary({projectId}: {projectId: number}) {
     <aside className="overflow-hidden rounded-xl border bg-background">
       <div className="space-y-3 border-b p-4"><div className="flex items-center justify-between"><h2 className="text-sm font-medium">项目素材 <span className="ml-1 text-xs font-normal text-muted-foreground">{assets.data?.length ?? 0}</span></h2><div className="flex gap-1"><Button variant="ghost" size="icon-sm" aria-label="刷新素材" title="刷新" onClick={assets.reload}><RefreshCwIcon className={assets.loading ? "animate-spin" : ""}/></Button><Button size="icon-sm" aria-label="导入素材" title="导入素材" onClick={()=>{setError(null);setFile(null);setOpen(true);}}><PlusIcon/></Button></div></div>
         <div className="relative"><SearchIcon className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground"/><Input aria-label="搜索素材" placeholder="搜索名称或来源…" className="pl-9" value={query} onChange={e=>setQuery(e.target.value)}/></div>
+        <MediaSemanticSearch projectId={projectId} onSelect={selectMatch}/>
         <div className="flex gap-1 rounded-lg bg-muted/60 p-1">{([["all","全部"],["video","视频"],["image","图片"]] as const).map(([value,label])=><button key={value} aria-pressed={filter === value} onClick={()=>setFilter(value)} className={`flex-1 rounded-md px-2 py-1.5 text-xs transition-colors focus-visible:outline-ring ${filter === value ? "bg-background font-medium shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>)}</div>
       </div>
       <div className="max-h-[540px] space-y-1 overflow-y-auto p-2 lg:max-h-[620px]">
@@ -91,7 +98,7 @@ export function AssetLibrary({projectId}: {projectId: number}) {
       </div>
       <div className="border-t px-4 py-2.5 text-xs text-muted-foreground">{list.length} 个素材{filter !== "all" || query ? " · 已筛选" : ""}</div>
     </aside>
-    {asset ? <AssetViewer key={asset.id} projectId={projectId} asset={asset}/> : <div className="flex min-h-[460px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 p-8 text-center"><ImageIcon className="size-10 text-muted-foreground/40"/><p className="text-sm text-muted-foreground">{assets.loading ? "正在加载素材" : "选择素材，查看照片与视频"}</p></div>}
+    {asset ? <AssetViewer key={`${projectId}-${asset.id}`} projectId={projectId} asset={asset} startMs={segment?.assetId === asset.id ? segment.startMs : 0} endMs={segment?.assetId === asset.id ? segment.endMs : undefined}/> : <div className="flex min-h-[460px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed bg-muted/10 p-8 text-center"><ImageIcon className="size-10 text-muted-foreground/40"/><p className="text-sm text-muted-foreground">{assets.loading ? "正在加载素材" : "选择素材，查看照片与视频"}</p></div>}
     <Dialog open={open} onOpenChange={value=>{if(!uploading) setOpen(value);}}><DialogContent className="sm:max-w-lg" showCloseButton={!uploading}><DialogHeader><DialogTitle>导入素材</DialogTitle><DialogDescription>将照片或视频添加到项目素材库。</DialogDescription></DialogHeader>
       <form action={upload} className="space-y-5">
         <input ref={fileInput} type="file" aria-label="选择照片或视频" accept="image/jpeg,image/png,video/mp4" className="sr-only" tabIndex={-1} disabled={uploading} onChange={e=>chooseFile(e.target.files?.[0] ?? null)}/>

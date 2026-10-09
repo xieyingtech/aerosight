@@ -1510,6 +1510,42 @@ type LiveStream struct {
 	RemoteEvidenceAt               sql.NullTime          `json:"remote_evidence_at"`
 }
 
+type MediaIndexJob struct {
+	ID               int64          `json:"id"`
+	ProjectID        int32          `json:"project_id"`
+	AssetID          int32          `json:"asset_id"`
+	SourceVersion    int32          `json:"source_version"`
+	SourceChecksum   string         `json:"source_checksum"`
+	Space            string         `json:"space"`
+	State            string         `json:"state"`
+	Attempts         int32          `json:"attempts"`
+	NextAttemptAt    time.Time      `json:"next_attempt_at"`
+	ErrorCode        sql.NullString `json:"error_code"`
+	ArtifactKey      sql.NullString `json:"artifact_key"`
+	ArtifactChecksum sql.NullString `json:"artifact_checksum"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type MediaIndexRetiredPoint struct {
+	ID    uuid.UUID `json:"id"`
+	Space string    `json:"space"`
+}
+
+type MediaIndexSegment struct {
+	ID            uuid.UUID    `json:"id"`
+	JobID         int64        `json:"job_id"`
+	ProjectID     int32        `json:"project_id"`
+	AssetID       int32        `json:"asset_id"`
+	StartMs       int64        `json:"start_ms"`
+	EndMs         int64        `json:"end_ms"`
+	Description   string       `json:"description"`
+	TimeQuality   string       `json:"time_quality"`
+	CapturedStart sql.NullTime `json:"captured_start"`
+	CapturedEnd   sql.NullTime `json:"captured_end"`
+	Active        bool         `json:"active"`
+	IndexDeleted  bool         `json:"index_deleted"`
+}
+
 type Observation struct {
 	ID        int64 `json:"id"`
 	ProjectID int32 `json:"project_id"`

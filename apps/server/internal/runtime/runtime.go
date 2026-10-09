@@ -25,6 +25,7 @@ import (
 	"aerosight/server/internal/outbox"
 	"aerosight/server/internal/perception"
 	reportworker "aerosight/server/internal/report"
+	"aerosight/server/internal/semantic"
 	"aerosight/server/internal/tasktrigger"
 	"aerosight/server/internal/telemetry"
 	"aerosight/server/internal/wakeup"
@@ -452,6 +453,14 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	if flightHubScheduler != nil {
 		tasks = append(tasks, flightHubScheduler.Run)
 	}
+	var semanticIndex *semantic.Service
+	if workerConfig.Semantic.Enabled {
+		if videoStorage == nil {
+			return nil, errors.New("semantic indexing requires object storage")
+		}
+		semanticIndex = &semantic.Service{DB: database, Client: semantic.Client{Config: workerConfig.Semantic}, Storage: videoStorage, Root: workerConfig.ObjectStorageLocalRoot, Secret: workerConfig.AuthSecret, Remote: algorithmRemoteAsset, Logger: logger}
+		tasks = append(tasks, semanticIndex.Run)
+	}
 	tasks = append(tasks, taskTriggerScheduler.Run)
 	if flightHubControlReconciler != nil {
 		tasks = append(tasks, func(ctx context.Context) error { return flightHubControlReconciler.Run(ctx, time.Second) })
@@ -469,10 +478,11 @@ func New(database *sql.DB, workerConfig config.Config, logger *slog.Logger) (*Ru
 	if liveStreamHealth != nil {
 		tasks = append(tasks, func(ctx context.Context) error { return liveStreamHealth.Run(ctx, database, 2*time.Second) })
 	}
-	return &Runtime{Callbacks: callbacks, InspectionMedia: algorithmRemoteAsset, tasks: tasks}, nil
+	return &Runtime{Callbacks: callbacks, InspectionMedia: algorithmRemoteAsset, SemanticIndex: semanticIndex, tasks: tasks}, nil
 }
 
 type Runtime struct {
+	SemanticIndex   *semantic.Service
 	InspectionMedia algorithm.RemoteAlgorithmAssetReader
 	Callbacks       http.Handler
 	tasks           []func(context.Context) error

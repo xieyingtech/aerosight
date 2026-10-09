@@ -179,6 +179,9 @@ func formatChatToolResult(pid int32, name string, rows []gin.H, limit int, now t
 }
 
 func (s *Server) executeChatReadTool(ctx context.Context, uid, pid int32, name string, arguments json.RawMessage) (gin.H, error) {
+	if name == "search_media" {
+		return s.executeMediaSearch(ctx, uid, pid, arguments)
+	}
 	if name == "load_skill" {
 		return loadAgentSkill(arguments)
 	}
