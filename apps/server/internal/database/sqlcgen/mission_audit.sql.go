@@ -117,7 +117,7 @@ ORDER BY CASE WHEN action IN('agent.request_mission_start','task_run.transition'
 `
 
 type GetMissionAuditRequestParams struct {
-	ProjectID int32          `json:"project_id"`
+	ProjectID sql.NullInt32  `json:"project_id"`
 	RunID     string         `json:"run_id"`
 	VersionID sql.NullString `json:"version_id"`
 }

@@ -24,10 +24,10 @@ select sqlc.arg(p3)::int as "teamId",member.role,adapter.project_id as "connecto
 ) r;
 
 -- name: FHDeviceAdminInsert :one
-insert into connector_device_admin_jobs(
+insert into connector_jobs(job_type,
       id,project_id,team_id,connector_instance_id,device_id,requested_by_user_id,approval_request_id,action_kind,
       capability_code,feature_flag,idempotency_key,request_digest,request_envelope_json
-    ) values(sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13)) on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
+    ) values('device-admin',sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13)) on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
 
 -- name: FHDeviceAdminExisting :many
 SELECT to_jsonb(r) FROM (

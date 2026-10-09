@@ -167,11 +167,11 @@ func (q *Queries) FHFlightExisting(ctx context.Context, arg FHFlightExistingPara
 }
 
 const fHFlightInsert = `-- name: FHFlightInsert :one
-insert into connector_action_jobs(
+insert into connector_jobs(job_type,
         id,project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,target_resource_id,
         approval_request_id,requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json
-      ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-      on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing
+      ) values('flight',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing
       returning id::text,status
 `
 
@@ -180,11 +180,11 @@ type FHFlightInsertParams struct {
 	P2  int32           `json:"p2"`
 	P3  int32           `json:"p3"`
 	P4  int64           `json:"p4"`
-	P5  int32           `json:"p5"`
-	P6  int32           `json:"p6"`
+	P5  sql.NullInt32   `json:"p5"`
+	P6  sql.NullInt32   `json:"p6"`
 	P7  sql.NullInt64   `json:"p7"`
 	P8  sql.NullInt64   `json:"p8"`
-	P9  uuid.UUID       `json:"p9"`
+	P9  uuid.NullUUID   `json:"p9"`
 	P10 int32           `json:"p10"`
 	P11 string          `json:"p11"`
 	P12 string          `json:"p12"`

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"aerosight/server/internal/database/sqlcgen"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -34,7 +35,7 @@ func (s *Server) legacyEventRoutes() {
 			if err != nil {
 				return nil, err
 			}
-			rawDetections, err := q.GetLegacyPerceptionDetections(c.Request.Context(), sqlcgen.GetLegacyPerceptionDetectionsParams{ProjectID: a.ProjectID, DetectionGroupID: groupID})
+			rawDetections, err := q.GetLegacyPerceptionDetections(c.Request.Context(), sqlcgen.GetLegacyPerceptionDetectionsParams{ProjectID: a.ProjectID, GroupID: sql.NullInt64{Int64: groupID, Valid: true}})
 			if err != nil {
 				return nil, err
 			}
@@ -60,7 +61,7 @@ func (s *Server) legacyEventRoutes() {
 			if mapped > 0 {
 				event["locationSummary"] = fmt.Sprintf("%d 条检测具有可用地理位置", mapped)
 			}
-			rawFeedback, err := q.GetLegacyPerceptionFeedback(c.Request.Context(), sqlcgen.GetLegacyPerceptionFeedbackParams{ProjectID: a.ProjectID, PerceptionEventID: id})
+			rawFeedback, err := q.GetLegacyPerceptionFeedback(c.Request.Context(), sqlcgen.GetLegacyPerceptionFeedbackParams{ProjectID: a.ProjectID, ID: id})
 			if err != nil {
 				return nil, err
 			}

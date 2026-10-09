@@ -941,13 +941,11 @@ func (projector *SQLFlightCatalogProjector) upsertExternalAsset(ctx context.Cont
 	if err != nil {
 		return 0, err
 	}
-	_, err = tx.ExecContext(ctx, `insert into connector_asset_access_refs(
-		id,project_id,team_id,connector_instance_id,remote_resource_id,access_kind,reference_digest,credential_envelope_json
-	) values($1,$2,$3,$4,$5,$6,$7,$8)
-	 on conflict(id) do update set team_id=excluded.team_id,connector_instance_id=excluded.connector_instance_id,
-		remote_resource_id=excluded.remote_resource_id,access_kind=excluded.access_kind,
-		reference_digest=excluded.reference_digest,credential_envelope_json=excluded.credential_envelope_json,updated_at=now()
-	 where connector_asset_access_refs.project_id=excluded.project_id`, assetID, instance.ProjectID, teamID, instance.ID,
+	_, err = tx.ExecContext(ctx, `update assets set
+		remote_connector_id=$4,remote_resource_id=$5,remote_access_kind=$6,
+		remote_reference_digest=$7,remote_credential_envelope_json=$8,
+		remote_reference_created_at=coalesce(remote_reference_created_at,now()),remote_reference_updated_at=now()
+	 where id=$1 and project_id=$2 and team_id=$3`, assetID, instance.ProjectID, teamID, instance.ID,
 		remoteResourceID, input.ResourceKind, hex.EncodeToString(digest[:]), envelopeJSON)
 	return assetID, err
 }

@@ -25,9 +25,8 @@ func retainInspectionAlert(ctx context.Context, tx *sql.Tx, instance connector.I
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, `insert into inspection_alert_sources(project_id,connector_instance_id,remote_resource_id,remote_flight_id,evidence_json)
- values($1,$2,$3,$4,$5) on conflict(project_id,remote_resource_id) do update set evidence_json=excluded.evidence_json,updated_at=now()
- where inspection_alert_sources.connector_instance_id=excluded.connector_instance_id and inspection_alert_sources.remote_flight_id=excluded.remote_flight_id`, instance.ProjectID, instance.ID, resourceID, alert.FlightID, raw)
+	result, err := tx.ExecContext(ctx, `update connector_remote_resources set inspection_flight_id=$4,inspection_evidence_json=$5,updated_at=now()
+ where project_id=$1 and connector_instance_id=$2 and id=$3 and (inspection_flight_id is null or inspection_flight_id=$4)`, instance.ProjectID, instance.ID, resourceID, alert.FlightID, raw)
 	if err != nil {
 		return err
 	}

@@ -219,6 +219,7 @@ func (p *Processor) processVideo(ctx context.Context, id string) error {
 	}()
 	reader := bufio.NewReader(stdout)
 	var annotations bytes.Buffer
+	lastProgress := time.Now()
 	for index := 0; ; index++ {
 		frameBytes, e := readMJPEGFrame(reader)
 		if errors.Is(e, io.EOF) {
@@ -250,21 +251,6 @@ func (p *Processor) processVideo(ctx context.Context, id string) error {
 			if e != nil {
 				return errors.New("frame storage failed")
 			}
-			var aid int
-			e = p.inspectionDB.QueryRowContext(ctx, `select id from assets where project_id=$1 and storage_key=$2 and status='available' limit 1`, input.ProjectID, object.Key).Scan(&aid)
-			if errors.Is(e, sql.ErrNoRows) {
-				frameMeta, _ := json.Marshal(map[string]any{"source": "video-analysis-frame", "videoAssetId": input.InputAsset.AssetID, "analysisRunId": id, "mediaTimeSeconds": frame.TimeMs / 1000, "width": frame.Width, "height": frame.Height})
-				var captured any
-				if raw, ok := input.Context["capturedAt"].(string); ok {
-					if t, e := time.Parse(time.RFC3339Nano, raw); e == nil {
-						captured = t.Add(time.Duration(frame.TimeMs * float64(time.Millisecond)))
-					}
-				}
-				e = p.inspectionDB.QueryRowContext(ctx, `insert into assets(project_id,team_id,kind,mime_type,storage_key,logical_key,size_bytes,checksum_sha256,checksum,metadata_json,status,available_at,captured_at) values($1,$2,'image','image/jpeg',$3,$3,$4,$5,$5,$6,'available',now(),$7) returning id`, input.ProjectID, event.TeamID, object.Key, pixels.Len(), object.ChecksumSHA256, frameMeta, captured).Scan(&aid)
-			}
-			if e != nil {
-				return e
-			}
 			request := prepared.request
 			request.Input = input
 			request.Input.Context = make(map[string]any)
@@ -274,34 +260,43 @@ func (p *Processor) processVideo(ctx context.Context, id string) error {
 			delete(request.Input.Context, "videoAnalysis")
 			request.Input.Context["videoAssetId"] = input.InputAsset.AssetID
 			request.Input.Context["mediaTimeSeconds"] = frame.TimeMs / 1000
+			request.Input.Context["frameIndex"] = index
 			request.Input.RunID = uuid.NewSHA1(uuid.MustParse(id), []byte(fmt.Sprint(index))).String()
 			request.Input.Context["videoRunId"] = id
 			expires := time.Now().Add(5 * time.Minute).UTC()
-			url, e := issueInputAssetURL(p.assetIssuer, input.ProjectID, aid, 1, object.ChecksumSHA256, expires, false)
-			if e != nil {
-				return errors.New("frame access could not be issued")
-			}
-			request.Input.InputAsset = AssetReference{AssetID: aid, Version: 1, ChecksumSHA256: object.ChecksumSHA256, MIMEType: "image/jpeg", AccessURL: url, AccessExpiresAt: expires}
-			attempts := &bufferedAttempts{}
-			outcome, e := NewHTTPJSONAdapter(p.client, attempts, p.breaker).Execute(ctx, request)
-			attemptTx, txErr := p.inspectionDB.BeginTx(ctx, nil)
-			if txErr != nil {
-				return txErr
-			}
-			recorder := transactionRecorder{tx: attemptTx, projectID: event.ProjectID, teamID: event.TeamID}
-			for _, a := range attempts.values {
-				a.RunID = id
-				a.Number = index*10 + a.Number
-				if txErr = recorder.RecordAttempt(ctx, a); txErr != nil {
-					break
+			var frameURL string
+			if presigner, ok := p.videoStorage.(interface {
+				PresignRead(context.Context, string, time.Duration) (*media.Access, error)
+			}); ok {
+				access, signErr := presigner.PresignRead(ctx, object.Key, 5*time.Minute)
+				if signErr != nil {
+					return errors.New("frame access could not be issued")
+				}
+				if access != nil {
+					frameURL = access.URL
 				}
 			}
-			if txErr != nil {
-				attemptTx.Rollback()
-				return txErr
+			if frameURL == "" {
+				signer, ok := p.assetIssuer.(interface {
+					IssueFrameURL(int, string, int, string, time.Time) (string, error)
+				})
+				if !ok {
+					return errors.New("frame access signing is unavailable")
+				}
+				frameURL, e = signer.IssueFrameURL(input.ProjectID, id, index, object.ChecksumSHA256, expires)
+				if e != nil {
+					return errors.New("frame access could not be issued")
+				}
 			}
-			if txErr = attemptTx.Commit(); txErr != nil {
-				return txErr
+			request.Input.InputAsset = AssetReference{AssetID: input.InputAsset.AssetID, Version: input.InputAsset.Version, ChecksumSHA256: object.ChecksumSHA256, MIMEType: "image/jpeg", AccessURL: frameURL, AccessExpiresAt: expires}
+			attempts := &bufferedAttempts{}
+			outcome, e := NewHTTPJSONAdapter(p.client, attempts, p.breaker).Execute(ctx, request)
+			diagnostics, marshalErr := json.Marshal(attempts.values)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			if _, storeErr := p.videoStorage.PutObject(ctx, frameKey+".attempts.json", bytes.NewReader(diagnostics), "application/json"); storeErr != nil {
+				return errors.New("frame diagnostics storage failed")
 			}
 			if e != nil {
 				return errors.New("frame algorithm execution failed")
@@ -328,8 +323,11 @@ func (p *Processor) processVideo(ctx context.Context, id string) error {
 			return errors.New("video annotations exceed 64 MB")
 		}
 		summary.ProcessedFrames = index + 1
-		if err = saveProgress(); err != nil {
-			return err
+		if time.Since(lastProgress) >= time.Second {
+			if err = saveProgress(); err != nil {
+				return err
+			}
+			lastProgress = time.Now()
 		}
 	}
 	err = cmd.Wait()

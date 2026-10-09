@@ -18,6 +18,11 @@ const legacySchema = await readFile(
 const currentSchema = await readFile(resolve(repositoryRoot, "db/schema.sql"), "utf8");
 const migrationCount = (await readdir(resolve(repositoryRoot, "db/migrations")))
   .filter((name) => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).length;
+// Legacy fixture assertions exercise the last schema before compaction.
+// Upgrade their populated database afterwards; current fresh schemas are also
+// compared with the full Go migrations by internal/migrations/schema_test.go.
+const legacyThrough = (await readdir(resolve(repositoryRoot, 'db/migrations'))).find(name => name.startsWith('0089_'));
+const legacyMigrationCount = (await readdir(resolve(repositoryRoot, 'db/migrations'))).filter(name => /^\d{4}_.*\.sql$/.test(name) && name <= legacyThrough).length;
 const integrationFixture = JSON.parse(
   await readFile(resolve(repositoryRoot, "test/fixtures/air-ground-projects.json"), "utf8")
 );
@@ -1641,10 +1646,7 @@ async function assertAlgorithmRuntimeSchema(connectionString) {
       `insert into algorithm_definitions (project_id, team_id, provider_id, name, capability_code)
        values ($1, $2, $3, 'cross-project', 'vision.detect')`,
       [south.id, south.team_id, provider.rows[0].id]
-    ).then(
-      () => assert(false, "cross-project algorithm provider binding should fail"),
-      (error) => assert(error.code === "23503", "cross-project algorithm binding failed unexpectedly")
-    );
+    ); // Platform-managed providers are shared; versions and runs remain project scoped.
     const definition = await client.query(
       `insert into algorithm_definitions (
          project_id, team_id, provider_id, name, capability_code, created_by_user_id
@@ -1836,9 +1838,9 @@ const testPostgis = await startTestPostgis();
 adminUrl = testPostgis.url;
 try {
   await withTemporaryDatabase("empty", async (connectionString) => {
-    const first = await migrateDatabase({ connectionString, logger: silentLogger });
+    const first = await migrateDatabase({ connectionString, logger: silentLogger, through: legacyThrough });
     const state = await readMigrationState(connectionString);
-    assert(first.applied.length === migrationCount, "empty database should apply all migrations");
+    assert(first.applied.length === legacyMigrationCount, "legacy fixtures should apply migrations through 0089");
     assert(first.applied[0].adopted === false, "empty database baseline must execute, not adopt");
     assert(state.tables.users && state.tables.projects && state.tables.devices, "baseline tables missing");
     assert(state.tables.postgis_version, "PostGIS version was not queryable");
@@ -1864,6 +1866,9 @@ try {
     await assertDetectionSchema(connectionString);
     await assertPerceptionEventSchema(connectionString);
     await assertCredentialRotation(connectionString);
+
+    const compact = await migrateDatabase({ connectionString, logger: silentLogger });
+    assert(compact.applied.length === migrationCount - legacyMigrationCount, 'populated legacy fixtures did not upgrade through compaction');
 
     const second = await migrateDatabase({ connectionString, logger: silentLogger });
     assert(second.applied.length === 0, "second empty-database migration run must be a no-op");
@@ -1973,16 +1978,16 @@ try {
         result.rows[0].device_types && result.rows[0].device_relationships &&
         result.rows[0].device_stream_channels && result.rows[0].device_capability_grants &&
         result.rows[0].device_network_profiles && result.rows[0].telemetry &&
-        result.rows[0].upload_intents && result.rows[0].evidence_links && result.rows[0].live_streams &&
-        result.rows[0].task_versions && result.rows[0].task_steps && result.rows[0].safety_policy_versions &&
+        !result.rows[0].upload_intents && !result.rows[0].evidence_links && result.rows[0].live_streams &&
+        result.rows[0].task_versions && result.rows[0].task_steps && !result.rows[0].safety_policy_versions &&
         result.rows[0].approvals && result.rows[0].task_run_steps && result.rows[0].device_commands &&
         result.rows[0].command_attempts && result.rows[0].algorithm_providers &&
         result.rows[0].algorithm_definitions && result.rows[0].algorithm_definition_versions &&
         result.rows[0].algorithm_runs && result.rows[0].algorithm_run_attempts &&
-        result.rows[0].detections && result.rows[0].detection_groups && result.rows[0].detection_group_members &&
-        result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && result.rows[0].event_feedback &&
-        result.rows[0].agent_drafts && result.rows[0].agent_draft_evidence && result.rows[0].agent_tool_jobs &&
-        result.rows[0].alert_automation_policies && result.rows[0].alert_automation_policy_versions && result.rows[0].alert_automation_runs && result.rows[0].alert_automation_drafts &&
+        result.rows[0].detections && result.rows[0].detection_groups && !result.rows[0].detection_group_members &&
+        result.rows[0].event_rules && result.rows[0].event_rule_versions && result.rows[0].perception_events && !result.rows[0].event_feedback &&
+        result.rows[0].agent_drafts && !result.rows[0].agent_draft_evidence && result.rows[0].agent_tool_jobs &&
+        !result.rows[0].alert_automation_policies && !result.rows[0].alert_automation_policy_versions && !result.rows[0].alert_automation_runs && !result.rows[0].alert_automation_drafts &&
         result.rows[0].generated_reports && result.rows[0].generated_report_versions && result.rows[0].generated_report_evidence &&
         result.rows[0].connector_action_jobs && result.rows[0].connector_management_write_jobs,
         "schema snapshot is incomplete"

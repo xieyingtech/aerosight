@@ -275,7 +275,9 @@ func (s *Server) projectReplay(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		rawMedia, err := q.ReplayMedia(c.Request.Context(), sqlcgen.ReplayMediaParams{ProjectID: a.ProjectID, CapturedAt: sql.NullTime{Time: input.From, Valid: true}, CapturedAt_2: sql.NullTime{Time: input.To, Valid: true}})
+		// Asset timestamps are stored as UTC without a timezone. Normalize the
+		// default local-clock window before binding timestamp parameters.
+		rawMedia, err := q.ReplayMedia(c.Request.Context(), sqlcgen.ReplayMediaParams{ProjectID: a.ProjectID, CapturedAt: sql.NullTime{Time: input.From.UTC(), Valid: true}, CapturedAt_2: sql.NullTime{Time: input.To.UTC(), Valid: true}})
 		if err != nil {
 			return nil, err
 		}

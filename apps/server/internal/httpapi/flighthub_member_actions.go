@@ -232,7 +232,7 @@ func (s *Server) fhMemberAction(c *gin.Context) {
 		}
 		envelopeJSON, _ := json.Marshal(envelope)
 		previewJSON, _ := json.Marshal(preview)
-		inserted, e := q.FHMemberInsert(ctx, sqlcgen.FHMemberInsertParams{P1: job, P2: pid, P3: a.TeamID, P4: cid, P5: uid, P6: approval, P7: fhMemberCapability, P8: fhMemberFlag, P9: key, P10: digest, P11: envelopeJSON, P12: pd, P13: previewJSON})
+		inserted, e := q.FHMemberInsert(ctx, sqlcgen.FHMemberInsertParams{P1: job, P2: pid, P3: a.TeamID, P4: cid, P5: uid, P6: uuid.NullUUID{UUID: approval, Valid: true}, P7: fhMemberCapability, P8: fhMemberFlag, P9: key, P10: digest, P11: envelopeJSON, P12: pd, P13: previewJSON})
 		id, status, reused := inserted.ID, inserted.Status, false
 		if errors.Is(e, sql.ErrNoRows) {
 			raw, e = q.FHMemberExisting(ctx, sqlcgen.FHMemberExistingParams{P1: pid, P2: cid, P3: key})

@@ -41,18 +41,7 @@ type AgentDraft struct {
 	GenerationToolCallsJson json.RawMessage `json:"generation_tool_calls_json"`
 	EvidenceVersionHash     sql.NullString  `json:"evidence_version_hash"`
 	GeneratedAt             sql.NullTime    `json:"generated_at"`
-}
-
-type AgentDraftEvidence struct {
-	ID               int64     `json:"id"`
-	ProjectID        int32     `json:"project_id"`
-	AgentDraftID     uuid.UUID `json:"agent_draft_id"`
-	ReferenceType    string    `json:"reference_type"`
-	ReferenceID      string    `json:"reference_id"`
-	ReferenceVersion string    `json:"reference_version"`
-	ObservedAt       time.Time `json:"observed_at"`
-	Quality          string    `json:"quality"`
-	CreatedAt        time.Time `json:"created_at"`
+	EvidenceRefsJson        json.RawMessage `json:"evidence_refs_json"`
 }
 
 type AgentMessage struct {
@@ -102,16 +91,26 @@ type AgentToolJob struct {
 	IdempotencyKey         sql.NullString        `json:"idempotency_key"`
 }
 
+type AgentWriteApproval struct {
+	ID        uuid.UUID             `json:"id"`
+	ProjectID int32                 `json:"project_id"`
+	SessionID int32                 `json:"session_id"`
+	UserID    int32                 `json:"user_id"`
+	ToolName  string                `json:"tool_name"`
+	Arguments json.RawMessage       `json:"arguments"`
+	Status    string                `json:"status"`
+	Result    pqtype.NullRawMessage `json:"result"`
+	CreatedAt time.Time             `json:"created_at"`
+	ExpiresAt time.Time             `json:"expires_at"`
+	DecidedAt sql.NullTime          `json:"decided_at"`
+}
+
 type AiProvider struct {
-	ModelsJson             json.RawMessage `json:"models_json"`
-	IsRealtimeDefault      bool            `json:"is_realtime_default"`
 	ID                     int64           `json:"id"`
 	Name                   string          `json:"name"`
 	ProviderType           string          `json:"provider_type"`
 	BaseUrl                sql.NullString  `json:"base_url"`
 	ModelID                string          `json:"model_id"`
-	RealtimeProtocol       string          `json:"realtime_protocol"`
-	RealtimeModelID        string          `json:"realtime_model_id"`
 	CredentialEnvelopeJson json.RawMessage `json:"credential_envelope_json"`
 	Enabled                bool            `json:"enabled"`
 	IsDefault              bool            `json:"is_default"`
@@ -122,65 +121,10 @@ type AiProvider struct {
 	UpdatedByUserID        int32           `json:"updated_by_user_id"`
 	CreatedAt              time.Time       `json:"created_at"`
 	UpdatedAt              time.Time       `json:"updated_at"`
-}
-
-type AlertAutomationDraft struct {
-	ID                uuid.UUID       `json:"id"`
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	AutomationRunID   uuid.UUID       `json:"automation_run_id"`
-	PerceptionEventID uuid.UUID       `json:"perception_event_id"`
-	DraftType         string          `json:"draft_type"`
-	Status            string          `json:"status"`
-	Title             string          `json:"title"`
-	PayloadJson       json.RawMessage `json:"payload_json"`
-	EvidenceRefsJson  json.RawMessage `json:"evidence_refs_json"`
-	CreatedAt         time.Time       `json:"created_at"`
-}
-
-type AlertAutomationPolicy struct {
-	ID                        int64         `json:"id"`
-	ProjectID                 int32         `json:"project_id"`
-	TeamID                    int32         `json:"team_id"`
-	Name                      string        `json:"name"`
-	CurrentPublishedVersionID sql.NullInt64 `json:"current_published_version_id"`
-	CreatedByUserID           sql.NullInt32 `json:"created_by_user_id"`
-	CreatedAt                 time.Time     `json:"created_at"`
-	UpdatedAt                 time.Time     `json:"updated_at"`
-}
-
-type AlertAutomationPolicyVersion struct {
-	ID                      int64           `json:"id"`
-	ProjectID               int32           `json:"project_id"`
-	TeamID                  int32           `json:"team_id"`
-	AlertAutomationPolicyID int64           `json:"alert_automation_policy_id"`
-	EventRuleVersionID      sql.NullInt64   `json:"event_rule_version_id"`
-	Version                 int32           `json:"version"`
-	Status                  string          `json:"status"`
-	Mode                    string          `json:"mode"`
-	ConfigJson              json.RawMessage `json:"config_json"`
-	CreatedByUserID         sql.NullInt32   `json:"created_by_user_id"`
-	PublishedByUserID       sql.NullInt32   `json:"published_by_user_id"`
-	CreatedAt               time.Time       `json:"created_at"`
-	PublishedAt             sql.NullTime    `json:"published_at"`
-}
-
-type AlertAutomationRun struct {
-	ID                uuid.UUID       `json:"id"`
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	PolicyVersionID   int64           `json:"policy_version_id"`
-	PerceptionEventID uuid.UUID       `json:"perception_event_id"`
-	TriggerReason     string          `json:"trigger_reason"`
-	Status            string          `json:"status"`
-	InputScopeJson    json.RawMessage `json:"input_scope_json"`
-	OutputRefsJson    json.RawMessage `json:"output_refs_json"`
-	FailureCode       sql.NullString  `json:"failure_code"`
-	FailureMessage    sql.NullString  `json:"failure_message"`
-	QueuedAt          time.Time       `json:"queued_at"`
-	StartedAt         sql.NullTime    `json:"started_at"`
-	FinishedAt        sql.NullTime    `json:"finished_at"`
-	CreatedAt         time.Time       `json:"created_at"`
+	RealtimeProtocol       string          `json:"realtime_protocol"`
+	RealtimeModelID        string          `json:"realtime_model_id"`
+	ModelsJson             json.RawMessage `json:"models_json"`
+	IsRealtimeDefault      bool            `json:"is_realtime_default"`
 }
 
 type AlgorithmCallbackReceipt struct {
@@ -325,75 +269,49 @@ type ApprovalRequest struct {
 }
 
 type Asset struct {
-	ID                 int32           `json:"id"`
-	ProjectID          int32           `json:"project_id"`
-	DeviceID           sql.NullInt32   `json:"device_id"`
-	TaskRunID          sql.NullInt32   `json:"task_run_id"`
-	IssueID            sql.NullInt32   `json:"issue_id"`
-	Kind               string          `json:"kind"`
-	MimeType           sql.NullString  `json:"mime_type"`
-	StorageKey         string          `json:"storage_key"`
-	SizeBytes          sql.NullInt64   `json:"size_bytes"`
-	Checksum           sql.NullString  `json:"checksum"`
-	CapturedAt         sql.NullTime    `json:"captured_at"`
-	MetadataJson       json.RawMessage `json:"metadata_json"`
-	CreatedAt          time.Time       `json:"created_at"`
-	TeamID             int32           `json:"team_id"`
-	LogicalKey         string          `json:"logical_key"`
-	Version            int32           `json:"version"`
-	Status             string          `json:"status"`
-	ObjectVersion      sql.NullString  `json:"object_version"`
-	ChecksumSha256     sql.NullString  `json:"checksum_sha256"`
-	AvailableAt        sql.NullTime    `json:"available_at"`
-	FailedAt           sql.NullTime    `json:"failed_at"`
-	FailureCode        sql.NullString  `json:"failure_code"`
-	RetentionHoldUntil sql.NullTime    `json:"retention_hold_until"`
-	LegalHold          bool            `json:"legal_hold"`
-	RetentionReason    sql.NullString  `json:"retention_reason"`
-	DeletedAt          sql.NullTime    `json:"deleted_at"`
-	SupersedesAssetID  sql.NullInt32   `json:"supersedes_asset_id"`
-}
-
-type AssetDerivative struct {
-	ID               int64           `json:"id"`
-	ProjectID        int32           `json:"project_id"`
-	TeamID           int32           `json:"team_id"`
-	SourceAssetID    int32           `json:"source_asset_id"`
-	DerivedAssetID   int32           `json:"derived_asset_id"`
-	DerivativeType   string          `json:"derivative_type"`
-	Generator        string          `json:"generator"`
-	GeneratorVersion sql.NullString  `json:"generator_version"`
-	ParametersJson   json.RawMessage `json:"parameters_json"`
-	CreatedAt        time.Time       `json:"created_at"`
-}
-
-type AssetUploadIntent struct {
-	ID                     uuid.UUID      `json:"id"`
-	ProjectID              int32          `json:"project_id"`
-	TeamID                 int32          `json:"team_id"`
-	ActorUserID            sql.NullInt32  `json:"actor_user_id"`
-	LogicalKey             string         `json:"logical_key"`
-	ObjectKey              string         `json:"object_key"`
-	FileName               string         `json:"file_name"`
-	Kind                   string         `json:"kind"`
-	MimeType               string         `json:"mime_type"`
-	ExpectedSizeBytes      int64          `json:"expected_size_bytes"`
-	ExpectedChecksumSha256 string         `json:"expected_checksum_sha256"`
-	DeviceID               sql.NullInt32  `json:"device_id"`
-	TaskRunID              sql.NullInt32  `json:"task_run_id"`
-	IssueID                sql.NullInt32  `json:"issue_id"`
-	Status                 string         `json:"status"`
-	AssetID                sql.NullInt32  `json:"asset_id"`
-	FailureCode            sql.NullString `json:"failure_code"`
-	ExpiresAt              time.Time      `json:"expires_at"`
-	CreatedAt              time.Time      `json:"created_at"`
-	CompletedAt            sql.NullTime   `json:"completed_at"`
+	ID                      int32           `json:"id"`
+	ProjectID               int32           `json:"project_id"`
+	DeviceID                sql.NullInt32   `json:"device_id"`
+	TaskRunID               sql.NullInt32   `json:"task_run_id"`
+	IssueID                 sql.NullInt32   `json:"issue_id"`
+	Kind                    string          `json:"kind"`
+	MimeType                sql.NullString  `json:"mime_type"`
+	StorageKey              string          `json:"storage_key"`
+	SizeBytes               sql.NullInt64   `json:"size_bytes"`
+	Checksum                sql.NullString  `json:"checksum"`
+	CapturedAt              sql.NullTime    `json:"captured_at"`
+	MetadataJson            json.RawMessage `json:"metadata_json"`
+	CreatedAt               time.Time       `json:"created_at"`
+	TeamID                  int32           `json:"team_id"`
+	LogicalKey              string          `json:"logical_key"`
+	Version                 int32           `json:"version"`
+	Status                  string          `json:"status"`
+	ObjectVersion           sql.NullString  `json:"object_version"`
+	ChecksumSha256          sql.NullString  `json:"checksum_sha256"`
+	AvailableAt             sql.NullTime    `json:"available_at"`
+	FailedAt                sql.NullTime    `json:"failed_at"`
+	FailureCode             sql.NullString  `json:"failure_code"`
+	RetentionHoldUntil      sql.NullTime    `json:"retention_hold_until"`
+	LegalHold               bool            `json:"legal_hold"`
+	RetentionReason         sql.NullString  `json:"retention_reason"`
+	DeletedAt               sql.NullTime    `json:"deleted_at"`
+	SupersedesAssetID       sql.NullInt32   `json:"supersedes_asset_id"`
+	DerivativeSourceAssetID sql.NullInt32   `json:"derivative_source_asset_id"`
+	DerivativeType          sql.NullString  `json:"derivative_type"`
+	RemoteConnectorID       sql.NullInt64   `json:"remote_connector_id"`
+	RemoteResourceID        sql.NullInt64   `json:"remote_resource_id"`
+	RemoteAccessKind        sql.NullString  `json:"remote_access_kind"`
+	RemoteReferenceDigest   sql.NullString  `json:"remote_reference_digest"`
+	// Private encrypted access locator; never include in public asset projections. Encryption AAD remains asset ID and project ID.
+	RemoteCredentialEnvelopeJson pqtype.NullRawMessage `json:"remote_credential_envelope_json"`
+	RemoteReferenceCreatedAt     sql.NullTime          `json:"remote_reference_created_at"`
+	RemoteReferenceUpdatedAt     sql.NullTime          `json:"remote_reference_updated_at"`
 }
 
 type AuditEvent struct {
 	ID               int64           `json:"id"`
-	ProjectID        int32           `json:"project_id"`
-	TeamID           int32           `json:"team_id"`
+	ProjectID        sql.NullInt32   `json:"project_id"`
+	TeamID           sql.NullInt32   `json:"team_id"`
 	RequestID        string          `json:"request_id"`
 	IdempotencyKey   sql.NullString  `json:"idempotency_key"`
 	ActorUserID      sql.NullInt32   `json:"actor_user_id"`
@@ -407,6 +325,10 @@ type AuditEvent struct {
 	Status           string          `json:"status"`
 	CreatedAt        time.Time       `json:"created_at"`
 	CompletedAt      sql.NullTime    `json:"completed_at"`
+	Scope            string          `json:"scope"`
+	ActorSystem      sql.NullString  `json:"actor_system"`
+	LegacyPlatformID sql.NullInt64   `json:"legacy_platform_id"`
+	DetailsJson      json.RawMessage `json:"details_json"`
 }
 
 type CommandAttempt struct {
@@ -433,7 +355,7 @@ type ConnectorActionJob struct {
 	WaylineResourceID      sql.NullInt64   `json:"wayline_resource_id"`
 	TargetResourceID       sql.NullInt64   `json:"target_resource_id"`
 	RemoteResultResourceID sql.NullInt64   `json:"remote_result_resource_id"`
-	ApprovalRequestID      uuid.UUID       `json:"approval_request_id"`
+	ApprovalRequestID      uuid.NullUUID   `json:"approval_request_id"`
 	RequestedByUserID      int32           `json:"requested_by_user_id"`
 	ActionKind             string          `json:"action_kind"`
 	IdempotencyKey         string          `json:"idempotency_key"`
@@ -486,13 +408,14 @@ type ConnectorCapabilitySnapshot struct {
 }
 
 type ConnectorControlSession struct {
-	ID                       uuid.UUID       `json:"id"`
-	ProjectID                int32           `json:"project_id"`
-	TeamID                   int32           `json:"team_id"`
-	ConnectorInstanceID      int64           `json:"connector_instance_id"`
-	DeviceID                 int32           `json:"device_id"`
-	HolderUserID             int32           `json:"holder_user_id"`
-	ApprovalRequestID        uuid.UUID       `json:"approval_request_id"`
+	ID                  uuid.UUID `json:"id"`
+	ProjectID           int32     `json:"project_id"`
+	TeamID              int32     `json:"team_id"`
+	ConnectorInstanceID int64     `json:"connector_instance_id"`
+	DeviceID            int32     `json:"device_id"`
+	HolderUserID        int32     `json:"holder_user_id"`
+	ApprovalRequestID   uuid.UUID `json:"approval_request_id"`
+	// Historical snapshot ID; retired record recoverable from audit_events schema.archive
 	SafetyPolicyVersionID    sql.NullInt64   `json:"safety_policy_version_id"`
 	IdempotencyKey           string          `json:"idempotency_key"`
 	ControlsJson             json.RawMessage `json:"controls_json"`
@@ -531,7 +454,7 @@ type ConnectorDeviceAdminJob struct {
 	ConnectorInstanceID int64                 `json:"connector_instance_id"`
 	DeviceID            sql.NullInt32         `json:"device_id"`
 	RequestedByUserID   int32                 `json:"requested_by_user_id"`
-	ApprovalRequestID   uuid.UUID             `json:"approval_request_id"`
+	ApprovalRequestID   uuid.NullUUID         `json:"approval_request_id"`
 	ActionKind          string                `json:"action_kind"`
 	CapabilityCode      string                `json:"capability_code"`
 	FeatureFlag         string                `json:"feature_flag"`
@@ -602,6 +525,64 @@ type ConnectorInstance struct {
 	CredentialEnvelopeJson pqtype.NullRawMessage `json:"credential_envelope_json"`
 }
 
+type ConnectorJob struct {
+	JobType                  string                `json:"job_type"`
+	ID                       uuid.UUID             `json:"id"`
+	ProjectID                int32                 `json:"project_id"`
+	TeamID                   int32                 `json:"team_id"`
+	ConnectorInstanceID      int64                 `json:"connector_instance_id"`
+	TaskRunID                sql.NullInt32         `json:"task_run_id"`
+	DeviceID                 sql.NullInt32         `json:"device_id"`
+	WaylineResourceID        sql.NullInt64         `json:"wayline_resource_id"`
+	TargetResourceID         sql.NullInt64         `json:"target_resource_id"`
+	RemoteResultResourceID   sql.NullInt64         `json:"remote_result_resource_id"`
+	ApprovalRequestID        uuid.NullUUID         `json:"approval_request_id"`
+	RequestedByUserID        int32                 `json:"requested_by_user_id"`
+	ActionKind               string                `json:"action_kind"`
+	IdempotencyKey           string                `json:"idempotency_key"`
+	RequestDigest            string                `json:"request_digest"`
+	RequestEnvelopeJson      json.RawMessage       `json:"request_envelope_json"`
+	Status                   string                `json:"status"`
+	DispatchCheckJson        pqtype.NullRawMessage `json:"dispatch_check_json"`
+	AttemptCount             sql.NullInt32         `json:"attempt_count"`
+	ReconciliationCount      sql.NullInt32         `json:"reconciliation_count"`
+	LastErrorCode            sql.NullString        `json:"last_error_code"`
+	AcceptedAt               sql.NullTime          `json:"accepted_at"`
+	ReconciledAt             sql.NullTime          `json:"reconciled_at"`
+	UnknownAt                sql.NullTime          `json:"unknown_at"`
+	CompletedAt              sql.NullTime          `json:"completed_at"`
+	CreatedAt                time.Time             `json:"created_at"`
+	UpdatedAt                time.Time             `json:"updated_at"`
+	CapabilityCode           string                `json:"capability_code"`
+	FeatureFlag              string                `json:"feature_flag"`
+	ResultJson               pqtype.NullRawMessage `json:"result_json"`
+	AttemptedAt              sql.NullTime          `json:"attempted_at"`
+	ExpectedRemoteVersion    sql.NullString        `json:"expected_remote_version"`
+	ReconciliationName       sql.NullString        `json:"reconciliation_name"`
+	RemoteIdsJson            pqtype.NullRawMessage `json:"remote_ids_json"`
+	AssetIdsJson             pqtype.NullRawMessage `json:"asset_ids_json"`
+	Progress                 sql.NullInt32         `json:"progress"`
+	Stage                    sql.NullString        `json:"stage"`
+	SubmitAttemptCount       sql.NullInt32         `json:"submit_attempt_count"`
+	SubmittedAt              sql.NullTime          `json:"submitted_at"`
+	PreviewDigest            string                `json:"preview_digest"`
+	OperationKind            sql.NullString        `json:"operation_kind"`
+	SourceAssetID            sql.NullInt32         `json:"source_asset_id"`
+	RequestedName            sql.NullString        `json:"requested_name"`
+	ObjectKeyDigest          sql.NullString        `json:"object_key_digest"`
+	ObjectKeyEnvelopeJson    pqtype.NullRawMessage `json:"object_key_envelope_json"`
+	NotificationAttemptCount sql.NullInt32         `json:"notification_attempt_count"`
+	ReconciliationMissCount  sql.NullInt32         `json:"reconciliation_miss_count"`
+	RemoteResourceID         sql.NullInt64         `json:"remote_resource_id"`
+	UploadedAt               sql.NullTime          `json:"uploaded_at"`
+	NotificationAttemptedAt  sql.NullTime          `json:"notification_attempted_at"`
+	ResultEnvelopeJson       pqtype.NullRawMessage `json:"result_envelope_json"`
+	PreviewJson              json.RawMessage       `json:"preview_json"`
+	BusinessRunID            sql.NullInt32         `json:"business_run_id"`
+	BusinessStepID           sql.NullInt64         `json:"business_step_id"`
+	BusinessBoundAt          sql.NullTime          `json:"business_bound_at"`
+}
+
 type ConnectorLiveActionJob struct {
 	ID                  uuid.UUID       `json:"id"`
 	ProjectID           int32           `json:"project_id"`
@@ -633,7 +614,7 @@ type ConnectorManagementWriteJob struct {
 	TeamID              int32           `json:"team_id"`
 	ConnectorInstanceID int64           `json:"connector_instance_id"`
 	RequestedByUserID   int32           `json:"requested_by_user_id"`
-	ApprovalRequestID   uuid.UUID       `json:"approval_request_id"`
+	ApprovalRequestID   uuid.NullUUID   `json:"approval_request_id"`
 	ActionKind          string          `json:"action_kind"`
 	CapabilityCode      string          `json:"capability_code"`
 	FeatureFlag         string          `json:"feature_flag"`
@@ -660,7 +641,7 @@ type ConnectorModelDeleteJob struct {
 	TeamID                int32           `json:"team_id"`
 	ConnectorInstanceID   int64           `json:"connector_instance_id"`
 	TargetResourceID      int64           `json:"target_resource_id"`
-	ApprovalRequestID     uuid.UUID       `json:"approval_request_id"`
+	ApprovalRequestID     uuid.NullUUID   `json:"approval_request_id"`
 	RequestedByUserID     int32           `json:"requested_by_user_id"`
 	ActionKind            string          `json:"action_kind"`
 	CapabilityCode        string          `json:"capability_code"`
@@ -763,23 +744,25 @@ type ConnectorOpenModelUpload struct {
 }
 
 type ConnectorRemoteResource struct {
-	ID                  int64           `json:"id"`
-	ProjectID           int32           `json:"project_id"`
-	TeamID              int32           `json:"team_id"`
-	ConnectorInstanceID int64           `json:"connector_instance_id"`
-	ResourceKind        string          `json:"resource_kind"`
-	RemoteID            string          `json:"remote_id"`
-	RemoteVersion       sql.NullString  `json:"remote_version"`
-	RemoteUpdatedAt     sql.NullTime    `json:"remote_updated_at"`
-	Status              string          `json:"status"`
-	SummaryJson         json.RawMessage `json:"summary_json"`
-	CanonicalTargetType sql.NullString  `json:"canonical_target_type"`
-	CanonicalTargetID   sql.NullString  `json:"canonical_target_id"`
-	FirstSeenAt         time.Time       `json:"first_seen_at"`
-	LastSeenAt          time.Time       `json:"last_seen_at"`
-	MissingAt           sql.NullTime    `json:"missing_at"`
-	CreatedAt           time.Time       `json:"created_at"`
-	UpdatedAt           time.Time       `json:"updated_at"`
+	ID                     int64                 `json:"id"`
+	ProjectID              int32                 `json:"project_id"`
+	TeamID                 int32                 `json:"team_id"`
+	ConnectorInstanceID    int64                 `json:"connector_instance_id"`
+	ResourceKind           string                `json:"resource_kind"`
+	RemoteID               string                `json:"remote_id"`
+	RemoteVersion          sql.NullString        `json:"remote_version"`
+	RemoteUpdatedAt        sql.NullTime          `json:"remote_updated_at"`
+	Status                 string                `json:"status"`
+	SummaryJson            json.RawMessage       `json:"summary_json"`
+	CanonicalTargetType    sql.NullString        `json:"canonical_target_type"`
+	CanonicalTargetID      sql.NullString        `json:"canonical_target_id"`
+	FirstSeenAt            time.Time             `json:"first_seen_at"`
+	LastSeenAt             time.Time             `json:"last_seen_at"`
+	MissingAt              sql.NullTime          `json:"missing_at"`
+	CreatedAt              time.Time             `json:"created_at"`
+	UpdatedAt              time.Time             `json:"updated_at"`
+	InspectionFlightID     sql.NullString        `json:"inspection_flight_id"`
+	InspectionEvidenceJson pqtype.NullRawMessage `json:"inspection_evidence_json"`
 }
 
 type ConnectorResourceSyncState struct {
@@ -851,6 +834,8 @@ type Detection struct {
 	AttributesJson        json.RawMessage `json:"attributes_json"`
 	CapturedAt            time.Time       `json:"captured_at"`
 	CreatedAt             time.Time       `json:"created_at"`
+	GroupID               sql.NullInt64   `json:"group_id"`
+	GroupedAt             sql.NullTime    `json:"grouped_at"`
 }
 
 type DetectionGroup struct {
@@ -867,14 +852,6 @@ type DetectionGroup struct {
 	AggregationVersion string      `json:"aggregation_version"`
 	CreatedAt          time.Time   `json:"created_at"`
 	UpdatedAt          time.Time   `json:"updated_at"`
-}
-
-type DetectionGroupMember struct {
-	ProjectID        int32     `json:"project_id"`
-	TeamID           int32     `json:"team_id"`
-	DetectionGroupID int64     `json:"detection_group_id"`
-	DetectionID      int64     `json:"detection_id"`
-	AddedAt          time.Time `json:"added_at"`
 }
 
 type Device struct {
@@ -930,6 +907,7 @@ type DeviceAdapter struct {
 	SyncCursorJson         json.RawMessage       `json:"sync_cursor_json"`
 	CredentialEnvelopeJson pqtype.NullRawMessage `json:"credential_envelope_json"`
 	ExternalScopeKey       sql.NullString        `json:"external_scope_key"`
+	TaskManagedAlerts      bool                  `json:"task_managed_alerts"`
 }
 
 type DeviceCapability struct {
@@ -970,25 +948,41 @@ type DeviceCapabilityGrant struct {
 }
 
 type DeviceCommand struct {
-	ID                uuid.UUID       `json:"id"`
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	TaskRunID         sql.NullInt32   `json:"task_run_id"`
-	TaskRunStepID     sql.NullInt64   `json:"task_run_step_id"`
-	DeviceID          int32           `json:"device_id"`
-	CommandKey        string          `json:"command_key"`
-	IdempotencyKey    string          `json:"idempotency_key"`
-	CapabilityCode    string          `json:"capability_code"`
-	ParametersJson    json.RawMessage `json:"parameters_json"`
-	SafetyContextJson json.RawMessage `json:"safety_context_json"`
-	Status            string          `json:"status"`
-	Priority          int32           `json:"priority"`
-	DeadlineAt        time.Time       `json:"deadline_at"`
-	RequestedByUserID sql.NullInt32   `json:"requested_by_user_id"`
-	CreatedAt         time.Time       `json:"created_at"`
-	CompletedAt       sql.NullTime    `json:"completed_at"`
-	ResultJson        json.RawMessage `json:"result_json"`
-	LiveStreamID      sql.NullInt64   `json:"live_stream_id"`
+	ID                         uuid.UUID             `json:"id"`
+	ProjectID                  int32                 `json:"project_id"`
+	TeamID                     int32                 `json:"team_id"`
+	TaskRunID                  sql.NullInt32         `json:"task_run_id"`
+	TaskRunStepID              sql.NullInt64         `json:"task_run_step_id"`
+	DeviceID                   int32                 `json:"device_id"`
+	CommandKey                 string                `json:"command_key"`
+	IdempotencyKey             string                `json:"idempotency_key"`
+	CapabilityCode             string                `json:"capability_code"`
+	ParametersJson             json.RawMessage       `json:"parameters_json"`
+	SafetyContextJson          json.RawMessage       `json:"safety_context_json"`
+	Status                     string                `json:"status"`
+	Priority                   int32                 `json:"priority"`
+	DeadlineAt                 time.Time             `json:"deadline_at"`
+	RequestedByUserID          sql.NullInt32         `json:"requested_by_user_id"`
+	CreatedAt                  time.Time             `json:"created_at"`
+	CompletedAt                sql.NullTime          `json:"completed_at"`
+	ResultJson                 json.RawMessage       `json:"result_json"`
+	LiveStreamID               sql.NullInt64         `json:"live_stream_id"`
+	ProtocolCorrelationID      sql.NullInt64         `json:"protocol_correlation_id"`
+	ProtocolAdapterID          sql.NullInt64         `json:"protocol_adapter_id"`
+	ProtocolMappingVersion     sql.NullString        `json:"protocol_mapping_version"`
+	ProtocolTransactionID      sql.NullString        `json:"protocol_transaction_id"`
+	ProtocolBusinessID         sql.NullString        `json:"protocol_business_id"`
+	ProtocolMethod             sql.NullString        `json:"protocol_method"`
+	ProtocolRequestTopic       sql.NullString        `json:"protocol_request_topic"`
+	ProtocolRequestPayloadJson pqtype.NullRawMessage `json:"protocol_request_payload_json"`
+	ProtocolStatus             sql.NullString        `json:"protocol_status"`
+	ProtocolReplyEventID       sql.NullString        `json:"protocol_reply_event_id"`
+	ProtocolReplyResult        sql.NullInt32         `json:"protocol_reply_result"`
+	ProtocolReplyPayloadJson   pqtype.NullRawMessage `json:"protocol_reply_payload_json"`
+	ProtocolSentAt             sql.NullTime          `json:"protocol_sent_at"`
+	ProtocolRepliedAt          sql.NullTime          `json:"protocol_replied_at"`
+	ProtocolCreatedAt          sql.NullTime          `json:"protocol_created_at"`
+	ProtocolUpdatedAt          sql.NullTime          `json:"protocol_updated_at"`
 }
 
 type DeviceCommandProtocolCorrelation struct {
@@ -1224,18 +1218,6 @@ type DriverDefinition struct {
 	UpdatedAt    time.Time       `json:"updated_at"`
 }
 
-type EventFeedback struct {
-	ID                int64           `json:"id"`
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	PerceptionEventID uuid.UUID       `json:"perception_event_id"`
-	Action            string          `json:"action"`
-	ValueJson         json.RawMessage `json:"value_json"`
-	Reason            string          `json:"reason"`
-	ActorUserID       int32           `json:"actor_user_id"`
-	CreatedAt         time.Time       `json:"created_at"`
-}
-
 type EventRule struct {
 	ID                        int64         `json:"id"`
 	ProjectID                 int32         `json:"project_id"`
@@ -1264,22 +1246,6 @@ type EventRuleVersion struct {
 	PublishedByUserID          sql.NullInt32   `json:"published_by_user_id"`
 	CreatedAt                  time.Time       `json:"created_at"`
 	PublishedAt                sql.NullTime    `json:"published_at"`
-}
-
-type EvidenceLink struct {
-	ID                  int64         `json:"id"`
-	ProjectID           int32         `json:"project_id"`
-	TeamID              int32         `json:"team_id"`
-	TargetType          string        `json:"target_type"`
-	TargetID            string        `json:"target_id"`
-	AssetID             int32         `json:"asset_id"`
-	AssetVersion        int32         `json:"asset_version"`
-	AssetChecksumSha256 string        `json:"asset_checksum_sha256"`
-	StartOffsetMs       sql.NullInt64 `json:"start_offset_ms"`
-	EndOffsetMs         sql.NullInt64 `json:"end_offset_ms"`
-	IsPublished         bool          `json:"is_published"`
-	CreatedByUserID     sql.NullInt32 `json:"created_by_user_id"`
-	CreatedAt           time.Time     `json:"created_at"`
 }
 
 type GeneratedReport struct {
@@ -1340,15 +1306,6 @@ type IdempotencyRecord struct {
 	ExpiresAt      time.Time             `json:"expires_at"`
 }
 
-type InspectionAlertSource struct {
-	ProjectID           int32           `json:"project_id"`
-	ConnectorInstanceID int64           `json:"connector_instance_id"`
-	RemoteResourceID    int64           `json:"remote_resource_id"`
-	RemoteFlightID      string          `json:"remote_flight_id"`
-	EvidenceJson        json.RawMessage `json:"evidence_json"`
-	UpdatedAt           time.Time       `json:"updated_at"`
-}
-
 type InspectionAssessment struct {
 	ID             uuid.UUID      `json:"id"`
 	ProjectID      int32          `json:"project_id"`
@@ -1378,13 +1335,6 @@ type InspectionAssessmentRevision struct {
 	CreatedAt        time.Time       `json:"created_at"`
 }
 
-type InspectionConnectorPolicy struct {
-	ProjectID           int32 `json:"project_id"`
-	TeamID              int32 `json:"team_id"`
-	ConnectorInstanceID int64 `json:"connector_instance_id"`
-	TaskManagedAlerts   bool  `json:"task_managed_alerts"`
-}
-
 type InspectionEvidenceSet struct {
 	ID                       uuid.UUID       `json:"id"`
 	ProjectID                int32           `json:"project_id"`
@@ -1400,18 +1350,6 @@ type InspectionEvidenceSet struct {
 	CreatedAt                time.Time       `json:"created_at"`
 }
 
-type InspectionFlightBinding struct {
-	ProjectID           int32     `json:"project_id"`
-	TeamID              int32     `json:"team_id"`
-	BusinessRunID       int32     `json:"business_run_id"`
-	BusinessStepID      int64     `json:"business_step_id"`
-	ConnectorInstanceID int64     `json:"connector_instance_id"`
-	FlightRunID         int32     `json:"flight_run_id"`
-	ActionJobID         uuid.UUID `json:"action_job_id"`
-	ActionKind          string    `json:"action_kind"`
-	CreatedAt           time.Time `json:"created_at"`
-}
-
 type InspectionFlightOwnership struct {
 	ProjectID           int32         `json:"project_id"`
 	ConnectorInstanceID int64         `json:"connector_instance_id"`
@@ -1419,14 +1357,6 @@ type InspectionFlightOwnership struct {
 	Ownership           string        `json:"ownership"`
 	TaskRunID           sql.NullInt32 `json:"task_run_id"`
 	CreatedAt           time.Time     `json:"created_at"`
-}
-
-type InspectionIssueSource struct {
-	ProjectID    int32     `json:"project_id"`
-	SourceKey    string    `json:"source_key"`
-	IssueID      int32     `json:"issue_id"`
-	AssessmentID uuid.UUID `json:"assessment_id"`
-	CreatedAt    time.Time `json:"created_at"`
 }
 
 type InspectionObservation struct {
@@ -1530,13 +1460,15 @@ type IssueFeedback struct {
 }
 
 type IssueLink struct {
-	ID              int32         `json:"id"`
-	ProjectID       int32         `json:"project_id"`
-	IssueID         int32         `json:"issue_id"`
-	LinkType        string        `json:"link_type"`
-	TargetID        string        `json:"target_id"`
-	CreatedByUserID sql.NullInt32 `json:"created_by_user_id"`
-	CreatedAt       time.Time     `json:"created_at"`
+	ID              int32          `json:"id"`
+	ProjectID       int32          `json:"project_id"`
+	IssueID         int32          `json:"issue_id"`
+	LinkType        string         `json:"link_type"`
+	TargetID        string         `json:"target_id"`
+	CreatedByUserID sql.NullInt32  `json:"created_by_user_id"`
+	CreatedAt       time.Time      `json:"created_at"`
+	SourceKey       sql.NullString `json:"source_key"`
+	AssessmentID    uuid.NullUUID  `json:"assessment_id"`
 }
 
 type LiveStream struct {
@@ -1578,11 +1510,12 @@ type LiveStream struct {
 }
 
 type Observation struct {
-	ID               int64           `json:"id"`
-	ProjectID        int32           `json:"project_id"`
-	TeamID           int32           `json:"team_id"`
-	AdapterID        int64           `json:"adapter_id"`
-	DeviceID         int32           `json:"device_id"`
+	ID        int64 `json:"id"`
+	ProjectID int32 `json:"project_id"`
+	TeamID    int32 `json:"team_id"`
+	AdapterID int64 `json:"adapter_id"`
+	DeviceID  int32 `json:"device_id"`
+	// Historical snapshot ID; retired record recoverable from audit_events schema.archive
 	CalibrationID    sql.NullInt64   `json:"calibration_id"`
 	ObservationType  string          `json:"observation_type"`
 	SourceEventID    string          `json:"source_event_id"`
@@ -1597,6 +1530,24 @@ type Observation struct {
 	Validity         string          `json:"validity"`
 	CreatedAt        time.Time       `json:"created_at"`
 	TaskRunID        sql.NullInt32   `json:"task_run_id"`
+	PoseDeviceID     sql.NullInt32   `json:"pose_device_id"`
+	// Preserves the pose timestamp independently of the generic observation timestamp for legacy records.
+	PoseCapturedAt          sql.NullTime    `json:"pose_captured_at"`
+	PoseStandardPosition    interface{}     `json:"pose_standard_position"`
+	PoseOriginalPosition    interface{}     `json:"pose_original_position"`
+	PoseOrientationX        sql.NullFloat64 `json:"pose_orientation_x"`
+	PoseOrientationY        sql.NullFloat64 `json:"pose_orientation_y"`
+	PoseOrientationZ        sql.NullFloat64 `json:"pose_orientation_z"`
+	PoseOrientationW        sql.NullFloat64 `json:"pose_orientation_w"`
+	PoseVelocityX           sql.NullFloat64 `json:"pose_velocity_x"`
+	PoseVelocityY           sql.NullFloat64 `json:"pose_velocity_y"`
+	PoseVelocityZ           sql.NullFloat64 `json:"pose_velocity_z"`
+	PoseHorizontalAccuracyM sql.NullFloat64 `json:"pose_horizontal_accuracy_m"`
+	PoseVerticalAccuracyM   sql.NullFloat64 `json:"pose_vertical_accuracy_m"`
+	PoseAttitudeAccuracyDeg sql.NullFloat64 `json:"pose_attitude_accuracy_deg"`
+	PoseVerticalDatum       sql.NullString  `json:"pose_vertical_datum"`
+	PoseTransformVersion    sql.NullString  `json:"pose_transform_version"`
+	PoseSpatialQuality      sql.NullString  `json:"pose_spatial_quality"`
 }
 
 type OutboxConsumption struct {
@@ -1643,20 +1594,8 @@ type PerceptionEvent struct {
 	CreatedAt          time.Time     `json:"created_at"`
 	UpdatedAt          time.Time     `json:"updated_at"`
 	ResolvedAt         sql.NullTime  `json:"resolved_at"`
-}
-
-type PlatformAuditEvent struct {
-	ID           int64          `json:"id"`
-	ActorUserID  int32          `json:"actor_user_id"`
-	RequestID    string         `json:"request_id"`
-	Action       string         `json:"action"`
-	ResourceType string         `json:"resource_type"`
-	ResourceID   sql.NullString `json:"resource_id"`
-	InputHash    string         `json:"input_hash"`
-	ResultHash   sql.NullString `json:"result_hash"`
-	Status       string         `json:"status"`
-	CreatedAt    time.Time      `json:"created_at"`
-	CompletedAt  sql.NullTime   `json:"completed_at"`
+	// Read-only feedback from the retired event API; live feedback uses issue_feedback
+	LegacyFeedbackJson json.RawMessage `json:"legacy_feedback_json"`
 }
 
 type Pose struct {
@@ -1682,14 +1621,15 @@ type Pose struct {
 }
 
 type Project struct {
-	ID                           int32          `json:"id"`
-	TeamID                       int32          `json:"team_id"`
-	Name                         string         `json:"name"`
-	Description                  sql.NullString `json:"description"`
-	CreatedByUserID              sql.NullInt32  `json:"created_by_user_id"`
-	CreatedAt                    time.Time      `json:"created_at"`
-	UpdatedAt                    time.Time      `json:"updated_at"`
-	CurrentSafetyPolicyVersionID sql.NullInt64  `json:"current_safety_policy_version_id"`
+	ID              int32          `json:"id"`
+	TeamID          int32          `json:"team_id"`
+	Name            string         `json:"name"`
+	Description     sql.NullString `json:"description"`
+	CreatedByUserID sql.NullInt32  `json:"created_by_user_id"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	// Historical snapshot ID; retired record recoverable from audit_events schema.archive
+	CurrentSafetyPolicyVersionID sql.NullInt64 `json:"current_safety_policy_version_id"`
 }
 
 type ProjectEvent struct {
@@ -1726,101 +1666,6 @@ type ProjectPermission struct {
 	CreatedAt       time.Time     `json:"created_at"`
 }
 
-type RetentionCleanupRun struct {
-	ID                uuid.UUID       `json:"id"`
-	ProjectID         int32           `json:"project_id"`
-	TeamID            int32           `json:"team_id"`
-	RetentionPolicyID int64           `json:"retention_policy_id"`
-	Mode              string          `json:"mode"`
-	Status            string          `json:"status"`
-	PlanJson          json.RawMessage `json:"plan_json"`
-	CandidateCount    int32           `json:"candidate_count"`
-	DeletedCount      int32           `json:"deleted_count"`
-	CreatedByUserID   sql.NullInt32   `json:"created_by_user_id"`
-	CreatedAt         time.Time       `json:"created_at"`
-	CompletedAt       sql.NullTime    `json:"completed_at"`
-	ErrorCode         sql.NullString  `json:"error_code"`
-}
-
-type RetentionDeletionTombstone struct {
-	ID                uuid.UUID      `json:"id"`
-	ProjectID         int32          `json:"project_id"`
-	TeamID            int32          `json:"team_id"`
-	CleanupRunID      uuid.UUID      `json:"cleanup_run_id"`
-	RetentionPolicyID int64          `json:"retention_policy_id"`
-	AssetID           int32          `json:"asset_id"`
-	StorageKeyHash    string         `json:"storage_key_hash"`
-	ChecksumSha256    sql.NullString `json:"checksum_sha256"`
-	ReasonCode        string         `json:"reason_code"`
-	DeletedAt         time.Time      `json:"deleted_at"`
-}
-
-type RetentionHold struct {
-	ID               uuid.UUID     `json:"id"`
-	ProjectID        int32         `json:"project_id"`
-	TeamID           int32         `json:"team_id"`
-	AssetID          int32         `json:"asset_id"`
-	Reason           string        `json:"reason"`
-	Status           string        `json:"status"`
-	HoldUntil        sql.NullTime  `json:"hold_until"`
-	CreatedByUserID  sql.NullInt32 `json:"created_by_user_id"`
-	ReleasedByUserID sql.NullInt32 `json:"released_by_user_id"`
-	CreatedAt        time.Time     `json:"created_at"`
-	ReleasedAt       sql.NullTime  `json:"released_at"`
-}
-
-type RetentionPolicy struct {
-	ID                      int64         `json:"id"`
-	ProjectID               int32         `json:"project_id"`
-	TeamID                  int32         `json:"team_id"`
-	PolicyKey               string        `json:"policy_key"`
-	Version                 int32         `json:"version"`
-	Status                  string        `json:"status"`
-	RetentionDays           int32         `json:"retention_days"`
-	DerivativeRetentionDays int32         `json:"derivative_retention_days"`
-	IsDefault               bool          `json:"is_default"`
-	CreatedByUserID         sql.NullInt32 `json:"created_by_user_id"`
-	PublishedByUserID       sql.NullInt32 `json:"published_by_user_id"`
-	CreatedAt               time.Time     `json:"created_at"`
-	PublishedAt             sql.NullTime  `json:"published_at"`
-}
-
-type SafetyPolicyVersion struct {
-	ID                      int64           `json:"id"`
-	ProjectID               int32           `json:"project_id"`
-	TeamID                  int32           `json:"team_id"`
-	Version                 int32           `json:"version"`
-	Status                  string          `json:"status"`
-	ProjectBoundary         interface{}     `json:"project_boundary"`
-	RestrictedAreas         interface{}     `json:"restricted_areas"`
-	MaxAltitudeMeters       float64         `json:"max_altitude_meters"`
-	MaxSpeedMetersPerSecond float64         `json:"max_speed_meters_per_second"`
-	MinimumBatteryPercent   float64         `json:"minimum_battery_percent"`
-	AllowedWindowsJson      json.RawMessage `json:"allowed_windows_json"`
-	RequiredComplianceJson  json.RawMessage `json:"required_compliance_json"`
-	OptionalComplianceJson  json.RawMessage `json:"optional_compliance_json"`
-	ExemptionsJson          json.RawMessage `json:"exemptions_json"`
-	CreatedByUserID         sql.NullInt32   `json:"created_by_user_id"`
-	PublishedByUserID       sql.NullInt32   `json:"published_by_user_id"`
-	CreatedAt               time.Time       `json:"created_at"`
-	PublishedAt             sql.NullTime    `json:"published_at"`
-}
-
-type SensorCalibration struct {
-	ID            int64           `json:"id"`
-	ProjectID     int32           `json:"project_id"`
-	TeamID        int32           `json:"team_id"`
-	DeviceID      int32           `json:"device_id"`
-	SensorKey     string          `json:"sensor_key"`
-	Version       int32           `json:"version"`
-	IntrinsicJson json.RawMessage `json:"intrinsic_json"`
-	ExtrinsicJson json.RawMessage `json:"extrinsic_json"`
-	QualityJson   json.RawMessage `json:"quality_json"`
-	ValidFrom     time.Time       `json:"valid_from"`
-	ValidUntil    sql.NullTime    `json:"valid_until"`
-	CreatedAt     time.Time       `json:"created_at"`
-}
-
 type Session struct {
 	Token  string    `json:"token"`
 	Data   []byte    `json:"data"`
@@ -1849,21 +1694,22 @@ type Task struct {
 }
 
 type TaskRun struct {
-	ID                          int32           `json:"id"`
-	ProjectID                   int32           `json:"project_id"`
-	TaskID                      int32           `json:"task_id"`
-	TriggerSource               string          `json:"trigger_source"`
-	Status                      string          `json:"status"`
-	InputSnapshotJson           json.RawMessage `json:"input_snapshot_json"`
-	OutputSnapshotJson          json.RawMessage `json:"output_snapshot_json"`
-	ErrorMessage                sql.NullString  `json:"error_message"`
-	StartedAt                   sql.NullTime    `json:"started_at"`
-	FinishedAt                  sql.NullTime    `json:"finished_at"`
-	CreatedByUserID             sql.NullInt32   `json:"created_by_user_id"`
-	CreatedAt                   time.Time       `json:"created_at"`
-	TaskVersionID               sql.NullInt64   `json:"task_version_id"`
-	TeamID                      int32           `json:"team_id"`
-	SelectedDeviceID            sql.NullInt32   `json:"selected_device_id"`
+	ID                 int32           `json:"id"`
+	ProjectID          int32           `json:"project_id"`
+	TaskID             int32           `json:"task_id"`
+	TriggerSource      string          `json:"trigger_source"`
+	Status             string          `json:"status"`
+	InputSnapshotJson  json.RawMessage `json:"input_snapshot_json"`
+	OutputSnapshotJson json.RawMessage `json:"output_snapshot_json"`
+	ErrorMessage       sql.NullString  `json:"error_message"`
+	StartedAt          sql.NullTime    `json:"started_at"`
+	FinishedAt         sql.NullTime    `json:"finished_at"`
+	CreatedByUserID    sql.NullInt32   `json:"created_by_user_id"`
+	CreatedAt          time.Time       `json:"created_at"`
+	TaskVersionID      sql.NullInt64   `json:"task_version_id"`
+	TeamID             int32           `json:"team_id"`
+	SelectedDeviceID   sql.NullInt32   `json:"selected_device_id"`
+	// Historical snapshot ID; retired record recoverable from audit_events schema.archive
 	SafetyPolicyVersionID       sql.NullInt64   `json:"safety_policy_version_id"`
 	ApprovalRequestID           uuid.NullUUID   `json:"approval_request_id"`
 	StateVersion                int32           `json:"state_version"`

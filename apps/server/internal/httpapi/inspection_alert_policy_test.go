@@ -23,7 +23,7 @@ func TestInspectionAlertPolicyHTTPAuthorizationAndReplay(t *testing.T) {
 	adapter := id(`insert into device_adapters(project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status)
  select $1,$2,'policy','dji-flighthub2',id,'2','connected' from connector_definitions where connector_key='dji.flighthub2' and version='1.0.0' returning id`, pid, team)
 	resource := id(`insert into connector_remote_resources(project_id,team_id,connector_instance_id,resource_kind,remote_id) values($1,$2,$3,'ai-alert','private-alert-identity') returning id`, pid, team, adapter)
-	if _, err := f.db.Exec(`insert into inspection_alert_sources(project_id,connector_instance_id,remote_resource_id,remote_flight_id,evidence_json) values($1,$2,$3,'private-flight-identity','{}')`, pid, adapter, resource); err != nil {
+	if _, err := f.db.Exec(`update connector_remote_resources set inspection_flight_id='private-flight-identity',inspection_evidence_json='{}' where project_id=$1 and connector_instance_id=$2 and id=$3`, pid, adapter, resource); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Exec(`insert into inspection_flight_ownership(project_id,connector_instance_id,remote_flight_id,ownership) values($1,$2,'private-flight-identity','pending')`, pid, adapter); err != nil {

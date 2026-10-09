@@ -18,12 +18,11 @@ func LockAlertConnector(ctx context.Context, tx *sql.Tx, projectID int, connecto
 }
 
 func SetAlertPolicy(ctx context.Context, tx *sql.Tx, projectID int, connectorID int64, managed bool) error {
-	team, err := LockAlertConnector(ctx, tx, projectID, connectorID)
+	_, err := LockAlertConnector(ctx, tx, projectID, connectorID)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `insert into inspection_connector_policies(project_id,team_id,connector_instance_id,task_managed_alerts)
- values($1,$2,$3,$4) on conflict(project_id,connector_instance_id) do update set task_managed_alerts=excluded.task_managed_alerts`, projectID, team, connectorID, managed)
+	_, err = tx.ExecContext(ctx, `update device_adapters set task_managed_alerts=$3 where project_id=$1 and id=$2`, projectID, connectorID, managed)
 	return err
 }
 
@@ -42,7 +41,7 @@ func ClassifyAlertFlight(ctx context.Context, tx *sql.Tx, projectID int, connect
 		return "", err
 	}
 	var managed bool
-	if err = tx.QueryRowContext(ctx, "select coalesce((select task_managed_alerts from inspection_connector_policies where project_id=$1 and connector_instance_id=$2),false)", projectID, connectorID).Scan(&managed); err != nil {
+	if err = tx.QueryRowContext(ctx, "select coalesce((select task_managed_alerts from device_adapters where project_id=$1 and id=$2),false)", projectID, connectorID).Scan(&managed); err != nil {
 		return "", err
 	}
 	if !managed {

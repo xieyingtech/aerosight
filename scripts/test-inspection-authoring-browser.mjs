@@ -274,7 +274,7 @@ try{
 
   const resource=await fixture.query(`insert into connector_remote_resources(project_id,team_id,connector_instance_id,resource_kind,remote_id,summary_json)
    values($1,$2,$3,'ai-alert','fixture-alert','{"label":"person","capturedAt":"2026-09-11T08:00:00Z"}') returning id`,[pid,team.body.id,policyConnector]);
-  await fixture.query(`insert into inspection_alert_sources(project_id,connector_instance_id,remote_resource_id,remote_flight_id,evidence_json) values($1,$2,$3,'fixture-flight','{}')`,[pid,policyConnector,resource.rows[0].id]);
+  await fixture.query(`update connector_remote_resources set inspection_flight_id='fixture-flight',inspection_evidence_json='{}' where project_id=$1 and connector_instance_id=$2 and id=$3`,[pid,policyConnector,resource.rows[0].id]);
   await fixture.query(`insert into inspection_flight_ownership(project_id,connector_instance_id,remote_flight_id,ownership) values($1,$2,'fixture-flight','pending')`,[pid,policyConnector]);
  }finally{await fixture.end();}
  await page.goto(`${origin}/projects/connectors/?projectId=${pid}`);

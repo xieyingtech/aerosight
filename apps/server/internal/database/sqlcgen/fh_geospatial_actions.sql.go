@@ -150,10 +150,10 @@ func (q *Queries) FHGeospatialExisting(ctx context.Context, arg FHGeospatialExis
 }
 
 const fHGeospatialInsert = `-- name: FHGeospatialInsert :one
-insert into connector_geospatial_action_jobs(
+insert into connector_jobs(job_type,
         id,project_id,team_id,connector_instance_id,target_resource_id,requested_by_user_id,
         action_kind,capability_code,feature_flag,idempotency_key,expected_remote_version,request_digest,request_envelope_json
-      ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ) values('geospatial',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
       on conflict do nothing returning id::text,status
 `
 

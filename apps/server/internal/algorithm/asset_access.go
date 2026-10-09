@@ -86,6 +86,10 @@ func (handler *AssetAccessHandler) WithRemoteReader(reader RemoteAlgorithmAssetR
 }
 
 func (handler *AssetAccessHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if strings.HasPrefix(request.URL.Path, "/algorithm-assets/frames/") {
+		handler.serveFrame(writer, request)
+		return
+	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		writer.Header().Set("Allow", "GET, HEAD")
 		http.Error(writer, "method not allowed", http.StatusMethodNotAllowed)

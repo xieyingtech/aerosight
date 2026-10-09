@@ -325,7 +325,7 @@ func createAlertIssue(ctx context.Context, tx *sql.Tx, instance connector.Instan
 	}
 	for _, link := range links {
 		if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id)
-			values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, issueID, link.kind, link.id); err != nil {
+			values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, issueID, link.kind, link.id); err != nil {
 			return 0, err
 		}
 	}
@@ -445,7 +445,7 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id)
-			values($1,$2,'spatial_group',$3) on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, issueID, strconv.FormatInt(groupID, 10)); err != nil {
+			values($1,$2,'spatial_group',$3) on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, issueID, strconv.FormatInt(groupID, 10)); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `update connector_remote_resources set canonical_target_type='perception_event',canonical_target_id=$4,updated_at=now()
@@ -490,7 +490,7 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 	}{{"device", droneID}, {"device", gatewayID}, {"asset", assetID}} {
 		if link.id != nil {
 			if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id)
-				values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, projection.IssueID, link.kind, strconv.Itoa(*link.id)); err != nil {
+				values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, projection.IssueID, link.kind, strconv.Itoa(*link.id)); err != nil {
 				return err
 			}
 		}
@@ -515,12 +515,11 @@ func resolveMissingAIAlerts(ctx context.Context, tx *sql.Tx, instance connector.
 	rows, err := tx.QueryContext(ctx, `select resource.id,resource.canonical_target_id,event.detection_group_id,link.issue_id,
  coalesce(ownership.ownership<>'legacy',policy.task_managed_alerts,false) as protected
  from connector_remote_resources resource
- left join inspection_alert_sources source on source.project_id=resource.project_id and source.remote_resource_id=resource.id
  left join connector_remote_resources flight on flight.project_id=resource.project_id and flight.connector_instance_id=resource.connector_instance_id
   and flight.resource_kind='flight-task' and flight.canonical_target_type='task_run' and flight.canonical_target_id=resource.summary_json->>'taskRunId'
  left join inspection_flight_ownership ownership on ownership.project_id=resource.project_id and ownership.connector_instance_id=resource.connector_instance_id
-  and ownership.remote_flight_id=coalesce(source.remote_flight_id,flight.remote_id)
- left join inspection_connector_policies policy on policy.project_id=resource.project_id and policy.connector_instance_id=resource.connector_instance_id
+  and ownership.remote_flight_id=coalesce(resource.inspection_flight_id,flight.remote_id)
+ left join device_adapters policy on policy.project_id=resource.project_id and policy.id=resource.connector_instance_id
  left join perception_events event on event.project_id=resource.project_id and resource.canonical_target_type='perception_event' and resource.canonical_target_id=event.id::text
  left join issue_links link on link.project_id=resource.project_id and link.link_type='perception_event' and link.target_id=event.id::text
  where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.resource_kind='ai-alert' and resource.status='active'

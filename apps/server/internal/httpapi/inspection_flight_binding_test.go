@@ -38,10 +38,10 @@ func TestInspectionFlightBindingRejectsMisassociation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var job string
-	if err := f.db.QueryRow(`insert into connector_action_jobs(project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,approval_request_id,requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json) values($1,$2,$3,$4,$5,$6,$7,$8,'flight-task-create','binding-test-key',$9,'{}') returning id::text`, pid, team, cid, flight, did, wayline, approval, user, strings.Repeat("a", 64)).Scan(&job); err != nil {
+	if err := f.db.QueryRow(`insert into connector_jobs(job_type,project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,approval_request_id,requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json) values('flight',$1,$2,$3,$4,$5,$6,$7,$8,'flight-task-create','binding-test-key',$9,'{}') returning id::text`, pid, team, cid, flight, did, wayline, approval, user, strings.Repeat("a", 64)).Scan(&job); err != nil {
 		t.Fatal(err)
 	}
-	query := `insert into inspection_flight_bindings(project_id,team_id,business_run_id,business_step_id,connector_instance_id,flight_run_id,action_job_id) values($1,$2,$3,$4,$5,$6,$7)`
+	query := `update connector_jobs set business_run_id=$3,business_step_id=$4,business_bound_at=now() where project_id=$1 and team_id=$2 and connector_instance_id=$5 and task_run_id=$6 and id=$7 and job_type='flight' and business_step_id is null`
 	for _, bad := range []struct {
 		name                   string
 		project, connector     int
@@ -54,7 +54,11 @@ func TestInspectionFlightBindingRejectsMisassociation(t *testing.T) {
 		{"wrong project", pid + 999, cid, business, businessStep, flight},
 	} {
 		t.Run(bad.name, func(t *testing.T) {
-			if _, err := f.db.Exec(query, bad.project, team, bad.business, bad.step, bad.connector, bad.flight, job); err == nil {
+			if result, err := f.db.Exec(query, bad.project, team, bad.business, bad.step, bad.connector, bad.flight, job); err == nil {
+				count, _ := result.RowsAffected()
+				if count == 0 {
+					return
+				}
 				t.Fatal("invalid binding accepted")
 			}
 		})
@@ -62,8 +66,11 @@ func TestInspectionFlightBindingRejectsMisassociation(t *testing.T) {
 	if _, err := f.db.Exec(query, pid, team, business, businessStep, cid, flight, job); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.db.Exec(query, pid, team, otherRun, otherStep, cid, flight, job); err == nil {
-		t.Fatal("shared flight action accepted")
+	if result, err := f.db.Exec(query, pid, team, otherRun, otherStep, cid, flight, job); err == nil {
+		count, _ := result.RowsAffected()
+		if count > 0 {
+			t.Fatal("shared flight action accepted")
+		}
 	}
 	if _, err := f.db.Exec(`update task_runs set status='succeeded',finished_at=now() where id=$1`, flight); err != nil {
 		t.Fatal(err)

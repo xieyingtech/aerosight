@@ -73,7 +73,7 @@ func readMissionAudit(ctx context.Context, q *sqlcgen.Queries, pid, id int32) (m
 	if run.TaskVersionID.Valid {
 		versionID = sql.NullString{String: strconv.FormatInt(run.TaskVersionID.Int64, 10), Valid: true}
 	}
-	request, err := q.GetMissionAuditRequest(ctx, sqlcgen.GetMissionAuditRequestParams{ProjectID: pid, RunID: strconv.Itoa(int(id)), VersionID: versionID})
+	request, err := q.GetMissionAuditRequest(ctx, sqlcgen.GetMissionAuditRequestParams{ProjectID: sql.NullInt32{Int32: pid, Valid: true}, RunID: strconv.Itoa(int(id)), VersionID: versionID})
 	var requested *mission.AuditRequest
 	if err == nil {
 		actorType := "user"

@@ -150,6 +150,19 @@ func TestVideoAnalysisBackgroundAndPlaybackAnnotations(t *testing.T) {
 		}
 	}
 	initialCalls := calls
+	var assetCount, attemptCount int
+	if err = f.db.QueryRow(`select count(*) from assets where project_id=$1`, pid).Scan(&assetCount); err != nil || assetCount != 1 {
+		t.Fatal("ordinary frames created material rows", assetCount, err)
+	}
+	if err = f.db.QueryRow(`select count(*) from algorithm_run_attempts where algorithm_run_id=$1`, id).Scan(&attemptCount); err != nil || attemptCount != 0 {
+		t.Fatal("frame diagnostics stored in business database", attemptCount, err)
+	}
+	for index := range frames {
+		key := fmt.Sprintf("projects/%d/algorithm-runs/%s/frames/%06d.attempts.json", pid, id, index)
+		if object, err := storage.GetObject(ctx, key); err != nil || !json.Valid(object.Body) {
+			t.Fatal("frame diagnostics missing from object storage", index, err)
+		}
+	}
 	// Simulate a restart after frame artifacts were saved but completion was lost.
 	if _, err = f.db.Exec(`update algorithm_runs set status='running' where id=$1`, id); err != nil {
 		t.Fatal(err)

@@ -31,7 +31,7 @@ func (q *Queries) CompleteIdempotency(ctx context.Context, arg CompleteIdempoten
 }
 
 const completePlatformAudit = `-- name: CompletePlatformAudit :execrows
-UPDATE platform_audit_events SET status='completed',result_hash=$2,completed_at=now() WHERE id=$1
+UPDATE audit_events SET status='completed',result_hash=$2,completed_at=now() WHERE id=$1 AND scope='platform'
 `
 
 type CompletePlatformAuditParams struct {
@@ -54,7 +54,7 @@ UPDATE audit_events SET status='completed',result_hash=$2,completed_at=now() WHE
 type CompleteProjectAuditParams struct {
 	ID         int64          `json:"id"`
 	ResultHash sql.NullString `json:"result_hash"`
-	ProjectID  int32          `json:"project_id"`
+	ProjectID  sql.NullInt32  `json:"project_id"`
 }
 
 func (q *Queries) CompleteProjectAudit(ctx context.Context, arg CompleteProjectAuditParams) (int64, error) {
@@ -92,12 +92,12 @@ func (q *Queries) EnqueueProjectEvent(ctx context.Context, arg EnqueueProjectEve
 }
 
 const insertPlatformAudit = `-- name: InsertPlatformAudit :one
-INSERT INTO platform_audit_events(actor_user_id,request_id,action,resource_type,resource_id,input_hash)
-VALUES($1,$2,$3,$4,$5,$6) RETURNING id
+INSERT INTO audit_events(scope,actor_user_id,request_id,action,resource_type,resource_id,input_hash)
+VALUES('platform',$1,$2,$3,$4,$5,$6) RETURNING id
 `
 
 type InsertPlatformAuditParams struct {
-	ActorUserID  int32          `json:"actor_user_id"`
+	ActorUserID  sql.NullInt32  `json:"actor_user_id"`
 	RequestID    string         `json:"request_id"`
 	Action       string         `json:"action"`
 	ResourceType string         `json:"resource_type"`
@@ -125,8 +125,8 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
 `
 
 type InsertProjectAuditParams struct {
-	ProjectID      int32           `json:"project_id"`
-	TeamID         int32           `json:"team_id"`
+	ProjectID      sql.NullInt32   `json:"project_id"`
+	TeamID         sql.NullInt32   `json:"team_id"`
 	RequestID      string          `json:"request_id"`
 	IdempotencyKey sql.NullString  `json:"idempotency_key"`
 	ActorUserID    sql.NullInt32   `json:"actor_user_id"`

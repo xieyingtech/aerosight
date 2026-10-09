@@ -30,11 +30,11 @@ select project.team_id::int as "teamId",
 ) r;
 
 -- name: FHMemberInsert :one
-insert into connector_management_write_jobs(
+insert into connector_jobs(job_type,
         id,project_id,team_id,connector_instance_id,requested_by_user_id,approval_request_id,action_kind,capability_code,
         feature_flag,idempotency_key,request_digest,request_envelope_json,preview_digest,preview_json)
-      values(sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),'project-member-upsert',sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13))
-      on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
+      values('management',sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),'project-member-upsert',sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13))
+      on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
 
 -- name: FHMemberExisting :many
 SELECT to_jsonb(r) FROM (

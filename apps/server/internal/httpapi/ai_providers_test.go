@@ -88,7 +88,7 @@ func TestAIProviderManagement(t *testing.T) {
 	auditCount := func() int {
 		t.Helper()
 		var n int
-		if err := f.db.QueryRow("select count(*) from platform_audit_events").Scan(&n); err != nil {
+		if err := f.db.QueryRow("select count(*) from audit_events where scope='platform'").Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		return n

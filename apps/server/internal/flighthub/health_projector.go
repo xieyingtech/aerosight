@@ -127,7 +127,7 @@ func projectHMSAlert(ctx context.Context, tx *sql.Tx, instance connector.Instanc
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id)
-		values($1,$2,'device',$3) on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, issueID, strconv.Itoa(device.DeviceID)); err != nil {
+		values($1,$2,'device',$3) on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, issueID, strconv.Itoa(device.DeviceID)); err != nil {
 		return err
 	}
 	if created || previousStatus != status {

@@ -12,7 +12,7 @@ import (
 func claimInspectionActionFlight(ctx context.Context, tx *sql.Tx, job FlightActionJob, remoteID string) error {
 	var businessRun int64
 	var knownRemote sql.NullString
-	err := tx.QueryRowContext(ctx, `select b.business_run_id,r.remote_id from inspection_flight_bindings b join connector_action_jobs j on j.id=b.action_job_id and j.project_id=b.project_id left join connector_remote_resources r on r.id=j.remote_result_resource_id and r.project_id=j.project_id where b.project_id=$1 and b.action_job_id=$2 and b.connector_instance_id=$3 and b.flight_run_id=$4 for update of j`, job.ProjectID, job.ID, job.ConnectorInstanceID, job.TaskRunID).Scan(&businessRun, &knownRemote)
+	err := tx.QueryRowContext(ctx, `select j.business_run_id,r.remote_id from connector_jobs j left join connector_remote_resources r on r.id=j.remote_result_resource_id and r.project_id=j.project_id where j.project_id=$1 and j.id=$2 and j.connector_instance_id=$3 and j.task_run_id=$4 and j.job_type='flight' and j.business_step_id is not null for update of j`, job.ProjectID, job.ID, job.ConnectorInstanceID, job.TaskRunID).Scan(&businessRun, &knownRemote)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

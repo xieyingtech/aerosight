@@ -61,7 +61,7 @@ func AuditedWrite[T any](ctx context.Context, db *sql.DB, a AuditContext, author
 		if err != nil {
 			return err
 		}
-		id, err := q.InsertProjectAudit(ctx, sqlcgen.InsertProjectAuditParams{ProjectID: a.ProjectID, TeamID: a.TeamID, RequestID: a.RequestID, IdempotencyKey: optionalString(a.IdempotencyKey), ActorUserID: optionalID(a.ActorUserID), ActorAgentID: optionalID(a.ActorAgentID), Action: a.Action, ResourceType: a.ResourceType, ResourceID: optionalString(a.ResourceID), InputHash: inputHash, PolicyResult: raw})
+		id, err := q.InsertProjectAudit(ctx, sqlcgen.InsertProjectAuditParams{ProjectID: optionalID(a.ProjectID), TeamID: optionalID(a.TeamID), RequestID: a.RequestID, IdempotencyKey: optionalString(a.IdempotencyKey), ActorUserID: optionalID(a.ActorUserID), ActorAgentID: optionalID(a.ActorAgentID), Action: a.Action, ResourceType: a.ResourceType, ResourceID: optionalString(a.ResourceID), InputHash: inputHash, PolicyResult: raw})
 		if err != nil {
 			return err
 		}
@@ -73,7 +73,7 @@ func AuditedWrite[T any](ctx context.Context, db *sql.DB, a AuditContext, author
 		if err != nil {
 			return err
 		}
-		return affectedOne(q.CompleteProjectAudit(ctx, sqlcgen.CompleteProjectAuditParams{ID: id, ProjectID: a.ProjectID, ResultHash: optionalString(resultHash)}))
+		return affectedOne(q.CompleteProjectAudit(ctx, sqlcgen.CompleteProjectAuditParams{ID: id, ProjectID: optionalID(a.ProjectID), ResultHash: optionalString(resultHash)}))
 	})
 	if err != nil {
 		var zero T
@@ -96,7 +96,7 @@ func AuditedPlatformWrite[T any](ctx context.Context, db *sql.DB, a AuditContext
 		if err != nil {
 			return err
 		}
-		id, err := q.InsertPlatformAudit(ctx, sqlcgen.InsertPlatformAuditParams{ActorUserID: a.ActorUserID, RequestID: a.RequestID, Action: a.Action, ResourceType: a.ResourceType, ResourceID: optionalString(a.ResourceID), InputHash: hash})
+		id, err := q.InsertPlatformAudit(ctx, sqlcgen.InsertPlatformAuditParams{ActorUserID: optionalID(a.ActorUserID), RequestID: a.RequestID, Action: a.Action, ResourceType: a.ResourceType, ResourceID: optionalString(a.ResourceID), InputHash: hash})
 		if err != nil {
 			return err
 		}

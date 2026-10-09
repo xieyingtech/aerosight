@@ -235,7 +235,7 @@ func (processor *TaskStepProcessor) createOrUpdate(ctx context.Context, tx *sql.
 	}
 	for _, link := range links {
 		if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id)
-			values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) do nothing`, record.ProjectID, issueID, link.kind, link.id); err != nil {
+			values($1,$2,$3,$4) on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, record.ProjectID, issueID, link.kind, link.id); err != nil {
 			return err
 		}
 	}

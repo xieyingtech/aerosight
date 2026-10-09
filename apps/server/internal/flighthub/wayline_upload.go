@@ -130,11 +130,11 @@ func (store *SQLWaylineUploadStore) Create(ctx context.Context, request WaylineU
 		return job, err
 	}
 	name := reconciliationWaylineName(request)
-	err = tx.QueryRowContext(ctx, `insert into connector_object_upload_jobs(
+	err = tx.QueryRowContext(ctx, `insert into connector_jobs(job_type,
 		project_id,team_id,connector_instance_id,operation_kind,source_asset_id,requested_by_user_id,
 		idempotency_key,requested_name,reconciliation_name
-	) values($1,$2,$3,'wayline',$4,$5,$6,$7,$8)
-	 on conflict(project_id,connector_instance_id,operation_kind,idempotency_key) do nothing returning id::text`,
+	) values('object-upload',$1,$2,$3,'wayline',$4,$5,$6,$7,$8)
+	 on conflict(job_type,project_id,connector_instance_id,operation_kind,idempotency_key) do nothing returning id::text`,
 		request.ProjectID, teamID, request.ConnectorInstanceID, request.SourceAssetID, request.RequestedByUserID,
 		request.IdempotencyKey, request.Name, name).Scan(&job.ID)
 	if errors.Is(err, sql.ErrNoRows) {

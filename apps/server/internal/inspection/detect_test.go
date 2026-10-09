@@ -84,7 +84,7 @@ func TestNativeDetectFreezesScopeAndDoesNotInferNoIssue(t *testing.T) {
 				if n == tc.alerts {
 					alertFlight = "other-" + flight
 				}
-				exec("insert into inspection_alert_sources(project_id,connector_instance_id,remote_resource_id,remote_flight_id,evidence_json) values($1,$2,$3,$4,$5)", project, adapter, resource, alertFlight, native)
+				exec("update connector_remote_resources set inspection_flight_id=$4,inspection_evidence_json=$5 where project_id=$1 and connector_instance_id=$2 and id=$3", project, adapter, resource, alertFlight, native)
 				if tc.missing {
 					exec("update connector_remote_resources set status='missing',missing_at=now() where id=$1", resource)
 				}
@@ -144,7 +144,7 @@ func TestNativeDetectFreezesScopeAndDoesNotInferNoIssue(t *testing.T) {
 					t.Fatalf("semantics lost: %s", frozen)
 				}
 			}
-			exec("update inspection_alert_sources set evidence_json='{}' where project_id=$1 and remote_flight_id=$2", project, flight)
+			exec("update connector_remote_resources set inspection_evidence_json='{}' where project_id=$1 and inspection_flight_id=$2", project, flight)
 			var after []byte
 			if err := db.QueryRow("select evidence_json from inspection_evidence_sets where task_run_step_id=$1", detectStep).Scan(&after); err != nil {
 				t.Fatal(err)

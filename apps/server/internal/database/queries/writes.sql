@@ -6,11 +6,11 @@ VALUES(sqlc.arg(project_id),sqlc.arg(team_id),sqlc.arg(request_id),sqlc.narg(ide
 UPDATE audit_events SET status='completed',result_hash=$2,completed_at=now() WHERE id=$1 AND project_id=$3;
 
 -- name: InsertPlatformAudit :one
-INSERT INTO platform_audit_events(actor_user_id,request_id,action,resource_type,resource_id,input_hash)
-VALUES($1,$2,$3,$4,$5,$6) RETURNING id;
+INSERT INTO audit_events(scope,actor_user_id,request_id,action,resource_type,resource_id,input_hash)
+VALUES('platform',$1,$2,$3,$4,$5,$6) RETURNING id;
 
 -- name: CompletePlatformAudit :execrows
-UPDATE platform_audit_events SET status='completed',result_hash=$2,completed_at=now() WHERE id=$1;
+UPDATE audit_events SET status='completed',result_hash=$2,completed_at=now() WHERE id=$1 AND scope='platform';
 
 -- name: PublishProjectEvent :one
 INSERT INTO project_events(project_id,team_id,event_id,event_type,payload_json,occurred_at)

@@ -114,7 +114,7 @@ func TestTaskManagedAlertNewUpdateMissingAndLegacyRelease(t *testing.T) {
 	}
 	var raw []byte
 	var hasConfidence bool
-	if err := db.QueryRow(`select source.evidence_json,resource.summary_json ? 'confidence' from inspection_alert_sources source join connector_remote_resources resource on resource.id=source.remote_resource_id and resource.project_id=source.project_id where resource.project_id=$1 and resource.remote_id=$2`, project, early.AlertUUID).Scan(&raw, &hasConfidence); err != nil {
+	if err := db.QueryRow(`select resource.inspection_evidence_json,resource.summary_json ? 'confidence' from connector_remote_resources resource where resource.project_id=$1 and resource.remote_id=$2`, project, early.AlertUUID).Scan(&raw, &hasConfidence); err != nil {
 		t.Fatal(err)
 	}
 	var evidence map[string]any

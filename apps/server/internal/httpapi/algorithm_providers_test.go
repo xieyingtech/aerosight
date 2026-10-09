@@ -92,6 +92,11 @@ func TestAlgorithmProviderManagement(t *testing.T) {
 	if got := call("PATCH", item, active, 200); got["status"] != "active" {
 		t.Fatalf("active %+v", got)
 	}
+	// Replacing credentials encrypts a fresh envelope; compare the blank update
+	// against this latest envelope, rather than the one before replacement.
+	if err := f.db.QueryRow("select credential_envelope_json from algorithm_providers where id=$1", id).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
 	blank := strings.Replace(active, " secret-token ", " ", 1)
 	call("PATCH", item, blank, 200)
 	var retained []byte

@@ -784,7 +784,7 @@ func TestInspectionExternalFormalAPIAndHTTPConsumer(t *testing.T) {
 				t.Fatal("replay dispatched provider")
 			}
 			if name == "assess rollback" {
-				for _, table := range []string{"issues", "issue_links", "inspection_issue_sources"} {
+				for _, table := range []string{"issues", "issue_links"} {
 					var count int
 					if err := f.db.QueryRow("select count(*) from "+table+" where project_id=$1", pid).Scan(&count); err != nil || count != 0 {
 						t.Fatal("half batch persisted", table, count, err)

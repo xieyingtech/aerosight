@@ -37,7 +37,11 @@ type copilotJob struct {
 }
 
 type evidenceRef struct {
-	Type, ID, Version, ObservedAt, Quality string
+	Type       string `json:"type"`
+	ID         string `json:"id"`
+	Version    string `json:"version"`
+	ObservedAt string `json:"observedAt"`
+	Quality    string `json:"quality"`
 }
 
 type issueContext struct {
@@ -284,12 +288,17 @@ func (processor JobProcessor) succeed(ctx context.Context, job copilotJob, draft
 		draftID, job.ProjectID, job.TeamID, fmt.Sprintf("案件 #%d Copilot 分析草案", job.IssueID), resultPayload, modelID, issueCopilotPromptVersion, evidenceHash, job.ID); err != nil {
 		return err
 	}
-	for _, ref := range refs {
-		if _, err := tx.ExecContext(ctx, `insert into agent_draft_evidence(project_id,agent_draft_id,reference_type,reference_id,reference_version,observed_at,quality)
-			values($1,$2,$3,$4,$5,$6,$7) on conflict do nothing`, job.ProjectID, draftID, ref.Type, ref.ID, ref.Version, ref.ObservedAt, ref.Quality); err != nil {
-			return err
-		}
+	if refs == nil {
+		refs = []evidenceRef{}
 	}
+	evidence, err := json.Marshal(refs)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `update agent_drafts set evidence_refs_json=$3 where project_id=$1 and id=$2`, job.ProjectID, draftID, evidence); err != nil {
+		return err
+	}
+
 	if _, err := tx.ExecContext(ctx, `update agent_tool_jobs set status='succeeded',result_json=jsonb_build_object('draftId',$2::text),finished_at=now()
 		where id=$1 and status='running'`, job.ID, draftID); err != nil {
 		return err

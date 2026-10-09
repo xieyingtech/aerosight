@@ -107,10 +107,9 @@ func (s *Server) missionReadRoutes() {
 			var deviceID int32
 			var remoteID string
 			err = s.db.QueryRowContext(c.Request.Context(), `select job.device_id,resource.remote_id
-			 from connector_action_jobs job
+			 from connector_jobs job
 			 join connector_remote_resources resource on resource.id=job.remote_result_resource_id and resource.project_id=job.project_id
-			 left join inspection_flight_bindings binding on binding.action_job_id=job.id and binding.project_id=job.project_id
-			 where job.project_id=$1 and (job.task_run_id=$2 or binding.business_run_id=$2)
+			 where job.project_id=$1 and job.job_type='flight' and (job.task_run_id=$2 or job.business_run_id=$2)
 			 and job.action_kind='flight-task-create' and job.accepted_at is not null
 			 order by job.accepted_at desc limit 1`, a.ProjectID, id).Scan(&deviceID, &remoteID)
 			if err != nil && err != sql.ErrNoRows {

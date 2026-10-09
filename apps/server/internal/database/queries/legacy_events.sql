@@ -31,16 +31,19 @@ select detection.id::text,detection.label,detection.confidence,
     nullif(version.protocol_config_json->>'mappingVersion','') as "mappingVersion",
     asset.id as "inputAssetId",asset.version as "assetVersion",asset.checksum_sha256 as "assetChecksumSha256",
     asset.mime_type as "mimeType",detection.captured_at as "capturedAt"
-    from detection_group_members member join detections detection on detection.id=member.detection_id and detection.project_id=member.project_id
+    from detections detection
     join algorithm_runs run on run.id=detection.algorithm_run_id and run.project_id=detection.project_id
     join algorithm_definition_versions version on version.id=run.algorithm_definition_version_id and version.project_id=run.project_id
     join assets asset on asset.id=detection.input_asset_id and asset.project_id=detection.project_id
-    where member.project_id=$1 and member.detection_group_id=$2 order by detection.captured_at
+    where detection.project_id=$1 and detection.group_id=$2 order by detection.captured_at
 ) r;
 
 -- name: GetLegacyPerceptionFeedback :many
 SELECT to_jsonb(r) FROM (
-select feedback.id::text,feedback.action,feedback.value_json as value,feedback.reason,
-    actor.name as "actorName",feedback.created_at as "createdAt" from event_feedback feedback join users actor on actor.id=feedback.actor_user_id
-    where feedback.project_id=$1 and feedback.perception_event_id=$2 order by feedback.created_at
+select feedback.item->>'id' as id,feedback.item->>'action' as action,feedback.item->'value_json' as value,
+    feedback.item->>'reason' as reason,coalesce(actor.name,feedback.item->>'actor_name') as "actorName",
+    (feedback.item->>'created_at')::timestamptz as "createdAt"
+    from perception_events event cross join lateral jsonb_array_elements(event.legacy_feedback_json) feedback(item)
+    left join users actor on actor.id=(feedback.item->>'actor_user_id')::integer
+    where event.project_id=$1 and event.id=$2 order by (feedback.item->>'created_at')::timestamptz,(feedback.item->>'id')::bigint
 ) r;

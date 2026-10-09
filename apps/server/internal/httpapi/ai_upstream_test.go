@@ -145,7 +145,7 @@ func TestAIProviderHealth(t *testing.T) {
 		t.Fatalf("SDK retried %d", calls)
 	}
 	var audits int
-	if err := f.db.QueryRow("select count(*) from platform_audit_events where action='ai_provider.test'").Scan(&audits); err != nil || audits != 4 {
+	if err := f.db.QueryRow("select count(*) from audit_events where scope='platform' and action='ai_provider.test'").Scan(&audits); err != nil || audits != 4 {
 		t.Fatalf("audits %d %v", audits, err)
 	}
 	f.server.networkResolver = func(context.Context, string) ([]netip.Addr, error) {

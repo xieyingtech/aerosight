@@ -194,92 +194,39 @@ func (ingestor *Ingestor) insertPoseObservation(ctx context.Context, tx *sql.Tx,
 		"verticalAccuracyMeters":   pose.VerticalAccuracyMeters,
 		"attitudeAccuracyDegrees":  pose.AttitudeAccuracyDegrees,
 	})
-	var observationID int64
-	var observationQuery string
-	var observationArgs []any
-	altitude := valueOrZero(pose.AltitudeMeters)
-	if supportedCRS {
-		observationQuery = `
-			insert into observations (
-			  project_id, team_id, adapter_id, device_id, observation_type, source_event_id,
-			  captured_at, received_at, time_quality, original_crs_id,
-			  original_geometry, standard_geometry, properties_json, quality_json, validity, task_run_id
-			) values (
-			  $1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9,
-			  ST_SetSRID(ST_MakePoint($10, $11, $12), 4326),
-			  ST_SetSRID(ST_MakePoint($10, $11, $12), 4326), $13, $14, $15, $16
-			) returning id`
-		observationArgs = []any{
-			item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
-			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
-			pose.Longitude, pose.Latitude, altitude, properties, quality, validity, nullableInt(item.TaskRunID),
-		}
-	} else {
-		observationQuery = `
-			insert into observations (
-			  project_id, team_id, adapter_id, device_id, observation_type, source_event_id,
-			  captured_at, received_at, time_quality, original_crs_id,
-			  original_geometry, properties_json, quality_json, validity, task_run_id
-			) values ($1, $2, $3, $4, 'pose', $5, $6, $7, $8, $9,
-			  ST_MakePoint($10, $11, $12), $13, $14, $15, $16)
-			returning id`
-		observationArgs = []any{
-			item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
-			item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
-			pose.Longitude, pose.Latitude, altitude, properties, quality, validity, nullableInt(item.TaskRunID),
-		}
-	}
-	if err := tx.QueryRowContext(ctx, observationQuery, observationArgs...).Scan(&observationID); err != nil {
-		return err
-	}
-
-	if supportedCRS {
-		transformVersion := pose.TransformVersion
-		if transformVersion == "" {
-			transformVersion = "1"
-		}
-		_, err := tx.ExecContext(ctx, `
-			insert into poses (
-			  observation_id, project_id, device_id, captured_at,
-			  standard_position, original_position,
-			  orientation_x, orientation_y, orientation_z, orientation_w,
-			  velocity_x, velocity_y, velocity_z,
-			  horizontal_accuracy_m, vertical_accuracy_m, attitude_accuracy_deg,
-			  vertical_datum, transform_version, spatial_quality
-			) values (
-			  $1, $2, $3, $4,
-			  ST_SetSRID(ST_MakePoint($5, $6, $7), 4326),
-			  ST_SetSRID(ST_MakePoint($5, $6, $7), 4326),
-			  $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
-			)`, observationID, item.ProjectID, item.DeviceID, item.CapturedAt,
-			pose.Longitude, pose.Latitude, altitude,
-			quaternionValue(pose.Orientation, "x"), quaternionValue(pose.Orientation, "y"),
-			quaternionValue(pose.Orientation, "z"), quaternionValue(pose.Orientation, "w"),
-			vectorValue(pose.VelocityMetersPerSecond, "x"), vectorValue(pose.VelocityMetersPerSecond, "y"),
-			vectorValue(pose.VelocityMetersPerSecond, "z"), pose.HorizontalAccuracyMeters,
-			pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, transformVersion, spatialQuality)
-		return err
-	}
 	transformVersion := pose.TransformVersion
 	if transformVersion == "" {
 		transformVersion = "1"
 	}
+	// Position and generic observation share one row and one INSERT. Keep the
+	// typed pose fields separate so legacy pose timestamps and devices survive.
 	_, err := tx.ExecContext(ctx, `
-		insert into poses (
-		  observation_id, project_id, device_id, captured_at, original_position,
-		  orientation_x, orientation_y, orientation_z, orientation_w,
-		  velocity_x, velocity_y, velocity_z,
-		  horizontal_accuracy_m, vertical_accuracy_m, attitude_accuracy_deg,
-		  vertical_datum, transform_version, spatial_quality
-		) values ($1, $2, $3, $4, ST_MakePoint($5, $6, $7),
-		  $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'unusable')`,
-		observationID, item.ProjectID, item.DeviceID, item.CapturedAt,
-		pose.Longitude, pose.Latitude, altitude,
+		insert into observations (
+		  project_id,team_id,adapter_id,device_id,observation_type,source_event_id,
+		  captured_at,received_at,time_quality,original_crs_id,
+		  original_geometry,standard_geometry,properties_json,quality_json,validity,task_run_id,
+		  pose_device_id,pose_captured_at,pose_original_position,pose_standard_position,
+		  pose_orientation_x,pose_orientation_y,pose_orientation_z,pose_orientation_w,
+		  pose_velocity_x,pose_velocity_y,pose_velocity_z,
+		  pose_horizontal_accuracy_m,pose_vertical_accuracy_m,pose_attitude_accuracy_deg,
+		  pose_vertical_datum,pose_transform_version,pose_spatial_quality
+		) values (
+		  $1,$2,$3,$4,'pose',$5,$6,$7,$8,$9,
+		  CASE WHEN $17 THEN ST_SetSRID(ST_MakePoint($10,$11,$12),4326) ELSE ST_MakePoint($10,$11,$12) END,
+		  CASE WHEN $17 THEN ST_SetSRID(ST_MakePoint($10,$11,$12),4326) ELSE NULL END,
+		  $13,$14,$15,$16,$4,$6,
+		  CASE WHEN $17 THEN ST_SetSRID(ST_MakePoint($10,$11,$12),4326) ELSE ST_MakePoint($10,$11,$12) END,
+		  CASE WHEN $17 THEN ST_SetSRID(ST_MakePoint($10,$11,$12),4326) ELSE NULL END,
+		  $18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
+		)`, item.ProjectID, item.TeamID, item.AdapterID, item.DeviceID, item.EventID,
+		item.CapturedAt, item.ReceivedAt, timeQuality, nullableInt64(crsID),
+		pose.Longitude, pose.Latitude, valueOrZero(pose.AltitudeMeters), properties, quality, validity,
+		nullableInt(item.TaskRunID), supportedCRS,
 		quaternionValue(pose.Orientation, "x"), quaternionValue(pose.Orientation, "y"),
 		quaternionValue(pose.Orientation, "z"), quaternionValue(pose.Orientation, "w"),
 		vectorValue(pose.VelocityMetersPerSecond, "x"), vectorValue(pose.VelocityMetersPerSecond, "y"),
 		vectorValue(pose.VelocityMetersPerSecond, "z"), pose.HorizontalAccuracyMeters,
-		pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, transformVersion)
+		pose.VerticalAccuracyMeters, pose.AttitudeAccuracyDegrees, pose.VerticalDatum, transformVersion, spatialQuality)
 	return err
 }
 

@@ -79,11 +79,10 @@ func (p *DetectProcessor) Handler(ctx context.Context, tx *sql.Tx, event outbox.
 	if err = ClaimAlertFlight(ctx, tx, step.ProjectID, observation.Flight.ConnectorID, observation.Flight.FlightUUID, int64(step.RunID)); err != nil {
 		return err
 	}
-	rows, err := tx.QueryContext(ctx, `select source.remote_resource_id,source.evidence_json,resource.status
- from inspection_alert_sources source join connector_remote_resources resource
- on resource.id=source.remote_resource_id and resource.project_id=source.project_id and resource.connector_instance_id=source.connector_instance_id
- where source.project_id=$1 and source.connector_instance_id=$2 and source.remote_flight_id=$3
- order by source.remote_resource_id limit 1001`, step.ProjectID, observation.Flight.ConnectorID, observation.Flight.FlightUUID)
+	rows, err := tx.QueryContext(ctx, `select resource.id,resource.inspection_evidence_json,resource.status
+ from connector_remote_resources resource
+ where resource.project_id=$1 and resource.connector_instance_id=$2 and resource.inspection_flight_id=$3
+ order by resource.id limit 1001`, step.ProjectID, observation.Flight.ConnectorID, observation.Flight.FlightUUID)
 	if err != nil {
 		return err
 	}

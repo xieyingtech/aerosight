@@ -33,7 +33,7 @@ func CandidateSourceKeys(ctx context.Context, tx *sql.Tx, e EvidenceSet, o Obser
 				return nil, errors.New("INSPECTION_SOURCE_IDENTITY_INVALID")
 			}
 			var alertID string
-			err := tx.QueryRowContext(ctx, `select resource.remote_id from connector_remote_resources resource join inspection_alert_sources source on source.remote_resource_id=resource.id and source.project_id=resource.project_id and source.connector_instance_id=resource.connector_instance_id where resource.project_id=$1 and resource.id=$2 and source.connector_instance_id=$3 and source.remote_flight_id=$4`, e.Run.ProjectID, resourceID, o.Flight.ConnectorID, o.Flight.FlightUUID).Scan(&alertID)
+			err := tx.QueryRowContext(ctx, `select resource.remote_id from connector_remote_resources resource where resource.project_id=$1 and resource.id=$2 and resource.connector_instance_id=$3 and resource.inspection_flight_id=$4`, e.Run.ProjectID, resourceID, o.Flight.ConnectorID, o.Flight.FlightUUID).Scan(&alertID)
 			if err != nil {
 				return nil, err
 			}
@@ -84,7 +84,7 @@ func LinkedIssues(ctx context.Context, tx *sql.Tx, e EvidenceSet, o Observation)
 	loadedSuggestions := false
 	for _, candidate := range e.Candidates {
 		item := LinkedIssue{CandidateID: candidate.ID}
-		err = tx.QueryRowContext(ctx, `select issue.id,issue.title,issue.status from inspection_issue_sources source join issues issue on issue.id=source.issue_id and issue.project_id=source.project_id where source.project_id=$1 and source.source_key=$2`, e.Run.ProjectID, keys[candidate.ID]).Scan(&item.IssueID, &item.Title, &item.Status)
+		err = tx.QueryRowContext(ctx, `select issue.id,issue.title,issue.status from issue_links source join issues issue on issue.id=source.issue_id and issue.project_id=source.project_id where source.project_id=$1 and source.source_key=$2`, e.Run.ProjectID, keys[candidate.ID]).Scan(&item.IssueID, &item.Title, &item.Status)
 		if errors.Is(err, sql.ErrNoRows) {
 			if !loadedSuggestions {
 				// Relevant labels/text rank ahead of recency, so older matching

@@ -417,7 +417,7 @@ func TestInspectionAssessmentQueueAndModelWithoutIssue(t *testing.T) {
 		if err != nil || len(suggested) != 1 || suggested[0].IssueID != issueID {
 			t.Fatal("foreign or closed issue offered", suggested, err)
 		}
-		if _, err = tx.Exec("insert into inspection_issue_sources(project_id,source_key,issue_id,assessment_id) values($1,$2,$3,$4)", project, keys[batch.Candidates[0].ID], issueID, reviewID); err != nil {
+		if _, err = tx.Exec("insert into issue_links(project_id,source_key,issue_id,assessment_id,link_type,target_id) values($1,$2,$3,$4::uuid,'inspection_source',$4::uuid::text)", project, keys[batch.Candidates[0].ID], issueID, reviewID); err != nil {
 			t.Fatal(err)
 		}
 		linked, err := inspection.LinkedIssues(ctx, tx, batch, observation)

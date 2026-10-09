@@ -151,12 +151,20 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 	}
 	var correlationStatus string
 	err = tx.QueryRowContext(ctx, `
-		insert into device_command_protocol_correlations (
-		  project_id,team_id,command_id,adapter_id,mapping_version,transaction_id,business_id,
-		  method,request_topic,request_payload_json,status
-		) values ($1,$2,$3::uuid,$4,$5,$6,$7,$8,$9,$10,'prepared')
-		on conflict (command_id) do update set command_id=excluded.command_id
-		returning status`, event.ProjectID, event.TeamID, command.ID, command.AdapterID,
+		update device_commands set
+		  protocol_correlation_id=coalesce(protocol_correlation_id,nextval('device_commands_protocol_correlation_id_seq')),
+		  protocol_adapter_id=coalesce(protocol_adapter_id,$4),
+		  protocol_mapping_version=coalesce(protocol_mapping_version,$5),
+		  protocol_transaction_id=coalesce(protocol_transaction_id,$6),
+		  protocol_business_id=coalesce(protocol_business_id,$7),
+		  protocol_method=coalesce(protocol_method,$8),
+		  protocol_request_topic=coalesce(protocol_request_topic,$9),
+		  protocol_request_payload_json=coalesce(protocol_request_payload_json,$10),
+		  protocol_status=coalesce(protocol_status,'prepared'),
+		  protocol_created_at=coalesce(protocol_created_at,now()),
+		  protocol_updated_at=coalesce(protocol_updated_at,now())
+		where project_id=$1 and team_id=$2 and id=$3::uuid
+		returning protocol_status`, event.ProjectID, event.TeamID, command.ID, command.AdapterID,
 		service.MappingVersion, service.TransactionID, service.BusinessID, service.Method,
 		service.Topic, redactLiveServicePayload(service.Payload)).Scan(&correlationStatus)
 	if err != nil {
@@ -177,8 +185,8 @@ func (dispatcher *CommandDispatcher) DispatchHandler(ctx context.Context, tx *sq
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		update device_command_protocol_correlations set status='sent',sent_at=$2,updated_at=now()
-		where command_id=$1::uuid and status='prepared'`, command.ID, now); err != nil {
+		update device_commands set protocol_status='sent',protocol_sent_at=$2,protocol_updated_at=now()
+		where id=$1::uuid and protocol_status='prepared'`, command.ID, now); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `update device_commands set status='sent',result_json=result_json||$3,completed_at=null
@@ -278,9 +286,9 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 		return nil
 	}
 	if status == "unknown" {
-		_, err := tx.ExecContext(ctx, `update device_command_protocol_correlations
-			set reply_event_id=$2,reply_result=$3,reply_payload_json=$4,replied_at=$5,updated_at=now()
-			where command_id=$1::uuid and status='unknown'`,
+		_, err := tx.ExecContext(ctx, `update device_commands
+			set protocol_reply_event_id=$2,protocol_reply_result=$3,protocol_reply_payload_json=$4,protocol_replied_at=$5,protocol_updated_at=now()
+			where id=$1::uuid and protocol_status='unknown'`,
 			commandID, envelope.EventID, reply.Result, payload.Data, dispatcher.now().UTC())
 		return err
 	}
@@ -290,9 +298,9 @@ func (dispatcher *CommandDispatcher) ReplyHandler(ctx context.Context, tx *sql.T
 	}
 	now := dispatcher.now().UTC()
 	if _, err := tx.ExecContext(ctx, `
-		update device_command_protocol_correlations
-		set status=$2,reply_event_id=$3,reply_result=$4,reply_payload_json=$5,replied_at=$6,updated_at=now()
-		where command_id=$1::uuid and status in ('prepared','sent')`,
+		update device_commands
+		set protocol_status=$2,protocol_reply_event_id=$3,protocol_reply_result=$4,protocol_reply_payload_json=$5,protocol_replied_at=$6,protocol_updated_at=now()
+		where id=$1::uuid and protocol_status in ('prepared','sent')`,
 		commandID, protocolStatus, envelope.EventID, reply.Result, payload.Data, now); err != nil {
 		return err
 	}
@@ -383,8 +391,8 @@ func (dispatcher *CommandDispatcher) ExpireUnknown(ctx context.Context, database
 			where id=$1::uuid and status='sent'`, command.ID, now); err != nil {
 			return 0, err
 		}
-		if _, err := tx.ExecContext(ctx, `update device_command_protocol_correlations
-			set status='unknown',updated_at=now() where command_id=$1::uuid and status='sent'`, command.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `update device_commands
+			set protocol_status='unknown',protocol_updated_at=now() where id=$1::uuid and protocol_status='sent'`, command.ID); err != nil {
 			return 0, err
 		}
 		if _, err := tx.ExecContext(ctx, `update command_attempts set status='timed_out',error_code='DJI_REPLY_TIMEOUT'

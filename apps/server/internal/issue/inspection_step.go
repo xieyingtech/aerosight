@@ -104,7 +104,7 @@ func (processor *TaskStepProcessor) inspectionAssessment(ctx context.Context, tx
 		}
 		key := keys[d.CandidateID]
 		var linked int64
-		err = tx.QueryRowContext(ctx, "select issue_id from inspection_issue_sources where project_id=$1 and source_key=$2", step.ProjectID, key).Scan(&linked)
+		err = tx.QueryRowContext(ctx, "select issue_id from issue_links where project_id=$1 and source_key=$2", step.ProjectID, key).Scan(&linked)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
@@ -162,7 +162,7 @@ func (processor *TaskStepProcessor) inspectionAssessment(ctx context.Context, tx
 			if err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, "insert into inspection_issue_sources(project_id,source_key,issue_id,assessment_id) values($1,$2,$3,$4)", step.ProjectID, key, issueID, input.AssessmentID); err != nil {
+			if _, err = tx.ExecContext(ctx, "insert into issue_links(project_id,source_key,issue_id,assessment_id,link_type,target_id) values($1,$2,$3,$4::uuid,'inspection_source',$4::uuid::text)", step.ProjectID, key, issueID, input.AssessmentID); err != nil {
 				return err
 			}
 			metadata := map[string]any{"assessmentId": input.AssessmentID, "revision": revision, "taskRunId": step.RunID, "taskRunStepId": step.StepID, "sourceKey": key}
@@ -186,7 +186,7 @@ func (processor *TaskStepProcessor) inspectionAssessment(ctx context.Context, tx
 		}
 		for kind, targets := range links {
 			for _, target := range targets {
-				if _, err = tx.ExecContext(ctx, "insert into issue_links(project_id,issue_id,link_type,target_id,created_by_user_id) values($1,$2,$3,$4,$5) on conflict(issue_id,link_type,target_id) do nothing", step.ProjectID, issueID, kind, target, step.UserID); err != nil {
+				if _, err = tx.ExecContext(ctx, "insert into issue_links(project_id,issue_id,link_type,target_id,created_by_user_id) values($1,$2,$3,$4,$5) on conflict(issue_id,link_type,target_id) where source_key is null do nothing", step.ProjectID, issueID, kind, target, step.UserID); err != nil {
 					return err
 				}
 			}

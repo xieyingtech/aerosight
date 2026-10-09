@@ -194,7 +194,7 @@ func (s *Server) fhModelAction(c *gin.Context) {
 		if e = authorizeFHModel(pid, cid, input, row); e != nil {
 			return nil, e
 		}
-		inserted, e := q.FHModelInsert(ctx, sqlcgen.FHModelInsertParams{P1: job, P2: pid, P3: a.TeamID, P4: cid, P5: target, P6: approval, P7: uid, P8: action, P9: policy.capability, P10: policy.flag, P11: key, P12: fhString(input["expectedRemoteVersion"]), P13: fhString(input["previewDigest"]), P14: digest, P15: envelopeJSON})
+		inserted, e := q.FHModelInsert(ctx, sqlcgen.FHModelInsertParams{P1: job, P2: pid, P3: a.TeamID, P4: cid, P5: sql.NullInt64{Int64: target, Valid: true}, P6: uuid.NullUUID{UUID: approval, Valid: true}, P7: uid, P8: action, P9: policy.capability, P10: policy.flag, P11: key, P12: sql.NullString{String: fhString(input["expectedRemoteVersion"]), Valid: true}, P13: fhString(input["previewDigest"]), P14: digest, P15: envelopeJSON})
 		id, status, reused := inserted.ID, inserted.Status, false
 		if errors.Is(e, sql.ErrNoRows) {
 			raw, e = q.FHModelExisting(ctx, sqlcgen.FHModelExistingParams{P1: pid, P2: cid, P3: action, P4: key})

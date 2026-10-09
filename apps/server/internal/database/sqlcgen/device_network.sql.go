@@ -101,7 +101,7 @@ func (q *Queries) InsertDJINetworkProfile(ctx context.Context, arg InsertDJINetw
 const insertDJISetupAdapter = `-- name: InsertDJISetupAdapter :one
 WITH inserted AS (
  INSERT INTO device_adapters(project_id,team_id,name,adapter_type,vendor,protocol_version,status,config_json,network_profile_id)
- VALUES($1,$2,$3,'dji','dji','cloud-api-mqtt5','connecting',$4,$5) RETURNING id, project_id, team_id, name, adapter_type, vendor, protocol_version, status, secret_ref, config_json, capabilities_json, last_health_json, last_checked_at, created_at, updated_at, network_profile_id, lease_owner, lease_expires_at, connection_epoch, last_connected_at, connector_definition_id, onboarding_policy, discovery_scope_json, sync_cursor_json, credential_envelope_json, external_scope_key
+ VALUES($1,$2,$3,'dji','dji','cloud-api-mqtt5','connecting',$4,$5) RETURNING id, project_id, team_id, name, adapter_type, vendor, protocol_version, status, secret_ref, config_json, capabilities_json, last_health_json, last_checked_at, created_at, updated_at, network_profile_id, lease_owner, lease_expires_at, connection_epoch, last_connected_at, connector_definition_id, onboarding_policy, discovery_scope_json, sync_cursor_json, credential_envelope_json, external_scope_key, task_managed_alerts
 )
 SELECT to_jsonb(r) FROM (
  SELECT id::text AS id,project_id AS "projectId",name,adapter_type AS "adapterType",vendor,

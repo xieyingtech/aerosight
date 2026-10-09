@@ -159,11 +159,11 @@ func (q *Queries) FHLiveExisting(ctx context.Context, arg FHLiveExistingParams) 
 }
 
 const fHLiveInsert = `-- name: FHLiveInsert :one
-insert into connector_live_action_jobs(
+insert into connector_jobs(job_type,
         id,project_id,team_id,connector_instance_id,device_id,target_resource_id,requested_by_user_id,
         action_kind,capability_code,feature_flag,idempotency_key,request_digest,request_envelope_json
-      ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status
+      ) values('live',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status
 `
 
 type FHLiveInsertParams struct {

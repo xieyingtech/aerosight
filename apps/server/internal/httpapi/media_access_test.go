@@ -137,7 +137,7 @@ func TestMediaAccessHTTPRangeAndAuthorization(t *testing.T) {
 	expired, _ := media.IssueAccess(secret, int32(pid), int32(asset), "play", time.Now().Add(-time.Hour), 120)
 	fetch("GET", expired.URL, "", 403, "")
 	// Published evidence turns the same asset into a sensitive download.
-	if _, err := f.db.Exec("insert into evidence_links(project_id,team_id,target_type,target_id,asset_id,asset_version,asset_checksum_sha256,is_published) values($1,$2,'issue','case',$3,1,$4,true)", pid, team, asset, strings.Repeat("a", 64)); err != nil {
+	if _, err := f.db.Exec("update assets set metadata_json=metadata_json || '{\"legacyPublishedEvidence\":true}'::jsonb where project_id=$1 and id=$2", pid, asset); err != nil {
 		t.Fatal(err)
 	}
 	download := issue("download", 200)["url"].(string)

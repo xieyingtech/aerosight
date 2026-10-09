@@ -233,7 +233,7 @@ func (s *Server) fhFlightLaunch(c *gin.Context) {
 		if err != nil {
 			return nil, err
 		}
-		inserted, err := w.Queries.FHFlightInsert(ctx, sqlcgen.FHFlightInsertParams{P1: job, P2: pid, P3: access.TeamID, P4: cid, P5: run, P6: did, P7: sql.NullInt64{Int64: input.WaylineResourceID, Valid: true}, P9: approval, P10: uid, P11: "flight-task-create", P12: key, P13: digest, P14: encrypted})
+		inserted, err := w.Queries.FHFlightInsert(ctx, sqlcgen.FHFlightInsertParams{P1: job, P2: pid, P3: access.TeamID, P4: cid, P5: sql.NullInt32{Int32: run, Valid: true}, P6: sql.NullInt32{Int32: did, Valid: true}, P7: sql.NullInt64{Int64: input.WaylineResourceID, Valid: true}, P9: uuid.NullUUID{UUID: approval, Valid: true}, P10: uid, P11: "flight-task-create", P12: key, P13: digest, P14: encrypted})
 		if err != nil {
 			return nil, err
 		}

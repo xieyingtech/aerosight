@@ -56,15 +56,14 @@ func (s *Server) inspectionAlertPolicy(c *gin.Context) {
 	}
 	if c.Request.Method == "GET" {
 		var managed bool
-		err = s.db.QueryRowContext(ctx, `select coalesce(policy.task_managed_alerts,false) from device_adapters adapter left join inspection_connector_policies policy on policy.project_id=adapter.project_id and policy.connector_instance_id=adapter.id where adapter.project_id=$1 and adapter.id=$2 and adapter.adapter_type='dji-flighthub2'`, pid, cid).Scan(&managed)
+		err = s.db.QueryRowContext(ctx, `select adapter.task_managed_alerts from device_adapters adapter where adapter.project_id=$1 and adapter.id=$2 and adapter.adapter_type='dji-flighthub2'`, pid, cid).Scan(&managed)
 		if err != nil {
 			s.inspectionPolicyFailure(c, err)
 			return
 		}
-		rows, err := s.db.QueryContext(ctx, `select source.remote_resource_id,ownership.ownership,ownership.task_run_id,resource.summary_json,resource.status
-   from inspection_alert_sources source join inspection_flight_ownership ownership on ownership.project_id=source.project_id and ownership.connector_instance_id=source.connector_instance_id and ownership.remote_flight_id=source.remote_flight_id
-   join connector_remote_resources resource on resource.project_id=source.project_id and resource.id=source.remote_resource_id
-   where source.project_id=$1 and source.connector_instance_id=$2 and ownership.ownership in('pending','task') order by source.remote_resource_id limit 101`, pid, cid)
+		rows, err := s.db.QueryContext(ctx, `select source.id,ownership.ownership,ownership.task_run_id,source.summary_json,source.status
+   from connector_remote_resources source join inspection_flight_ownership ownership on ownership.project_id=source.project_id and ownership.connector_instance_id=source.connector_instance_id and ownership.remote_flight_id=source.inspection_flight_id
+   where source.project_id=$1 and source.connector_instance_id=$2 and ownership.ownership in('pending','task') order by source.id limit 101`, pid, cid)
 		if err != nil {
 			s.inspectionPolicyFailure(c, err)
 			return
@@ -121,7 +120,7 @@ func (s *Server) inspectionAlertPolicy(c *gin.Context) {
 				return gin.H{"taskManagedAlerts": *body.TaskManagedAlerts}, nil
 			}
 			var flightID string
-			if err := w.Tx.QueryRowContext(ctx, "select remote_flight_id from inspection_alert_sources where project_id=$1 and connector_instance_id=$2 and remote_resource_id=$3", pid, cid, body.ResourceID).Scan(&flightID); err != nil {
+			if err := w.Tx.QueryRowContext(ctx, "select inspection_flight_id from connector_remote_resources where project_id=$1 and connector_instance_id=$2 and id=$3", pid, cid, body.ResourceID).Scan(&flightID); err != nil {
 				return nil, err
 			}
 			if err := inspection.ReleaseLegacyFlight(ctx, w.Tx, int(pid), cid, flightID); err != nil {

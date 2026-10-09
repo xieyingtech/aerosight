@@ -80,10 +80,8 @@ func TestMissionAuditTraceCorrelatesLatestAttempt(t *testing.T) {
 	if res.StatusCode != 200 || data["complete"] != false || data["safetyState"] != "not_requested" || len(data["missing"].([]any)) != 4 {
 		t.Fatalf("empty %d %+v", res.StatusCode, data)
 	}
-	var policy int64
-	if err := f.db.QueryRow("insert into safety_policy_versions(project_id,team_id,version,status,max_altitude_meters,max_speed_meters_per_second,minimum_battery_percent) values($1,$2,1,'published',100,10,20) returning id", pid, team).Scan(&policy); err != nil {
-		t.Fatal(err)
-	}
+	var policy int64 = 1 // Historical policy snapshot ID.
+
 	if _, err := f.db.Exec(`update task_runs set safety_policy_version_id=$2,preflight_snapshot_json='{"allowed":true,"checks":[{"code":"ok"}]}',trigger_source='agent' where id=$1`, run, policy); err != nil {
 		t.Fatal(err)
 	}

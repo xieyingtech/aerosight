@@ -141,7 +141,7 @@ func createAirSenseProjection(ctx context.Context, tx *sql.Tx, instance connecto
 		{"perception_event", eventID}, {"device", strconv.Itoa(deviceID)}, {"spatial_group", strconv.FormatInt(groupID, 10)},
 	} {
 		if _, err := tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id) values($1,$2,$3,$4)
-			on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, issueID, link.kind, link.id); err != nil {
+			on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, issueID, link.kind, link.id); err != nil {
 			return err
 		}
 	}
@@ -193,7 +193,7 @@ func updateAirSenseProjection(ctx context.Context, tx *sql.Tx, instance connecto
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `insert into issue_links(project_id,issue_id,link_type,target_id) values($1,$2,'device',$3)
-		on conflict(issue_id,link_type,target_id) do nothing`, instance.ProjectID, projection.issueID.Int64, strconv.Itoa(deviceID))
+		on conflict(issue_id,link_type,target_id) where source_key is null do nothing`, instance.ProjectID, projection.issueID.Int64, strconv.Itoa(deviceID))
 	return err
 }
 

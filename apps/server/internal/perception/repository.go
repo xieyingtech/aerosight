@@ -74,8 +74,7 @@ func attachImageLevelGroup(ctx context.Context, tx *sql.Tx, projectID, teamID, a
 	var groupID int64
 	err := tx.QueryRowContext(ctx, `
 		select group_row.id from detection_groups group_row
-		join detection_group_members member on member.detection_group_id=group_row.id and member.project_id=group_row.project_id
-		join detections detection on detection.id=member.detection_id and detection.project_id=member.project_id
+		join detections detection on detection.group_id=group_row.id and detection.project_id=group_row.project_id
 		where group_row.project_id=$1 and group_row.label=$2 and group_row.status='active'
 		  and group_row.location_quality='unavailable' and detection.input_asset_id=$3
 		order by group_row.id limit 1 for update of group_row`, projectID, label, assetID).Scan(&groupID)
@@ -88,7 +87,7 @@ func attachImageLevelGroup(ctx context.Context, tx *sql.Tx, projectID, teamID, a
 	if err != nil {
 		return 0, err
 	}
-	if _, err = tx.ExecContext(ctx, `insert into detection_group_members(project_id,team_id,detection_group_id,detection_id) values($1,$2,$3,$4)`, projectID, teamID, groupID, detectionID); err != nil {
+	if _, err = tx.ExecContext(ctx, `update detections set group_id=$3,grouped_at=now() where project_id=$1 and team_id=$2 and id=$4`, projectID, teamID, groupID, detectionID); err != nil {
 		return 0, err
 	}
 	if !created {

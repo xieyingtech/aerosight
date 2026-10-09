@@ -417,11 +417,8 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 		projectID, teamID, adapterID, deviceID, secureRemoteKey(serial), serial); err != nil {
 		t.Fatal(err)
 	}
-	if err := database.QueryRowContext(ctx, `insert into safety_policy_versions(
-		project_id,team_id,version,status,max_altitude_meters,max_speed_meters_per_second,minimum_battery_percent,published_at
-	) values($1,$2,1,'published',120,15,50,now()) returning id`, projectID, teamID).Scan(&policyID); err != nil {
-		t.Fatal(err)
-	}
+	policyID = 1 // Historical preflight snapshot ID.
+
 	if err := database.QueryRowContext(ctx, `insert into tasks(project_id,team_id,name,trigger_type,script,created_by_user_id)
 		values($1,$2,'flight action task','manual','{}',$3) returning id`, projectID, teamID, requesterID).Scan(&taskID); err != nil {
 		t.Fatal(err)
@@ -455,19 +452,19 @@ func TestSQLFlightActionJobRestartsReconcilesAndKeepsIntentEncrypted(t *testing.
 		t.Fatal(err)
 	}
 	requestDigest := strings.Repeat("b", 64)
-	if _, err := database.ExecContext(ctx, `insert into connector_action_jobs(
+	if _, err := database.ExecContext(ctx, `insert into connector_jobs(job_type,
 		id,project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,approval_request_id,
 		requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json
-	) values($1,$2,$3,$4,$5,$6,$7,$8,$9,'flight-task-create',$10,$11,$12)`,
+	) values('flight',$1,$2,$3,$4,$5,$6,$7,$8,$9,'flight-task-create',$10,$11,$12)`,
 		jobID, projectID, teamID, adapterID, taskRunID, deviceID, waylineID, approvalID, requesterID,
 		fmt.Sprintf("flight-action-%d", suffix), requestDigest, envelope); err != nil {
 		t.Fatal(err)
 	}
-	duplicate, err := database.ExecContext(ctx, `insert into connector_action_jobs(
+	duplicate, err := database.ExecContext(ctx, `insert into connector_jobs(job_type,
 		id,project_id,team_id,connector_instance_id,task_run_id,device_id,wayline_resource_id,approval_request_id,
 		requested_by_user_id,action_kind,idempotency_key,request_digest,request_envelope_json
-	) values($1,$2,$3,$4,$5,$6,$7,$8,$9,'flight-task-create',$10,$11,$12)
-	 on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing`,
+	) values('flight',$1,$2,$3,$4,$5,$6,$7,$8,$9,'flight-task-create',$10,$11,$12)
+	 on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing`,
 		uuid.NewString(), projectID, teamID, adapterID, taskRunID, deviceID, waylineID, approvalID, requesterID,
 		fmt.Sprintf("flight-action-%d", suffix), requestDigest, envelope)
 	if err != nil {

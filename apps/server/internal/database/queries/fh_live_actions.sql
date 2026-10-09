@@ -29,11 +29,11 @@ select sqlc.arg(p3)::int as "teamId",member.role,
 ) r;
 
 -- name: FHLiveInsert :one
-insert into connector_live_action_jobs(
+insert into connector_jobs(job_type,
         id,project_id,team_id,connector_instance_id,device_id,target_resource_id,requested_by_user_id,
         action_kind,capability_code,feature_flag,idempotency_key,request_digest,request_envelope_json
-      ) values(sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13))
-      on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
+      ) values('live',sqlc.arg(p1),sqlc.arg(p2),sqlc.arg(p3),sqlc.arg(p4),sqlc.arg(p5),sqlc.arg(p6),sqlc.arg(p7),sqlc.arg(p8),sqlc.arg(p9),sqlc.arg(p10),sqlc.arg(p11),sqlc.arg(p12),sqlc.arg(p13))
+      on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status;
 
 -- name: FHLiveExisting :many
 SELECT to_jsonb(r) FROM (

@@ -140,21 +140,16 @@ async function writeNewEvidenceAndFutureEvent(client, scope) {
   const asset = (await client.query(
     `insert into assets(
        project_id,team_id,device_id,task_run_id,kind,mime_type,storage_key,logical_key,version,status,
-       size_bytes,checksum,checksum_sha256,available_at,captured_at,legal_hold,retention_reason
+       size_bytes,checksum,checksum_sha256,available_at,captured_at,legal_hold,retention_reason,metadata_json
      ) values($1,$2,$3,$4,'image','image/jpeg','projects/rollback/new-evidence.jpg','rollback/new-evidence.jpg',
-       1,'available',128,$5,$5,now(),now(),true,'rollback drill preservation') returning id`,
+       1,'available',128,$5,$5,now(),now(),true,'rollback drill preservation','{"sensitive":true}') returning id`,
     [scope.projectId, scope.teamId, scope.deviceId, scope.runId, checksum]
   )).rows[0];
   await client.query(
-    `insert into evidence_links(
-       project_id,team_id,target_type,target_id,asset_id,asset_version,asset_checksum_sha256,is_published,created_by_user_id
-     ) values($1,$2,'task_run',$3,$4,1,$5,true,$6)`,
+    `insert into audit_events(project_id,team_id,request_id,actor_user_id,action,resource_type,resource_id,input_hash,details_json,status,completed_at)
+     values($1,$2,'rollback-drill',$6,'evidence.sealed','asset',$4::text,$5,
+       jsonb_build_object('taskRunId',$3::text,'assetVersion',1,'checksumSha256',$5::text),'completed',now())`,
     [scope.projectId, scope.teamId, String(scope.runId), asset.id, checksum, scope.userId]
-  );
-  await client.query(
-    `insert into retention_holds(project_id,team_id,asset_id,reason,created_by_user_id)
-     values($1,$2,$3,'preserve evidence across application rollback',$4)`,
-    [scope.projectId, scope.teamId, asset.id, scope.userId]
   );
   await client.query(
     `insert into outbox_events(project_id,team_id,event_id,event_type,payload_json)
@@ -225,14 +220,13 @@ try {
   assert(afterRollback.assets.some((row) => row.id === scope.legacyAssetId), "rollback asset page lost legacy data");
 
   const evidence = (await client.query(
-    `select asset.id,asset.status,asset.legal_hold,count(distinct link.id)::integer as links,
-            count(distinct hold.id)::integer as holds
+    `select asset.id,asset.status,asset.legal_hold,asset.retention_reason,count(distinct audit.id)::integer as evidence_audits
        from assets asset
-       left join evidence_links link on link.asset_id=asset.id and link.project_id=asset.project_id
-       left join retention_holds hold on hold.asset_id=asset.id and hold.project_id=asset.project_id and hold.status='active'
+       left join audit_events audit on audit.resource_id=asset.id::text and audit.project_id=asset.project_id
+         and audit.resource_type='asset' and audit.action='evidence.sealed'
       where asset.project_id=$1 and asset.id=$2 group by asset.id`, [scope.projectId, newAssetId]
   )).rows[0];
-  assert(evidence?.status === "available" && evidence.legal_hold === true && evidence.links === 1 && evidence.holds === 1,
+  assert(evidence?.status === "available" && evidence.legal_hold === true && evidence.evidence_audits === 1 && evidence.retention_reason === 'rollback drill preservation',
     "new evidence was deleted or detached during rollback");
   const futureEvent = (await client.query(
     `select status,attempts,locked_by,(select count(*)::integer from outbox_consumptions where event_id=outbox.event_id) as consumptions
@@ -251,7 +245,7 @@ try {
       devices: afterRollback.devices.length, tasks: afterRollback.tasks.length,
       runs: afterRollback.runs.length, assetsVisibleToLegacyQuery: afterRollback.assets.length },
     newEvidence: { assetId: newAssetId, status: evidence.status, legalHold: evidence.legal_hold,
-      publishedLinks: evidence.links, activeHolds: evidence.holds },
+      evidenceAuditRecords: evidence.evidence_audits, retentionReason: evidence.retention_reason },
     unknownEvent: futureEvent, passed: true };
   await writeFile(resolve(output, 'result.json'), JSON.stringify(result, null, 2));
   process.stdout.write(`${JSON.stringify(result, null, 2)}\nEvidence: ${output}\n`);

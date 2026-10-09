@@ -294,10 +294,10 @@ func (s *Server) fhGovernedAction(kind string) gin.HandlerFunc {
 			id, status := "", ""
 			reused := false
 			if kind == "flight" {
-				r, e := q.FHFlightInsert(ctx, sqlcgen.FHFlightInsertParams{P1: jobID, P2: pid, P3: a.TeamID, P4: cid, P5: int32(rid), P6: int32(did), P7: sql.NullInt64{Int64: wayline, Valid: wayline > 0}, P8: sql.NullInt64{Int64: target, Valid: target > 0}, P9: approval, P10: uid, P11: action, P12: key, P13: digest, P14: envelopeJSON})
+				r, e := q.FHFlightInsert(ctx, sqlcgen.FHFlightInsertParams{P1: jobID, P2: pid, P3: a.TeamID, P4: cid, P5: sql.NullInt32{Int32: int32(rid), Valid: true}, P6: sql.NullInt32{Int32: int32(did), Valid: true}, P7: sql.NullInt64{Int64: wayline, Valid: wayline > 0}, P8: sql.NullInt64{Int64: target, Valid: target > 0}, P9: uuid.NullUUID{UUID: approval, Valid: true}, P10: uid, P11: action, P12: key, P13: digest, P14: envelopeJSON})
 				id, status, err = r.ID, r.Status, e
 			} else {
-				r, e := q.FHDeviceAdminInsert(ctx, sqlcgen.FHDeviceAdminInsertParams{P1: jobID, P2: pid, P3: a.TeamID, P4: cid, P5: sql.NullInt32{Int32: int32(did), Valid: did > 0}, P6: uid, P7: approval, P8: action, P9: policy.capability, P10: policy.flag, P11: key, P12: digest, P13: envelopeJSON})
+				r, e := q.FHDeviceAdminInsert(ctx, sqlcgen.FHDeviceAdminInsertParams{P1: jobID, P2: pid, P3: a.TeamID, P4: cid, P5: sql.NullInt32{Int32: int32(did), Valid: did > 0}, P6: uid, P7: uuid.NullUUID{UUID: approval, Valid: true}, P8: action, P9: policy.capability, P10: policy.flag, P11: key, P12: digest, P13: envelopeJSON})
 				id, status, err = r.ID, r.Status, e
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {

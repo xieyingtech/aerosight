@@ -85,10 +85,10 @@ func (store *SQLModelJobStore) Create(ctx context.Context, request ModelJobCreat
 	if err != nil {
 		return job, err
 	}
-	err = tx.QueryRowContext(ctx, `insert into connector_model_jobs(project_id,team_id,connector_instance_id,requested_by_user_id,
+	err = tx.QueryRowContext(ctx, `insert into connector_jobs(job_type,project_id,team_id,connector_instance_id,requested_by_user_id,
 		action_kind,idempotency_key,request_digest,request_envelope_json,reconciliation_name)
-		values($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text`,
+		values('model',$1,$2,$3,$4,$5,$6,$7,$8,$9)
+		on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text`,
 		request.ProjectID, teamID, request.ConnectorInstanceID, request.RequestedByUserID, request.ActionKind,
 		request.IdempotencyKey, digest, envelope, nullableJobText(reconciliationName)).Scan(&job.ID)
 	if errors.Is(err, sql.ErrNoRows) {

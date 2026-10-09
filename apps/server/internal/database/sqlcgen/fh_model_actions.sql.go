@@ -143,10 +143,10 @@ func (q *Queries) FHModelGate(ctx context.Context, arg FHModelGateParams) ([]jso
 }
 
 const fHModelInsert = `-- name: FHModelInsert :one
-insert into connector_model_delete_jobs(id,project_id,team_id,connector_instance_id,target_resource_id,
+insert into connector_jobs(job_type,id,project_id,team_id,connector_instance_id,target_resource_id,
         approval_request_id,requested_by_user_id,action_kind,capability_code,feature_flag,idempotency_key,
         expected_remote_version,preview_digest,request_digest,request_envelope_json)
-       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       values('model-delete',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        on conflict do nothing returning id::text,status
 `
 
@@ -155,14 +155,14 @@ type FHModelInsertParams struct {
 	P2  int32           `json:"p2"`
 	P3  int32           `json:"p3"`
 	P4  int64           `json:"p4"`
-	P5  int64           `json:"p5"`
-	P6  uuid.UUID       `json:"p6"`
+	P5  sql.NullInt64   `json:"p5"`
+	P6  uuid.NullUUID   `json:"p6"`
 	P7  int32           `json:"p7"`
 	P8  string          `json:"p8"`
 	P9  string          `json:"p9"`
 	P10 string          `json:"p10"`
 	P11 string          `json:"p11"`
-	P12 string          `json:"p12"`
+	P12 sql.NullString  `json:"p12"`
 	P13 string          `json:"p13"`
 	P14 string          `json:"p14"`
 	P15 json.RawMessage `json:"p15"`

@@ -147,10 +147,10 @@ func (q *Queries) FHDeviceAdminExisting(ctx context.Context, arg FHDeviceAdminEx
 }
 
 const fHDeviceAdminInsert = `-- name: FHDeviceAdminInsert :one
-insert into connector_device_admin_jobs(
+insert into connector_jobs(job_type,
       id,project_id,team_id,connector_instance_id,device_id,requested_by_user_id,approval_request_id,action_kind,
       capability_code,feature_flag,idempotency_key,request_digest,request_envelope_json
-    ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status
+    ) values('device-admin',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) on conflict(job_type,project_id,connector_instance_id,action_kind,idempotency_key) do nothing returning id::text,status
 `
 
 type FHDeviceAdminInsertParams struct {
@@ -160,7 +160,7 @@ type FHDeviceAdminInsertParams struct {
 	P4  int64           `json:"p4"`
 	P5  sql.NullInt32   `json:"p5"`
 	P6  int32           `json:"p6"`
-	P7  uuid.UUID       `json:"p7"`
+	P7  uuid.NullUUID   `json:"p7"`
 	P8  string          `json:"p8"`
 	P9  string          `json:"p9"`
 	P10 string          `json:"p10"`

@@ -32,6 +32,88 @@ COMMENT ON EXTENSION postgis IS 'PostGIS geometry and geography spatial types an
 
 
 --
+-- Name: clear_assets_remote_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.clear_assets_remote_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF OLD.remote_access_kind IS NOT NULL AND (NEW.remote_connector_id IS NULL OR NEW.remote_resource_id IS NULL) THEN
+    NEW.remote_connector_id := NULL;
+    NEW.remote_resource_id := NULL;
+    NEW.remote_access_kind := NULL;
+    NEW.remote_reference_digest := NULL;
+    NEW.remote_credential_envelope_json := NULL;
+    NEW.remote_reference_created_at := NULL;
+    NEW.remote_reference_updated_at := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: clear_device_commands_protocol_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.clear_device_commands_protocol_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF OLD.protocol_status IS NOT NULL AND (NEW.protocol_adapter_id IS NULL) THEN
+    NEW.protocol_correlation_id := NULL;
+    NEW.protocol_adapter_id := NULL;
+    NEW.protocol_mapping_version := NULL;
+    NEW.protocol_transaction_id := NULL;
+    NEW.protocol_business_id := NULL;
+    NEW.protocol_method := NULL;
+    NEW.protocol_request_topic := NULL;
+    NEW.protocol_request_payload_json := NULL;
+    NEW.protocol_status := NULL;
+    NEW.protocol_reply_event_id := NULL;
+    NEW.protocol_reply_result := NULL;
+    NEW.protocol_reply_payload_json := NULL;
+    NEW.protocol_sent_at := NULL;
+    NEW.protocol_replied_at := NULL;
+    NEW.protocol_created_at := NULL;
+    NEW.protocol_updated_at := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: clear_observations_pose_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.clear_observations_pose_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF OLD.pose_spatial_quality IS NOT NULL AND (NEW.pose_device_id IS NULL) THEN
+    NEW.pose_device_id := NULL;
+    NEW.pose_captured_at := NULL;
+    NEW.pose_standard_position := NULL;
+    NEW.pose_original_position := NULL;
+    NEW.pose_orientation_x := NULL;
+    NEW.pose_orientation_y := NULL;
+    NEW.pose_orientation_z := NULL;
+    NEW.pose_orientation_w := NULL;
+    NEW.pose_velocity_x := NULL;
+    NEW.pose_velocity_y := NULL;
+    NEW.pose_velocity_z := NULL;
+    NEW.pose_horizontal_accuracy_m := NULL;
+    NEW.pose_vertical_accuracy_m := NULL;
+    NEW.pose_attitude_accuracy_deg := NULL;
+    NEW.pose_vertical_datum := NULL;
+    NEW.pose_transform_version := NULL;
+    NEW.pose_spatial_quality := NULL;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
 -- Name: notify_aerosight_outbox(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -125,6 +207,28 @@ $$;
 
 
 --
+-- Name: preserve_connector_job_identity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.preserve_connector_job_identity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+ if row(new.id,new.project_id,new.team_id,new.connector_instance_id,new.job_type)
+    is distinct from row(old.id,old.project_id,old.team_id,old.connector_instance_id,old.job_type) then
+  raise exception 'CONNECTOR_JOB_IDENTITY_IMMUTABLE';
+ end if;
+ if old.business_step_id is not null and
+    row(new.business_run_id,new.business_step_id,new.task_run_id,new.business_bound_at)
+    is distinct from row(old.business_run_id,old.business_step_id,old.task_run_id,old.business_bound_at) then
+  raise exception 'INSPECTION_FLIGHT_BINDING_IMMUTABLE';
+ end if;
+ return new;
+end;
+$$;
+
+
+--
 -- Name: project_approval_request_status(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -147,6 +251,29 @@ begin
       where id = new.approval_request_id;
   end if;
   return new;
+end;
+$$;
+
+
+--
+-- Name: protect_legacy_published_asset(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_legacy_published_asset() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+ if old.metadata_json->>'legacyPublishedEvidence'='true' then
+  if tg_op='DELETE' then
+   raise exception 'LEGACY_PUBLISHED_EVIDENCE_ASSET_IMMUTABLE' using errcode='55000';
+  end if;
+  if new.metadata_json->>'legacyPublishedEvidence' is distinct from 'true'
+    or row(new.id,new.project_id) is distinct from row(old.id,old.project_id) then
+   raise exception 'LEGACY_PUBLISHED_EVIDENCE_ASSET_IMMUTABLE' using errcode='55000';
+  end if;
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
 end;
 $$;
 
@@ -196,54 +323,6 @@ CREATE FUNCTION public.protect_published_event_rule_version() RETURNS trigger
   if old.status in ('published','retired') then raise exception 'published event rule versions are immutable' using errcode='55000'; end if;
   return case when tg_op='DELETE' then old else new end;
 end; $$;
-
-
---
--- Name: protect_published_evidence_link(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.protect_published_evidence_link() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-begin
-  if old.is_published then
-    raise exception 'published evidence links are immutable' using errcode = '55000';
-  end if;
-  return case when tg_op = 'DELETE' then old else new end;
-end;
-$$;
-
-
---
--- Name: protect_published_retention_policy(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.protect_published_retention_policy() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-begin
-  if old.status='published' then
-    raise exception 'published retention policy is immutable' using errcode='55000';
-  end if;
-  return case when tg_op='DELETE' then old else new end;
-end;
-$$;
-
-
---
--- Name: protect_published_safety_policy_version(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.protect_published_safety_policy_version() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-begin
-  if old.status = 'published' then
-    raise exception 'published safety policy versions are immutable' using errcode = '55000';
-  end if;
-  return case when tg_op = 'DELETE' then old else new end;
-end;
-$$;
 
 
 --
@@ -317,46 +396,180 @@ end;
 $$;
 
 
+--
+-- Name: write_connector_asset_access_refs_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.write_connector_asset_access_refs_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE assets SET remote_connector_id = NULL, remote_resource_id = NULL, remote_access_kind = NULL, remote_reference_digest = NULL, remote_credential_envelope_json = NULL, remote_reference_created_at = NULL, remote_reference_updated_at = NULL WHERE id = OLD.id AND project_id = OLD.project_id AND team_id = OLD.team_id;
+    RETURN OLD;
+  END IF;
+  IF TG_OP = 'UPDATE' AND (NEW.id IS DISTINCT FROM OLD.id OR NEW.project_id IS DISTINCT FROM OLD.project_id OR NEW.team_id IS DISTINCT FROM OLD.team_id) THEN
+    RAISE EXCEPTION 'extension identity cannot change' USING ERRCODE = '23514';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_at := COALESCE(NEW.created_at,now());
+    NEW.updated_at := COALESCE(NEW.updated_at,now());
+    IF NOT EXISTS (SELECT 1 FROM assets WHERE id = NEW.id AND project_id = NEW.project_id AND team_id = NEW.team_id) THEN
+      RAISE EXCEPTION 'extension parent does not exist in scope' USING ERRCODE = '23503';
+    END IF;
+    UPDATE assets SET remote_connector_id = NEW.connector_instance_id,
+    remote_resource_id = NEW.remote_resource_id,
+    remote_access_kind = NEW.access_kind,
+    remote_reference_digest = NEW.reference_digest,
+    remote_credential_envelope_json = NEW.credential_envelope_json,
+    remote_reference_created_at = NEW.created_at,
+    remote_reference_updated_at = NEW.updated_at WHERE id = NEW.id AND project_id = NEW.project_id AND team_id = NEW.team_id AND remote_access_kind IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'extension already exists' USING ERRCODE = '23505';
+    END IF;
+  ELSE
+    UPDATE assets SET remote_connector_id = NEW.connector_instance_id,
+    remote_resource_id = NEW.remote_resource_id,
+    remote_access_kind = NEW.access_kind,
+    remote_reference_digest = NEW.reference_digest,
+    remote_credential_envelope_json = NEW.credential_envelope_json,
+    remote_reference_created_at = NEW.created_at,
+    remote_reference_updated_at = NEW.updated_at WHERE id = OLD.id AND project_id = OLD.project_id AND team_id = OLD.team_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: write_device_command_protocol_correlations_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.write_device_command_protocol_correlations_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE device_commands SET protocol_correlation_id = NULL, protocol_adapter_id = NULL, protocol_mapping_version = NULL, protocol_transaction_id = NULL, protocol_business_id = NULL, protocol_method = NULL, protocol_request_topic = NULL, protocol_request_payload_json = NULL, protocol_status = NULL, protocol_reply_event_id = NULL, protocol_reply_result = NULL, protocol_reply_payload_json = NULL, protocol_sent_at = NULL, protocol_replied_at = NULL, protocol_created_at = NULL, protocol_updated_at = NULL WHERE id = OLD.command_id AND project_id = OLD.project_id AND team_id = OLD.team_id;
+    RETURN OLD;
+  END IF;
+  IF TG_OP = 'UPDATE' AND (NEW.command_id IS DISTINCT FROM OLD.command_id OR NEW.project_id IS DISTINCT FROM OLD.project_id OR NEW.team_id IS DISTINCT FROM OLD.team_id OR NEW.id IS DISTINCT FROM OLD.id) THEN
+    RAISE EXCEPTION 'extension identity cannot change' USING ERRCODE = '23514';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW.id := COALESCE(NEW.id,nextval('device_commands_protocol_correlation_id_seq'));
+    NEW.status := COALESCE(NEW.status,'prepared');
+    NEW.created_at := COALESCE(NEW.created_at,now());
+    NEW.updated_at := COALESCE(NEW.updated_at,now());
+    IF NOT EXISTS (SELECT 1 FROM device_commands WHERE id = NEW.command_id AND project_id = NEW.project_id AND team_id = NEW.team_id) THEN
+      RAISE EXCEPTION 'extension parent does not exist in scope' USING ERRCODE = '23503';
+    END IF;
+    UPDATE device_commands SET protocol_correlation_id = NEW.id,
+    protocol_adapter_id = NEW.adapter_id,
+    protocol_mapping_version = NEW.mapping_version,
+    protocol_transaction_id = NEW.transaction_id,
+    protocol_business_id = NEW.business_id,
+    protocol_method = NEW.method,
+    protocol_request_topic = NEW.request_topic,
+    protocol_request_payload_json = NEW.request_payload_json,
+    protocol_status = NEW.status,
+    protocol_reply_event_id = NEW.reply_event_id,
+    protocol_reply_result = NEW.reply_result,
+    protocol_reply_payload_json = NEW.reply_payload_json,
+    protocol_sent_at = NEW.sent_at,
+    protocol_replied_at = NEW.replied_at,
+    protocol_created_at = NEW.created_at,
+    protocol_updated_at = NEW.updated_at WHERE id = NEW.command_id AND project_id = NEW.project_id AND team_id = NEW.team_id AND protocol_status IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'extension already exists' USING ERRCODE = '23505';
+    END IF;
+  ELSE
+    UPDATE device_commands SET protocol_correlation_id = NEW.id,
+    protocol_adapter_id = NEW.adapter_id,
+    protocol_mapping_version = NEW.mapping_version,
+    protocol_transaction_id = NEW.transaction_id,
+    protocol_business_id = NEW.business_id,
+    protocol_method = NEW.method,
+    protocol_request_topic = NEW.request_topic,
+    protocol_request_payload_json = NEW.request_payload_json,
+    protocol_status = NEW.status,
+    protocol_reply_event_id = NEW.reply_event_id,
+    protocol_reply_result = NEW.reply_result,
+    protocol_reply_payload_json = NEW.reply_payload_json,
+    protocol_sent_at = NEW.sent_at,
+    protocol_replied_at = NEW.replied_at,
+    protocol_created_at = NEW.created_at,
+    protocol_updated_at = NEW.updated_at WHERE id = OLD.command_id AND project_id = OLD.project_id AND team_id = OLD.team_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
+--
+-- Name: write_poses_extension(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.write_poses_extension() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE observations SET pose_device_id = NULL, pose_captured_at = NULL, pose_standard_position = NULL, pose_original_position = NULL, pose_orientation_x = NULL, pose_orientation_y = NULL, pose_orientation_z = NULL, pose_orientation_w = NULL, pose_velocity_x = NULL, pose_velocity_y = NULL, pose_velocity_z = NULL, pose_horizontal_accuracy_m = NULL, pose_vertical_accuracy_m = NULL, pose_attitude_accuracy_deg = NULL, pose_vertical_datum = NULL, pose_transform_version = NULL, pose_spatial_quality = NULL WHERE id = OLD.observation_id AND project_id = OLD.project_id;
+    RETURN OLD;
+  END IF;
+  IF TG_OP = 'UPDATE' AND (NEW.observation_id IS DISTINCT FROM OLD.observation_id OR NEW.project_id IS DISTINCT FROM OLD.project_id) THEN
+    RAISE EXCEPTION 'extension identity cannot change' USING ERRCODE = '23514';
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    NEW.spatial_quality := COALESCE(NEW.spatial_quality,'usable');
+    IF NOT EXISTS (SELECT 1 FROM observations WHERE id = NEW.observation_id AND project_id = NEW.project_id) THEN
+      RAISE EXCEPTION 'extension parent does not exist in scope' USING ERRCODE = '23503';
+    END IF;
+    UPDATE observations SET pose_device_id = NEW.device_id,
+    pose_captured_at = NEW.captured_at,
+    pose_standard_position = NEW.standard_position,
+    pose_original_position = NEW.original_position,
+    pose_orientation_x = NEW.orientation_x,
+    pose_orientation_y = NEW.orientation_y,
+    pose_orientation_z = NEW.orientation_z,
+    pose_orientation_w = NEW.orientation_w,
+    pose_velocity_x = NEW.velocity_x,
+    pose_velocity_y = NEW.velocity_y,
+    pose_velocity_z = NEW.velocity_z,
+    pose_horizontal_accuracy_m = NEW.horizontal_accuracy_m,
+    pose_vertical_accuracy_m = NEW.vertical_accuracy_m,
+    pose_attitude_accuracy_deg = NEW.attitude_accuracy_deg,
+    pose_vertical_datum = NEW.vertical_datum,
+    pose_transform_version = NEW.transform_version,
+    pose_spatial_quality = NEW.spatial_quality WHERE id = NEW.observation_id AND project_id = NEW.project_id AND pose_spatial_quality IS NULL;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'extension already exists' USING ERRCODE = '23505';
+    END IF;
+  ELSE
+    UPDATE observations SET pose_device_id = NEW.device_id,
+    pose_captured_at = NEW.captured_at,
+    pose_standard_position = NEW.standard_position,
+    pose_original_position = NEW.original_position,
+    pose_orientation_x = NEW.orientation_x,
+    pose_orientation_y = NEW.orientation_y,
+    pose_orientation_z = NEW.orientation_z,
+    pose_orientation_w = NEW.orientation_w,
+    pose_velocity_x = NEW.velocity_x,
+    pose_velocity_y = NEW.velocity_y,
+    pose_velocity_z = NEW.velocity_z,
+    pose_horizontal_accuracy_m = NEW.horizontal_accuracy_m,
+    pose_vertical_accuracy_m = NEW.vertical_accuracy_m,
+    pose_attitude_accuracy_deg = NEW.attitude_accuracy_deg,
+    pose_vertical_datum = NEW.vertical_datum,
+    pose_transform_version = NEW.transform_version,
+    pose_spatial_quality = NEW.spatial_quality WHERE id = OLD.observation_id AND project_id = OLD.project_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
-
---
--- Name: agent_draft_evidence; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.agent_draft_evidence (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    agent_draft_id uuid NOT NULL,
-    reference_type text NOT NULL,
-    reference_id text NOT NULL,
-    reference_version text NOT NULL,
-    observed_at timestamp with time zone NOT NULL,
-    quality text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT agent_draft_evidence_type_valid CHECK ((reference_type = ANY (ARRAY['asset'::text, 'event'::text, 'detection'::text, 'track'::text, 'task_run'::text])))
-);
-
-
---
--- Name: agent_draft_evidence_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.agent_draft_evidence_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: agent_draft_evidence_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.agent_draft_evidence_id_seq OWNED BY public.agent_draft_evidence.id;
-
 
 --
 -- Name: agent_drafts; Type: TABLE; Schema: public; Owner: -
@@ -379,6 +592,8 @@ CREATE TABLE public.agent_drafts (
     generation_tool_calls_json jsonb DEFAULT '[]'::jsonb NOT NULL,
     evidence_version_hash text,
     generated_at timestamp with time zone,
+    evidence_refs_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT agent_drafts_evidence_array CHECK ((jsonb_typeof(evidence_refs_json) = 'array'::text)),
     CONSTRAINT agent_drafts_generation_metadata_complete CHECK ((((model_id IS NULL) AND (prompt_template_version IS NULL) AND (evidence_version_hash IS NULL) AND (generated_at IS NULL)) OR ((model_id IS NOT NULL) AND (prompt_template_version IS NOT NULL) AND (evidence_version_hash IS NOT NULL) AND (generated_at IS NOT NULL)))),
     CONSTRAINT agent_drafts_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'discarded'::text, 'published'::text]))),
     CONSTRAINT agent_drafts_type_valid CHECK ((draft_type = ANY (ARRAY['inspection_task'::text, 'report'::text, 'issue'::text])))
@@ -491,6 +706,26 @@ CREATE TABLE public.agent_tool_jobs (
 
 
 --
+-- Name: agent_write_approvals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.agent_write_approvals (
+    id uuid NOT NULL,
+    project_id integer NOT NULL,
+    session_id integer NOT NULL,
+    user_id integer NOT NULL,
+    tool_name text NOT NULL,
+    arguments jsonb NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    result jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone DEFAULT (now() + '00:30:00'::interval) NOT NULL,
+    decided_at timestamp with time zone,
+    CONSTRAINT agent_write_approvals_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'rejected'::text])))
+);
+
+
+--
 -- Name: agents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -531,18 +766,11 @@ ALTER SEQUENCE public.agents_id_seq OWNED BY public.agents.id;
 --
 
 CREATE TABLE public.ai_providers (
-    models_json jsonb NOT NULL DEFAULT '[]'::jsonb,
-    is_realtime_default boolean NOT NULL DEFAULT false,
-    CONSTRAINT ai_providers_models_array CHECK (jsonb_typeof(models_json) = 'array'),
-    CONSTRAINT ai_providers_realtime_default_enabled CHECK (NOT is_realtime_default OR (enabled AND realtime_protocol <> 'disabled')),
     id bigint NOT NULL,
     name text NOT NULL,
     provider_type text NOT NULL,
     base_url text,
     model_id text NOT NULL,
-    realtime_protocol text DEFAULT 'disabled' NOT NULL,
-    realtime_model_id text DEFAULT '' NOT NULL,
-    CONSTRAINT ai_providers_realtime_valid CHECK ((realtime_protocol = 'disabled' AND realtime_model_id = '') OR (realtime_protocol = 'stepfun' AND length(btrim(realtime_model_id)) BETWEEN 1 AND 255)),
     credential_envelope_json jsonb NOT NULL,
     enabled boolean DEFAULT false NOT NULL,
     is_default boolean DEFAULT false NOT NULL,
@@ -553,8 +781,15 @@ CREATE TABLE public.ai_providers (
     updated_by_user_id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    realtime_protocol text DEFAULT 'disabled'::text NOT NULL,
+    realtime_model_id text DEFAULT ''::text NOT NULL,
+    models_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    is_realtime_default boolean DEFAULT false NOT NULL,
     CONSTRAINT ai_providers_credential_envelope_object CHECK ((jsonb_typeof(credential_envelope_json) = 'object'::text)),
     CONSTRAINT ai_providers_default_enabled CHECK (((NOT is_default) OR enabled)),
+    CONSTRAINT ai_providers_models_array CHECK ((jsonb_typeof(models_json) = 'array'::text)),
+    CONSTRAINT ai_providers_realtime_default_enabled CHECK (((NOT is_realtime_default) OR (enabled AND (realtime_protocol <> 'disabled'::text)))),
+    CONSTRAINT ai_providers_realtime_valid CHECK ((((realtime_protocol = 'disabled'::text) AND (realtime_model_id = ''::text)) OR ((realtime_protocol = 'stepfun'::text) AND ((length(btrim(realtime_model_id)) >= 1) AND (length(btrim(realtime_model_id)) <= 255))))),
     CONSTRAINT ai_providers_status_valid CHECK ((status = ANY (ARRAY['untested'::text, 'healthy'::text, 'degraded'::text, 'failed'::text]))),
     CONSTRAINT ai_providers_type_valid CHECK ((provider_type = 'openai'::text))
 );
@@ -577,129 +812,6 @@ CREATE SEQUENCE public.ai_providers_id_seq
 --
 
 ALTER SEQUENCE public.ai_providers_id_seq OWNED BY public.ai_providers.id;
-
-
---
--- Name: alert_automation_drafts; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alert_automation_drafts (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    automation_run_id uuid NOT NULL,
-    perception_event_id uuid NOT NULL,
-    draft_type text NOT NULL,
-    status text DEFAULT 'draft'::text NOT NULL,
-    title text NOT NULL,
-    payload_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    evidence_refs_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT alert_automation_drafts_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'discarded'::text, 'published'::text]))),
-    CONSTRAINT alert_automation_drafts_type_valid CHECK ((draft_type = ANY (ARRAY['report'::text, 'issue'::text, 'follow-up-task'::text])))
-);
-
-
---
--- Name: alert_automation_policies; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alert_automation_policies (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    name text NOT NULL,
-    current_published_version_id bigint,
-    created_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
--- Name: alert_automation_policies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.alert_automation_policies_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: alert_automation_policies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.alert_automation_policies_id_seq OWNED BY public.alert_automation_policies.id;
-
-
---
--- Name: alert_automation_policy_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alert_automation_policy_versions (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    alert_automation_policy_id bigint NOT NULL,
-    event_rule_version_id bigint,
-    version integer NOT NULL,
-    status text DEFAULT 'draft'::text NOT NULL,
-    mode text DEFAULT 'manual'::text NOT NULL,
-    config_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_by_user_id integer,
-    published_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    published_at timestamp with time zone,
-    CONSTRAINT alert_automation_policy_versions_mode_valid CHECK ((mode = ANY (ARRAY['manual'::text, 'agent-on-demand'::text, 'agent-auto-draft'::text, 'follow-up-draft'::text]))),
-    CONSTRAINT alert_automation_policy_versions_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'retired'::text]))),
-    CONSTRAINT alert_automation_policy_versions_version_positive CHECK ((version > 0))
-);
-
-
---
--- Name: alert_automation_policy_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.alert_automation_policy_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: alert_automation_policy_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.alert_automation_policy_versions_id_seq OWNED BY public.alert_automation_policy_versions.id;
-
-
---
--- Name: alert_automation_runs; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.alert_automation_runs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    policy_version_id bigint NOT NULL,
-    perception_event_id uuid NOT NULL,
-    trigger_reason text NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    input_scope_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    output_refs_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    failure_code text,
-    failure_message text,
-    queued_at timestamp with time zone DEFAULT now() NOT NULL,
-    started_at timestamp with time zone,
-    finished_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT alert_automation_runs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text])))
-);
 
 
 --
@@ -1016,75 +1128,6 @@ ALTER SEQUENCE public.approvals_id_seq OWNED BY public.approvals.id;
 
 
 --
--- Name: asset_derivatives; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.asset_derivatives (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    source_asset_id integer NOT NULL,
-    derived_asset_id integer NOT NULL,
-    derivative_type text NOT NULL,
-    generator text NOT NULL,
-    generator_version text,
-    parameters_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT asset_derivatives_not_self CHECK ((source_asset_id <> derived_asset_id))
-);
-
-
---
--- Name: asset_derivatives_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.asset_derivatives_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: asset_derivatives_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.asset_derivatives_id_seq OWNED BY public.asset_derivatives.id;
-
-
---
--- Name: asset_upload_intents; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.asset_upload_intents (
-    id uuid NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    actor_user_id integer,
-    logical_key text NOT NULL,
-    object_key text NOT NULL,
-    file_name text NOT NULL,
-    kind text NOT NULL,
-    mime_type text NOT NULL,
-    expected_size_bytes bigint NOT NULL,
-    expected_checksum_sha256 text NOT NULL,
-    device_id integer,
-    task_run_id integer,
-    issue_id integer,
-    status text DEFAULT 'pending'::text NOT NULL,
-    asset_id integer,
-    failure_code text,
-    expires_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    completed_at timestamp with time zone,
-    CONSTRAINT asset_upload_intents_checksum_valid CHECK ((expected_checksum_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT asset_upload_intents_size_valid CHECK ((expected_size_bytes >= 0)),
-    CONSTRAINT asset_upload_intents_status_valid CHECK ((status = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'expired'::text])))
-);
-
-
---
 -- Name: assets; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1116,10 +1159,28 @@ CREATE TABLE public.assets (
     retention_reason text,
     deleted_at timestamp with time zone,
     supersedes_asset_id integer,
+    derivative_source_asset_id integer,
+    derivative_type text,
+    remote_connector_id bigint,
+    remote_resource_id bigint,
+    remote_access_kind text,
+    remote_reference_digest text,
+    remote_credential_envelope_json jsonb,
+    remote_reference_created_at timestamp with time zone,
+    remote_reference_updated_at timestamp with time zone,
     CONSTRAINT assets_checksum_sha256_valid CHECK (((checksum_sha256 IS NULL) OR (checksum_sha256 ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT assets_derivative_not_self CHECK (((derivative_source_asset_id IS NULL) OR ((derivative_source_asset_id <> id) AND (derivative_type IS NOT NULL)))),
+    CONSTRAINT assets_remote_shape_check CHECK ((((remote_connector_id IS NULL) AND (remote_resource_id IS NULL) AND (remote_access_kind IS NULL) AND (remote_reference_digest IS NULL) AND (remote_credential_envelope_json IS NULL) AND (remote_reference_created_at IS NULL) AND (remote_reference_updated_at IS NULL)) OR ((remote_connector_id IS NOT NULL) AND (remote_resource_id IS NOT NULL) AND (remote_access_kind IS NOT NULL) AND (remote_reference_digest IS NOT NULL) AND (remote_credential_envelope_json IS NOT NULL) AND (remote_reference_created_at IS NOT NULL) AND (remote_reference_updated_at IS NOT NULL) AND (remote_access_kind = ANY (ARRAY['flight-media'::text, 'flight-record'::text, 'model'::text, 'model-resource'::text])) AND (remote_reference_digest ~ '^[a-f0-9]{64}$'::text) AND (jsonb_typeof(remote_credential_envelope_json) = 'object'::text)))),
     CONSTRAINT assets_status_valid CHECK ((status = ANY (ARRAY['pending'::text, 'available'::text, 'failed'::text, 'deleted'::text]))),
     CONSTRAINT assets_version_positive CHECK ((version > 0))
 );
+
+
+--
+-- Name: COLUMN assets.remote_credential_envelope_json; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.assets.remote_credential_envelope_json IS 'Private encrypted access locator; never include in public asset projections. Encryption AAD remains asset ID and project ID.';
 
 
 --
@@ -1148,8 +1209,8 @@ ALTER SEQUENCE public.assets_id_seq OWNED BY public.assets.id;
 
 CREATE TABLE public.audit_events (
     id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
+    project_id integer,
+    team_id integer,
     request_id text NOT NULL,
     idempotency_key text,
     actor_user_id integer,
@@ -1163,7 +1224,12 @@ CREATE TABLE public.audit_events (
     status text DEFAULT 'accepted'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     completed_at timestamp with time zone,
-    CONSTRAINT audit_events_actor_present CHECK (((actor_user_id IS NOT NULL) OR (actor_agent_id IS NOT NULL))),
+    scope text DEFAULT 'project'::text NOT NULL,
+    actor_system text,
+    legacy_platform_id bigint,
+    details_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT audit_events_actor_present CHECK (((actor_user_id IS NOT NULL) OR (actor_agent_id IS NOT NULL) OR (actor_system IS NOT NULL))),
+    CONSTRAINT audit_events_scope_valid CHECK ((((scope = 'project'::text) AND (project_id IS NOT NULL) AND (team_id IS NOT NULL)) OR ((scope = 'platform'::text) AND (project_id IS NULL) AND (team_id IS NULL)))),
     CONSTRAINT audit_events_status_valid CHECK ((status = ANY (ARRAY['accepted'::text, 'completed'::text])))
 );
 
@@ -1228,29 +1294,30 @@ ALTER SEQUENCE public.command_attempts_id_seq OWNED BY public.command_attempts.i
 
 
 --
--- Name: connector_action_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_jobs; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_action_jobs (
+CREATE TABLE public.connector_jobs (
+    job_type text NOT NULL,
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     project_id integer NOT NULL,
     team_id integer NOT NULL,
     connector_instance_id bigint NOT NULL,
-    task_run_id integer NOT NULL,
-    device_id integer NOT NULL,
+    task_run_id integer,
+    device_id integer,
     wayline_resource_id bigint,
     target_resource_id bigint,
     remote_result_resource_id bigint,
-    approval_request_id uuid NOT NULL,
+    approval_request_id uuid,
     requested_by_user_id integer NOT NULL,
-    action_kind text NOT NULL,
+    action_kind text,
     idempotency_key text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
+    request_digest text,
+    request_envelope_json jsonb,
     status text DEFAULT 'queued'::text NOT NULL,
-    dispatch_check_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    reconciliation_count integer DEFAULT 0 NOT NULL,
+    dispatch_check_json jsonb DEFAULT '{}'::jsonb,
+    attempt_count integer DEFAULT 0,
+    reconciliation_count integer DEFAULT 0,
     last_error_code text,
     accepted_at timestamp with time zone,
     reconciled_at timestamp with time zone,
@@ -1258,37 +1325,176 @@ CREATE TABLE public.connector_action_jobs (
     completed_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_action_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['flight-task-create'::text, 'flight-task-status'::text, 'flight-task-resumption'::text]))),
-    CONSTRAINT connector_action_jobs_attempts_valid CHECK ((((attempt_count >= 0) AND (attempt_count <= 1)) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 8)))),
-    CONSTRAINT connector_action_jobs_completion_valid CHECK ((((status = 'succeeded'::text) = (completed_at IS NOT NULL)) AND ((status <> 'succeeded'::text) OR (remote_result_resource_id IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_action_jobs_digest_valid CHECK ((request_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_action_jobs_dispatch_object CHECK ((jsonb_typeof(dispatch_check_json) = 'object'::text)),
-    CONSTRAINT connector_action_jobs_envelope_object CHECK ((jsonb_typeof(request_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_action_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_action_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'prepared'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT connector_action_jobs_target_shape CHECK ((((action_kind = 'flight-task-create'::text) AND (wayline_resource_id IS NOT NULL) AND (target_resource_id IS NULL)) OR ((action_kind = ANY (ARRAY['flight-task-status'::text, 'flight-task-resumption'::text])) AND (wayline_resource_id IS NULL) AND (target_resource_id IS NOT NULL))))
+    capability_code text,
+    feature_flag text,
+    result_json jsonb DEFAULT '{}'::jsonb,
+    attempted_at timestamp with time zone,
+    expected_remote_version text,
+    reconciliation_name text,
+    remote_ids_json jsonb DEFAULT '[]'::jsonb,
+    asset_ids_json jsonb DEFAULT '[]'::jsonb,
+    progress integer DEFAULT 0,
+    stage text DEFAULT 'queued'::text,
+    submit_attempt_count integer DEFAULT 0,
+    submitted_at timestamp with time zone,
+    preview_digest text,
+    operation_kind text,
+    source_asset_id integer,
+    requested_name text,
+    object_key_digest text,
+    object_key_envelope_json jsonb,
+    notification_attempt_count integer DEFAULT 0,
+    reconciliation_miss_count integer DEFAULT 0,
+    remote_resource_id bigint,
+    uploaded_at timestamp with time zone,
+    notification_attempted_at timestamp with time zone,
+    result_envelope_json jsonb,
+    preview_json jsonb,
+    business_run_id integer,
+    business_step_id bigint,
+    business_bound_at timestamp with time zone,
+    CONSTRAINT connector_action_jobs_action_valid CHECK (((job_type <> 'flight'::text) OR (action_kind = ANY (ARRAY['flight-task-create'::text, 'flight-task-status'::text, 'flight-task-resumption'::text])))),
+    CONSTRAINT connector_action_jobs_attempts_valid CHECK (((job_type <> 'flight'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 8))))),
+    CONSTRAINT connector_action_jobs_completion_valid CHECK (((job_type <> 'flight'::text) OR (((status = 'succeeded'::text) = (completed_at IS NOT NULL)) AND ((status <> 'succeeded'::text) OR (remote_result_resource_id IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_action_jobs_digest_valid CHECK (((job_type <> 'flight'::text) OR (request_digest ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT connector_action_jobs_dispatch_object CHECK (((job_type <> 'flight'::text) OR (jsonb_typeof(dispatch_check_json) = 'object'::text))),
+    CONSTRAINT connector_action_jobs_envelope_object CHECK (((job_type <> 'flight'::text) OR (jsonb_typeof(request_envelope_json) = 'object'::text))),
+    CONSTRAINT connector_action_jobs_idempotency_valid CHECK (((job_type <> 'flight'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_action_jobs_status_valid CHECK (((job_type <> 'flight'::text) OR (status = ANY (ARRAY['queued'::text, 'prepared'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_action_jobs_target_shape CHECK (((job_type <> 'flight'::text) OR (((action_kind = 'flight-task-create'::text) AND (wayline_resource_id IS NOT NULL) AND (target_resource_id IS NULL)) OR ((action_kind = ANY (ARRAY['flight-task-status'::text, 'flight-task-resumption'::text])) AND (wayline_resource_id IS NULL) AND (target_resource_id IS NOT NULL))))),
+    CONSTRAINT connector_device_admin_jobs_action_valid CHECK (((job_type <> 'device-admin'::text) OR (action_kind = ANY (ARRAY['rtk-calibrate'::text, 'relay-pair'::text, 'active-project-update'::text, 'sn-decrypt'::text])))),
+    CONSTRAINT connector_device_admin_jobs_attempt_valid CHECK (((job_type <> 'device-admin'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1)))),
+    CONSTRAINT connector_device_admin_jobs_completion_valid CHECK (((job_type <> 'device-admin'::text) OR (((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_device_admin_jobs_digest_valid CHECK (((job_type <> 'device-admin'::text) OR (request_digest ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT connector_device_admin_jobs_envelopes_valid CHECK (((job_type <> 'device-admin'::text) OR ((jsonb_typeof(request_envelope_json) = 'object'::text) AND ((result_envelope_json IS NULL) OR (jsonb_typeof(result_envelope_json) = 'object'::text))))),
+    CONSTRAINT connector_device_admin_jobs_idempotency_valid CHECK (((job_type <> 'device-admin'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_device_admin_jobs_policy_valid CHECK (((job_type <> 'device-admin'::text) OR (((action_kind = 'rtk-calibrate'::text) AND (capability_code = 'device.rtk.calibrate'::text) AND (feature_flag = 'flighthub.rtk.calibrate'::text)) OR ((action_kind = 'relay-pair'::text) AND (capability_code = 'device.relay.pair'::text) AND (feature_flag = 'flighthub.relay.pair'::text)) OR ((action_kind = 'active-project-update'::text) AND (capability_code = 'device.active-project.update'::text) AND (feature_flag = 'flighthub.device-migration'::text)) OR ((action_kind = 'sn-decrypt'::text) AND (capability_code = 'security.sn.decrypt'::text) AND (feature_flag = 'flighthub.sn-decrypt'::text))))),
+    CONSTRAINT connector_device_admin_jobs_result_valid CHECK (((job_type <> 'device-admin'::text) OR (jsonb_typeof(result_json) = 'object'::text))),
+    CONSTRAINT connector_device_admin_jobs_status_valid CHECK (((job_type <> 'device-admin'::text) OR (status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_device_admin_jobs_target_valid CHECK (((job_type <> 'device-admin'::text) OR ((action_kind = 'sn-decrypt'::text) = (device_id IS NULL)))),
+    CONSTRAINT connector_geospatial_action_jobs_action_valid CHECK (((job_type <> 'geospatial'::text) OR (action_kind = ANY (ARRAY['map-element-create'::text, 'map-element-update'::text, 'map-element-delete'::text])))),
+    CONSTRAINT connector_geospatial_action_jobs_attempt_valid CHECK (((job_type <> 'geospatial'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1)))),
+    CONSTRAINT connector_geospatial_action_jobs_capability_valid CHECK (((job_type <> 'geospatial'::text) OR (((action_kind = ANY (ARRAY['map-element-create'::text, 'map-element-update'::text])) AND (capability_code = 'geospatial.write'::text) AND (feature_flag = 'flighthub.actions'::text)) OR ((action_kind = 'map-element-delete'::text) AND (capability_code = 'geospatial.element.delete'::text) AND (feature_flag = 'flighthub.geospatial.delete'::text))))),
+    CONSTRAINT connector_geospatial_action_jobs_completion_valid CHECK (((job_type <> 'geospatial'::text) OR (((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_geospatial_action_jobs_digest_valid CHECK (((job_type <> 'geospatial'::text) OR (request_digest ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT connector_geospatial_action_jobs_envelope_object CHECK (((job_type <> 'geospatial'::text) OR (jsonb_typeof(request_envelope_json) = 'object'::text))),
+    CONSTRAINT connector_geospatial_action_jobs_idempotency_valid CHECK (((job_type <> 'geospatial'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_geospatial_action_jobs_result_object CHECK (((job_type <> 'geospatial'::text) OR (jsonb_typeof(result_json) = 'object'::text))),
+    CONSTRAINT connector_geospatial_action_jobs_status_valid CHECK (((job_type <> 'geospatial'::text) OR (status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_geospatial_action_jobs_target_shape CHECK (((job_type <> 'geospatial'::text) OR (((action_kind = 'map-element-create'::text) AND (target_resource_id IS NULL) AND (expected_remote_version IS NULL)) OR ((action_kind = ANY (ARRAY['map-element-update'::text, 'map-element-delete'::text])) AND (target_resource_id IS NOT NULL) AND ((length(btrim(expected_remote_version)) >= 1) AND (length(btrim(expected_remote_version)) <= 512)) AND (expected_remote_version = btrim(expected_remote_version)))))),
+    CONSTRAINT connector_jobs_business_binding_valid CHECK ((((business_run_id IS NULL) = (business_step_id IS NULL)) AND ((business_step_id IS NULL) OR ((job_type = 'flight'::text) AND (action_kind = 'flight-task-create'::text) AND (business_run_id <> task_run_id))))),
+    CONSTRAINT connector_jobs_job_type_check CHECK ((job_type = ANY (ARRAY['flight'::text, 'live'::text, 'geospatial'::text, 'model'::text, 'model-delete'::text, 'object-upload'::text, 'device-admin'::text, 'management'::text]))),
+    CONSTRAINT connector_live_action_jobs_action_valid CHECK (((job_type <> 'live'::text) OR (action_kind = ANY (ARRAY['live-quality-set'::text, 'live-converter-create'::text, 'live-converter-toggle'::text, 'live-converter-delete'::text])))),
+    CONSTRAINT connector_live_action_jobs_attempt_valid CHECK (((job_type <> 'live'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1)))),
+    CONSTRAINT connector_live_action_jobs_capability_valid CHECK (((job_type <> 'live'::text) OR (((action_kind = 'live-quality-set'::text) AND (capability_code = 'live.quality.set'::text) AND (feature_flag = 'flighthub.live.quality'::text)) OR ((action_kind = 'live-converter-create'::text) AND (capability_code = 'live.converter.create'::text) AND (feature_flag = 'flighthub.live.converter.create'::text)) OR ((action_kind = 'live-converter-toggle'::text) AND (capability_code = 'live.converter.toggle'::text) AND (feature_flag = 'flighthub.live.converter.toggle'::text)) OR ((action_kind = 'live-converter-delete'::text) AND (capability_code = 'live.converter.delete'::text) AND (feature_flag = 'flighthub.live.converter.delete'::text))))),
+    CONSTRAINT connector_live_action_jobs_completion_valid CHECK (((job_type <> 'live'::text) OR (((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_live_action_jobs_digest_valid CHECK (((job_type <> 'live'::text) OR (request_digest ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT connector_live_action_jobs_envelope_object CHECK (((job_type <> 'live'::text) OR (jsonb_typeof(request_envelope_json) = 'object'::text))),
+    CONSTRAINT connector_live_action_jobs_idempotency_valid CHECK (((job_type <> 'live'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_live_action_jobs_result_object CHECK (((job_type <> 'live'::text) OR (jsonb_typeof(result_json) = 'object'::text))),
+    CONSTRAINT connector_live_action_jobs_status_valid CHECK (((job_type <> 'live'::text) OR (status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_live_action_jobs_target_shape CHECK (((job_type <> 'live'::text) OR (((action_kind = ANY (ARRAY['live-quality-set'::text, 'live-converter-create'::text])) AND (device_id IS NOT NULL) AND (target_resource_id IS NULL)) OR ((action_kind = ANY (ARRAY['live-converter-toggle'::text, 'live-converter-delete'::text])) AND (device_id IS NULL) AND (target_resource_id IS NOT NULL))))),
+    CONSTRAINT connector_management_write_jobs_action_valid CHECK (((job_type <> 'management'::text) OR (action_kind = 'project-member-upsert'::text))),
+    CONSTRAINT connector_management_write_jobs_attempt_valid CHECK (((job_type <> 'management'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 1))))),
+    CONSTRAINT connector_management_write_jobs_completion_valid CHECK (((job_type <> 'management'::text) OR (((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_management_write_jobs_digest_valid CHECK (((job_type <> 'management'::text) OR ((request_digest ~ '^[a-f0-9]{64}$'::text) AND (preview_digest ~ '^[a-f0-9]{64}$'::text)))),
+    CONSTRAINT connector_management_write_jobs_idempotency_valid CHECK (((job_type <> 'management'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_management_write_jobs_json_valid CHECK (((job_type <> 'management'::text) OR ((jsonb_typeof(request_envelope_json) = 'object'::text) AND (jsonb_typeof(preview_json) = 'object'::text) AND (jsonb_typeof(result_json) = 'object'::text)))),
+    CONSTRAINT connector_management_write_jobs_policy_valid CHECK (((job_type <> 'management'::text) OR ((capability_code = 'organization.project-member.write'::text) AND (feature_flag = 'flighthub.organization.project-member'::text)))),
+    CONSTRAINT connector_management_write_jobs_status_valid CHECK (((job_type <> 'management'::text) OR (status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_model_delete_jobs_action_valid CHECK (((job_type <> 'model-delete'::text) OR (action_kind = ANY (ARRAY['model-delete'::text, 'model-resource-delete'::text])))),
+    CONSTRAINT connector_model_delete_jobs_attempts_valid CHECK (((job_type <> 'model-delete'::text) OR ((attempt_count >= 0) AND (attempt_count <= 1) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 16))))),
+    CONSTRAINT connector_model_delete_jobs_completion_valid CHECK (((job_type <> 'model-delete'::text) OR (((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL))))),
+    CONSTRAINT connector_model_delete_jobs_digest_valid CHECK (((job_type <> 'model-delete'::text) OR ((preview_digest ~ '^[a-f0-9]{64}$'::text) AND (request_digest ~ '^[a-f0-9]{64}$'::text)))),
+    CONSTRAINT connector_model_delete_jobs_envelope_object CHECK (((job_type <> 'model-delete'::text) OR (jsonb_typeof(request_envelope_json) = 'object'::text))),
+    CONSTRAINT connector_model_delete_jobs_idempotency_valid CHECK (((job_type <> 'model-delete'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_model_delete_jobs_policy_valid CHECK (((job_type <> 'model-delete'::text) OR (((action_kind = 'model-delete'::text) AND (capability_code = 'model.delete'::text) AND (feature_flag = 'flighthub.model.delete'::text)) OR ((action_kind = 'model-resource-delete'::text) AND (capability_code = 'model.resource.delete'::text) AND (feature_flag = 'flighthub.model-resource.delete'::text))))),
+    CONSTRAINT connector_model_delete_jobs_result_object CHECK (((job_type <> 'model-delete'::text) OR (jsonb_typeof(result_json) = 'object'::text))),
+    CONSTRAINT connector_model_delete_jobs_status_valid CHECK (((job_type <> 'model-delete'::text) OR (status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_model_delete_jobs_version_valid CHECK (((job_type <> 'model-delete'::text) OR ((length(btrim(expected_remote_version)) >= 1) AND (length(btrim(expected_remote_version)) <= 512) AND (expected_remote_version = btrim(expected_remote_version))))),
+    CONSTRAINT connector_model_jobs_action_valid CHECK (((job_type <> 'model'::text) OR (action_kind = ANY (ARRAY['traditional-create'::text, 'open-start'::text, 'open-stop'::text])))),
+    CONSTRAINT connector_model_jobs_asset_array CHECK (((job_type <> 'model'::text) OR (jsonb_typeof(asset_ids_json) = 'array'::text))),
+    CONSTRAINT connector_model_jobs_attempts_valid CHECK (((job_type <> 'model'::text) OR ((submit_attempt_count >= 0) AND (submit_attempt_count <= 1) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 32))))),
+    CONSTRAINT connector_model_jobs_completion_valid CHECK (((job_type <> 'model'::text) OR ((status = 'succeeded'::text) = (completed_at IS NOT NULL)))),
+    CONSTRAINT connector_model_jobs_digest_valid CHECK (((job_type <> 'model'::text) OR (request_digest ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT connector_model_jobs_envelope_object CHECK (((job_type <> 'model'::text) OR (jsonb_typeof(request_envelope_json) = 'object'::text))),
+    CONSTRAINT connector_model_jobs_idempotency_valid CHECK (((job_type <> 'model'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_model_jobs_progress_valid CHECK (((job_type <> 'model'::text) OR ((progress >= 0) AND (progress <= 100)))),
+    CONSTRAINT connector_model_jobs_remote_array CHECK (((job_type <> 'model'::text) OR (jsonb_typeof(remote_ids_json) = 'array'::text))),
+    CONSTRAINT connector_model_jobs_status_valid CHECK (((job_type <> 'model'::text) OR (status = ANY (ARRAY['queued'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))),
+    CONSTRAINT connector_object_upload_jobs_attempts_valid CHECK (((job_type <> 'object-upload'::text) OR ((notification_attempt_count >= 0) AND (notification_attempt_count <= 2) AND ((reconciliation_miss_count >= 0) AND (reconciliation_miss_count <= 8))))),
+    CONSTRAINT connector_object_upload_jobs_completion_valid CHECK (((job_type <> 'object-upload'::text) OR (((status = 'succeeded'::text) = (completed_at IS NOT NULL)) AND ((status <> 'succeeded'::text) OR (remote_resource_id IS NOT NULL))))),
+    CONSTRAINT connector_object_upload_jobs_digest_valid CHECK (((job_type <> 'object-upload'::text) OR ((object_key_digest IS NULL) OR (object_key_digest ~ '^[a-f0-9]{64}$'::text)))),
+    CONSTRAINT connector_object_upload_jobs_envelope_object CHECK (((job_type <> 'object-upload'::text) OR ((object_key_envelope_json IS NULL) OR (jsonb_typeof(object_key_envelope_json) = 'object'::text)))),
+    CONSTRAINT connector_object_upload_jobs_idempotency_valid CHECK (((job_type <> 'object-upload'::text) OR ((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200) AND (idempotency_key = btrim(idempotency_key))))),
+    CONSTRAINT connector_object_upload_jobs_name_valid CHECK (((job_type <> 'object-upload'::text) OR ((length(btrim(requested_name)) >= 1) AND (length(btrim(requested_name)) <= 200) AND (requested_name = btrim(requested_name)) AND ((length(btrim(reconciliation_name)) >= 1) AND (length(btrim(reconciliation_name)) <= 240)) AND (reconciliation_name = btrim(reconciliation_name))))),
+    CONSTRAINT connector_object_upload_jobs_operation_kind_valid CHECK (((job_type <> 'object-upload'::text) OR (operation_kind ~ '^[a-z][a-z0-9-]{0,63}$'::text))),
+    CONSTRAINT connector_object_upload_jobs_status_valid CHECK (((job_type <> 'object-upload'::text) OR (status = ANY (ARRAY['queued'::text, 'uploading'::text, 'notifying'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text])))),
+    CONSTRAINT connector_object_upload_jobs_upload_checkpoint CHECK (((job_type <> 'object-upload'::text) OR (((object_key_digest IS NULL) = (object_key_envelope_json IS NULL)) AND ((uploaded_at IS NULL) = (object_key_envelope_json IS NULL))))),
+    CONSTRAINT jobs_device_admin_required CHECK (((job_type <> 'device-admin'::text) OR ((approval_request_id IS NOT NULL) AND (action_kind IS NOT NULL) AND (capability_code IS NOT NULL) AND (feature_flag IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (result_json IS NOT NULL)))),
+    CONSTRAINT jobs_flight_required CHECK (((job_type <> 'flight'::text) OR ((task_run_id IS NOT NULL) AND (device_id IS NOT NULL) AND (approval_request_id IS NOT NULL) AND (action_kind IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (dispatch_check_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (reconciliation_count IS NOT NULL)))),
+    CONSTRAINT jobs_geospatial_required CHECK (((job_type <> 'geospatial'::text) OR ((action_kind IS NOT NULL) AND (capability_code IS NOT NULL) AND (feature_flag IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (result_json IS NOT NULL)))),
+    CONSTRAINT jobs_live_required CHECK (((job_type <> 'live'::text) OR ((action_kind IS NOT NULL) AND (capability_code IS NOT NULL) AND (feature_flag IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (result_json IS NOT NULL)))),
+    CONSTRAINT jobs_management_required CHECK (((job_type <> 'management'::text) OR ((approval_request_id IS NOT NULL) AND (action_kind IS NOT NULL) AND (capability_code IS NOT NULL) AND (feature_flag IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (preview_digest IS NOT NULL) AND (preview_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (reconciliation_count IS NOT NULL) AND (result_json IS NOT NULL)))),
+    CONSTRAINT jobs_model_delete_required CHECK (((job_type <> 'model-delete'::text) OR ((target_resource_id IS NOT NULL) AND (approval_request_id IS NOT NULL) AND (action_kind IS NOT NULL) AND (capability_code IS NOT NULL) AND (feature_flag IS NOT NULL) AND (expected_remote_version IS NOT NULL) AND (preview_digest IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (attempt_count IS NOT NULL) AND (reconciliation_count IS NOT NULL) AND (result_json IS NOT NULL)))),
+    CONSTRAINT jobs_model_required CHECK (((job_type <> 'model'::text) OR ((action_kind IS NOT NULL) AND (request_digest IS NOT NULL) AND (request_envelope_json IS NOT NULL) AND (remote_ids_json IS NOT NULL) AND (asset_ids_json IS NOT NULL) AND (progress IS NOT NULL) AND (stage IS NOT NULL) AND (submit_attempt_count IS NOT NULL) AND (reconciliation_count IS NOT NULL)))),
+    CONSTRAINT jobs_object_upload_required CHECK (((job_type <> 'object-upload'::text) OR ((operation_kind IS NOT NULL) AND (source_asset_id IS NOT NULL) AND (requested_name IS NOT NULL) AND (reconciliation_name IS NOT NULL) AND (notification_attempt_count IS NOT NULL) AND (reconciliation_miss_count IS NOT NULL))))
 );
 
 
 --
--- Name: connector_asset_access_refs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_action_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_asset_access_refs (
-    id integer NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    remote_resource_id bigint NOT NULL,
-    access_kind text NOT NULL,
-    reference_digest text NOT NULL,
-    credential_envelope_json jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_asset_access_refs_digest_valid CHECK ((reference_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_asset_access_refs_envelope_object CHECK ((jsonb_typeof(credential_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_asset_access_refs_kind_valid CHECK ((access_kind = ANY (ARRAY['flight-media'::text, 'flight-record'::text, 'model'::text, 'model-resource'::text])))
-);
+CREATE VIEW public.connector_action_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    task_run_id,
+    device_id,
+    wayline_resource_id,
+    target_resource_id,
+    remote_result_resource_id,
+    approval_request_id,
+    requested_by_user_id,
+    action_kind,
+    idempotency_key,
+    request_digest,
+    request_envelope_json,
+    status,
+    dispatch_check_json,
+    attempt_count,
+    reconciliation_count,
+    last_error_code,
+    accepted_at,
+    reconciled_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'flight'::text)
+  WITH CASCADED CHECK OPTION;
+
+
+--
+-- Name: connector_asset_access_refs; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.connector_asset_access_refs AS
+ SELECT id,
+    project_id,
+    team_id,
+    remote_connector_id AS connector_instance_id,
+    remote_resource_id,
+    remote_access_kind AS access_kind,
+    remote_reference_digest AS reference_digest,
+    remote_credential_envelope_json AS credential_envelope_json,
+    remote_reference_created_at AS created_at,
+    remote_reference_updated_at AS updated_at
+   FROM public.assets
+  WHERE (remote_access_kind IS NOT NULL);
 
 
 --
@@ -1382,6 +1588,13 @@ CREATE TABLE public.connector_control_sessions (
 
 
 --
+-- Name: COLUMN connector_control_sessions.safety_policy_version_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.connector_control_sessions.safety_policy_version_id IS 'Historical snapshot ID; retired record recoverable from audit_events schema.archive';
+
+
+--
 -- Name: connector_definitions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1419,84 +1632,68 @@ ALTER SEQUENCE public.connector_definitions_id_seq OWNED BY public.connector_def
 
 
 --
--- Name: connector_device_admin_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_device_admin_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_device_admin_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    device_id integer,
-    requested_by_user_id integer NOT NULL,
-    approval_request_id uuid NOT NULL,
-    action_kind text NOT NULL,
-    capability_code text NOT NULL,
-    feature_flag text NOT NULL,
-    idempotency_key text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    result_envelope_json jsonb,
-    attempted_at timestamp with time zone,
-    unknown_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_device_admin_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['rtk-calibrate'::text, 'relay-pair'::text, 'active-project-update'::text, 'sn-decrypt'::text]))),
-    CONSTRAINT connector_device_admin_jobs_attempt_valid CHECK (((attempt_count >= 0) AND (attempt_count <= 1))),
-    CONSTRAINT connector_device_admin_jobs_completion_valid CHECK ((((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_device_admin_jobs_digest_valid CHECK ((request_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_device_admin_jobs_envelopes_valid CHECK (((jsonb_typeof(request_envelope_json) = 'object'::text) AND ((result_envelope_json IS NULL) OR (jsonb_typeof(result_envelope_json) = 'object'::text)))),
-    CONSTRAINT connector_device_admin_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_device_admin_jobs_policy_valid CHECK ((((action_kind = 'rtk-calibrate'::text) AND (capability_code = 'device.rtk.calibrate'::text) AND (feature_flag = 'flighthub.rtk.calibrate'::text)) OR ((action_kind = 'relay-pair'::text) AND (capability_code = 'device.relay.pair'::text) AND (feature_flag = 'flighthub.relay.pair'::text)) OR ((action_kind = 'active-project-update'::text) AND (capability_code = 'device.active-project.update'::text) AND (feature_flag = 'flighthub.device-migration'::text)) OR ((action_kind = 'sn-decrypt'::text) AND (capability_code = 'security.sn.decrypt'::text) AND (feature_flag = 'flighthub.sn-decrypt'::text)))),
-    CONSTRAINT connector_device_admin_jobs_result_valid CHECK ((jsonb_typeof(result_json) = 'object'::text)),
-    CONSTRAINT connector_device_admin_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT connector_device_admin_jobs_target_valid CHECK (((action_kind = 'sn-decrypt'::text) = (device_id IS NULL)))
-);
+CREATE VIEW public.connector_device_admin_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    device_id,
+    requested_by_user_id,
+    approval_request_id,
+    action_kind,
+    capability_code,
+    feature_flag,
+    idempotency_key,
+    request_digest,
+    request_envelope_json,
+    status,
+    attempt_count,
+    last_error_code,
+    result_json,
+    result_envelope_json,
+    attempted_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'device-admin'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
--- Name: connector_geospatial_action_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_geospatial_action_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_geospatial_action_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    target_resource_id bigint,
-    requested_by_user_id integer NOT NULL,
-    action_kind text NOT NULL,
-    capability_code text NOT NULL,
-    feature_flag text NOT NULL,
-    idempotency_key text NOT NULL,
-    expected_remote_version text,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    attempted_at timestamp with time zone,
-    unknown_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_geospatial_action_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['map-element-create'::text, 'map-element-update'::text, 'map-element-delete'::text]))),
-    CONSTRAINT connector_geospatial_action_jobs_attempt_valid CHECK (((attempt_count >= 0) AND (attempt_count <= 1))),
-    CONSTRAINT connector_geospatial_action_jobs_capability_valid CHECK ((((action_kind = ANY (ARRAY['map-element-create'::text, 'map-element-update'::text])) AND (capability_code = 'geospatial.write'::text) AND (feature_flag = 'flighthub.actions'::text)) OR ((action_kind = 'map-element-delete'::text) AND (capability_code = 'geospatial.element.delete'::text) AND (feature_flag = 'flighthub.geospatial.delete'::text)))),
-    CONSTRAINT connector_geospatial_action_jobs_completion_valid CHECK ((((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_geospatial_action_jobs_digest_valid CHECK ((request_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_geospatial_action_jobs_envelope_object CHECK ((jsonb_typeof(request_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_geospatial_action_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_geospatial_action_jobs_result_object CHECK ((jsonb_typeof(result_json) = 'object'::text)),
-    CONSTRAINT connector_geospatial_action_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT connector_geospatial_action_jobs_target_shape CHECK ((((action_kind = 'map-element-create'::text) AND (target_resource_id IS NULL) AND (expected_remote_version IS NULL)) OR ((action_kind = ANY (ARRAY['map-element-update'::text, 'map-element-delete'::text])) AND (target_resource_id IS NOT NULL) AND ((length(btrim(expected_remote_version)) >= 1) AND (length(btrim(expected_remote_version)) <= 512)) AND (expected_remote_version = btrim(expected_remote_version)))))
-);
+CREATE VIEW public.connector_geospatial_action_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    target_resource_id,
+    requested_by_user_id,
+    action_kind,
+    capability_code,
+    feature_flag,
+    idempotency_key,
+    expected_remote_version,
+    request_digest,
+    request_envelope_json,
+    status,
+    attempt_count,
+    last_error_code,
+    result_json,
+    attempted_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'geospatial'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
@@ -1530,6 +1727,7 @@ CREATE TABLE public.device_adapters (
     sync_cursor_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     credential_envelope_json jsonb,
     external_scope_key text,
+    task_managed_alerts boolean DEFAULT false NOT NULL,
     CONSTRAINT device_adapters_credential_envelope_object CHECK (((credential_envelope_json IS NULL) OR (jsonb_typeof(credential_envelope_json) = 'object'::text))),
     CONSTRAINT device_adapters_discovery_scope_object CHECK ((jsonb_typeof(discovery_scope_json) = 'object'::text)),
     CONSTRAINT device_adapters_external_scope_key_normalized CHECK (((external_scope_key IS NULL) OR (((length(external_scope_key) >= 1) AND (length(external_scope_key) <= 512)) AND (external_scope_key = btrim(external_scope_key))))),
@@ -1574,207 +1772,170 @@ CREATE VIEW public.connector_instances AS
 
 
 --
--- Name: connector_live_action_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_live_action_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_live_action_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    device_id integer,
-    target_resource_id bigint,
-    requested_by_user_id integer NOT NULL,
-    action_kind text NOT NULL,
-    capability_code text NOT NULL,
-    feature_flag text NOT NULL,
-    idempotency_key text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    attempted_at timestamp with time zone,
-    unknown_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_live_action_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['live-quality-set'::text, 'live-converter-create'::text, 'live-converter-toggle'::text, 'live-converter-delete'::text]))),
-    CONSTRAINT connector_live_action_jobs_attempt_valid CHECK (((attempt_count >= 0) AND (attempt_count <= 1))),
-    CONSTRAINT connector_live_action_jobs_capability_valid CHECK ((((action_kind = 'live-quality-set'::text) AND (capability_code = 'live.quality.set'::text) AND (feature_flag = 'flighthub.live.quality'::text)) OR ((action_kind = 'live-converter-create'::text) AND (capability_code = 'live.converter.create'::text) AND (feature_flag = 'flighthub.live.converter.create'::text)) OR ((action_kind = 'live-converter-toggle'::text) AND (capability_code = 'live.converter.toggle'::text) AND (feature_flag = 'flighthub.live.converter.toggle'::text)) OR ((action_kind = 'live-converter-delete'::text) AND (capability_code = 'live.converter.delete'::text) AND (feature_flag = 'flighthub.live.converter.delete'::text)))),
-    CONSTRAINT connector_live_action_jobs_completion_valid CHECK ((((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_live_action_jobs_digest_valid CHECK ((request_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_live_action_jobs_envelope_object CHECK ((jsonb_typeof(request_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_live_action_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_live_action_jobs_result_object CHECK ((jsonb_typeof(result_json) = 'object'::text)),
-    CONSTRAINT connector_live_action_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT connector_live_action_jobs_target_shape CHECK ((((action_kind = ANY (ARRAY['live-quality-set'::text, 'live-converter-create'::text])) AND (device_id IS NOT NULL) AND (target_resource_id IS NULL)) OR ((action_kind = ANY (ARRAY['live-converter-toggle'::text, 'live-converter-delete'::text])) AND (device_id IS NULL) AND (target_resource_id IS NOT NULL))))
-);
+CREATE VIEW public.connector_live_action_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    device_id,
+    target_resource_id,
+    requested_by_user_id,
+    action_kind,
+    capability_code,
+    feature_flag,
+    idempotency_key,
+    request_digest,
+    request_envelope_json,
+    status,
+    attempt_count,
+    last_error_code,
+    result_json,
+    attempted_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'live'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
--- Name: connector_management_write_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_management_write_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_management_write_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    requested_by_user_id integer NOT NULL,
-    approval_request_id uuid NOT NULL,
-    action_kind text NOT NULL,
-    capability_code text NOT NULL,
-    feature_flag text NOT NULL,
-    idempotency_key text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    preview_digest text NOT NULL,
-    preview_json jsonb NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    reconciliation_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    attempted_at timestamp with time zone,
-    unknown_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_management_write_jobs_action_valid CHECK ((action_kind = 'project-member-upsert'::text)),
-    CONSTRAINT connector_management_write_jobs_attempt_valid CHECK ((((attempt_count >= 0) AND (attempt_count <= 1)) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 1)))),
-    CONSTRAINT connector_management_write_jobs_completion_valid CHECK ((((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_management_write_jobs_digest_valid CHECK (((request_digest ~ '^[a-f0-9]{64}$'::text) AND (preview_digest ~ '^[a-f0-9]{64}$'::text))),
-    CONSTRAINT connector_management_write_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_management_write_jobs_json_valid CHECK (((jsonb_typeof(request_envelope_json) = 'object'::text) AND (jsonb_typeof(preview_json) = 'object'::text) AND (jsonb_typeof(result_json) = 'object'::text))),
-    CONSTRAINT connector_management_write_jobs_policy_valid CHECK (((capability_code = 'organization.project-member.write'::text) AND (feature_flag = 'flighthub.organization.project-member'::text))),
-    CONSTRAINT connector_management_write_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))
-);
+CREATE VIEW public.connector_management_write_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    requested_by_user_id,
+    approval_request_id,
+    action_kind,
+    capability_code,
+    feature_flag,
+    idempotency_key,
+    request_digest,
+    request_envelope_json,
+    preview_digest,
+    preview_json,
+    status,
+    attempt_count,
+    reconciliation_count,
+    last_error_code,
+    result_json,
+    attempted_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'management'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
--- Name: connector_model_delete_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_model_delete_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_model_delete_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    target_resource_id bigint NOT NULL,
-    approval_request_id uuid NOT NULL,
-    requested_by_user_id integer NOT NULL,
-    action_kind text NOT NULL,
-    capability_code text NOT NULL,
-    feature_flag text NOT NULL,
-    idempotency_key text NOT NULL,
-    expected_remote_version text NOT NULL,
-    preview_digest text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    attempt_count integer DEFAULT 0 NOT NULL,
-    reconciliation_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    attempted_at timestamp with time zone,
-    unknown_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_model_delete_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['model-delete'::text, 'model-resource-delete'::text]))),
-    CONSTRAINT connector_model_delete_jobs_attempts_valid CHECK ((((attempt_count >= 0) AND (attempt_count <= 1)) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 16)))),
-    CONSTRAINT connector_model_delete_jobs_completion_valid CHECK ((((status = ANY (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text])) = (completed_at IS NOT NULL)) AND ((status = 'blocked'::text) = (unknown_at IS NOT NULL)))),
-    CONSTRAINT connector_model_delete_jobs_digest_valid CHECK (((preview_digest ~ '^[a-f0-9]{64}$'::text) AND (request_digest ~ '^[a-f0-9]{64}$'::text))),
-    CONSTRAINT connector_model_delete_jobs_envelope_object CHECK ((jsonb_typeof(request_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_model_delete_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_model_delete_jobs_policy_valid CHECK ((((action_kind = 'model-delete'::text) AND (capability_code = 'model.delete'::text) AND (feature_flag = 'flighthub.model.delete'::text)) OR ((action_kind = 'model-resource-delete'::text) AND (capability_code = 'model.resource.delete'::text) AND (feature_flag = 'flighthub.model-resource.delete'::text)))),
-    CONSTRAINT connector_model_delete_jobs_result_object CHECK ((jsonb_typeof(result_json) = 'object'::text)),
-    CONSTRAINT connector_model_delete_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'executing'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text]))),
-    CONSTRAINT connector_model_delete_jobs_version_valid CHECK ((((length(btrim(expected_remote_version)) >= 1) AND (length(btrim(expected_remote_version)) <= 512)) AND (expected_remote_version = btrim(expected_remote_version))))
-);
+CREATE VIEW public.connector_model_delete_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    target_resource_id,
+    approval_request_id,
+    requested_by_user_id,
+    action_kind,
+    capability_code,
+    feature_flag,
+    idempotency_key,
+    expected_remote_version,
+    preview_digest,
+    request_digest,
+    request_envelope_json,
+    status,
+    attempt_count,
+    reconciliation_count,
+    last_error_code,
+    result_json,
+    attempted_at,
+    unknown_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'model-delete'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
--- Name: connector_model_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_model_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_model_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    requested_by_user_id integer NOT NULL,
-    action_kind text NOT NULL,
-    idempotency_key text NOT NULL,
-    request_digest text NOT NULL,
-    request_envelope_json jsonb NOT NULL,
-    reconciliation_name text,
-    status text DEFAULT 'queued'::text NOT NULL,
-    remote_ids_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    asset_ids_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    progress integer DEFAULT 0 NOT NULL,
-    stage text DEFAULT 'queued'::text NOT NULL,
-    submit_attempt_count integer DEFAULT 0 NOT NULL,
-    reconciliation_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    submitted_at timestamp with time zone,
-    reconciled_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_model_jobs_action_valid CHECK ((action_kind = ANY (ARRAY['traditional-create'::text, 'open-start'::text, 'open-stop'::text]))),
-    CONSTRAINT connector_model_jobs_asset_array CHECK ((jsonb_typeof(asset_ids_json) = 'array'::text)),
-    CONSTRAINT connector_model_jobs_attempts_valid CHECK ((((submit_attempt_count >= 0) AND (submit_attempt_count <= 1)) AND ((reconciliation_count >= 0) AND (reconciliation_count <= 32)))),
-    CONSTRAINT connector_model_jobs_completion_valid CHECK (((status = 'succeeded'::text) = (completed_at IS NOT NULL))),
-    CONSTRAINT connector_model_jobs_digest_valid CHECK ((request_digest ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT connector_model_jobs_envelope_object CHECK ((jsonb_typeof(request_envelope_json) = 'object'::text)),
-    CONSTRAINT connector_model_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_model_jobs_progress_valid CHECK (((progress >= 0) AND (progress <= 100))),
-    CONSTRAINT connector_model_jobs_remote_array CHECK ((jsonb_typeof(remote_ids_json) = 'array'::text)),
-    CONSTRAINT connector_model_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text])))
-);
+CREATE VIEW public.connector_model_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    requested_by_user_id,
+    action_kind,
+    idempotency_key,
+    request_digest,
+    request_envelope_json,
+    reconciliation_name,
+    status,
+    remote_ids_json,
+    asset_ids_json,
+    progress,
+    stage,
+    submit_attempt_count,
+    reconciliation_count,
+    last_error_code,
+    submitted_at,
+    reconciled_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'model'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
--- Name: connector_object_upload_jobs; Type: TABLE; Schema: public; Owner: -
+-- Name: connector_object_upload_jobs; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE TABLE public.connector_object_upload_jobs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    connector_instance_id bigint NOT NULL,
-    operation_kind text NOT NULL,
-    source_asset_id integer NOT NULL,
-    requested_by_user_id integer NOT NULL,
-    idempotency_key text NOT NULL,
-    requested_name text NOT NULL,
-    reconciliation_name text NOT NULL,
-    status text DEFAULT 'queued'::text NOT NULL,
-    object_key_digest text,
-    object_key_envelope_json jsonb,
-    notification_attempt_count integer DEFAULT 0 NOT NULL,
-    reconciliation_miss_count integer DEFAULT 0 NOT NULL,
-    last_error_code text,
-    remote_resource_id bigint,
-    uploaded_at timestamp with time zone,
-    notification_attempted_at timestamp with time zone,
-    reconciled_at timestamp with time zone,
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT connector_object_upload_jobs_attempts_valid CHECK ((((notification_attempt_count >= 0) AND (notification_attempt_count <= 2)) AND ((reconciliation_miss_count >= 0) AND (reconciliation_miss_count <= 8)))),
-    CONSTRAINT connector_object_upload_jobs_completion_valid CHECK ((((status = 'succeeded'::text) = (completed_at IS NOT NULL)) AND ((status <> 'succeeded'::text) OR (remote_resource_id IS NOT NULL)))),
-    CONSTRAINT connector_object_upload_jobs_digest_valid CHECK (((object_key_digest IS NULL) OR (object_key_digest ~ '^[a-f0-9]{64}$'::text))),
-    CONSTRAINT connector_object_upload_jobs_envelope_object CHECK (((object_key_envelope_json IS NULL) OR (jsonb_typeof(object_key_envelope_json) = 'object'::text))),
-    CONSTRAINT connector_object_upload_jobs_idempotency_valid CHECK ((((length(btrim(idempotency_key)) >= 8) AND (length(btrim(idempotency_key)) <= 200)) AND (idempotency_key = btrim(idempotency_key)))),
-    CONSTRAINT connector_object_upload_jobs_name_valid CHECK ((((length(btrim(requested_name)) >= 1) AND (length(btrim(requested_name)) <= 200)) AND (requested_name = btrim(requested_name)) AND ((length(btrim(reconciliation_name)) >= 1) AND (length(btrim(reconciliation_name)) <= 240)) AND (reconciliation_name = btrim(reconciliation_name)))),
-    CONSTRAINT connector_object_upload_jobs_operation_kind_valid CHECK ((operation_kind ~ '^[a-z][a-z0-9-]{0,63}$'::text)),
-    CONSTRAINT connector_object_upload_jobs_status_valid CHECK ((status = ANY (ARRAY['queued'::text, 'uploading'::text, 'notifying'::text, 'reconciling'::text, 'succeeded'::text, 'failed'::text]))),
-    CONSTRAINT connector_object_upload_jobs_upload_checkpoint CHECK ((((object_key_digest IS NULL) = (object_key_envelope_json IS NULL)) AND ((uploaded_at IS NULL) = (object_key_envelope_json IS NULL))))
-);
+CREATE VIEW public.connector_object_upload_jobs AS
+ SELECT id,
+    project_id,
+    team_id,
+    connector_instance_id,
+    operation_kind,
+    source_asset_id,
+    requested_by_user_id,
+    idempotency_key,
+    requested_name,
+    reconciliation_name,
+    status,
+    object_key_digest,
+    object_key_envelope_json,
+    notification_attempt_count,
+    reconciliation_miss_count,
+    last_error_code,
+    remote_resource_id,
+    uploaded_at,
+    notification_attempted_at,
+    reconciled_at,
+    completed_at,
+    created_at,
+    updated_at
+   FROM public.connector_jobs
+  WHERE (job_type = 'object-upload'::text)
+  WITH CASCADED CHECK OPTION;
 
 
 --
@@ -1839,12 +2000,15 @@ CREATE TABLE public.connector_remote_resources (
     missing_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    inspection_flight_id text,
+    inspection_evidence_json jsonb,
     CONSTRAINT connector_remote_resources_canonical_pair CHECK (((canonical_target_type IS NULL) = (canonical_target_id IS NULL))),
     CONSTRAINT connector_remote_resources_kind_valid CHECK ((resource_kind = ANY (ARRAY['wayline'::text, 'flight-task'::text, 'flight-media'::text, 'flight-record'::text, 'flight-alert'::text, 'ai-alert'::text, 'map-element'::text, 'flight-area'::text, 'offline-map'::text, 'air-sense-warning'::text, 'model'::text, 'model-resource'::text, 'live-share'::text, 'stream-converter'::text, 'recording'::text, 'hms'::text, 'topology'::text, 'auto-record'::text, 'organization'::text, 'organization-user'::text, 'organization-role'::text, 'organization-permission'::text, 'project-user'::text, 'project-member'::text]))),
     CONSTRAINT connector_remote_resources_missing_time CHECK ((((status = 'missing'::text) = (missing_at IS NOT NULL)) OR (status = ANY (ARRAY['deleted'::text, 'failed'::text])))),
     CONSTRAINT connector_remote_resources_remote_id_valid CHECK ((((length(btrim(remote_id)) >= 1) AND (length(btrim(remote_id)) <= 512)) AND (remote_id = btrim(remote_id)))),
     CONSTRAINT connector_remote_resources_status_valid CHECK ((status = ANY (ARRAY['active'::text, 'missing'::text, 'deleted'::text, 'failed'::text]))),
-    CONSTRAINT connector_remote_resources_summary_object CHECK ((jsonb_typeof(summary_json) = 'object'::text))
+    CONSTRAINT connector_remote_resources_summary_object CHECK ((jsonb_typeof(summary_json) = 'object'::text)),
+    CONSTRAINT connector_resources_inspection_shape CHECK ((((inspection_flight_id IS NULL) = (inspection_evidence_json IS NULL)) AND ((inspection_flight_id IS NULL) OR (length(inspection_flight_id) > 0)) AND ((inspection_evidence_json IS NULL) OR (jsonb_typeof(inspection_evidence_json) = 'object'::text))))
 );
 
 
@@ -2002,19 +2166,6 @@ ALTER SEQUENCE public.coordinate_references_id_seq OWNED BY public.coordinate_re
 
 
 --
--- Name: detection_group_members; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.detection_group_members (
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    detection_group_id bigint NOT NULL,
-    detection_id bigint NOT NULL,
-    added_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-
---
 -- Name: detection_groups; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2080,6 +2231,8 @@ CREATE TABLE public.detections (
     attributes_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     captured_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    group_id bigint,
+    grouped_at timestamp with time zone,
     CONSTRAINT detections_confidence_valid CHECK (((confidence >= (0)::double precision) AND (confidence <= (1)::double precision))),
     CONSTRAINT detections_error_valid CHECK (((horizontal_error_meters IS NULL) OR (horizontal_error_meters >= (0)::double precision))),
     CONSTRAINT detections_location_quality_valid CHECK ((location_quality = ANY (ARRAY['surveyed'::text, 'estimated'::text, 'low'::text, 'unavailable'::text])))
@@ -2216,53 +2369,6 @@ ALTER SEQUENCE public.device_capability_grants_id_seq OWNED BY public.device_cap
 
 
 --
--- Name: device_command_protocol_correlations; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.device_command_protocol_correlations (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    command_id uuid NOT NULL,
-    adapter_id bigint NOT NULL,
-    mapping_version text NOT NULL,
-    transaction_id text NOT NULL,
-    business_id text NOT NULL,
-    method text NOT NULL,
-    request_topic text NOT NULL,
-    request_payload_json jsonb NOT NULL,
-    status text DEFAULT 'prepared'::text NOT NULL,
-    reply_event_id text,
-    reply_result integer,
-    reply_payload_json jsonb,
-    sent_at timestamp with time zone,
-    replied_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT device_command_protocol_correlations_status_valid CHECK ((status = ANY (ARRAY['prepared'::text, 'sent'::text, 'acknowledged'::text, 'nacked'::text, 'unknown'::text])))
-);
-
-
---
--- Name: device_command_protocol_correlations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.device_command_protocol_correlations_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: device_command_protocol_correlations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.device_command_protocol_correlations_id_seq OWNED BY public.device_command_protocol_correlations.id;
-
-
---
 -- Name: device_commands; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2286,9 +2392,73 @@ CREATE TABLE public.device_commands (
     completed_at timestamp with time zone,
     result_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     live_stream_id bigint,
+    protocol_correlation_id bigint,
+    protocol_adapter_id bigint,
+    protocol_mapping_version text,
+    protocol_transaction_id text,
+    protocol_business_id text,
+    protocol_method text,
+    protocol_request_topic text,
+    protocol_request_payload_json jsonb,
+    protocol_status text,
+    protocol_reply_event_id text,
+    protocol_reply_result integer,
+    protocol_reply_payload_json jsonb,
+    protocol_sent_at timestamp with time zone,
+    protocol_replied_at timestamp with time zone,
+    protocol_created_at timestamp with time zone,
+    protocol_updated_at timestamp with time zone,
     CONSTRAINT device_commands_priority_valid CHECK (((priority >= 0) AND (priority <= 100))),
+    CONSTRAINT device_commands_protocol_shape_check CHECK ((((protocol_correlation_id IS NULL) AND (protocol_adapter_id IS NULL) AND (protocol_mapping_version IS NULL) AND (protocol_transaction_id IS NULL) AND (protocol_business_id IS NULL) AND (protocol_method IS NULL) AND (protocol_request_topic IS NULL) AND (protocol_request_payload_json IS NULL) AND (protocol_status IS NULL) AND (protocol_reply_event_id IS NULL) AND (protocol_reply_result IS NULL) AND (protocol_reply_payload_json IS NULL) AND (protocol_sent_at IS NULL) AND (protocol_replied_at IS NULL) AND (protocol_created_at IS NULL) AND (protocol_updated_at IS NULL)) OR ((protocol_correlation_id IS NOT NULL) AND (protocol_adapter_id IS NOT NULL) AND (protocol_mapping_version IS NOT NULL) AND (protocol_transaction_id IS NOT NULL) AND (protocol_business_id IS NOT NULL) AND (protocol_method IS NOT NULL) AND (protocol_request_topic IS NOT NULL) AND (protocol_request_payload_json IS NOT NULL) AND (protocol_status IS NOT NULL) AND (protocol_created_at IS NOT NULL) AND (protocol_updated_at IS NOT NULL) AND (protocol_status = ANY (ARRAY['prepared'::text, 'sent'::text, 'acknowledged'::text, 'nacked'::text, 'unknown'::text]))))),
     CONSTRAINT device_commands_status_valid CHECK ((status = ANY (ARRAY['pending'::text, 'dispatchable'::text, 'sent'::text, 'acknowledged'::text, 'nacked'::text, 'timed_out'::text, 'canceled'::text, 'unknown'::text])))
 );
+
+
+--
+-- Name: device_command_protocol_correlations; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.device_command_protocol_correlations AS
+ SELECT protocol_correlation_id AS id,
+    project_id,
+    team_id,
+    id AS command_id,
+    protocol_adapter_id AS adapter_id,
+    protocol_mapping_version AS mapping_version,
+    protocol_transaction_id AS transaction_id,
+    protocol_business_id AS business_id,
+    protocol_method AS method,
+    protocol_request_topic AS request_topic,
+    protocol_request_payload_json AS request_payload_json,
+    protocol_status AS status,
+    protocol_reply_event_id AS reply_event_id,
+    protocol_reply_result AS reply_result,
+    protocol_reply_payload_json AS reply_payload_json,
+    protocol_sent_at AS sent_at,
+    protocol_replied_at AS replied_at,
+    protocol_created_at AS created_at,
+    protocol_updated_at AS updated_at
+   FROM public.device_commands
+  WHERE (protocol_status IS NOT NULL);
+
+
+--
+-- Name: device_commands_protocol_correlation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.device_commands_protocol_correlation_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: device_commands_protocol_correlation_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.device_commands_protocol_correlation_id_seq OWNED BY public.device_commands.protocol_correlation_id;
 
 
 --
@@ -2836,43 +3006,6 @@ ALTER SEQUENCE public.driver_definitions_id_seq OWNED BY public.driver_definitio
 
 
 --
--- Name: event_feedback; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.event_feedback (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    perception_event_id uuid NOT NULL,
-    action text NOT NULL,
-    value_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    reason text NOT NULL,
-    actor_user_id integer NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT event_feedback_action_valid CHECK ((action = ANY (ARRAY['confirm'::text, 'false_positive'::text, 'category_correction'::text, 'assign'::text, 'acknowledge'::text, 'investigate'::text, 'dismiss'::text, 'resolve'::text])))
-);
-
-
---
--- Name: event_feedback_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.event_feedback_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: event_feedback_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.event_feedback_id_seq OWNED BY public.event_feedback.id;
-
-
---
 -- Name: event_rule_versions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2953,50 +3086,6 @@ CREATE SEQUENCE public.event_rules_id_seq
 --
 
 ALTER SEQUENCE public.event_rules_id_seq OWNED BY public.event_rules.id;
-
-
---
--- Name: evidence_links; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.evidence_links (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    target_type text NOT NULL,
-    target_id text NOT NULL,
-    asset_id integer NOT NULL,
-    asset_version integer NOT NULL,
-    asset_checksum_sha256 text NOT NULL,
-    start_offset_ms bigint,
-    end_offset_ms bigint,
-    is_published boolean DEFAULT false NOT NULL,
-    created_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT evidence_links_checksum_valid CHECK ((asset_checksum_sha256 ~ '^[a-f0-9]{64}$'::text)),
-    CONSTRAINT evidence_links_offsets_valid CHECK ((((start_offset_ms IS NULL) AND (end_offset_ms IS NULL)) OR ((start_offset_ms IS NOT NULL) AND (start_offset_ms >= 0) AND (end_offset_ms IS NOT NULL) AND (end_offset_ms > start_offset_ms)))),
-    CONSTRAINT evidence_links_target_type_valid CHECK ((target_type = ANY (ARRAY['detection'::text, 'track'::text, 'event'::text, 'report'::text, 'issue'::text, 'task_run'::text]))),
-    CONSTRAINT evidence_links_version_positive CHECK ((asset_version > 0))
-);
-
-
---
--- Name: evidence_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.evidence_links_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: evidence_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.evidence_links_id_seq OWNED BY public.evidence_links.id;
 
 
 --
@@ -3119,6 +3208,135 @@ CREATE SEQUENCE public.idempotency_records_id_seq
 --
 
 ALTER SEQUENCE public.idempotency_records_id_seq OWNED BY public.idempotency_records.id;
+
+
+--
+-- Name: inspection_assessment_revisions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_assessment_revisions (
+    assessment_id uuid NOT NULL,
+    project_id integer NOT NULL,
+    revision integer NOT NULL,
+    source text NOT NULL,
+    decisions_json jsonb NOT NULL,
+    reviewed_by_user_id integer,
+    idempotency_key text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inspection_assessment_revisions_check CHECK (((source = 'human'::text) = (reviewed_by_user_id IS NOT NULL))),
+    CONSTRAINT inspection_assessment_revisions_decisions_json_check CHECK ((jsonb_typeof(decisions_json) = 'array'::text)),
+    CONSTRAINT inspection_assessment_revisions_revision_check CHECK ((revision > 0)),
+    CONSTRAINT inspection_assessment_revisions_source_check CHECK ((source = ANY (ARRAY['model'::text, 'human'::text])))
+);
+
+
+--
+-- Name: inspection_assessments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_assessments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    project_id integer NOT NULL,
+    team_id integer NOT NULL,
+    task_run_id integer NOT NULL,
+    task_run_step_id bigint NOT NULL,
+    evidence_set_id uuid NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    revision integer DEFAULT 0 NOT NULL,
+    provider_id integer,
+    model_version text,
+    prompt_version text,
+    evidence_hash text,
+    original_output text,
+    failure_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inspection_assessments_evidence_hash_check CHECK (((evidence_hash IS NULL) OR (evidence_hash ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT inspection_assessments_revision_check CHECK ((revision >= 0)),
+    CONSTRAINT inspection_assessments_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'needs_review'::text, 'succeeded'::text, 'failed'::text, 'canceled'::text])))
+);
+
+
+--
+-- Name: inspection_evidence_sets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_evidence_sets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    project_id integer NOT NULL,
+    team_id integer NOT NULL,
+    task_run_id integer NOT NULL,
+    task_run_step_id bigint NOT NULL,
+    observation_id uuid NOT NULL,
+    source text NOT NULL,
+    model_version text NOT NULL,
+    completeness text DEFAULT 'unavailable'::text NOT NULL,
+    target_algorithm_confirmed boolean DEFAULT false NOT NULL,
+    evidence_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inspection_evidence_sets_completeness_check CHECK ((completeness = ANY (ARRAY['complete'::text, 'partial'::text, 'alert-only'::text, 'unavailable'::text]))),
+    CONSTRAINT inspection_evidence_sets_evidence_json_check CHECK ((jsonb_typeof(evidence_json) = 'object'::text)),
+    CONSTRAINT inspection_evidence_sets_source_check CHECK ((source = ANY (ARRAY['flighthub-ai'::text, 'external'::text])))
+);
+
+
+--
+-- Name: inspection_flight_ownership; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_flight_ownership (
+    project_id integer NOT NULL,
+    connector_instance_id bigint NOT NULL,
+    remote_flight_id text NOT NULL,
+    ownership text NOT NULL,
+    task_run_id integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inspection_flight_ownership_check CHECK (((ownership <> 'task'::text) OR (task_run_id IS NOT NULL))),
+    CONSTRAINT inspection_flight_ownership_ownership_check CHECK ((ownership = ANY (ARRAY['pending'::text, 'task'::text, 'legacy'::text])))
+);
+
+
+--
+-- Name: inspection_observation_assets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_observation_assets (
+    observation_id uuid NOT NULL,
+    project_id integer NOT NULL,
+    asset_id integer NOT NULL,
+    asset_version integer NOT NULL,
+    source_run_id integer
+);
+
+
+--
+-- Name: inspection_observations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.inspection_observations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    project_id integer NOT NULL,
+    team_id integer NOT NULL,
+    task_run_id integer NOT NULL,
+    task_run_step_id bigint NOT NULL,
+    source_mode text NOT NULL,
+    connector_instance_id bigint,
+    remote_flight_id text,
+    projected_run_id integer,
+    completeness text DEFAULT 'partial'::text NOT NULL,
+    scope_description text NOT NULL,
+    observed_from timestamp with time zone NOT NULL,
+    observed_to timestamp with time zone NOT NULL,
+    manifest_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    sealed_at timestamp with time zone,
+    limited_scope_confirmed_by integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT inspection_observations_check CHECK ((observed_to >= observed_from)),
+    CONSTRAINT inspection_observations_check1 CHECK ((((source_mode = 'assets'::text) AND (connector_instance_id IS NULL) AND (remote_flight_id IS NULL) AND (projected_run_id IS NULL)) OR ((source_mode <> 'assets'::text) AND (connector_instance_id IS NOT NULL) AND (remote_flight_id IS NOT NULL) AND (length(btrim(remote_flight_id)) > 0)))),
+    CONSTRAINT inspection_observations_completeness_check CHECK ((completeness = ANY (ARRAY['complete'::text, 'partial'::text, 'alert-only'::text, 'unavailable'::text]))),
+    CONSTRAINT inspection_observations_manifest_json_check CHECK ((jsonb_typeof(manifest_json) = 'object'::text)),
+    CONSTRAINT inspection_observations_scope_description_check CHECK ((length(btrim(scope_description)) > 0)),
+    CONSTRAINT inspection_observations_source_mode_check CHECK ((source_mode = ANY (ARRAY['assets'::text, 'existing-flight'::text, 'flighthub-flight'::text])))
+);
 
 
 --
@@ -3257,7 +3475,10 @@ CREATE TABLE public.issue_links (
     link_type text NOT NULL,
     target_id text NOT NULL,
     created_by_user_id integer,
-    created_at timestamp without time zone DEFAULT now() NOT NULL
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    source_key text,
+    assessment_id uuid,
+    CONSTRAINT issue_links_source_shape CHECK ((((source_key IS NULL) = (assessment_id IS NULL)) AND ((source_key IS NULL) OR ((link_type = 'inspection_source'::text) AND (target_id = (assessment_id)::text)))))
 );
 
 
@@ -3427,9 +3648,41 @@ CREATE TABLE public.observations (
     validity text DEFAULT 'valid'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     task_run_id integer,
+    pose_device_id integer,
+    pose_captured_at timestamp with time zone,
+    pose_standard_position public.geometry(PointZ,4326),
+    pose_original_position public.geometry(PointZ),
+    pose_orientation_x double precision,
+    pose_orientation_y double precision,
+    pose_orientation_z double precision,
+    pose_orientation_w double precision,
+    pose_velocity_x double precision,
+    pose_velocity_y double precision,
+    pose_velocity_z double precision,
+    pose_horizontal_accuracy_m double precision,
+    pose_vertical_accuracy_m double precision,
+    pose_attitude_accuracy_deg double precision,
+    pose_vertical_datum text,
+    pose_transform_version text,
+    pose_spatial_quality text,
+    CONSTRAINT observations_pose_shape_check CHECK ((((pose_device_id IS NULL) AND (pose_captured_at IS NULL) AND (pose_standard_position IS NULL) AND (pose_original_position IS NULL) AND (pose_orientation_x IS NULL) AND (pose_orientation_y IS NULL) AND (pose_orientation_z IS NULL) AND (pose_orientation_w IS NULL) AND (pose_velocity_x IS NULL) AND (pose_velocity_y IS NULL) AND (pose_velocity_z IS NULL) AND (pose_horizontal_accuracy_m IS NULL) AND (pose_vertical_accuracy_m IS NULL) AND (pose_attitude_accuracy_deg IS NULL) AND (pose_vertical_datum IS NULL) AND (pose_transform_version IS NULL) AND (pose_spatial_quality IS NULL)) OR ((pose_device_id IS NOT NULL) AND (pose_captured_at IS NOT NULL) AND (pose_spatial_quality IS NOT NULL) AND (pose_spatial_quality = ANY (ARRAY['usable'::text, 'degraded'::text, 'unusable'::text])) AND (pose_horizontal_accuracy_m >= (0)::double precision) AND (pose_vertical_accuracy_m >= (0)::double precision) AND (pose_attitude_accuracy_deg >= (0)::double precision)))),
     CONSTRAINT observations_time_quality_valid CHECK ((time_quality = ANY (ARRAY['trusted'::text, 'uncertain'::text, 'invalid'::text]))),
     CONSTRAINT observations_validity_valid CHECK ((validity = ANY (ARRAY['valid'::text, 'degraded'::text, 'late'::text, 'invalid'::text])))
 );
+
+
+--
+-- Name: COLUMN observations.calibration_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.observations.calibration_id IS 'Historical snapshot ID; retired record recoverable from audit_events schema.archive';
+
+
+--
+-- Name: COLUMN observations.pose_captured_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.observations.pose_captured_at IS 'Preserves the pose timestamp independently of the generic observation timestamp for legacy records.';
 
 
 --
@@ -3530,78 +3783,47 @@ CREATE TABLE public.perception_events (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     resolved_at timestamp with time zone,
+    legacy_feedback_json jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT perception_events_counts_valid CHECK (((occurrence_count > 0) AND (state_version >= 0) AND (last_detected_at >= first_detected_at))),
+    CONSTRAINT perception_events_legacy_feedback_json_check CHECK ((jsonb_typeof(legacy_feedback_json) = 'array'::text)),
     CONSTRAINT perception_events_severity_valid CHECK ((severity = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text]))),
     CONSTRAINT perception_events_status_valid CHECK ((status = ANY (ARRAY['open'::text, 'acknowledged'::text, 'investigating'::text, 'resolved'::text, 'dismissed'::text])))
 );
 
 
 --
--- Name: platform_audit_events; Type: TABLE; Schema: public; Owner: -
+-- Name: COLUMN perception_events.legacy_feedback_json; Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE TABLE public.platform_audit_events (
-    id bigint NOT NULL,
-    actor_user_id integer NOT NULL,
-    request_id text NOT NULL,
-    action text NOT NULL,
-    resource_type text NOT NULL,
-    resource_id text,
-    input_hash text NOT NULL,
-    result_hash text,
-    status text DEFAULT 'accepted'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    completed_at timestamp with time zone,
-    CONSTRAINT platform_audit_events_status_valid CHECK ((status = ANY (ARRAY['accepted'::text, 'completed'::text])))
-);
+COMMENT ON COLUMN public.perception_events.legacy_feedback_json IS 'Read-only feedback from the retired event API; live feedback uses issue_feedback';
 
 
 --
--- Name: platform_audit_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+-- Name: poses; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE SEQUENCE public.platform_audit_events_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: platform_audit_events_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.platform_audit_events_id_seq OWNED BY public.platform_audit_events.id;
-
-
---
--- Name: poses; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.poses (
-    observation_id bigint NOT NULL,
-    project_id integer NOT NULL,
-    device_id integer NOT NULL,
-    captured_at timestamp with time zone NOT NULL,
-    standard_position public.geometry(PointZ,4326),
-    original_position public.geometry(PointZ),
-    orientation_x double precision,
-    orientation_y double precision,
-    orientation_z double precision,
-    orientation_w double precision,
-    velocity_x double precision,
-    velocity_y double precision,
-    velocity_z double precision,
-    horizontal_accuracy_m double precision,
-    vertical_accuracy_m double precision,
-    attitude_accuracy_deg double precision,
-    vertical_datum text,
-    transform_version text,
-    spatial_quality text DEFAULT 'usable'::text NOT NULL,
-    CONSTRAINT poses_accuracy_nonnegative CHECK ((((horizontal_accuracy_m IS NULL) OR (horizontal_accuracy_m >= (0)::double precision)) AND ((vertical_accuracy_m IS NULL) OR (vertical_accuracy_m >= (0)::double precision)) AND ((attitude_accuracy_deg IS NULL) OR (attitude_accuracy_deg >= (0)::double precision)))),
-    CONSTRAINT poses_spatial_quality_valid CHECK ((spatial_quality = ANY (ARRAY['usable'::text, 'degraded'::text, 'unusable'::text])))
-);
+CREATE VIEW public.poses AS
+ SELECT id AS observation_id,
+    project_id,
+    pose_device_id AS device_id,
+    pose_captured_at AS captured_at,
+    pose_standard_position AS standard_position,
+    pose_original_position AS original_position,
+    pose_orientation_x AS orientation_x,
+    pose_orientation_y AS orientation_y,
+    pose_orientation_z AS orientation_z,
+    pose_orientation_w AS orientation_w,
+    pose_velocity_x AS velocity_x,
+    pose_velocity_y AS velocity_y,
+    pose_velocity_z AS velocity_z,
+    pose_horizontal_accuracy_m AS horizontal_accuracy_m,
+    pose_vertical_accuracy_m AS vertical_accuracy_m,
+    pose_attitude_accuracy_deg AS attitude_accuracy_deg,
+    pose_vertical_datum AS vertical_datum,
+    pose_transform_version AS transform_version,
+    pose_spatial_quality AS spatial_quality
+   FROM public.observations
+  WHERE (pose_spatial_quality IS NOT NULL);
 
 
 --
@@ -3653,7 +3875,7 @@ CREATE TABLE public.project_feature_flags (
     dependency_health_json jsonb DEFAULT '{}'::jsonb NOT NULL,
     updated_by_user_id integer,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    flighthub_action_flags_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    flighthub_action_flags_json jsonb DEFAULT '{"live.control": true}'::jsonb NOT NULL,
     CONSTRAINT project_feature_flags_flighthub_actions_object CHECK ((jsonb_typeof(flighthub_action_flags_json) = 'object'::text))
 );
 
@@ -3709,6 +3931,13 @@ CREATE TABLE public.projects (
 
 
 --
+-- Name: COLUMN projects.current_safety_policy_version_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.projects.current_safety_policy_version_id IS 'Historical snapshot ID; retired record recoverable from audit_events schema.archive';
+
+
+--
 -- Name: projects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -3726,202 +3955,6 @@ CREATE SEQUENCE public.projects_id_seq
 --
 
 ALTER SEQUENCE public.projects_id_seq OWNED BY public.projects.id;
-
-
---
--- Name: retention_cleanup_runs; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.retention_cleanup_runs (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    retention_policy_id bigint NOT NULL,
-    mode text DEFAULT 'dry_run'::text NOT NULL,
-    status text DEFAULT 'planned'::text NOT NULL,
-    plan_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    candidate_count integer DEFAULT 0 NOT NULL,
-    deleted_count integer DEFAULT 0 NOT NULL,
-    created_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    completed_at timestamp with time zone,
-    error_code text,
-    CONSTRAINT retention_cleanup_runs_counts_valid CHECK (((candidate_count >= 0) AND (deleted_count >= 0) AND (deleted_count <= candidate_count))),
-    CONSTRAINT retention_cleanup_runs_mode_valid CHECK ((mode = ANY (ARRAY['dry_run'::text, 'execute'::text]))),
-    CONSTRAINT retention_cleanup_runs_status_valid CHECK ((status = ANY (ARRAY['planned'::text, 'running'::text, 'completed'::text, 'failed'::text])))
-);
-
-
---
--- Name: retention_deletion_tombstones; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.retention_deletion_tombstones (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    cleanup_run_id uuid NOT NULL,
-    retention_policy_id bigint NOT NULL,
-    asset_id integer NOT NULL,
-    storage_key_hash text NOT NULL,
-    checksum_sha256 text,
-    reason_code text NOT NULL,
-    deleted_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT retention_tombstones_checksum_valid CHECK (((checksum_sha256 IS NULL) OR (checksum_sha256 ~ '^[a-f0-9]{64}$'::text))),
-    CONSTRAINT retention_tombstones_storage_hash_valid CHECK ((storage_key_hash ~ '^[a-f0-9]{64}$'::text))
-);
-
-
---
--- Name: retention_holds; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.retention_holds (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    asset_id integer NOT NULL,
-    reason text NOT NULL,
-    status text DEFAULT 'active'::text NOT NULL,
-    hold_until timestamp with time zone,
-    created_by_user_id integer,
-    released_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    released_at timestamp with time zone,
-    CONSTRAINT retention_holds_reason_present CHECK ((length(TRIM(BOTH FROM reason)) > 0)),
-    CONSTRAINT retention_holds_release_complete CHECK ((((status = 'active'::text) AND (released_at IS NULL)) OR ((status = 'released'::text) AND (released_at IS NOT NULL)))),
-    CONSTRAINT retention_holds_status_valid CHECK ((status = ANY (ARRAY['active'::text, 'released'::text])))
-);
-
-
---
--- Name: retention_policies; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.retention_policies (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    policy_key text NOT NULL,
-    version integer NOT NULL,
-    status text DEFAULT 'draft'::text NOT NULL,
-    retention_days integer NOT NULL,
-    derivative_retention_days integer NOT NULL,
-    is_default boolean DEFAULT false NOT NULL,
-    created_by_user_id integer,
-    published_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    published_at timestamp with time zone,
-    CONSTRAINT retention_policies_duration_valid CHECK (((retention_days > 0) AND (derivative_retention_days > 0))),
-    CONSTRAINT retention_policies_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'retired'::text]))),
-    CONSTRAINT retention_policies_version_valid CHECK ((version > 0))
-);
-
-
---
--- Name: retention_policies_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.retention_policies_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: retention_policies_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.retention_policies_id_seq OWNED BY public.retention_policies.id;
-
-
---
--- Name: safety_policy_versions; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.safety_policy_versions (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    version integer NOT NULL,
-    status text DEFAULT 'draft'::text NOT NULL,
-    project_boundary public.geometry(Polygon,4326),
-    restricted_areas public.geometry(MultiPolygon,4326),
-    max_altitude_meters double precision NOT NULL,
-    max_speed_meters_per_second double precision NOT NULL,
-    minimum_battery_percent double precision NOT NULL,
-    allowed_windows_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    required_compliance_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    optional_compliance_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    exemptions_json jsonb DEFAULT '[]'::jsonb NOT NULL,
-    created_by_user_id integer,
-    published_by_user_id integer,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    published_at timestamp with time zone,
-    CONSTRAINT safety_policy_versions_limits_valid CHECK (((max_altitude_meters > (0)::double precision) AND (max_speed_meters_per_second > (0)::double precision) AND ((minimum_battery_percent >= (0)::double precision) AND (minimum_battery_percent <= (100)::double precision)))),
-    CONSTRAINT safety_policy_versions_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text])))
-);
-
-
---
--- Name: safety_policy_versions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.safety_policy_versions_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: safety_policy_versions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.safety_policy_versions_id_seq OWNED BY public.safety_policy_versions.id;
-
-
---
--- Name: sensor_calibrations; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.sensor_calibrations (
-    id bigint NOT NULL,
-    project_id integer NOT NULL,
-    team_id integer NOT NULL,
-    device_id integer NOT NULL,
-    sensor_key text NOT NULL,
-    version integer NOT NULL,
-    intrinsic_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    extrinsic_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    quality_json jsonb DEFAULT '{}'::jsonb NOT NULL,
-    valid_from timestamp with time zone NOT NULL,
-    valid_until timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT sensor_calibrations_valid_range CHECK (((valid_until IS NULL) OR (valid_until > valid_from)))
-);
-
-
---
--- Name: sensor_calibrations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.sensor_calibrations_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: sensor_calibrations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.sensor_calibrations_id_seq OWNED BY public.sensor_calibrations.id;
 
 
 --
@@ -4027,6 +4060,13 @@ CREATE TABLE public.task_runs (
 
 
 --
+-- Name: COLUMN task_runs.safety_policy_version_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.task_runs.safety_policy_version_id IS 'Historical snapshot ID; retired record recoverable from audit_events schema.archive';
+
+
+--
 -- Name: task_runs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
 --
 
@@ -4078,7 +4118,7 @@ CREATE TABLE public.task_steps (
     CONSTRAINT task_steps_position_positive CHECK (("position" > 0)),
     CONSTRAINT task_steps_retry_policy_object CHECK ((jsonb_typeof(retry_policy_json) = 'object'::text)),
     CONSTRAINT task_steps_timeout_positive CHECK (((timeout_seconds > 0) AND (timeout_seconds <= 86400))),
-    CONSTRAINT task_steps_uses_valid CHECK ((uses = ANY (ARRAY['device.command'::text, 'device.collect'::text, 'algorithm.run'::text, 'issue.create-or-update'::text, 'copilot.run'::text, 'report.generate'::text])))
+    CONSTRAINT task_steps_uses_valid CHECK ((uses = ANY (ARRAY['device.command'::text, 'device.collect'::text, 'algorithm.run'::text, 'issue.create-or-update'::text, 'copilot.run'::text, 'report.generate'::text, 'inspection.observe'::text, 'inspection.detect'::text])))
 );
 
 
@@ -4102,6 +4142,43 @@ ALTER SEQUENCE public.task_steps_id_seq OWNED BY public.task_steps.id;
 
 
 --
+-- Name: task_trigger_records; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.task_trigger_records (
+    id bigint NOT NULL,
+    project_id integer NOT NULL,
+    team_id integer NOT NULL,
+    task_id integer NOT NULL,
+    task_version_id bigint NOT NULL,
+    occurrence_key text NOT NULL,
+    scheduled_for timestamp with time zone,
+    interval_end timestamp with time zone,
+    outcome text NOT NULL,
+    reason text NOT NULL,
+    task_run_id integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT task_trigger_records_check CHECK (((outcome = 'accepted'::text) = (task_run_id IS NOT NULL))),
+    CONSTRAINT task_trigger_records_check1 CHECK (((interval_end IS NULL) OR ((scheduled_for IS NOT NULL) AND (interval_end >= scheduled_for)))),
+    CONSTRAINT task_trigger_records_outcome_check CHECK ((outcome = ANY (ARRAY['accepted'::text, 'missed'::text, 'skipped'::text, 'error'::text])))
+);
+
+
+--
+-- Name: task_trigger_records_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.task_trigger_records ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.task_trigger_records_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: task_versions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4121,7 +4198,16 @@ CREATE TABLE public.task_versions (
     input_schema_json jsonb DEFAULT '{"type": "object", "properties": {}, "additionalProperties": false}'::jsonb NOT NULL,
     trigger_json jsonb DEFAULT '{"type": "manual"}'::jsonb NOT NULL,
     concurrency_limit integer DEFAULT 1 NOT NULL,
+    author_format text DEFAULT 'json'::text NOT NULL,
+    author_source text,
+    author_revision integer DEFAULT 0 NOT NULL,
+    dsl_version text DEFAULT 'aerosight/v1'::text NOT NULL,
+    definition_hash text,
+    CONSTRAINT task_versions_author_format_check CHECK ((author_format = ANY (ARRAY['json'::text, 'yaml'::text]))),
+    CONSTRAINT task_versions_author_revision_check CHECK ((author_revision >= 0)),
     CONSTRAINT task_versions_concurrency_positive CHECK (((concurrency_limit > 0) AND (concurrency_limit <= 100))),
+    CONSTRAINT task_versions_definition_hash_check CHECK (((definition_hash IS NULL) OR (definition_hash ~ '^[a-f0-9]{64}$'::text))),
+    CONSTRAINT task_versions_dsl_version_check CHECK ((dsl_version = ANY (ARRAY['aerosight/v1'::text, 'aerosight/v2'::text]))),
     CONSTRAINT task_versions_input_schema_object CHECK ((jsonb_typeof(input_schema_json) = 'object'::text)),
     CONSTRAINT task_versions_status_valid CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text, 'retired'::text]))),
     CONSTRAINT task_versions_trigger_object CHECK ((jsonb_typeof(trigger_json) = 'object'::text)),
@@ -4168,7 +4254,9 @@ CREATE TABLE public.tasks (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone DEFAULT now() NOT NULL,
     team_id integer NOT NULL,
-    current_published_version_id bigint
+    current_published_version_id bigint,
+    authorized_by_user_id integer,
+    schedule_evaluated_at timestamp with time zone
 );
 
 
@@ -4314,13 +4402,6 @@ ALTER TABLE ONLY public.device_telemetry ATTACH PARTITION public.device_telemetr
 
 
 --
--- Name: agent_draft_evidence id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_draft_evidence ALTER COLUMN id SET DEFAULT nextval('public.agent_draft_evidence_id_seq'::regclass);
-
-
---
 -- Name: agent_messages id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4346,20 +4427,6 @@ ALTER TABLE ONLY public.agents ALTER COLUMN id SET DEFAULT nextval('public.agent
 --
 
 ALTER TABLE ONLY public.ai_providers ALTER COLUMN id SET DEFAULT nextval('public.ai_providers_id_seq'::regclass);
-
-
---
--- Name: alert_automation_policies id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies ALTER COLUMN id SET DEFAULT nextval('public.alert_automation_policies_id_seq'::regclass);
-
-
---
--- Name: alert_automation_policy_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions ALTER COLUMN id SET DEFAULT nextval('public.alert_automation_policy_versions_id_seq'::regclass);
 
 
 --
@@ -4402,13 +4469,6 @@ ALTER TABLE ONLY public.algorithm_run_attempts ALTER COLUMN id SET DEFAULT nextv
 --
 
 ALTER TABLE ONLY public.approvals ALTER COLUMN id SET DEFAULT nextval('public.approvals_id_seq'::regclass);
-
-
---
--- Name: asset_derivatives id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_derivatives ALTER COLUMN id SET DEFAULT nextval('public.asset_derivatives_id_seq'::regclass);
 
 
 --
@@ -4510,13 +4570,6 @@ ALTER TABLE ONLY public.device_capability_grants ALTER COLUMN id SET DEFAULT nex
 
 
 --
--- Name: device_command_protocol_correlations id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations ALTER COLUMN id SET DEFAULT nextval('public.device_command_protocol_correlations_id_seq'::regclass);
-
-
---
 -- Name: device_connections id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4594,13 +4647,6 @@ ALTER TABLE ONLY public.driver_definitions ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
--- Name: event_feedback id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_feedback ALTER COLUMN id SET DEFAULT nextval('public.event_feedback_id_seq'::regclass);
-
-
---
 -- Name: event_rule_versions id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4612,13 +4658,6 @@ ALTER TABLE ONLY public.event_rule_versions ALTER COLUMN id SET DEFAULT nextval(
 --
 
 ALTER TABLE ONLY public.event_rules ALTER COLUMN id SET DEFAULT nextval('public.event_rules_id_seq'::regclass);
-
-
---
--- Name: evidence_links id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links ALTER COLUMN id SET DEFAULT nextval('public.evidence_links_id_seq'::regclass);
 
 
 --
@@ -4692,13 +4731,6 @@ ALTER TABLE ONLY public.outbox_events ALTER COLUMN id SET DEFAULT nextval('publi
 
 
 --
--- Name: platform_audit_events id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.platform_audit_events ALTER COLUMN id SET DEFAULT nextval('public.platform_audit_events_id_seq'::regclass);
-
-
---
 -- Name: project_events cursor; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -4717,27 +4749,6 @@ ALTER TABLE ONLY public.project_permissions ALTER COLUMN id SET DEFAULT nextval(
 --
 
 ALTER TABLE ONLY public.projects ALTER COLUMN id SET DEFAULT nextval('public.projects_id_seq'::regclass);
-
-
---
--- Name: retention_policies id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies ALTER COLUMN id SET DEFAULT nextval('public.retention_policies_id_seq'::regclass);
-
-
---
--- Name: safety_policy_versions id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions ALTER COLUMN id SET DEFAULT nextval('public.safety_policy_versions_id_seq'::regclass);
-
-
---
--- Name: sensor_calibrations id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations ALTER COLUMN id SET DEFAULT nextval('public.sensor_calibrations_id_seq'::regclass);
 
 
 --
@@ -4797,22 +4808,6 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 
 
 --
--- Name: agent_draft_evidence agent_draft_evidence_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_draft_evidence
-    ADD CONSTRAINT agent_draft_evidence_pkey PRIMARY KEY (id);
-
-
---
--- Name: agent_draft_evidence agent_draft_evidence_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.agent_draft_evidence
-    ADD CONSTRAINT agent_draft_evidence_unique UNIQUE (agent_draft_id, reference_type, reference_id, reference_version);
-
-
---
 -- Name: agent_drafts agent_drafts_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4861,6 +4856,14 @@ ALTER TABLE ONLY public.agent_tool_jobs
 
 
 --
+-- Name: agent_write_approvals agent_write_approvals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_write_approvals
+    ADD CONSTRAINT agent_write_approvals_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: agents agents_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -4890,86 +4893,6 @@ ALTER TABLE ONLY public.ai_providers
 
 ALTER TABLE ONLY public.ai_providers
     ADD CONSTRAINT ai_providers_pkey PRIMARY KEY (id);
-
-
---
--- Name: alert_automation_drafts alert_automation_drafts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_drafts
-    ADD CONSTRAINT alert_automation_drafts_pkey PRIMARY KEY (id);
-
-
---
--- Name: alert_automation_drafts alert_automation_drafts_run_type_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_drafts
-    ADD CONSTRAINT alert_automation_drafts_run_type_unique UNIQUE (automation_run_id, draft_type);
-
-
---
--- Name: alert_automation_policies alert_automation_policies_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies
-    ADD CONSTRAINT alert_automation_policies_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: alert_automation_policies alert_automation_policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies
-    ADD CONSTRAINT alert_automation_policies_pkey PRIMARY KEY (id);
-
-
---
--- Name: alert_automation_policies alert_automation_policies_project_name_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies
-    ADD CONSTRAINT alert_automation_policies_project_name_unique UNIQUE (project_id, name);
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_pkey PRIMARY KEY (id);
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_policy_version_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_policy_version_unique UNIQUE (alert_automation_policy_id, version);
-
-
---
--- Name: alert_automation_runs alert_automation_runs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_runs
-    ADD CONSTRAINT alert_automation_runs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: alert_automation_runs alert_automation_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_runs
-    ADD CONSTRAINT alert_automation_runs_pkey PRIMARY KEY (id);
 
 
 --
@@ -5053,7 +4976,6 @@ ALTER TABLE ONLY public.algorithm_providers
 
 
 --
---
 -- Name: algorithm_run_attempts algorithm_run_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5126,38 +5048,6 @@ ALTER TABLE ONLY public.approvals
 
 
 --
--- Name: asset_derivatives asset_derivatives_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_derivatives
-    ADD CONSTRAINT asset_derivatives_pkey PRIMARY KEY (id);
-
-
---
--- Name: asset_derivatives asset_derivatives_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_derivatives
-    ADD CONSTRAINT asset_derivatives_unique UNIQUE (source_asset_id, derived_asset_id, derivative_type);
-
-
---
--- Name: asset_upload_intents asset_upload_intents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_pkey PRIMARY KEY (id);
-
-
---
--- Name: asset_upload_intents asset_upload_intents_project_object_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_project_object_unique UNIQUE (project_id, object_key);
-
-
---
 -- Name: assets assets_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5182,6 +5072,22 @@ ALTER TABLE ONLY public.assets
 
 
 --
+-- Name: assets assets_version_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assets
+    ADD CONSTRAINT assets_version_project_unique UNIQUE (id, version, project_id);
+
+
+--
+-- Name: audit_events audit_events_legacy_platform_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_events
+    ADD CONSTRAINT audit_events_legacy_platform_id_key UNIQUE (legacy_platform_id);
+
+
+--
 -- Name: audit_events audit_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5203,54 +5109,6 @@ ALTER TABLE ONLY public.command_attempts
 
 ALTER TABLE ONLY public.command_attempts
     ADD CONSTRAINT command_attempts_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_action_jobs connector_action_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_action_jobs connector_action_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_action_jobs connector_action_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_reference_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_reference_unique UNIQUE (project_id, connector_instance_id, access_kind, reference_digest);
 
 
 --
@@ -5310,171 +5168,43 @@ ALTER TABLE ONLY public.connector_definitions
 
 
 --
--- Name: connector_device_admin_jobs connector_device_admin_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_device_admin_jobs connector_device_admin_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_id_project_id_key UNIQUE (id, project_id);
 
 
 --
--- Name: connector_device_admin_jobs connector_device_admin_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_id_project_id_team_id_connector_instance_id__key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_id_project_unique UNIQUE (id, project_id);
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_id_project_id_team_id_connector_instance_id__key UNIQUE (id, project_id, team_id, connector_instance_id, task_run_id, action_kind);
 
 
 --
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_job_type_project_id_connector_instance_id_ac_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_job_type_project_id_connector_instance_id_ac_key UNIQUE (job_type, project_id, connector_instance_id, action_kind, idempotency_key);
 
 
 --
--- Name: connector_live_action_jobs connector_live_action_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_job_type_project_id_connector_instance_id_op_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_live_action_jobs connector_live_action_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_job_type_project_id_connector_instance_id_op_key UNIQUE (job_type, project_id, connector_instance_id, operation_kind, idempotency_key);
 
 
 --
--- Name: connector_live_action_jobs connector_live_action_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_management_write_jobs connector_management_write_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_management_write_jobs connector_management_write_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_management_write_jobs connector_management_write_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_model_delete_jobs connector_model_delete_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_model_delete_jobs connector_model_delete_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_model_delete_jobs connector_model_delete_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_model_jobs connector_model_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_model_jobs connector_model_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_model_jobs connector_model_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, action_kind, idempotency_key);
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_pkey PRIMARY KEY (id);
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_project_idempotency_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_project_idempotency_unique UNIQUE (project_id, connector_instance_id, operation_kind, idempotency_key);
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_pkey PRIMARY KEY (id);
 
 
 --
@@ -5499,6 +5229,14 @@ ALTER TABLE ONLY public.connector_open_model_uploads
 
 ALTER TABLE ONLY public.connector_open_model_uploads
     ADD CONSTRAINT connector_open_model_uploads_project_idempotency_unique UNIQUE (project_id, connector_instance_id, idempotency_key);
+
+
+--
+-- Name: connector_remote_resources connector_remote_resources_connector_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.connector_remote_resources
+    ADD CONSTRAINT connector_remote_resources_connector_project_unique UNIQUE (id, project_id, connector_instance_id);
 
 
 --
@@ -5590,22 +5328,6 @@ ALTER TABLE ONLY public.coordinate_references
 
 
 --
--- Name: detection_group_members detection_group_members_detection_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.detection_group_members
-    ADD CONSTRAINT detection_group_members_detection_unique UNIQUE (detection_id);
-
-
---
--- Name: detection_group_members detection_group_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.detection_group_members
-    ADD CONSTRAINT detection_group_members_pkey PRIMARY KEY (detection_group_id, detection_id);
-
-
---
 -- Name: detection_groups detection_groups_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5683,38 +5405,6 @@ ALTER TABLE ONLY public.device_capabilities
 
 ALTER TABLE ONLY public.device_capability_grants
     ADD CONSTRAINT device_capability_grants_pkey PRIMARY KEY (id);
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_business_method_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_business_method_unique UNIQUE (adapter_id, business_id, method);
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_command_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_command_unique UNIQUE (command_id);
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_pkey PRIMARY KEY (id);
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_transaction_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_transaction_unique UNIQUE (adapter_id, transaction_id);
 
 
 --
@@ -5990,14 +5680,6 @@ ALTER TABLE ONLY public.driver_definitions
 
 
 --
--- Name: event_feedback event_feedback_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_feedback
-    ADD CONSTRAINT event_feedback_pkey PRIMARY KEY (id);
-
-
---
 -- Name: event_rule_versions event_rule_versions_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6043,22 +5725,6 @@ ALTER TABLE ONLY public.event_rules
 
 ALTER TABLE ONLY public.event_rules
     ADD CONSTRAINT event_rules_project_name_unique UNIQUE (project_id, name);
-
-
---
--- Name: evidence_links evidence_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links
-    ADD CONSTRAINT evidence_links_pkey PRIMARY KEY (id);
-
-
---
--- Name: evidence_links evidence_links_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links
-    ADD CONSTRAINT evidence_links_unique UNIQUE (project_id, target_type, target_id, asset_id, start_offset_ms, end_offset_ms);
 
 
 --
@@ -6139,6 +5805,118 @@ ALTER TABLE ONLY public.idempotency_records
 
 ALTER TABLE ONLY public.idempotency_records
     ADD CONSTRAINT idempotency_records_scope_unique UNIQUE (project_id, actor_key, operation, idempotency_key);
+
+
+--
+-- Name: inspection_assessment_revisions inspection_assessment_revisio_assessment_id_idempotency_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessment_revisions
+    ADD CONSTRAINT inspection_assessment_revisio_assessment_id_idempotency_key_key UNIQUE (assessment_id, idempotency_key);
+
+
+--
+-- Name: inspection_assessment_revisions inspection_assessment_revisions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessment_revisions
+    ADD CONSTRAINT inspection_assessment_revisions_pkey PRIMARY KEY (assessment_id, revision);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_id_project_id_key UNIQUE (id, project_id);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_task_run_step_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_task_run_step_id_project_id_key UNIQUE (task_run_step_id, project_id);
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_id_task_run_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_id_task_run_id_project_id_key UNIQUE (id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_task_run_step_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_task_run_step_id_project_id_key UNIQUE (task_run_step_id, project_id);
+
+
+--
+-- Name: inspection_flight_ownership inspection_flight_ownership_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_flight_ownership
+    ADD CONSTRAINT inspection_flight_ownership_pkey PRIMARY KEY (project_id, connector_instance_id, remote_flight_id);
+
+
+--
+-- Name: inspection_observation_assets inspection_observation_assets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observation_assets
+    ADD CONSTRAINT inspection_observation_assets_pkey PRIMARY KEY (observation_id, asset_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_id_project_id_key UNIQUE (id, project_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_id_task_run_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_id_task_run_id_project_id_key UNIQUE (id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: inspection_observations inspection_observations_task_run_step_id_project_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_task_run_step_id_project_id_key UNIQUE (task_run_step_id, project_id);
 
 
 --
@@ -6294,22 +6072,6 @@ ALTER TABLE ONLY public.perception_events
 
 
 --
--- Name: platform_audit_events platform_audit_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.platform_audit_events
-    ADD CONSTRAINT platform_audit_events_pkey PRIMARY KEY (id);
-
-
---
--- Name: poses poses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.poses
-    ADD CONSTRAINT poses_pkey PRIMARY KEY (observation_id);
-
-
---
 -- Name: project_events project_events_event_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6358,118 +6120,6 @@ ALTER TABLE ONLY public.projects
 
 
 --
--- Name: retention_cleanup_runs retention_cleanup_runs_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_cleanup_runs
-    ADD CONSTRAINT retention_cleanup_runs_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: retention_cleanup_runs retention_cleanup_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_cleanup_runs
-    ADD CONSTRAINT retention_cleanup_runs_pkey PRIMARY KEY (id);
-
-
---
--- Name: retention_deletion_tombstones retention_deletion_tombstones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_deletion_tombstones_pkey PRIMARY KEY (id);
-
-
---
--- Name: retention_holds retention_holds_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_holds
-    ADD CONSTRAINT retention_holds_pkey PRIMARY KEY (id);
-
-
---
--- Name: retention_policies retention_policies_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: retention_policies retention_policies_key_version_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_key_version_unique UNIQUE (project_id, policy_key, version);
-
-
---
--- Name: retention_policies retention_policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_pkey PRIMARY KEY (id);
-
-
---
--- Name: retention_deletion_tombstones retention_tombstones_asset_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_tombstones_asset_unique UNIQUE (asset_id);
-
-
---
--- Name: safety_policy_versions safety_policy_versions_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: safety_policy_versions safety_policy_versions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_pkey PRIMARY KEY (id);
-
-
---
--- Name: safety_policy_versions safety_policy_versions_project_version_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_project_version_unique UNIQUE (project_id, version);
-
-
---
--- Name: sensor_calibrations sensor_calibrations_device_sensor_version_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations
-    ADD CONSTRAINT sensor_calibrations_device_sensor_version_unique UNIQUE (device_id, sensor_key, version);
-
-
---
--- Name: sensor_calibrations sensor_calibrations_id_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations
-    ADD CONSTRAINT sensor_calibrations_id_project_unique UNIQUE (id, project_id);
-
-
---
--- Name: sensor_calibrations sensor_calibrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations
-    ADD CONSTRAINT sensor_calibrations_pkey PRIMARY KEY (id);
-
-
---
 -- Name: sessions sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6507,6 +6157,14 @@ ALTER TABLE ONLY public.task_run_steps
 
 ALTER TABLE ONLY public.task_run_steps
     ADD CONSTRAINT task_run_steps_run_position_unique UNIQUE (task_run_id, "position");
+
+
+--
+-- Name: task_run_steps task_run_steps_run_project_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_run_steps
+    ADD CONSTRAINT task_run_steps_run_project_unique UNIQUE (id, task_run_id, project_id);
 
 
 --
@@ -6555,6 +6213,22 @@ ALTER TABLE ONLY public.task_steps
 
 ALTER TABLE ONLY public.task_steps
     ADD CONSTRAINT task_steps_version_position_unique UNIQUE (task_version_id, "position");
+
+
+--
+-- Name: task_trigger_records task_trigger_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: task_trigger_records task_trigger_records_project_id_task_id_occurrence_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_project_id_task_id_occurrence_key_key UNIQUE (project_id, task_id, occurrence_key);
 
 
 --
@@ -6646,13 +6320,6 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: agent_draft_evidence_project_ref_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX agent_draft_evidence_project_ref_idx ON public.agent_draft_evidence USING btree (project_id, reference_type, reference_id);
-
-
---
 -- Name: agent_drafts_project_created_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6723,6 +6390,13 @@ CREATE INDEX agent_tool_jobs_session_idx ON public.agent_tool_jobs USING btree (
 
 
 --
+-- Name: agent_write_approvals_session_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX agent_write_approvals_session_idx ON public.agent_write_approvals USING btree (project_id, session_id, user_id, created_at DESC);
+
+
+--
 -- Name: agents_project_copilot_unique; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6751,38 +6425,10 @@ CREATE UNIQUE INDEX ai_providers_single_default_idx ON public.ai_providers USING
 
 
 --
--- Name: alert_automation_drafts_project_event_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: ai_providers_single_realtime_default_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX alert_automation_drafts_project_event_idx ON public.alert_automation_drafts USING btree (project_id, perception_event_id, created_at DESC);
-
-
---
--- Name: alert_automation_policy_versions_one_draft_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX alert_automation_policy_versions_one_draft_idx ON public.alert_automation_policy_versions USING btree (alert_automation_policy_id) WHERE (status = 'draft'::text);
-
-
---
--- Name: alert_automation_policy_versions_project_status_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX alert_automation_policy_versions_project_status_idx ON public.alert_automation_policy_versions USING btree (project_id, status);
-
-
---
--- Name: alert_automation_runs_claim_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX alert_automation_runs_claim_idx ON public.alert_automation_runs USING btree (status, queued_at) WHERE (status = 'queued'::text);
-
-
---
--- Name: alert_automation_runs_project_event_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX alert_automation_runs_project_event_idx ON public.alert_automation_runs USING btree (project_id, perception_event_id, created_at DESC);
+CREATE UNIQUE INDEX ai_providers_single_realtime_default_idx ON public.ai_providers USING btree (is_realtime_default) WHERE is_realtime_default;
 
 
 --
@@ -6863,17 +6509,10 @@ CREATE INDEX approvals_request_decided_idx ON public.approvals USING btree (appr
 
 
 --
--- Name: asset_derivatives_source_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: assets_derivative_source_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX asset_derivatives_source_idx ON public.asset_derivatives USING btree (project_id, source_asset_id);
-
-
---
--- Name: asset_upload_intents_expiry_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX asset_upload_intents_expiry_idx ON public.asset_upload_intents USING btree (status, expires_at);
+CREATE INDEX assets_derivative_source_idx ON public.assets USING btree (project_id, derivative_source_asset_id) WHERE (derivative_source_asset_id IS NOT NULL);
 
 
 --
@@ -6902,6 +6541,20 @@ CREATE INDEX assets_project_created_idx ON public.assets USING btree (project_id
 --
 
 CREATE INDEX assets_project_status_created_idx ON public.assets USING btree (project_id, status, created_at DESC);
+
+
+--
+-- Name: assets_remote_reference_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX assets_remote_reference_key ON public.assets USING btree (project_id, remote_connector_id, remote_access_kind, remote_reference_digest) WHERE (remote_access_kind IS NOT NULL);
+
+
+--
+-- Name: assets_remote_resource_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX assets_remote_resource_idx ON public.assets USING btree (project_id, remote_connector_id, remote_resource_id) WHERE (remote_access_kind IS NOT NULL);
 
 
 --
@@ -6947,20 +6600,6 @@ CREATE INDEX command_attempts_command_idx ON public.command_attempts USING btree
 
 
 --
--- Name: connector_action_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_action_jobs_pending_idx ON public.connector_action_jobs USING btree (connector_instance_id, action_kind, status, updated_at) WHERE (status <> ALL (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text]));
-
-
---
--- Name: connector_asset_access_refs_resource_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_asset_access_refs_resource_idx ON public.connector_asset_access_refs USING btree (project_id, connector_instance_id, remote_resource_id);
-
-
---
 -- Name: connector_capability_snapshots_acceptance_scope_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -6996,66 +6635,24 @@ CREATE INDEX connector_control_sessions_reconcile_idx ON public.connector_contro
 
 
 --
--- Name: connector_device_admin_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: connector_jobs_business_flight_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX connector_device_admin_jobs_pending_idx ON public.connector_device_admin_jobs USING btree (status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text]));
-
-
---
--- Name: connector_geospatial_action_jobs_active_target_unique; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX connector_geospatial_action_jobs_active_target_unique ON public.connector_geospatial_action_jobs USING btree (target_resource_id) WHERE ((target_resource_id IS NOT NULL) AND (status = ANY (ARRAY['queued'::text, 'executing'::text])));
+CREATE UNIQUE INDEX connector_jobs_business_flight_unique ON public.connector_jobs USING btree (project_id, task_run_id) WHERE (business_step_id IS NOT NULL);
 
 
 --
--- Name: connector_geospatial_action_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: connector_jobs_business_step_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX connector_geospatial_action_jobs_pending_idx ON public.connector_geospatial_action_jobs USING btree (connector_instance_id, action_kind, status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text]));
-
-
---
--- Name: connector_live_action_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_live_action_jobs_pending_idx ON public.connector_live_action_jobs USING btree (connector_instance_id, action_kind, status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text]));
+CREATE UNIQUE INDEX connector_jobs_business_step_unique ON public.connector_jobs USING btree (project_id, business_step_id) WHERE (business_step_id IS NOT NULL);
 
 
 --
--- Name: connector_management_write_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: connector_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX connector_management_write_jobs_pending_idx ON public.connector_management_write_jobs USING btree (status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text, 'accepted'::text]));
-
-
---
--- Name: connector_model_delete_jobs_active_target_unique; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX connector_model_delete_jobs_active_target_unique ON public.connector_model_delete_jobs USING btree (target_resource_id) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text]));
-
-
---
--- Name: connector_model_delete_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_model_delete_jobs_pending_idx ON public.connector_model_delete_jobs USING btree (connector_instance_id, action_kind, status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'executing'::text]));
-
-
---
--- Name: connector_model_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_model_jobs_pending_idx ON public.connector_model_jobs USING btree (connector_instance_id, status, updated_at) WHERE (status = ANY (ARRAY['queued'::text, 'reconciling'::text]));
-
-
---
--- Name: connector_object_upload_jobs_pending_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX connector_object_upload_jobs_pending_idx ON public.connector_object_upload_jobs USING btree (connector_instance_id, operation_kind, status, updated_at) WHERE (status <> ALL (ARRAY['succeeded'::text, 'failed'::text]));
+CREATE INDEX connector_jobs_pending_idx ON public.connector_jobs USING btree (job_type, status, updated_at) WHERE (status <> ALL (ARRAY['succeeded'::text, 'failed'::text, 'blocked'::text]));
 
 
 --
@@ -7084,6 +6681,13 @@ CREATE INDEX connector_remote_resources_lookup_idx ON public.connector_remote_re
 --
 
 CREATE INDEX connector_resource_sync_states_due_idx ON public.connector_resource_sync_states USING btree (connector_instance_id, status, next_attempt_at);
+
+
+--
+-- Name: connector_resources_inspection_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX connector_resources_inspection_idx ON public.connector_remote_resources USING btree (project_id, connector_instance_id, inspection_flight_id) WHERE (inspection_flight_id IS NOT NULL);
 
 
 --
@@ -7119,6 +6723,13 @@ CREATE INDEX detection_groups_project_time_idx ON public.detection_groups USING 
 --
 
 CREATE INDEX detections_geometry_gist ON public.detections USING gist (geographic_geometry);
+
+
+--
+-- Name: detections_group_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX detections_group_idx ON public.detections USING btree (project_id, group_id) WHERE (group_id IS NOT NULL);
 
 
 --
@@ -7192,13 +6803,6 @@ CREATE UNIQUE INDEX device_capability_grants_unique ON public.device_capability_
 
 
 --
--- Name: device_command_protocol_correlations_reply_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX device_command_protocol_correlations_reply_idx ON public.device_command_protocol_correlations USING btree (adapter_id, transaction_id, business_id, method, status);
-
-
---
 -- Name: device_commands_dispatch_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7210,6 +6814,34 @@ CREATE INDEX device_commands_dispatch_idx ON public.device_commands USING btree 
 --
 
 CREATE UNIQUE INDEX device_commands_live_stream_action_unique ON public.device_commands USING btree (live_stream_id, command_key) WHERE (live_stream_id IS NOT NULL);
+
+
+--
+-- Name: device_commands_protocol_business_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX device_commands_protocol_business_key ON public.device_commands USING btree (protocol_adapter_id, protocol_business_id, protocol_method) WHERE (protocol_status IS NOT NULL);
+
+
+--
+-- Name: device_commands_protocol_id_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX device_commands_protocol_id_key ON public.device_commands USING btree (protocol_correlation_id) WHERE (protocol_status IS NOT NULL);
+
+
+--
+-- Name: device_commands_protocol_reply_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX device_commands_protocol_reply_idx ON public.device_commands USING btree (protocol_adapter_id, protocol_transaction_id, protocol_business_id, protocol_method, protocol_status) WHERE (protocol_status IS NOT NULL);
+
+
+--
+-- Name: device_commands_protocol_transaction_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX device_commands_protocol_transaction_key ON public.device_commands USING btree (protocol_adapter_id, protocol_transaction_id) WHERE (protocol_status IS NOT NULL);
 
 
 --
@@ -7402,24 +7034,10 @@ CREATE INDEX driver_definitions_status_idx ON public.driver_definitions USING bt
 
 
 --
--- Name: event_feedback_event_created_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX event_feedback_event_created_idx ON public.event_feedback USING btree (perception_event_id, created_at);
-
-
---
 -- Name: event_rule_versions_one_draft_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX event_rule_versions_one_draft_idx ON public.event_rule_versions USING btree (event_rule_id) WHERE (status = 'draft'::text);
-
-
---
--- Name: evidence_links_target_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX evidence_links_target_idx ON public.evidence_links USING btree (project_id, target_type, target_id);
 
 
 --
@@ -7510,7 +7128,7 @@ CREATE INDEX issue_feedback_quality_idx ON public.issue_feedback USING btree (pr
 -- Name: issue_links_issue_target_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX issue_links_issue_target_unique ON public.issue_links USING btree (issue_id, link_type, target_id);
+CREATE UNIQUE INDEX issue_links_issue_target_unique ON public.issue_links USING btree (issue_id, link_type, target_id) WHERE (source_key IS NULL);
 
 
 --
@@ -7518,6 +7136,13 @@ CREATE UNIQUE INDEX issue_links_issue_target_unique ON public.issue_links USING 
 --
 
 CREATE INDEX issue_links_project_issue_idx ON public.issue_links USING btree (project_id, issue_id);
+
+
+--
+-- Name: issue_links_source_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX issue_links_source_unique ON public.issue_links USING btree (project_id, source_key) WHERE (source_key IS NOT NULL);
 
 
 --
@@ -7619,6 +7244,27 @@ CREATE INDEX observations_original_geometry_gist ON public.observations USING gi
 
 
 --
+-- Name: observations_pose_device_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX observations_pose_device_time_idx ON public.observations USING btree (pose_device_id, pose_captured_at, id) WHERE (pose_spatial_quality IS NOT NULL);
+
+
+--
+-- Name: observations_pose_position_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX observations_pose_position_idx ON public.observations USING gist (pose_standard_position) WHERE (pose_spatial_quality IS NOT NULL);
+
+
+--
+-- Name: observations_pose_project_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX observations_pose_project_time_idx ON public.observations USING btree (project_id, pose_captured_at, id) WHERE (pose_spatial_quality IS NOT NULL);
+
+
+--
 -- Name: observations_project_time_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -7665,34 +7311,6 @@ CREATE UNIQUE INDEX perception_events_active_dedup_idx ON public.perception_even
 --
 
 CREATE INDEX perception_events_project_status_idx ON public.perception_events USING btree (project_id, status, last_detected_at DESC);
-
-
---
--- Name: platform_audit_events_actor_created_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX platform_audit_events_actor_created_idx ON public.platform_audit_events USING btree (actor_user_id, created_at DESC);
-
-
---
--- Name: poses_device_time_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX poses_device_time_idx ON public.poses USING btree (device_id, captured_at DESC, observation_id);
-
-
---
--- Name: poses_project_time_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX poses_project_time_idx ON public.poses USING btree (project_id, captured_at DESC, observation_id);
-
-
---
--- Name: poses_standard_position_gist; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX poses_standard_position_gist ON public.poses USING gist (standard_position);
 
 
 --
@@ -7749,62 +7367,6 @@ CREATE INDEX projects_team_idx ON public.projects USING btree (team_id);
 --
 
 CREATE UNIQUE INDEX projects_team_name_unique ON public.projects USING btree (team_id, name);
-
-
---
--- Name: retention_cleanup_runs_project_created_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX retention_cleanup_runs_project_created_idx ON public.retention_cleanup_runs USING btree (project_id, created_at DESC);
-
-
---
--- Name: retention_holds_one_active_asset_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX retention_holds_one_active_asset_idx ON public.retention_holds USING btree (project_id, asset_id) WHERE (status = 'active'::text);
-
-
---
--- Name: retention_policies_one_default_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX retention_policies_one_default_idx ON public.retention_policies USING btree (project_id) WHERE ((status = 'published'::text) AND is_default);
-
-
---
--- Name: retention_tombstones_project_deleted_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX retention_tombstones_project_deleted_idx ON public.retention_deletion_tombstones USING btree (project_id, deleted_at DESC);
-
-
---
--- Name: safety_policy_versions_boundary_gist; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX safety_policy_versions_boundary_gist ON public.safety_policy_versions USING gist (project_boundary);
-
-
---
--- Name: safety_policy_versions_one_draft_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX safety_policy_versions_one_draft_idx ON public.safety_policy_versions USING btree (project_id) WHERE (status = 'draft'::text);
-
-
---
--- Name: safety_policy_versions_restricted_gist; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX safety_policy_versions_restricted_gist ON public.safety_policy_versions USING gist (restricted_areas);
-
-
---
--- Name: sensor_calibrations_device_valid_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX sensor_calibrations_device_valid_idx ON public.sensor_calibrations USING btree (device_id, sensor_key, valid_from DESC);
 
 
 --
@@ -7983,6 +7545,41 @@ CREATE TRIGGER approvals_validate_decision BEFORE INSERT ON public.approvals FOR
 
 
 --
+-- Name: assets assets_legacy_published_evidence; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER assets_legacy_published_evidence BEFORE DELETE OR UPDATE ON public.assets FOR EACH ROW EXECUTE FUNCTION public.protect_legacy_published_asset();
+
+
+--
+-- Name: assets clear_assets_remote_extension; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER clear_assets_remote_extension BEFORE UPDATE ON public.assets FOR EACH ROW EXECUTE FUNCTION public.clear_assets_remote_extension();
+
+
+--
+-- Name: device_commands clear_device_commands_protocol_extension; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER clear_device_commands_protocol_extension BEFORE UPDATE ON public.device_commands FOR EACH ROW EXECUTE FUNCTION public.clear_device_commands_protocol_extension();
+
+
+--
+-- Name: observations clear_observations_pose_extension; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER clear_observations_pose_extension BEFORE UPDATE ON public.observations FOR EACH ROW EXECUTE FUNCTION public.clear_observations_pose_extension();
+
+
+--
+-- Name: connector_jobs connector_jobs_preserve_identity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER connector_jobs_preserve_identity BEFORE UPDATE ON public.connector_jobs FOR EACH ROW EXECUTE FUNCTION public.preserve_connector_job_identity();
+
+
+--
 -- Name: device_adapters device_adapters_populate_connector_definition; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8011,13 +7608,6 @@ CREATE TRIGGER event_rule_versions_published_immutable BEFORE DELETE OR UPDATE O
 
 
 --
--- Name: evidence_links evidence_links_published_immutable; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER evidence_links_published_immutable BEFORE DELETE OR UPDATE ON public.evidence_links FOR EACH ROW EXECUTE FUNCTION public.protect_published_evidence_link();
-
-
---
 -- Name: outbox_events outbox_events_notify; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8039,20 +7629,6 @@ CREATE TRIGGER projects_provision_copilot_agent AFTER INSERT ON public.projects 
 
 
 --
--- Name: retention_policies retention_policies_published_immutable; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER retention_policies_published_immutable BEFORE DELETE OR UPDATE ON public.retention_policies FOR EACH ROW EXECUTE FUNCTION public.protect_published_retention_policy();
-
-
---
--- Name: safety_policy_versions safety_policy_versions_published_immutable; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER safety_policy_versions_published_immutable BEFORE DELETE OR UPDATE ON public.safety_policy_versions FOR EACH ROW EXECUTE FUNCTION public.protect_published_safety_policy_version();
-
-
---
 -- Name: task_steps task_steps_published_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -8067,19 +7643,32 @@ CREATE TRIGGER task_versions_published_immutable BEFORE DELETE OR UPDATE ON publ
 
 
 --
--- Name: agent_draft_evidence agent_draft_evidence_draft_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_asset_access_refs write_connector_asset_access_refs_extension; Type: TRIGGER; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.agent_draft_evidence
-    ADD CONSTRAINT agent_draft_evidence_draft_fk FOREIGN KEY (agent_draft_id, project_id) REFERENCES public.agent_drafts(id, project_id) ON DELETE CASCADE;
+CREATE TRIGGER write_connector_asset_access_refs_extension INSTEAD OF INSERT OR DELETE OR UPDATE ON public.connector_asset_access_refs FOR EACH ROW EXECUTE FUNCTION public.write_connector_asset_access_refs_extension();
 
 
 --
--- Name: agent_drafts agent_drafts_actor_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: device_command_protocol_correlations write_device_command_protocol_correlations_extension; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER write_device_command_protocol_correlations_extension INSTEAD OF INSERT OR DELETE OR UPDATE ON public.device_command_protocol_correlations FOR EACH ROW EXECUTE FUNCTION public.write_device_command_protocol_correlations_extension();
+
+
+--
+-- Name: poses write_poses_extension; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER write_poses_extension INSTEAD OF INSERT OR DELETE OR UPDATE ON public.poses FOR EACH ROW EXECUTE FUNCTION public.write_poses_extension();
+
+
+--
+-- Name: agent_drafts agent_drafts_actor_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.agent_drafts
-    ADD CONSTRAINT agent_drafts_actor_team_fk FOREIGN KEY (team_id, created_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT agent_drafts_actor_user_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -8195,6 +7784,30 @@ ALTER TABLE ONLY public.agent_tool_jobs
 
 
 --
+-- Name: agent_write_approvals agent_write_approvals_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_write_approvals
+    ADD CONSTRAINT agent_write_approvals_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: agent_write_approvals agent_write_approvals_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_write_approvals
+    ADD CONSTRAINT agent_write_approvals_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.agent_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: agent_write_approvals agent_write_approvals_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.agent_write_approvals
+    ADD CONSTRAINT agent_write_approvals_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: agents agents_project_id_projects_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8216,94 +7829,6 @@ ALTER TABLE ONLY public.ai_providers
 
 ALTER TABLE ONLY public.ai_providers
     ADD CONSTRAINT ai_providers_updated_by_user_id_fkey FOREIGN KEY (updated_by_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
-
-
---
--- Name: alert_automation_drafts alert_automation_drafts_event_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_drafts
-    ADD CONSTRAINT alert_automation_drafts_event_project_fk FOREIGN KEY (perception_event_id, project_id) REFERENCES public.perception_events(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: alert_automation_drafts alert_automation_drafts_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_drafts
-    ADD CONSTRAINT alert_automation_drafts_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: alert_automation_drafts alert_automation_drafts_run_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_drafts
-    ADD CONSTRAINT alert_automation_drafts_run_project_fk FOREIGN KEY (automation_run_id, project_id) REFERENCES public.alert_automation_runs(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: alert_automation_policies alert_automation_policies_current_version_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies
-    ADD CONSTRAINT alert_automation_policies_current_version_project_fk FOREIGN KEY (current_published_version_id, project_id) REFERENCES public.alert_automation_policy_versions(id, project_id) ON DELETE SET NULL;
-
-
---
--- Name: alert_automation_policies alert_automation_policies_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policies
-    ADD CONSTRAINT alert_automation_policies_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_policy_project_fk FOREIGN KEY (alert_automation_policy_id, project_id) REFERENCES public.alert_automation_policies(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: alert_automation_policy_versions alert_automation_policy_versions_rule_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_policy_versions
-    ADD CONSTRAINT alert_automation_policy_versions_rule_project_fk FOREIGN KEY (event_rule_version_id, project_id) REFERENCES public.event_rule_versions(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: alert_automation_runs alert_automation_runs_event_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_runs
-    ADD CONSTRAINT alert_automation_runs_event_project_fk FOREIGN KEY (perception_event_id, project_id) REFERENCES public.perception_events(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: alert_automation_runs alert_automation_runs_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_runs
-    ADD CONSTRAINT alert_automation_runs_policy_project_fk FOREIGN KEY (policy_version_id, project_id) REFERENCES public.alert_automation_policy_versions(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: alert_automation_runs alert_automation_runs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.alert_automation_runs
-    ADD CONSTRAINT alert_automation_runs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
 
 
 --
@@ -8403,7 +7928,6 @@ ALTER TABLE ONLY public.algorithm_providers
 
 
 --
---
 -- Name: algorithm_run_attempts algorithm_run_attempts_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8476,19 +8000,19 @@ ALTER TABLE ONLY public.approval_requests
 
 
 --
--- Name: approval_requests approval_requests_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: approval_requests approval_requests_requester_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.approval_requests
-    ADD CONSTRAINT approval_requests_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT approval_requests_requester_user_fk FOREIGN KEY (requested_by_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
--- Name: approvals approvals_approver_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: approvals approvals_approver_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.approvals
-    ADD CONSTRAINT approvals_approver_member_fk FOREIGN KEY (team_id, approver_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT approvals_approver_user_fk FOREIGN KEY (approver_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -8508,75 +8032,11 @@ ALTER TABLE ONLY public.approvals
 
 
 --
--- Name: asset_derivatives asset_derivatives_derived_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: assets assets_derivative_source_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.asset_derivatives
-    ADD CONSTRAINT asset_derivatives_derived_project_fk FOREIGN KEY (derived_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: asset_derivatives asset_derivatives_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_derivatives
-    ADD CONSTRAINT asset_derivatives_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: asset_derivatives asset_derivatives_source_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_derivatives
-    ADD CONSTRAINT asset_derivatives_source_project_fk FOREIGN KEY (source_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: asset_upload_intents asset_upload_intents_actor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_actor_fk FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: asset_upload_intents asset_upload_intents_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_asset_project_fk FOREIGN KEY (asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE SET NULL (asset_id);
-
-
---
--- Name: asset_upload_intents asset_upload_intents_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE SET NULL (device_id);
-
-
---
--- Name: asset_upload_intents asset_upload_intents_issue_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_issue_project_fk FOREIGN KEY (issue_id, project_id) REFERENCES public.issues(id, project_id) ON DELETE SET NULL (issue_id);
-
-
---
--- Name: asset_upload_intents asset_upload_intents_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: asset_upload_intents asset_upload_intents_task_run_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.asset_upload_intents
-    ADD CONSTRAINT asset_upload_intents_task_run_project_fk FOREIGN KEY (task_run_id, project_id) REFERENCES public.task_runs(id, project_id) ON DELETE SET NULL (task_run_id);
+ALTER TABLE ONLY public.assets
+    ADD CONSTRAINT assets_derivative_source_project_fk FOREIGN KEY (derivative_source_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE SET NULL (derivative_source_asset_id);
 
 
 --
@@ -8625,6 +8085,22 @@ ALTER TABLE ONLY public.assets
 
 ALTER TABLE ONLY public.assets
     ADD CONSTRAINT assets_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: assets assets_remote_connector_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assets
+    ADD CONSTRAINT assets_remote_connector_id_fkey FOREIGN KEY (remote_connector_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE SET NULL (remote_connector_id);
+
+
+--
+-- Name: assets assets_remote_resource_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assets
+    ADD CONSTRAINT assets_remote_resource_id_fkey FOREIGN KEY (remote_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE SET NULL (remote_resource_id);
 
 
 --
@@ -8700,110 +8176,6 @@ ALTER TABLE ONLY public.command_attempts
 
 
 --
--- Name: connector_action_jobs connector_action_jobs_approval_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_approval_project_fk FOREIGN KEY (approval_request_id, project_id) REFERENCES public.approval_requests(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_result_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_result_project_fk FOREIGN KEY (remote_result_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE SET NULL (remote_result_resource_id);
-
-
---
--- Name: connector_action_jobs connector_action_jobs_target_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_target_project_fk FOREIGN KEY (target_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_task_run_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_task_run_project_fk FOREIGN KEY (task_run_id, project_id) REFERENCES public.task_runs(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_action_jobs connector_action_jobs_wayline_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_action_jobs
-    ADD CONSTRAINT connector_action_jobs_wayline_project_fk FOREIGN KEY (wayline_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_asset_project_fk FOREIGN KEY (id, project_id) REFERENCES public.assets(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_asset_access_refs connector_asset_access_refs_resource_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_asset_access_refs
-    ADD CONSTRAINT connector_asset_access_refs_resource_project_fk FOREIGN KEY (remote_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE CASCADE;
-
-
---
 -- Name: connector_capability_snapshots connector_capability_snapshots_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8844,19 +8216,11 @@ ALTER TABLE ONLY public.connector_control_sessions
 
 
 --
--- Name: connector_control_sessions connector_control_sessions_holder_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_control_sessions connector_control_sessions_holder_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connector_control_sessions
-    ADD CONSTRAINT connector_control_sessions_holder_member_fk FOREIGN KEY (team_id, holder_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_control_sessions connector_control_sessions_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_control_sessions
-    ADD CONSTRAINT connector_control_sessions_policy_project_fk FOREIGN KEY (safety_policy_version_id, project_id) REFERENCES public.safety_policy_versions(id, project_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT connector_control_sessions_holder_user_fk FOREIGN KEY (holder_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -8868,251 +8232,99 @@ ALTER TABLE ONLY public.connector_control_sessions
 
 
 --
--- Name: connector_device_admin_jobs connector_device_admin_jobs_approval_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_approval_request_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_approval_project_fk FOREIGN KEY (approval_request_id, project_id) REFERENCES public.approval_requests(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_device_admin_jobs connector_device_admin_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_approval_request_id_project_id_fkey FOREIGN KEY (approval_request_id, project_id) REFERENCES public.approval_requests(id, project_id) ON DELETE RESTRICT;
 
 
 --
--- Name: connector_device_admin_jobs connector_device_admin_jobs_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_business_step_id_business_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_device_admin_jobs connector_device_admin_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_business_step_id_business_run_id_project_id_fkey FOREIGN KEY (business_step_id, business_run_id, project_id) REFERENCES public.task_run_steps(id, task_run_id, project_id);
 
 
 --
--- Name: connector_device_admin_jobs connector_device_admin_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_connector_instance_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_device_admin_jobs
-    ADD CONSTRAINT connector_device_admin_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_connector_instance_id_project_id_fkey FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
 
 
 --
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_device_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_device_id_project_id_fkey FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE RESTRICT;
 
 
 --
--- Name: connector_geospatial_action_jobs connector_geospatial_action_jobs_target_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_project_id_team_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_geospatial_action_jobs
-    ADD CONSTRAINT connector_geospatial_action_jobs_target_project_fk FOREIGN KEY (target_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_live_action_jobs connector_live_action_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_project_id_team_id_fkey FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
 
 
 --
--- Name: connector_live_action_jobs connector_live_action_jobs_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_remote_resource_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_live_action_jobs connector_live_action_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_remote_resource_id_project_id_fkey FOREIGN KEY (remote_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE SET NULL (remote_resource_id);
 
 
 --
--- Name: connector_live_action_jobs connector_live_action_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_remote_result_resource_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_live_action_jobs connector_live_action_jobs_target_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_live_action_jobs
-    ADD CONSTRAINT connector_live_action_jobs_target_project_fk FOREIGN KEY (target_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_remote_result_resource_id_project_id_fkey FOREIGN KEY (remote_result_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE SET NULL (remote_result_resource_id);
 
 
 --
--- Name: connector_management_write_jobs connector_management_write_jobs_approval_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_requested_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_approval_project_fk FOREIGN KEY (approval_request_id, project_id) REFERENCES public.approval_requests(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_management_write_jobs connector_management_write_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_requested_by_user_id_fkey FOREIGN KEY (requested_by_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
--- Name: connector_management_write_jobs connector_management_write_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_source_asset_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_management_write_jobs connector_management_write_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_management_write_jobs
-    ADD CONSTRAINT connector_management_write_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_source_asset_id_project_id_fkey FOREIGN KEY (source_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE RESTRICT;
 
 
 --
--- Name: connector_model_delete_jobs connector_model_delete_jobs_approval_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_target_resource_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_approval_project_fk FOREIGN KEY (approval_request_id, project_id) REFERENCES public.approval_requests(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_model_delete_jobs connector_model_delete_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_target_resource_id_project_id_fkey FOREIGN KEY (target_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
 
 
 --
--- Name: connector_model_delete_jobs connector_model_delete_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_task_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_model_delete_jobs connector_model_delete_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_task_run_id_project_id_fkey FOREIGN KEY (task_run_id, project_id) REFERENCES public.task_runs(id, project_id) ON DELETE CASCADE;
 
 
 --
--- Name: connector_model_delete_jobs connector_model_delete_jobs_target_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_jobs connector_jobs_wayline_resource_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.connector_model_delete_jobs
-    ADD CONSTRAINT connector_model_delete_jobs_target_project_fk FOREIGN KEY (target_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_model_jobs connector_model_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_model_jobs connector_model_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_model_jobs connector_model_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_model_jobs
-    ADD CONSTRAINT connector_model_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_asset_project_fk FOREIGN KEY (source_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_connector_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_connector_project_fk FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_remote_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_remote_project_fk FOREIGN KEY (remote_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE SET NULL (remote_resource_id);
-
-
---
--- Name: connector_object_upload_jobs connector_object_upload_jobs_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.connector_object_upload_jobs
-    ADD CONSTRAINT connector_object_upload_jobs_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.connector_jobs
+    ADD CONSTRAINT connector_jobs_wayline_resource_id_project_id_fkey FOREIGN KEY (wayline_resource_id, project_id) REFERENCES public.connector_remote_resources(id, project_id) ON DELETE RESTRICT;
 
 
 --
@@ -9148,11 +8360,11 @@ ALTER TABLE ONLY public.connector_open_model_uploads
 
 
 --
--- Name: connector_open_model_uploads connector_open_model_uploads_requester_member_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: connector_open_model_uploads connector_open_model_uploads_requester_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.connector_open_model_uploads
-    ADD CONSTRAINT connector_open_model_uploads_requester_member_fk FOREIGN KEY (team_id, requested_by_user_id) REFERENCES public.team_members(team_id, user_id) ON DELETE RESTRICT;
+    ADD CONSTRAINT connector_open_model_uploads_requester_user_fk FOREIGN KEY (requested_by_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -9212,30 +8424,6 @@ ALTER TABLE ONLY public.coordinate_references
 
 
 --
--- Name: detection_group_members detection_group_members_detection_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.detection_group_members
-    ADD CONSTRAINT detection_group_members_detection_project_fk FOREIGN KEY (detection_id, project_id) REFERENCES public.detections(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: detection_group_members detection_group_members_group_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.detection_group_members
-    ADD CONSTRAINT detection_group_members_group_project_fk FOREIGN KEY (detection_group_id, project_id) REFERENCES public.detection_groups(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: detection_group_members detection_group_members_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.detection_group_members
-    ADD CONSTRAINT detection_group_members_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
 -- Name: detection_groups detection_groups_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9249,6 +8437,14 @@ ALTER TABLE ONLY public.detection_groups
 
 ALTER TABLE ONLY public.detections
     ADD CONSTRAINT detections_asset_project_fk FOREIGN KEY (input_asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: detections detections_group_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.detections
+    ADD CONSTRAINT detections_group_project_fk FOREIGN KEY (group_id, project_id) REFERENCES public.detection_groups(id, project_id) ON DELETE SET NULL (group_id);
 
 
 --
@@ -9380,30 +8576,6 @@ ALTER TABLE ONLY public.device_capability_grants
 
 
 --
--- Name: device_command_protocol_correlations device_command_protocol_correlations_adapter_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_adapter_project_fk FOREIGN KEY (adapter_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_command_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_command_project_fk FOREIGN KEY (command_id, project_id) REFERENCES public.device_commands(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: device_command_protocol_correlations device_command_protocol_correlations_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.device_command_protocol_correlations
-    ADD CONSTRAINT device_command_protocol_correlations_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
 -- Name: device_commands device_commands_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9425,6 +8597,14 @@ ALTER TABLE ONLY public.device_commands
 
 ALTER TABLE ONLY public.device_commands
     ADD CONSTRAINT device_commands_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: device_commands device_commands_protocol_adapter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.device_commands
+    ADD CONSTRAINT device_commands_protocol_adapter_id_fkey FOREIGN KEY (protocol_adapter_id, project_id) REFERENCES public.device_adapters(id, project_id) ON DELETE SET NULL (protocol_adapter_id);
 
 
 --
@@ -9716,30 +8896,6 @@ ALTER TABLE ONLY public.devices
 
 
 --
--- Name: event_feedback event_feedback_actor_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_feedback
-    ADD CONSTRAINT event_feedback_actor_fk FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
-
-
---
--- Name: event_feedback event_feedback_event_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_feedback
-    ADD CONSTRAINT event_feedback_event_project_fk FOREIGN KEY (perception_event_id, project_id) REFERENCES public.perception_events(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: event_feedback event_feedback_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.event_feedback
-    ADD CONSTRAINT event_feedback_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
 -- Name: event_rule_versions event_rule_versions_creator_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9796,30 +8952,6 @@ ALTER TABLE ONLY public.event_rules
 
 
 --
--- Name: evidence_links evidence_links_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links
-    ADD CONSTRAINT evidence_links_asset_project_fk FOREIGN KEY (asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: evidence_links evidence_links_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links
-    ADD CONSTRAINT evidence_links_created_by_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: evidence_links evidence_links_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.evidence_links
-    ADD CONSTRAINT evidence_links_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
 -- Name: generated_report_evidence generated_report_evidence_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9873,6 +9005,166 @@ ALTER TABLE ONLY public.generated_reports
 
 ALTER TABLE ONLY public.idempotency_records
     ADD CONSTRAINT idempotency_records_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_assessment_revisions inspection_assessment_revisions_assessment_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessment_revisions
+    ADD CONSTRAINT inspection_assessment_revisions_assessment_id_project_id_fkey FOREIGN KEY (assessment_id, project_id) REFERENCES public.inspection_assessments(id, project_id);
+
+
+--
+-- Name: inspection_assessment_revisions inspection_assessment_revisions_reviewed_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessment_revisions
+    ADD CONSTRAINT inspection_assessment_revisions_reviewed_by_user_id_fkey FOREIGN KEY (reviewed_by_user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_evidence_set_id_task_run_id_project_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_evidence_set_id_task_run_id_project_fkey FOREIGN KEY (evidence_set_id, task_run_id, project_id) REFERENCES public.inspection_evidence_sets(id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_project_id_team_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_project_id_team_id_fkey FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_assessments inspection_assessments_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.ai_providers(id);
+
+
+--
+-- Name: inspection_assessments inspection_assessments_task_run_step_id_task_run_id_projec_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_assessments
+    ADD CONSTRAINT inspection_assessments_task_run_step_id_task_run_id_projec_fkey FOREIGN KEY (task_run_step_id, task_run_id, project_id) REFERENCES public.task_run_steps(id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_observation_id_task_run_id_projec_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_observation_id_task_run_id_projec_fkey FOREIGN KEY (observation_id, task_run_id, project_id) REFERENCES public.inspection_observations(id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_project_id_team_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_project_id_team_id_fkey FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_evidence_sets inspection_evidence_sets_task_run_step_id_task_run_id_proj_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_evidence_sets
+    ADD CONSTRAINT inspection_evidence_sets_task_run_step_id_task_run_id_proj_fkey FOREIGN KEY (task_run_step_id, task_run_id, project_id) REFERENCES public.task_run_steps(id, task_run_id, project_id);
+
+
+--
+-- Name: inspection_flight_ownership inspection_flight_ownership_connector_instance_id_project__fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_flight_ownership
+    ADD CONSTRAINT inspection_flight_ownership_connector_instance_id_project__fkey FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id);
+
+
+--
+-- Name: inspection_flight_ownership inspection_flight_ownership_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_flight_ownership
+    ADD CONSTRAINT inspection_flight_ownership_project_fk FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_flight_ownership inspection_flight_ownership_task_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_flight_ownership
+    ADD CONSTRAINT inspection_flight_ownership_task_run_id_project_id_fkey FOREIGN KEY (task_run_id, project_id) REFERENCES public.task_runs(id, project_id);
+
+
+--
+-- Name: inspection_observation_assets inspection_observation_assets_asset_id_asset_version_proje_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observation_assets
+    ADD CONSTRAINT inspection_observation_assets_asset_id_asset_version_proje_fkey FOREIGN KEY (asset_id, asset_version, project_id) REFERENCES public.assets(id, version, project_id);
+
+
+--
+-- Name: inspection_observation_assets inspection_observation_assets_observation_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observation_assets
+    ADD CONSTRAINT inspection_observation_assets_observation_id_project_id_fkey FOREIGN KEY (observation_id, project_id) REFERENCES public.inspection_observations(id, project_id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_observation_assets inspection_observation_assets_source_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observation_assets
+    ADD CONSTRAINT inspection_observation_assets_source_run_id_project_id_fkey FOREIGN KEY (source_run_id, project_id) REFERENCES public.task_runs(id, project_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_connector_instance_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_connector_instance_id_project_id_fkey FOREIGN KEY (connector_instance_id, project_id) REFERENCES public.device_adapters(id, project_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_limited_scope_confirmed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_limited_scope_confirmed_by_fkey FOREIGN KEY (limited_scope_confirmed_by) REFERENCES public.users(id);
+
+
+--
+-- Name: inspection_observations inspection_observations_project_id_team_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_project_id_team_id_fkey FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: inspection_observations inspection_observations_projected_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_projected_run_id_project_id_fkey FOREIGN KEY (projected_run_id, project_id) REFERENCES public.task_runs(id, project_id);
+
+
+--
+-- Name: inspection_observations inspection_observations_task_run_step_id_task_run_id_proje_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.inspection_observations
+    ADD CONSTRAINT inspection_observations_task_run_step_id_task_run_id_proje_fkey FOREIGN KEY (task_run_step_id, task_run_id, project_id) REFERENCES public.task_run_steps(id, task_run_id, project_id);
 
 
 --
@@ -10012,6 +9304,14 @@ ALTER TABLE ONLY public.issue_feedback
 
 
 --
+-- Name: issue_links issue_links_assessment_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.issue_links
+    ADD CONSTRAINT issue_links_assessment_project_fk FOREIGN KEY (assessment_id, project_id) REFERENCES public.inspection_assessments(id, project_id);
+
+
+--
 -- Name: issue_links issue_links_created_by_user_id_users_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10148,14 +9448,6 @@ ALTER TABLE ONLY public.observations
 
 
 --
--- Name: observations observations_calibration_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.observations
-    ADD CONSTRAINT observations_calibration_project_fk FOREIGN KEY (calibration_id, project_id) REFERENCES public.sensor_calibrations(id, project_id) ON DELETE SET NULL (calibration_id);
-
-
---
 -- Name: observations observations_crs_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10169,6 +9461,14 @@ ALTER TABLE ONLY public.observations
 
 ALTER TABLE ONLY public.observations
     ADD CONSTRAINT observations_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE CASCADE;
+
+
+--
+-- Name: observations observations_pose_device_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.observations
+    ADD CONSTRAINT observations_pose_device_id_fkey FOREIGN KEY (pose_device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE SET NULL (pose_device_id);
 
 
 --
@@ -10236,30 +9536,6 @@ ALTER TABLE ONLY public.perception_events
 
 
 --
--- Name: platform_audit_events platform_audit_events_actor_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.platform_audit_events
-    ADD CONSTRAINT platform_audit_events_actor_user_id_fkey FOREIGN KEY (actor_user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
-
-
---
--- Name: poses poses_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.poses
-    ADD CONSTRAINT poses_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: poses poses_observation_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.poses
-    ADD CONSTRAINT poses_observation_project_fk FOREIGN KEY (observation_id, project_id) REFERENCES public.observations(id, project_id) ON DELETE CASCADE;
-
-
---
 -- Name: project_events project_events_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10316,171 +9592,11 @@ ALTER TABLE ONLY public.projects
 
 
 --
--- Name: projects projects_current_safety_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.projects
-    ADD CONSTRAINT projects_current_safety_policy_project_fk FOREIGN KEY (current_safety_policy_version_id, id) REFERENCES public.safety_policy_versions(id, project_id) ON DELETE SET NULL (current_safety_policy_version_id);
-
-
---
 -- Name: projects projects_team_id_teams_id_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.projects
     ADD CONSTRAINT projects_team_id_teams_id_fk FOREIGN KEY (team_id) REFERENCES public.teams(id) ON DELETE CASCADE;
-
-
---
--- Name: retention_cleanup_runs retention_cleanup_runs_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_cleanup_runs
-    ADD CONSTRAINT retention_cleanup_runs_created_by_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: retention_cleanup_runs retention_cleanup_runs_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_cleanup_runs
-    ADD CONSTRAINT retention_cleanup_runs_policy_project_fk FOREIGN KEY (retention_policy_id, project_id) REFERENCES public.retention_policies(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: retention_cleanup_runs retention_cleanup_runs_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_cleanup_runs
-    ADD CONSTRAINT retention_cleanup_runs_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: retention_holds retention_holds_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_holds
-    ADD CONSTRAINT retention_holds_asset_project_fk FOREIGN KEY (asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: retention_holds retention_holds_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_holds
-    ADD CONSTRAINT retention_holds_created_by_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: retention_holds retention_holds_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_holds
-    ADD CONSTRAINT retention_holds_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: retention_holds retention_holds_released_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_holds
-    ADD CONSTRAINT retention_holds_released_by_fk FOREIGN KEY (released_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: retention_policies retention_policies_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_created_by_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: retention_policies retention_policies_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: retention_policies retention_policies_published_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_policies
-    ADD CONSTRAINT retention_policies_published_by_fk FOREIGN KEY (published_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: retention_deletion_tombstones retention_tombstones_asset_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_tombstones_asset_project_fk FOREIGN KEY (asset_id, project_id) REFERENCES public.assets(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: retention_deletion_tombstones retention_tombstones_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_tombstones_policy_project_fk FOREIGN KEY (retention_policy_id, project_id) REFERENCES public.retention_policies(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: retention_deletion_tombstones retention_tombstones_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_tombstones_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: retention_deletion_tombstones retention_tombstones_run_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.retention_deletion_tombstones
-    ADD CONSTRAINT retention_tombstones_run_project_fk FOREIGN KEY (cleanup_run_id, project_id) REFERENCES public.retention_cleanup_runs(id, project_id) ON DELETE RESTRICT;
-
-
---
--- Name: safety_policy_versions safety_policy_versions_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_created_by_fk FOREIGN KEY (created_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: safety_policy_versions safety_policy_versions_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
-
-
---
--- Name: safety_policy_versions safety_policy_versions_published_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.safety_policy_versions
-    ADD CONSTRAINT safety_policy_versions_published_by_fk FOREIGN KEY (published_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- Name: sensor_calibrations sensor_calibrations_device_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations
-    ADD CONSTRAINT sensor_calibrations_device_project_fk FOREIGN KEY (device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE CASCADE;
-
-
---
--- Name: sensor_calibrations sensor_calibrations_project_team_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.sensor_calibrations
-    ADD CONSTRAINT sensor_calibrations_project_team_fk FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
 
 
 --
@@ -10529,14 +9645,6 @@ ALTER TABLE ONLY public.task_runs
 
 ALTER TABLE ONLY public.task_runs
     ADD CONSTRAINT task_runs_device_project_fk FOREIGN KEY (selected_device_id, project_id) REFERENCES public.devices(id, project_id) ON DELETE SET NULL (selected_device_id);
-
-
---
--- Name: task_runs task_runs_policy_project_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.task_runs
-    ADD CONSTRAINT task_runs_policy_project_fk FOREIGN KEY (safety_policy_version_id, project_id) REFERENCES public.safety_policy_versions(id, project_id) ON DELETE RESTRICT;
 
 
 --
@@ -10604,6 +9712,38 @@ ALTER TABLE ONLY public.task_steps
 
 
 --
+-- Name: task_trigger_records task_trigger_records_project_id_team_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_project_id_team_id_fkey FOREIGN KEY (project_id, team_id) REFERENCES public.projects(id, team_id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_trigger_records task_trigger_records_task_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_task_id_project_id_fkey FOREIGN KEY (task_id, project_id) REFERENCES public.tasks(id, project_id);
+
+
+--
+-- Name: task_trigger_records task_trigger_records_task_run_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_task_run_id_project_id_fkey FOREIGN KEY (task_run_id, project_id) REFERENCES public.task_runs(id, project_id);
+
+
+--
+-- Name: task_trigger_records task_trigger_records_task_version_id_project_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_trigger_records
+    ADD CONSTRAINT task_trigger_records_task_version_id_project_id_fkey FOREIGN KEY (task_version_id, project_id) REFERENCES public.task_versions(id, project_id);
+
+
+--
 -- Name: task_versions task_versions_created_by_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10633,6 +9773,14 @@ ALTER TABLE ONLY public.task_versions
 
 ALTER TABLE ONLY public.task_versions
     ADD CONSTRAINT task_versions_task_project_fk FOREIGN KEY (task_id, project_id) REFERENCES public.tasks(id, project_id) ON DELETE CASCADE;
+
+
+--
+-- Name: tasks tasks_authorized_by_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_authorized_by_user_id_fkey FOREIGN KEY (authorized_by_user_id) REFERENCES public.users(id);
 
 
 --
@@ -10695,232 +9843,5 @@ ALTER TABLE ONLY public.telemetry_event_dedup
 -- PostgreSQL database dump complete
 --
 
--- Inspection workflow additive schema (0073).
--- Additive storage for v2 Task authoring and inspection evidence. Existing task
--- definitions, connector projections and issue records are not rewritten.
-alter table task_versions
-  add column author_format text not null default 'json' check(author_format in('json','yaml')),
-  add column author_source text,
-  add column author_revision integer not null default 0 check(author_revision>=0),
-  add column dsl_version text not null default 'aerosight/v1' check(dsl_version in('aerosight/v1','aerosight/v2')),
-  add column definition_hash text check(definition_hash is null or definition_hash ~ '^[a-f0-9]{64}$');
-alter table tasks
-  add column authorized_by_user_id integer references users(id),
-  add column schedule_evaluated_at timestamptz;
 
-create table task_trigger_records (
-  id bigint generated by default as identity primary key,
-  project_id integer not null,
-  team_id integer not null,
-  task_id integer not null,
-  task_version_id bigint not null,
-  occurrence_key text not null,
-  scheduled_for timestamptz,
-  interval_end timestamptz,
-  outcome text not null check(outcome in('accepted','missed','skipped','error')),
-  reason text not null,
-  task_run_id integer,
-  created_at timestamptz not null default now(),
-  foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
-  foreign key(task_id,project_id) references tasks(id,project_id),
-  foreign key(task_version_id,project_id) references task_versions(id,project_id),
-  foreign key(task_run_id,project_id) references task_runs(id,project_id),
-  unique(project_id,task_id,occurrence_key),
-  check((outcome='accepted')=(task_run_id is not null)),
-  check(interval_end is null or scheduled_for is not null and interval_end>=scheduled_for)
-);
-
--- These keys let downstream records enforce run and asset-version scope in SQL.
-alter table task_run_steps add constraint task_run_steps_run_project_unique unique(id,task_run_id,project_id);
-alter table assets add constraint assets_version_project_unique unique(id,version,project_id);
-
-create table inspection_observations (
-  id uuid primary key default gen_random_uuid(),
-  project_id integer not null,
-  team_id integer not null,
-  task_run_id integer not null,
-  task_run_step_id bigint not null,
-  source_mode text not null check(source_mode in('assets','existing-flight','flighthub-flight')),
-  connector_instance_id bigint,
-  remote_flight_id text,
-  projected_run_id integer,
-  completeness text not null default 'partial' check(completeness in('complete','partial','alert-only','unavailable')),
-  scope_description text not null check(length(btrim(scope_description))>0),
-  observed_from timestamptz not null,
-  observed_to timestamptz not null,
-  manifest_json jsonb not null default '{}'::jsonb check(jsonb_typeof(manifest_json)='object'),
-  sealed_at timestamptz,
-  limited_scope_confirmed_by integer references users(id),
-  created_at timestamptz not null default now(),
-  foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
-  foreign key(task_run_step_id,task_run_id,project_id) references task_run_steps(id,task_run_id,project_id),
-  foreign key(connector_instance_id,project_id) references device_adapters(id,project_id),
-  foreign key(projected_run_id,project_id) references task_runs(id,project_id),
-  unique(task_run_step_id,project_id),
-  unique(id,task_run_id,project_id),
-  unique(id,project_id),
-  check(observed_to>=observed_from),
-  check((source_mode='assets' and connector_instance_id is null and remote_flight_id is null and projected_run_id is null)
-     or (source_mode<>'assets' and connector_instance_id is not null and remote_flight_id is not null and length(btrim(remote_flight_id))>0))
-);
-
-create table inspection_observation_assets (
-  observation_id uuid not null,
-  project_id integer not null,
-  asset_id integer not null,
-  asset_version integer not null,
-  source_run_id integer,
-  primary key(observation_id,asset_id),
-  foreign key(observation_id,project_id) references inspection_observations(id,project_id) on delete cascade,
-  foreign key(asset_id,asset_version,project_id) references assets(id,version,project_id),
-  foreign key(source_run_id,project_id) references task_runs(id,project_id)
-);
-
-create table inspection_evidence_sets (
-  id uuid primary key default gen_random_uuid(),
-  project_id integer not null,
-  team_id integer not null,
-  task_run_id integer not null,
-  task_run_step_id bigint not null,
-  observation_id uuid not null,
-  source text not null check(source in('flighthub-ai','external')),
-  model_version text not null,
-  completeness text not null default 'unavailable' check(completeness in('complete','partial','alert-only','unavailable')),
-  target_algorithm_confirmed boolean not null default false,
-  evidence_json jsonb not null default '{}'::jsonb check(jsonb_typeof(evidence_json)='object'),
-  created_at timestamptz not null default now(),
-  foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
-  foreign key(task_run_step_id,task_run_id,project_id) references task_run_steps(id,task_run_id,project_id),
-  foreign key(observation_id,task_run_id,project_id) references inspection_observations(id,task_run_id,project_id),
-  unique(task_run_step_id,project_id),
-  unique(id,task_run_id,project_id)
-);
-
-create table inspection_assessments (
-  id uuid primary key default gen_random_uuid(),
-  project_id integer not null,
-  team_id integer not null,
-  task_run_id integer not null,
-  task_run_step_id bigint not null,
-  evidence_set_id uuid not null,
-  status text not null default 'pending' check(status in('pending','running','needs_review','succeeded','failed','canceled')),
-  revision integer not null default 0 check(revision>=0),
-  provider_id integer references ai_providers(id),
-  model_version text,
-  prompt_version text,
-  evidence_hash text check(evidence_hash is null or evidence_hash ~ '^[a-f0-9]{64}$'),
-  original_output text,
-  failure_code text,
-  created_at timestamptz not null default now(),
-  foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
-  foreign key(task_run_step_id,task_run_id,project_id) references task_run_steps(id,task_run_id,project_id),
-  foreign key(evidence_set_id,task_run_id,project_id) references inspection_evidence_sets(id,task_run_id,project_id),
-  unique(task_run_step_id,project_id),
-  unique(id,project_id)
-);
-
-create table inspection_assessment_revisions (
-  assessment_id uuid not null,
-  project_id integer not null,
-  revision integer not null check(revision>0),
-  source text not null check(source in('model','human')),
-  decisions_json jsonb not null check(jsonb_typeof(decisions_json)='array'),
-  reviewed_by_user_id integer references users(id),
-  idempotency_key text not null,
-  created_at timestamptz not null default now(),
-  primary key(assessment_id,revision),
-  foreign key(assessment_id,project_id) references inspection_assessments(id,project_id),
-  unique(assessment_id,idempotency_key),
-  check((source='human')=(reviewed_by_user_id is not null))
-);
-
-create table inspection_issue_sources (
-  project_id integer not null,
-  source_key text not null,
-  issue_id integer not null,
-  assessment_id uuid not null,
-  created_at timestamptz not null default now(),
-  primary key(project_id,source_key),
-  foreign key(issue_id,project_id) references issues(id,project_id),
-  foreign key(assessment_id,project_id) references inspection_assessments(id,project_id)
-);
-
--- Unknown flights are held for classification only when the connector explicitly
--- opts into task-managed alerts. The absence of a row preserves legacy behavior.
-create table inspection_connector_policies (
-  project_id integer not null,
-  team_id integer not null,
-  connector_instance_id bigint not null,
-  task_managed_alerts boolean not null default false,
-  primary key(project_id,connector_instance_id),
-  foreign key(project_id,team_id) references projects(id,team_id) on delete cascade,
-  foreign key(connector_instance_id,project_id) references device_adapters(id,project_id)
-);
-
-create table inspection_flight_ownership (
-  project_id integer not null,
-  connector_instance_id bigint not null,
-  remote_flight_id text not null,
-  ownership text not null check(ownership in('pending','task','legacy')),
-  task_run_id integer,
-  created_at timestamptz not null default now(),
-  primary key(project_id,connector_instance_id,remote_flight_id),
-  foreign key(connector_instance_id,project_id) references device_adapters(id,project_id),
-  foreign key(task_run_id,project_id) references task_runs(id,project_id),
-  check(ownership<>'task' or task_run_id is not null)
-);
-
--- Preserve legacy steps while allowing v2 inspection templates to be authored.
--- Runtime availability is checked separately before publication.
-alter table task_steps drop constraint task_steps_uses_valid;
-alter table task_steps add constraint task_steps_uses_valid check(uses in (
-  'device.command','device.collect','algorithm.run','issue.create-or-update',
-  'copilot.run','report.generate','inspection.observe','inspection.detect'
-));
-
--- Private source identity is separated from public connector summaries. This
--- also retains evidence while Task ownership is pending, without creating cases.
-alter table connector_remote_resources add constraint connector_remote_resources_connector_project_unique unique(id,project_id,connector_instance_id);
-
-create table inspection_alert_sources (
-  project_id integer not null,
-  connector_instance_id bigint not null,
-  remote_resource_id bigint not null,
-  remote_flight_id text not null,
-  evidence_json jsonb not null,
-  updated_at timestamptz not null default now(),
-  primary key(project_id,remote_resource_id),
-  foreign key(project_id) references projects(id) on delete cascade,
-  foreign key(connector_instance_id,project_id) references device_adapters(id,project_id),
-  foreign key(remote_resource_id,project_id,connector_instance_id) references connector_remote_resources(id,project_id,connector_instance_id),
-  check(length(remote_flight_id)>0)
-);
-create index inspection_alert_sources_flight_idx on inspection_alert_sources(project_id,connector_instance_id,remote_flight_id);
-
-alter table inspection_flight_ownership add constraint inspection_flight_ownership_project_fk foreign key(project_id) references projects(id) on delete cascade;
--- The governed action owns a separate physical flight Run. Business workflow
--- completion must never be driven by the action's projection state updates.
-alter table connector_action_jobs add constraint connector_action_jobs_inspection_scope_unique
- unique(id,project_id,team_id,connector_instance_id,task_run_id,action_kind);
-
-create table inspection_flight_bindings (
- project_id integer not null,
- team_id integer not null,
- business_run_id integer not null,
- business_step_id bigint not null,
- connector_instance_id bigint not null,
- flight_run_id integer not null,
- action_job_id uuid not null,
- action_kind text not null default 'flight-task-create' check(action_kind='flight-task-create'),
- created_at timestamptz not null default now(),
- primary key(project_id,business_step_id),
- unique(action_job_id),
- unique(project_id,flight_run_id),
- check(business_run_id<>flight_run_id),
- foreign key(project_id,team_id) references projects(id,team_id),
- foreign key(business_step_id,business_run_id,project_id) references task_run_steps(id,task_run_id,project_id),
- foreign key(action_job_id,project_id,team_id,connector_instance_id,flight_run_id,action_kind)
- references connector_action_jobs(id,project_id,team_id,connector_instance_id,task_run_id,action_kind)
-);
-
-CREATE UNIQUE INDEX ai_providers_single_realtime_default_idx ON public.ai_providers(is_realtime_default) WHERE is_realtime_default;
+SET search_path = public, pg_catalog;
