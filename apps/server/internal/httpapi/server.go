@@ -121,6 +121,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.algorithmDefinitionRoutes()
 	s.aiProviderRoutes()
 	s.adminAlgorithmProviderRoutes()
+	s.deviceTypePresentationRoutes()
 	s.agentSessionRoutes()
 	s.mediaAccessRoutes()
 	s.router.POST("/api/media-auth", s.timeout, s.mediaAuth)

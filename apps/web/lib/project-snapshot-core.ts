@@ -22,6 +22,7 @@ export type ProjectSnapshotDevice = Record<string, unknown> & {
   typeKey?: string;
   typeVersion?: string;
   typeName?: string;
+  typeIcon?: string | null;
   category?: string;
   driverKey?: string;
   driverVersion?: string;

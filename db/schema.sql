@@ -2882,6 +2882,7 @@ CREATE TABLE public.device_types (
     version integer NOT NULL,
     display_name text NOT NULL,
     category text NOT NULL,
+    icon text DEFAULT 'cpu'::text NOT NULL,
     vendor text,
     model text,
     driver_definition_id bigint NOT NULL,
@@ -2891,6 +2892,7 @@ CREATE TABLE public.device_types (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT device_types_capability_profile_object CHECK ((jsonb_typeof(capability_profile_json) = 'object'::text)),
+    CONSTRAINT device_types_icon_check CHECK (icon ~ '^[a-z][a-z0-9]*(-[a-z0-9]+)*$' AND length(icon) <= 80),
     CONSTRAINT device_types_status_valid CHECK ((status = ANY (ARRAY['active'::text, 'retired'::text]))),
     CONSTRAINT device_types_version_positive CHECK ((version > 0))
 );

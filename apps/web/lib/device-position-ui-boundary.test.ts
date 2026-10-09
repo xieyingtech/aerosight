@@ -17,6 +17,8 @@ test("project map exposes original unverified poses without claiming calibration
   assert.match(snapshot, /coalesce\(pose\.standard_position,pose\.original_position\)/);
   assert.match(snapshot, /coordinate_reference_unverified/);
   assert.match(snapshot, /calibrationStatus/);
-  assert.match(map, /未校准/);
-  assert.match(map, /positionStatus/);
+  const model = read("apps/web/lib/project-map-model.ts");
+  assert.match(model, /presentDevicePosition\(device\)/);
+  assert.match(model, /positionStatus: presentedPosition.state/);
+  assert.match(map, /popupFeature.properties.warningMessage/);
 });

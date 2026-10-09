@@ -1197,6 +1197,7 @@ type DeviceType struct {
 	Version                 int32           `json:"version"`
 	DisplayName             string          `json:"display_name"`
 	Category                string          `json:"category"`
+	Icon                    string          `json:"icon"`
 	Vendor                  sql.NullString  `json:"vendor"`
 	Model                   sql.NullString  `json:"model"`
 	DriverDefinitionID      int64           `json:"driver_definition_id"`

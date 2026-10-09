@@ -16,9 +16,7 @@ export const projectMapLayers = [
   { id: "algorithm-results", label: "算法识别结果", kind: "algorithm-results" },
   { id: "media", label: "媒体点", kind: "media" },
   { id: "issues", label: "案件", kind: "issue" },
-  { id: "drones", label: "无人机", kind: "device-drone" },
-  { id: "docks", label: "机巢", kind: "device-dock" },
-  { id: "ground-robots", label: "地面设备", kind: "device-ground" }
+  { id: "devices", label: "设备", kind: "device-generic" }
 ] as const;
 
 type MapProperties = {
@@ -27,9 +25,14 @@ type MapProperties = {
   entityId: string;
   label: string;
   status?: string;
+  warningSeverity?: "warning" | "error";
+  warningMessage?: string;
+  positionLabel?: string;
+  ownerDeviceTypeKey?: string;
+  deviceTypeKey?: string;
+  deviceTypeName?: string;
+  deviceTypeIcon?: string;
 	capturedAt?: string;
-	markerKind?: "drone" | "dock" | "ground";
-	markerGlyph?: string;
 	dataFreshness?: string;
 	positionStatus?: string;
 	positionReason?: string;
@@ -58,15 +61,12 @@ function feature(projectId: number, geometryValue: Geometry, properties: Omit<Ma
   return { type: "Feature", geometry: geometryValue, properties: { projectId, ...properties } };
 }
 
-function deviceAppearance(...values: unknown[]): Pick<MapProperties, "layerKind" | "markerKind" | "markerGlyph"> {
-	const normalized = values.map((value) => String(value ?? "").toLowerCase()).join(" ");
-	if (normalized.includes("dock") || normalized.includes("nest") || normalized.includes("airport")) {
-		return { layerKind: "device-dock", markerKind: "dock", markerGlyph: "▣" };
-	}
-	if (normalized.includes("aircraft") || normalized.includes("drone") || normalized.includes("uav")) {
-		return { layerKind: "device-drone", markerKind: "drone", markerGlyph: "✈" };
-	}
-	return { layerKind: "device-ground", markerKind: "ground", markerGlyph: "●" };
+function deviceTypePresentation(device: ProjectSituationSnapshot["devices"][number]) {
+  return {
+    deviceTypeKey: device.deviceTypeId || device.typeKey || "unknown",
+    deviceTypeName: device.typeName || "未设置设备类型",
+    deviceTypeIcon: device.typeIcon || undefined
+  };
 }
 
 export function createProjectMapModel(snapshot: ProjectSituationSnapshot): FeatureCollection<Geometry, MapProperties> {
@@ -77,30 +77,39 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
 		const pose = device.pose as Record<string, unknown> | null;
 		const position = pose && point(pose.longitude, pose.latitude);
 		if (!position) continue;
-		const appearance = deviceAppearance(device.type, device.category, device.typeKey);
+		const appearance = deviceTypePresentation(device);
 		const presentedPosition = presentDevicePosition(device);
+		const diagnostics = (snapshot.diagnostics ?? []).filter(item => Number(item.deviceId) === Number(device.id) && item.deviceId != null && item.severity !== "info");
+		const warningSeverity = diagnostics.some(item => item.severity === "error") || presentedPosition.state === "invalid" ? "error"
+			: diagnostics.length || ["unverified", "stale"].includes(presentedPosition.state) ? "warning" : undefined;
+		const warningMessage = [...diagnostics.map(item => item.title), ...(presentedPosition.state !== "available" ? [presentedPosition.label] : [])].join(" · ");
 		features.push(feature(projectId, position, {
-			...appearance, entityId: String(device.id), label: String(device.name ?? "未命名设备"),
+			...appearance, layerKind: "device-generic", entityId: String(device.id), label: String(device.name ?? "未命名设备"),
 			status: String(device.status ?? "unknown"), capturedAt: pose.capturedAt ? String(pose.capturedAt) : undefined,
 			dataFreshness: String(device.dataFreshness ?? "unknown"), positionStatus: presentedPosition.state,
-			positionReason: presentedPosition.reason, positionSource: presentedPosition.source
+			positionReason: presentedPosition.reason, positionSource: presentedPosition.source,
+			positionLabel: presentedPosition.label, warningSeverity, warningMessage
 		}));
   }
   for (const track of snapshot.tracks) {
     if (!scoped(track, projectId)) continue;
     const line = geometry(track.geometry);
     if (line?.type !== "LineString") continue;
+    const owner = snapshot.devices.find(device => Number(device.id) === Number(track.deviceId));
     features.push(feature(projectId, line, {
       layerKind: "track", entityId: String(track.deviceId), label: `设备 ${track.deviceId} 轨迹`,
+      ownerDeviceTypeKey: owner ? deviceTypePresentation(owner).deviceTypeKey : undefined,
       capturedAt: track.endedAt ? String(track.endedAt) : undefined
     }));
   }
   for (const task of snapshot.activeTasks) {
     if (!scoped(task, projectId)) continue;
     const input = task.input as Record<string, unknown> | undefined;
+    const owner = snapshot.devices.find(device => Number(device.id) === Number(input?.deviceId ?? task.deviceId));
     const route = geometry(input?.route);
     if (route?.type === "LineString") features.push(feature(projectId, route, {
-      layerKind: "mission-route", entityId: String(task.id), label: String(task.taskName ?? "任务航线"), status: String(task.status ?? "")
+      layerKind: "mission-route", entityId: String(task.id), label: String(task.taskName ?? "任务航线"), status: String(task.status ?? ""),
+      ownerDeviceTypeKey: owner ? deviceTypePresentation(owner).deviceTypeKey : undefined
     }));
   }
   for (const region of snapshot.regions) {
@@ -128,10 +137,23 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
     if (!scoped(item, projectId)) continue;
     const position = geometry(item.geometry) ?? point(item.longitude, item.latitude);
     if (position) features.push(feature(projectId, position, {
-      layerKind: "issue", entityId: String(item.id), label: `#${String(item.number ?? "—")} ${String(item.title ?? "案件")}`, status: String(item.status ?? "open")
+      layerKind: "issue", entityId: String(item.id), label: `#${String(item.number ?? "—")} ${String(item.title ?? "案件")}`, status: String(item.status ?? "open"),
+      warningSeverity: ["urgent", "high", "critical", "error"].includes(String(item.priority ?? item.severity)) ? "error" : "warning",
+      warningMessage: String(item.title ?? "待处理案件")
     }));
   }
   return { type: "FeatureCollection", features };
+}
+
+export function projectMapLayerCounts(model: ReturnType<typeof createProjectMapModel>) {
+  return Object.fromEntries(projectMapLayers.map(layer => [layer.id,
+    new Set(model.features.filter(item => item.properties.layerKind === layer.kind).map(item => item.properties.entityId)).size
+  ])) as Record<typeof projectMapLayers[number]["id"], number>;
+}
+
+export function filterProjectMapModelByLayers(model: ReturnType<typeof createProjectMapModel>, visible: ReadonlySet<typeof projectMapLayers[number]["id"]>) {
+  const kinds = new Set(projectMapLayers.filter(layer => visible.has(layer.id)).map(layer => layer.kind));
+  return { ...model, features: model.features.filter(item => kinds.has(item.properties.layerKind)) };
 }
 
 export function firstMapCoordinate(model: FeatureCollection<Geometry, MapProperties>): [number, number] | null {
@@ -152,4 +174,21 @@ export function filterProjectMapModelByTime(
     features: model.features.filter((item) => !item.properties.capturedAt ||
       (item.properties.capturedAt >= range.from && item.properties.capturedAt <= range.to))
   };
+}
+
+export function projectMapDeviceTypes(model: ReturnType<typeof createProjectMapModel>) {
+  const types = new Map<string, { key: string; label: string; icon?: string; count: number }>();
+  for (const item of model.features) {
+    if (item.properties.layerKind !== "device-generic") continue;
+    const key = item.properties.deviceTypeKey!;
+    const current = types.get(key);
+    if (current) current.count++;
+    else types.set(key, { key, label: item.properties.deviceTypeName!, icon: item.properties.deviceTypeIcon, count: 1 });
+  }
+  return [...types.values()];
+}
+
+export function filterProjectMapModelByDeviceTypes(model: ReturnType<typeof createProjectMapModel>, hiddenTypes: ReadonlySet<string>) {
+  return { ...model, features: model.features.filter(item =>
+    !hiddenTypes.has(item.properties.deviceTypeKey ?? "") && !hiddenTypes.has(item.properties.ownerDeviceTypeKey ?? "")) };
 }

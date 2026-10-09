@@ -7,10 +7,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 const HeaderActionsContext = createContext<HTMLDivElement | null>(null);
 
-export function SiteHeaderLayout({ children }: { children: ReactNode }) {
+export function SiteHeaderLayout({ children, compact = false }: { children: ReactNode; compact?: boolean }) {
   const [actions, setActions] = useState<HTMLDivElement | null>(null);
   return <HeaderActionsContext.Provider value={actions}>
-    <SiteHeader actionsRef={setActions} />
+    <SiteHeader actionsRef={setActions} compact={compact} />
     {children}
   </HeaderActionsContext.Provider>;
 }
@@ -20,9 +20,9 @@ export function SiteHeaderActions({ children }: { children: ReactNode }) {
   return target ? createPortal(children, target) : null;
 }
 
-export function SiteHeader({ actionsRef }: { actionsRef?: (element: HTMLDivElement | null) => void }) {
+export function SiteHeader({ actionsRef, compact = false }: { actionsRef?: (element: HTMLDivElement | null) => void; compact?: boolean }) {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-2">
+    <header className={`flex shrink-0 items-center gap-2 ${compact ? "h-12 border-b" : "h-16"}`}>
       <div className="flex items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator className="mr-2 data-vertical:h-4 data-vertical:self-auto" orientation="vertical" />

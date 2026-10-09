@@ -17,7 +17,7 @@ export type DeviceDiscovery = {
   lastSeenAt: string;
 };
 
-export type DeviceTypeOption = { id: string; typeKey: string; displayName: string; category: string };
+export type DeviceTypeOption = { id: string; typeKey: string; displayName: string; icon?: string; category: string };
 export type DiscoveryConnector = { id: string; name: string; connectorKey: string; status: string; canScan: boolean };
 
 export const DISCOVERY_STATUS_LABELS: Record<DiscoveryStatus, string> = {

@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -55,7 +57,7 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
   </div>;
 }
 
-export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStreamId, onStreamChanged, compact = false }: {
+export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStreamId, onStreamChanged, compact = false, immersive = false, controlsTarget, controlsVisible = true }: {
   snapshot: ProjectSituationSnapshot;
   selection: SituationSelection | null;
   mode: "live" | "history";
@@ -63,6 +65,9 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   selectedStreamId?: number | null;
   onStreamChanged?: () => void | Promise<void>;
   compact?: boolean;
+  immersive?: boolean;
+  controlsTarget?: HTMLDivElement | null;
+  controlsVisible?: boolean;
 }) {
   const baseModel = useMemo(() => createLiveStreamPanelModel({ snapshot, selection, mode, cursor }), [snapshot, selection, mode, cursor]);
   const model = mode === "live" && selectedStreamId
@@ -189,25 +194,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   };
   const lastActive = model.stream.lastActiveAt ? Date.parse(String(model.stream.lastActiveAt)) : NaN;
   const latencySeconds = Number.isFinite(lastActive) ? Math.max(0, Math.round((Date.now() - lastActive) / 1000)) : null;
-  return <div className={compact ? "space-y-2" : "space-y-3 p-4"}>
-    {!compact && <div className="flex items-center justify-between text-sm font-medium">
-      <span className="flex items-center gap-2"><RadioTowerIcon className="size-4" />设备 #{String(model.stream.deviceId)}</span>
-      <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
-    </div>}
-    <div ref={playbackElement} className={`flex aspect-video items-center justify-center overflow-hidden bg-slate-950 text-slate-200 ${compact ? "" : "rounded-lg border"}`}>
-      {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? sourceType === "dji_flighthub" ? "已停止观看，等待设备停止推流…" : "正在停止直播…" : "正在等待设备推流…"}</div>
-        : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
-        : playback.status === "error" ? <div className="space-y-3 text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" /><p>直播连接失败</p><button className="rounded-md border px-3 py-2" type="button" onClick={() => setPlaybackRevision(value => value + 1)}>重新连接</button></div>
-          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "webrtc"
-            ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />
-          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
-            ? <video autoPlay className="h-full w-full object-contain" controls muted onError={() => setPlayback((current) => current.status === "ready" && current.index + 1 < current.candidates.length ? { ...current, index: current.index + 1 } : { status: "error" })} src={playback.candidates[playback.index].url} />
-          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "volc-rtc"
-            ? <IsolatedRTCPlayer credential={playback.candidates[playback.index].url} />
-            : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "simulator"
-              ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
-              : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}
-    </div>
+  const controls = <div hidden={!controlsVisible} className="space-y-3">
     {streamId && playback.status === "ready" && ["volc-rtc", "hls"].includes(playback.candidates[playback.index]?.protocol) && <SampledVideoAlgorithm key={`${streamId}-${playback.candidates[playback.index].protocol}`} projectId={snapshot.project.id} streamId={streamId} capture={async signal => {
       const iframe = playbackElement.current?.querySelector("iframe");
       if (iframe) return captureRTCFrame(iframe, signal);
@@ -224,6 +211,27 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       </button>
       {stopState === "error" && <span className="text-xs text-destructive">停止失败，请重试</span>}
     </div>
+  </div>;
+  return <div className={immersive ? "flex h-full min-h-0 flex-1 flex-col" : compact ? "space-y-2" : "space-y-3 p-4"}>
+    {!compact && <div className="flex items-center justify-between text-sm font-medium">
+      <span className="flex items-center gap-2"><RadioTowerIcon className="size-4" />设备 #{String(model.stream.deviceId)}</span>
+      <span className={status === "degraded" ? "text-amber-600" : "text-emerald-600"}>{status}</span>
+    </div>}
+    <div ref={playbackElement} className={cn("flex items-center justify-center overflow-hidden bg-slate-950 text-slate-200", immersive ? "min-h-0 flex-1" : "aspect-video", !compact && "rounded-lg border")}>
+      {!isLiveStreamPlayable(status) && !(sourceType === "dji_flighthub" && status === "starting") ? <div className="text-center text-xs"><RefreshCwIcon className="mx-auto mb-2 size-7 animate-spin" />{status === "stopping" ? sourceType === "dji_flighthub" ? "已停止观看，等待设备停止推流…" : "正在停止直播…" : "正在等待设备推流…"}</div>
+        : playback.status === "loading" ? <RefreshCwIcon className="size-6 animate-spin" />
+        : playback.status === "error" ? <div className="space-y-3 text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" /><p>直播连接失败</p><button className="rounded-md border px-3 py-2" type="button" onClick={() => setPlaybackRevision(value => value + 1)}>重新连接</button></div>
+          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "webrtc"
+            ? <iframe allow="autoplay; fullscreen" className="h-full w-full border-0" src={playback.candidates[playback.index].url} title="WebRTC 直播" />
+          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "hls"
+            ? <video autoPlay className="h-full w-full object-contain" controls muted onError={() => setPlayback((current) => current.status === "ready" && current.index + 1 < current.candidates.length ? { ...current, index: current.index + 1 } : { status: "error" })} src={playback.candidates[playback.index].url} />
+          : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "volc-rtc"
+            ? <IsolatedRTCPlayer credential={playback.candidates[playback.index].url} />
+            : playback.status === "ready" && playback.candidates[playback.index]?.protocol === "simulator"
+              ? <div className="text-center text-xs"><RadioTowerIcon className="mx-auto mb-2 size-8 animate-pulse" />Simulator 直播信号<br />{String(model.stream.streamKey)}</div>
+              : <div className="text-center text-xs"><VideoOffIcon className="mx-auto mb-2 size-7" />等待播放信息</div>}
+    </div>
+    {immersive ? controlsTarget && createPortal(controls, controlsTarget) : controls}
     {!compact && realtimeData}
   </div>;
 }

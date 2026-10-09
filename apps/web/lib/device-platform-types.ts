@@ -10,6 +10,7 @@ export type DeviceTypeSummary = {
   typeKey: string;
   version: number;
   displayName: string;
+  icon: string;
   category: string;
   vendor: string | null;
   model: string | null;

@@ -475,7 +475,7 @@ func (q *Queries) DiscoveryType(ctx context.Context, p1 string) ([]json.RawMessa
 
 const discoveryTypes = `-- name: DiscoveryTypes :many
 SELECT to_jsonb(r) FROM (
-select id::text,type_key as "typeKey",display_name as "displayName",category
+select id::text,type_key as "typeKey",display_name as "displayName",icon,category
       from device_types where status='active' order by display_name,version desc
 ) r
 `

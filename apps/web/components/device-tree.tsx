@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIcon, ArrowRightIcon, BotIcon, BoxIcon, CameraIcon, ChevronRightIcon,
-  CpuIcon, MapPinIcon, PlaneIcon, RadioIcon, SearchIcon, WarehouseIcon
+  ArrowRightIcon, CameraIcon, ChevronRightIcon,
+  CpuIcon, MapPinIcon, RadioIcon, SearchIcon
 } from "lucide-react";
 
+import { DeviceTypeIcon } from "@/components/device-type-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -16,14 +17,6 @@ import { presentDevicePosition } from "@/lib/device-position-presentation";
 import type { DeviceTreeNode } from "@/lib/device-tree-core";
 import { cn } from "@/lib/utils";
 import { projectNavigationHref } from "@/lib/project-navigation";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  aircraft: "无人机", camera: "摄像头", dock: "机场", robot: "机器人", sensor: "传感器"
-};
-
-const CATEGORY_ICONS: Record<string, ComponentType<{ className?: string }>> = {
-  aircraft: PlaneIcon, camera: CameraIcon, dock: WarehouseIcon, robot: BotIcon, sensor: ActivityIcon
-};
 
 const STATUS_LABELS: Record<string, string> = {
   degraded: "异常", offline: "离线", online: "在线", unknown: "未知"
@@ -46,7 +39,6 @@ function DeviceBranch({ node, depth, selectedId, onSelect, searching }: {
 }) {
   const [open, setOpen] = useState(depth < 1);
   const hasChildren = node.children.length > 0;
-  const Icon = CATEGORY_ICONS[node.category] ?? CpuIcon;
 
   useEffect(() => {
     if (searching) setOpen(true);
@@ -62,10 +54,10 @@ function DeviceBranch({ node, depth, selectedId, onSelect, searching }: {
           </button>
         </CollapsibleTrigger> : <span className="size-7 shrink-0" />}
         <button className="flex min-w-0 flex-1 items-center gap-2 py-2 pr-2 text-left" onClick={() => onSelect(node.id)} type="button">
-          <Icon className="size-4 shrink-0" />
+          <DeviceTypeIcon name={node.typeIcon} className="size-4 shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{node.name}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{CATEGORY_LABELS[node.category] ?? node.category}{node.relationType ? ` · ${node.relationType}` : ""}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{node.typeName}{node.relationType ? ` · ${node.relationType}` : ""}</span>
           </span>
           <span aria-label={STATUS_LABELS[node.status] ?? node.status} className={cn("size-2 shrink-0 rounded-full", statusClass(node.status))} />
         </button>
@@ -85,14 +77,13 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 }
 
 function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectId: number }) {
-  const Icon = CATEGORY_ICONS[device.category] ?? BoxIcon;
   const position = presentDevicePosition(device);
   return <div className="flex h-full min-h-0 flex-col">
     <header className="flex flex-wrap items-start justify-between gap-4 border-b p-5">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="rounded-lg bg-primary/10 p-2.5 text-primary"><Icon className="size-5" /></div>
+        <div className="rounded-lg bg-primary/10 p-2.5 text-primary"><DeviceTypeIcon name={device.typeIcon} className="size-5" /></div>
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-lg font-semibold">{device.name}</h2><Badge variant="outline">{CATEGORY_LABELS[device.category] ?? device.category}</Badge></div>
+          <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-lg font-semibold">{device.name}</h2><Badge variant="outline">{device.typeName}</Badge></div>
           <p className="mt-1 text-xs text-muted-foreground">设备 ID {device.id} · {device.typeKey}</p>
         </div>
       </div>

@@ -184,6 +184,7 @@ type Querier interface {
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ListChatMessagesRow, error)
 	ListChatSessions(ctx context.Context, arg ListChatSessionsParams) ([]ListChatSessionsRow, error)
 	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ListDeviceTypePresentation(ctx context.Context) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubSyncRuns(ctx context.Context, projectID int32) ([]json.RawMessage, error)
@@ -352,6 +353,7 @@ type Querier interface {
 	UpdateAIProvider(ctx context.Context, arg UpdateAIProviderParams) error
 	UpdateAlgorithmDefinition(ctx context.Context, arg UpdateAlgorithmDefinitionParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
+	UpdateDeviceTypeIcon(ctx context.Context, arg UpdateDeviceTypeIconParams) (string, error)
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)
 	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)

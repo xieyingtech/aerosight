@@ -11,6 +11,7 @@ export type DeviceTreeItem = {
   positionSource: string;
   pose: { longitude: number; latitude: number; altitudeMeters: number | null; capturedAt: string; calibrationStatus: "calibrated" | "unverified" } | null;
   typeName: string;
+  typeIcon?: string | null;
   typeKey: string;
   driverKey: string;
   driverVersion: string;

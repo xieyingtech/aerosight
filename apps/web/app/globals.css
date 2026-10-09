@@ -167,3 +167,69 @@
 .chat-markdown img { max-width: 100%; height: auto; border-radius: 0.5rem; }
 .chat-markdown .task-list-item { list-style: none; }
 .chat-markdown input[type="checkbox"] { margin-right: 0.5rem; accent-color: var(--primary); }
+
+.project-map-popup .maplibregl-popup-content {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 12%);
+}
+.project-map-popup .maplibregl-popup-close-button {
+  color: var(--popover-foreground);
+  padding: 0.125rem 0.375rem;
+  font-size: 1.125rem;
+}
+
+.project-map-marker {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.project-map-marker-core {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--marker-color);
+  color: white;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 22%);
+}
+.project-map-marker-selected .project-map-marker-core,
+.project-map-marker:focus-visible .project-map-marker-core {
+  outline: 2px solid var(--marker-color);
+  outline-offset: 3px;
+}
+.project-map-marker-halo,
+.project-map-marker-halo > span {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.project-map-marker-halo > span {
+  border: 1.5px solid var(--marker-halo-color);
+  background: color-mix(in srgb, var(--marker-halo-color) 18%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--marker-halo-color) 35%, transparent);
+  animation: project-map-ripple 2.4s cubic-bezier(0.2, 0.5, 0.4, 1) infinite;
+}
+.project-map-marker-halo > span:nth-child(2) { animation-delay: -1.2s; }
+@keyframes project-map-ripple {
+  0% { transform: scale(0.8); opacity: 0; }
+  15% { opacity: 0.65; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-map-marker-halo > span { animation: none; transform: scale(1.4); opacity: 0.25; }
+  .project-map-marker-halo > span:nth-child(2) { display: none; }
+}

@@ -53,7 +53,8 @@ export function AppSidebar({
     { title: "团队管理", url: "/admin/teams", icon: <Building2Icon /> },
     { title: "项目管理", url: "/admin/projects", icon: <FolderKanbanIcon /> },
     { title: "AI Provider", url: "/admin/ai-providers", icon: <SparklesIcon /> },
-    { title: "算法服务", url: "/admin/algorithm-providers", icon: <BoxesIcon /> }
+    { title: "算法服务", url: "/admin/algorithm-providers", icon: <BoxesIcon /> },
+    { title: "设备类型", url: "/admin/device-types", icon: <CpuIcon /> }
   ];
   const projectIcons = {
     overview: <MapIcon />, realtime: <RadioTowerIcon />, tasks: <WaypointsIcon />,

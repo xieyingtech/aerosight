@@ -29,7 +29,7 @@ test("simulator vertical acceptance covers manual and scheduled task through iss
     availability: { devices: "available", tasks: "available", media: "available", alerts: "available", liveStreams: "available" }
   };
   const overview = createProjectMapModel(initialSnapshot);
-  assert.ok(overview.features.some((feature) => feature.properties.layerKind === "device-drone"));
+  assert.ok(overview.features.some((feature) => feature.properties.layerKind === "device-generic"));
   assert.ok(overview.features.some((feature) => feature.properties.layerKind === "track"));
 
   const triggerAuthorization = { projectId: 17,taskProjectId: 17,taskVersionStatus: "published",taskStatus: "active",

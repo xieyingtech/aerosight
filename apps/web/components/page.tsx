@@ -11,9 +11,13 @@ export function Page({
   title: string;
   description?: string;
   actions?: ReactNode;
-  variant?: "default" | "workspace";
+  variant?: "default" | "workspace" | "canvas";
   children: ReactNode;
 }) {
+  if (variant === "canvas") return <section className="absolute inset-0 overflow-hidden" aria-label={title}>
+    <h1 className="sr-only">{title}</h1>
+    {children}
+  </section>;
   return (
     <section className={cn(
       variant === "workspace" ? "flex min-h-[calc(100svh-5rem)] flex-col gap-3" : "space-y-6"

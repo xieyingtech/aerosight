@@ -7,6 +7,8 @@ import { projectPageHref, scopedPageQuery } from "@/lib/page-routes";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 
+import { CanvasWorkspace } from "@/components/canvas-workspace";
+import { Button } from "@/components/ui/button";
 import { DeviceActionPanel } from "@/components/device-action-panel";
 import { FlightHubDeviceOperations } from "@/components/flighthub-device-operations";
 import { LiveDeviceWindow } from "@/components/live-device-window";
@@ -49,6 +51,8 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const [selection, setSelection] = useState<RealtimeWorkbenchSelection>(() => resolveWorkbenchSelection(initialSnapshot, {
     deviceId: initialDeviceId, streamId: initialStreamId
   }));
+  const [primaryDeviceId, setPrimaryDeviceId] = useState<number | null>(null);
+  const [liveControls, setLiveControls] = useState<HTMLDivElement | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [transitionTimeout, setTransitionTimeout] = useState(false);
   const pollCount = useRef(0);
@@ -114,7 +118,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const selectedDevice = findProjectDevice(snapshot, selection.deviceId);
   const modules = realtimeDeviceModules(selectedDevice);
   const mapSelection: SituationSelection | null = selectedDevice ? {
-    lane: `device-${String(selectedDevice.category ?? selectedDevice.type ?? "ground")}`,
+    lane: "device-generic",
     entityId: String(selectedDevice.id), label: String(selectedDevice.name ?? `设备 #${selectedDevice.id}`)
   } : null;
   const deviceOptions = snapshot.devices.map((device) => ({
@@ -125,6 +129,9 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   }));
   const deviceSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
   const liveDevices = relatedLiveDevices(snapshot, selection.deviceId);
+  const primaryDevice = liveDevices.find(device => Number(device.id) === primaryDeviceId)
+    ?? liveDevices.find(device => Number(device.id) === Number(snapshot.liveStreams.find(stream => Number(stream.id) === selection.streamId)?.deviceId))
+    ?? liveDevices[0];
   const liveDeviceIds = new Set(liveDevices.map(device => Number(device.id)));
   const hasActiveStreams = activeProjectStreams(snapshot).some(stream => liveDeviceIds.has(Number(stream.deviceId)));
   const isFlightHub = selectedDevice?.connectorKey === "dji.flighthub2";
@@ -134,6 +141,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
 
   const selectDevice = (deviceId: number) => {
     const next = resolveWorkbenchSelection(snapshot, { deviceId });
+    setPrimaryDeviceId(null);
     syncSelection(next);
   };
 
@@ -147,13 +155,13 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     window.setTimeout(() => { void refresh(); }, 500);
   };
 
-  return <div className="flex min-h-0 flex-1 flex-col gap-3">
+  return <CanvasWorkspace title="实时作业" subtitle={primaryDevice ? `${snapshot.project.name} · ${String(primaryDevice.name)}` : snapshot.project.name} leftTitle="设备与操作" left={<div className="space-y-3">
       <section className="rounded-xl border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <div><h2 className="font-medium">作业设备</h2><p className="mt-1 text-xs text-muted-foreground">搜索并选择设备</p></div>
-          <button aria-label="刷新状态" className="inline-flex size-8 items-center justify-center rounded-md border disabled:opacity-50" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} /></button>
+          <Button aria-label="刷新状态" variant="outline" size="icon-sm" disabled={refreshing} onClick={() => refresh()} type="button"><RefreshCwIcon className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} /></Button>
         </div>
-        <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
+        <div className="mt-3 grid items-start gap-3">
           <InputSelect onValueChange={(value) => selectDevice(Number(value))} options={deviceOptions} placeholder="按名称、类型或驱动搜索" value={selection.deviceId ? String(selection.deviceId) : null} />
           {selectedDevice && <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2 text-sm"><span>{String(selectedDevice.typeName ?? selectedDevice.category ?? "设备")}</span><Badge variant="outline">{String(selectedDevice.status ?? "unknown")}</Badge><span className="text-xs text-muted-foreground">{String(selectedDevice.driverKey ?? "未绑定驱动")}@{String(selectedDevice.driverVersion ?? "-")}</span></div>
@@ -168,19 +176,18 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
             {isFlightHub && <FlightHubDeviceOperations compact workflowActions={actions} key={String(selectedDevice.id)} projectId={snapshot.project.id} deviceId={Number(selectedDevice.id)} deviceName={String(selectedDevice.name)} onChanged={async()=>{await refresh();}} />}
           </section>}</div>}
       </section>
-    <div className="grid min-h-[600px] flex-1 gap-3 xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_380px]">
-    <div className="flex min-h-0 flex-col gap-3 xl:overflow-y-auto">
-      {liveDevices.length > 0 && <section aria-label="设备直播" className="grid gap-3 md:grid-cols-2">
-        {liveDevices.map(device => <LiveDeviceWindow key={String(device.id)} snapshot={snapshot} device={device} selectedStreamId={selection.streamId} autoStart={autoLive && selection.deviceId === autoLiveDeviceId.current} onStarted={session => handleStreamStarted(session, Number(device.id))} onChanged={async () => { await refresh(); }} />)}
-      </section>}
-      <ProjectMap className="h-[50svh] min-h-[360px] flex-1 xl:min-h-[360px]" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
-    </div>
-    <aside className="min-h-0 space-y-3 xl:overflow-y-auto xl:pr-1">
+      {liveDevices.length > 1 && <div className="space-y-2"><h3 className="text-sm font-medium">主画面设备</h3><div className="flex flex-wrap gap-2">{liveDevices.map(device => <Button key={String(device.id)} size="sm" variant={device.id === primaryDevice?.id ? "secondary" : "outline"} aria-pressed={device.id === primaryDevice?.id} onClick={() => setPrimaryDeviceId(Number(device.id))}>{String(device.name)}</Button>)}</div></div>}
+      <div ref={setLiveControls} className="space-y-3" />
+    </div>} rightTitle="地图与实时数据" right={<div className="space-y-3">
+      <ProjectMap compactControls className="h-60 min-h-0" onSelect={(value) => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />
       {!selectedDevice && <section className="flex min-h-96 flex-col items-center justify-center rounded-xl border border-dashed bg-card p-8 text-center"><CrosshairIcon className="mb-3 size-9 text-muted-foreground" /><h2 className="font-medium">选择一台设备开始作业</h2><p className="mt-1 text-sm text-muted-foreground">操作、直播与实时数据会按设备能力显示在这里。</p></section>}
       {modules.live && hasActiveStreams && transitionTimeout && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">直播状态长时间未收敛，请检查设备连接后手动刷新。</p>}
       {diagnostics.length ? <OperationDiagnostics items={diagnostics} /> : selectedDevice ? <section className="rounded-xl border bg-card p-4 text-sm text-muted-foreground"><span className="flex items-center gap-2"><InfoIcon className="size-4" />当前设备没有待处理诊断</span></section> : null}
       {modules.timeline && deviceSnapshot && <ProjectTimeline snapshot={deviceSnapshot} />}
-    </aside>
-    </div>
-  </div>;
+    </div>}>
+      <section aria-label="设备直播" className="h-full bg-slate-950">
+        {liveDevices.map(device => <div key={String(device.id)} hidden={device.id !== primaryDevice?.id} className="h-full"><LiveDeviceWindow immersive controlsTarget={liveControls} controlsVisible={device.id === primaryDevice?.id} snapshot={snapshot} device={device} selectedStreamId={selection.streamId} autoStart={autoLive && selection.deviceId === autoLiveDeviceId.current} onStarted={session => handleStreamStarted(session, Number(device.id))} onChanged={async () => { await refresh(); }} /></div>)}
+        {!liveDevices.length && <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-slate-200"><CrosshairIcon className="size-10" /><h2 className="font-medium">{selectedDevice ? "当前设备没有可用视频通道" : "选择一台设备开始作业"}</h2><p className="text-sm text-slate-400">在左侧设备面板选择直播设备，地图和实时数据位于右侧。</p></div>}
+      </section>
+    </CanvasWorkspace>;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProjectMapModel, filterProjectMapModelByTime, projectMapLayers } from "./project-map-model.ts";
+import { createProjectMapModel, projectMapDeviceTypes, filterProjectMapModelByDeviceTypes, filterProjectMapModelByLayers, filterProjectMapModelByTime, projectMapLayerCounts, projectMapLayers } from "./project-map-model.ts";
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
 
 const snapshot: ProjectSituationSnapshot = {
@@ -26,7 +26,7 @@ const snapshot: ProjectSituationSnapshot = {
 
 test("map layer registry keeps all operational layers stable", () => {
   assert.deepEqual(projectMapLayers.map((layer) => layer.id), [
-    "regions", "mission-routes", "tracks", "algorithm-results", "media", "issues", "drones", "docks", "ground-robots"
+    "regions", "mission-routes", "tracks", "algorithm-results", "media", "issues", "devices"
   ]);
 });
 
@@ -40,7 +40,7 @@ test("history window keeps timeless regions but filters timestamped features", (
 test("map model renders air-ground features and drops foreign project data", () => {
   const model = createProjectMapModel(snapshot);
   const kinds = new Set(model.features.map((item) => item.properties.layerKind));
-  for (const kind of ["device-drone", "device-ground", "track", "mission-route", "region", "media", "algorithm-results", "issue"]) {
+  for (const kind of ["device-generic", "track", "mission-route", "region", "media", "algorithm-results", "issue"]) {
     assert(kinds.has(kind as never), `missing ${kind}`);
   }
   assert(!model.features.some((item) => item.properties.entityId === "99"));
@@ -48,18 +48,57 @@ test("map model renders air-ground features and drops foreign project data", () 
   assert.equal(model.features.find((item) => item.properties.layerKind === "algorithm-results")?.properties.label, "车辆识别");
 });
 
-test("Dock 2 and M3TD snapshot uses facility and aircraft map icons", () => {
-	const model = createProjectMapModel(snapshot);
-	const devices = new Map(model.features.filter((item) => item.properties.layerKind.startsWith("device-"))
-		.map((item) => [item.properties.entityId, item.properties]));
-	assert.deepEqual(
-		[devices.get("1"), devices.get("4"), devices.get("5")].map((item) => [item?.layerKind, item?.markerKind, item?.markerGlyph]),
-		Array.from({ length: 3 }, () => ["device-drone", "drone", "✈"])
-	);
-	assert.deepEqual(
-		[devices.get("3")?.layerKind, devices.get("3")?.markerKind, devices.get("3")?.markerGlyph],
-		["device-dock", "dock", "▣"]
-	);
-	assert.equal(devices.get("1")?.positionStatus, "unverified");
-	assert.equal(devices.get("3")?.positionSource, "dji-flighthub-openapi");
+test("device types provide map names and icons without inferring air or ground categories", () => {
+  const model = createProjectMapModel({ ...snapshot, devices: [
+    { ...snapshot.devices[0], deviceTypeId: "42", typeName: "Custom camera", typeIcon: "camera" },
+    { ...snapshot.devices[1], deviceTypeId: "43", typeName: "Sensor", typeIcon: "thermometer" },
+    snapshot.devices[3]
+  ] });
+  const types = projectMapDeviceTypes(model);
+  assert.deepEqual(types.map(type => [type.key, type.label, type.icon, type.count]), [
+    ["42", "Custom camera", "camera", 1], ["43", "Sensor", "thermometer", 1], ["unknown", "未设置设备类型", undefined, 1]
+  ]);
+  assert(model.features.filter(item => item.properties.deviceTypeKey).every(item => item.properties.layerKind === "device-generic"));
+});
+
+test("layer badge counts match mappable project entities, including hidden layer counts", () => {
+  const model = createProjectMapModel({ ...snapshot, tracks: [...snapshot.tracks, ...snapshot.tracks] });
+  const counts = projectMapLayerCounts(model);
+  assert.equal(counts.devices, 5);
+  assert.equal(counts.tracks, 1);
+  assert.equal(counts["mission-routes"], 1);
+  assert.equal(counts.issues, 1);
+  const history = filterProjectMapModelByTime(createProjectMapModel({ ...snapshot,
+    mediaPoints: [{ ...snapshot.mediaPoints[0], capturedAt: "2026-08-23T00:00:00Z" }]
+  }), { from: "2026-08-24T00:00:00Z", to: "2026-08-25T00:00:00Z" });
+  assert.equal(projectMapLayerCounts(history).media, 0);
+});
+
+test("warning indicators bind diagnostics to their device and error wins over position warning", () => {
+  const model = createProjectMapModel({ ...snapshot, diagnostics: [
+    { id: "device-error", deviceId: 1, kind: "stream", severity: "error", title: "直播中断", reason: "failed", status: "failed", occurredAt: null },
+    { id: "project-error", deviceId: null, kind: "connection", severity: "error", title: "连接异常", reason: "failed", status: "failed", occurredAt: null }
+  ] });
+  const drone = model.features.find(item => item.properties.layerKind === "device-generic" && item.properties.entityId === "1");
+  const dock = model.features.find(item => item.properties.layerKind === "device-generic" && item.properties.entityId === "3");
+  const ground = model.features.find(item => item.properties.layerKind === "device-generic" && item.properties.entityId === "2");
+  assert.equal(drone?.properties.warningSeverity, "error");
+  assert.match(drone?.properties.warningMessage ?? "", /直播中断/);
+  assert.equal(dock?.properties.warningSeverity, "warning");
+  assert.equal(ground?.properties.warningSeverity, undefined);
+});
+
+test("type visibility follows device ownership for tracks and routes, without guessing unowned routes", () => {
+  const model = createProjectMapModel({ ...snapshot,
+    devices: snapshot.devices.map(device => ({ ...device, deviceTypeId: String(device.id) })),
+    activeTasks: [...snapshot.activeTasks, { id: 88, input: { deviceId: 1, route: { type: "LineString", coordinates: [[120, 30], [121, 31]] } } }],
+    tracks: [...snapshot.tracks, { deviceId: 2, geometry: { type: "LineString", coordinates: [[120, 30], [121, 31]] } }]
+  });
+  const filtered = filterProjectMapModelByDeviceTypes(model, new Set(["1"]));
+  assert(!filtered.features.some(item => item.properties.layerKind === "device-generic" && item.properties.entityId === "1"));
+  assert(!filtered.features.some(item => item.properties.layerKind === "track" && item.properties.entityId === "1"));
+  assert(!filtered.features.some(item => item.properties.layerKind === "mission-route" && item.properties.entityId === "88"));
+  assert(filtered.features.some(item => item.properties.layerKind === "track" && item.properties.entityId === "2"));
+  assert(filtered.features.some(item => item.properties.layerKind === "mission-route" && item.properties.entityId === "3"));
+  assert.equal(filterProjectMapModelByDeviceTypes(model, new Set()).features.length, model.features.length);
 });

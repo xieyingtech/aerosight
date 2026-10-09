@@ -17,7 +17,7 @@ SELECT to_jsonb(r) FROM (
                order by binding.priority desc,binding.connector_instance_id limit 1) as "connectorKey",
               device.device_type_id::text as "deviceTypeId",
               device_type.type_key as "typeKey", device_type.version as "typeVersion",
-              device_type.display_name as "typeName", device_type.category,
+              device_type.display_name as "typeName", device_type.icon as "typeIcon", device_type.category,
               driver.driver_key as "driverKey", driver.version as "driverVersion",
               driver.status as "driverStatus",
               device.status_reason as "statusReason", device.last_seen_at as "lastSeenAt",
