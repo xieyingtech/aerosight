@@ -1,2 +1,5 @@
 # Preserve reviewed contract checksums on Windows.
 contracts/dji-flighthub/v2/** text eol=lf
+
+# Migration checksums must match Git blobs and Linux production builds.
+db/migrations/*.sql text eol=lf
