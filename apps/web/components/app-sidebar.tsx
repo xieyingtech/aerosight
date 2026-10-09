@@ -25,6 +25,13 @@ import {
   SidebarMenuItem
 } from "@/components/ui/sidebar";
 
+const projectNavigationGroups = [
+  { label: "态势与作业", keys: ["overview", "realtime", "tasks", "issues"] },
+  { label: "设备接入", keys: ["devices", "connectors"] },
+  { label: "数据与智能", keys: ["assets", "algorithms", "agents"] },
+  { label: "项目设置", keys: ["settings"] }
+] as const;
+
 export function AppSidebar({
   user,
   projects,
@@ -63,12 +70,17 @@ export function AppSidebar({
   };
   const projectItems = currentProject
     ? visibleProjectNavigation(currentProject.role, currentProject.permissions).map((item) => ({
+        key: item.key,
         title: item.title,
         url: projectNavigationHref(currentProject.id, item.segment),
         icon: projectIcons[item.key],
         exact: item.exact
       }))
     : [];
+  const projectGroups = projectNavigationGroups.map(group => ({
+    label: group.label,
+    items: group.keys.flatMap(key => projectItems.filter(item => item.key === key))
+  })).filter(group => group.items.length > 0);
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
@@ -118,7 +130,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {currentProject ? (
-          <NavMain items={projectItems} label="项目工作台" />
+          projectGroups.map(group => <NavMain key={group.label} items={group.items} label={group.label} />)
         ) : (
           <>
             <NavMain items={navMain} label="导航" />
