@@ -11,19 +11,19 @@ import type { ProjectSituationSnapshot, ProjectSnapshotDevice } from "@/lib/proj
 import { LiveStreamPanel } from "@/components/live-stream-panel";
 import { Button } from "@/components/ui/button";
 
-export function LiveDeviceWindow({ snapshot, device, selectedStreamId, autoStart = false, onStarted, onChanged, immersive = false, controlsTarget, controlsVisible = true }: {
+export function LiveDeviceWindow({ snapshot, device, selectedStreamId, videoChannelKey, autoStart = false, onStarted, onChanged, immersive = false, controlsTarget, controlsVisible = true }: {
  snapshot: ProjectSituationSnapshot; device: ProjectSnapshotDevice; selectedStreamId?: number | null; autoStart?: boolean;
  onStarted: (session: Record<string, unknown> & { id: number; status: string }) => void;
- onChanged: () => Promise<void>; immersive?: boolean; controlsTarget?: HTMLDivElement | null; controlsVisible?: boolean;
+ onChanged: () => Promise<void>; videoChannelKey?: string; immersive?: boolean; controlsTarget?: HTMLDivElement | null; controlsVisible?: boolean;
 }) {
  const channels = (device.channels ?? []).filter(channel => channel.dataType === "video");
  const streams = activeProjectStreams(snapshot).filter(stream => Number(stream.deviceId) === Number(device.id));
  const preferred = streams.find(stream => Number(stream.id) === selectedStreamId) ?? streams[0];
  const [channelKey, setChannelKey] = useState("");
- const channel = channels.find(item => item.channelKey === channelKey)
+ const channel = videoChannelKey !== undefined ? channels.find(item => item.channelKey === videoChannelKey) : channels.find(item => item.channelKey === channelKey)
   ?? channels.find(item => item.channelKey === preferred?.streamKey)
   ?? defaultVideoChannel(channels);
- const stream = streams.find(item => item.streamKey === channel?.channelKey) ?? (!channelKey ? preferred : null);
+ const stream = videoChannelKey !== undefined ? streams.find(item => item.streamKey === videoChannelKey) : streams.find(item => item.streamKey === channel?.channelKey) ?? (!channelKey ? preferred : null);
  const action = device.capabilities?.find(capability => capability.code === "stream.video.control")?.actions.find(action => action.kind === "live");
  const [pending, setPending] = useState(false), [error, setError] = useState("");
  const attempts = useRef(new Set<string>()), suppressed = useRef(false), starting = useRef(false);
@@ -52,13 +52,13 @@ export function LiveDeviceWindow({ snapshot, device, selectedStreamId, autoStart
  }, [stream?.id, channel?.channelKey, enabled, signal, autoStart]);
  const header = <div hidden={!controlsVisible} className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
    <h2 className="text-sm font-medium">{String(device.name)} · {String(device.typeName ?? "直播")}</h2>
-   {channels.length > 1 && <select aria-label={`${device.name} 视频通道`} title={streams.length ? "停止当前直播后可切换通道" : "选择视频通道"} className="max-w-full rounded border bg-background px-2 py-1 text-xs" value={channel?.channelKey ?? ""} disabled={pending || streams.length > 0} onChange={event => { setChannelKey(event.target.value); setError(""); suppressed.current = false; }}>
+   {videoChannelKey === undefined && channels.length > 1 && <select aria-label={`${device.name} 视频通道`} title={streams.length ? "停止当前直播后可切换通道" : "选择视频通道"} className="max-w-full rounded border bg-background px-2 py-1 text-xs" value={channel?.channelKey ?? ""} disabled={pending || streams.length > 0} onChange={event => { setChannelKey(event.target.value); setError(""); suppressed.current = false; }}>
     {channels.map(item => <option key={item.stableChannelId} value={item.channelKey}>{item.displayName}</option>)}
    </select>}
   </div>;
  return <div className={cn("overflow-hidden bg-card", immersive ? "flex h-full min-h-0 flex-col bg-slate-950" : "rounded-xl border")}>
   {immersive ? controlsTarget && createPortal(header, controlsTarget) : header}
-  {stream ? <LiveStreamPanel compact immersive={immersive} controlsTarget={controlsTarget} controlsVisible={controlsVisible} key={String(stream.id)} snapshot={snapshot} selectedStreamId={Number(stream.id)} selection={{ lane: `device-${String(device.category ?? "ground")}`, entityId: String(device.id), label: String(device.name) }} mode="live" cursor={null} onStreamChanged={async () => { suppressed.current = true; await onChanged(); }} />
+  {stream ? <LiveStreamPanel compact immersive={immersive} controlsTarget={controlsTarget} controlsVisible={controlsVisible} key={String(stream.id)} snapshot={snapshot} selectedStreamId={Number(stream.id)} selection={{ lane: "device-generic", entityId: String(device.id), label: String(device.name) }} mode="live" cursor={null} onStreamChanged={async () => { suppressed.current = true; await onChanged(); }} />
    : <div className={cn("flex flex-col items-center justify-center gap-3 p-4 text-center text-sm", immersive ? "min-h-0 flex-1 bg-slate-950 text-slate-200" : "aspect-video bg-muted/30")}>
     <p className="text-muted-foreground">{pending ? signal ? "正在连接直播…" : "正在启动直播…" : device.status !== "online" ? "设备尚未在线，等待设备连接" : "暂无直播信号"}</p>
     {channel && <Button size="sm" variant="outline" disabled={!enabled || pending} onClick={() => { suppressed.current = false; void start(); }}>{pending ? <RefreshCwIcon className="size-4 animate-spin"/> : <PlayIcon className="size-4"/>}{signal ? "连接直播" : "启动直播"}</Button>}
