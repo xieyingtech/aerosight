@@ -19,3 +19,7 @@
 - 本轮未重复执行完整 `pnpm check`；上一轮记录的既有 `TestReportAggregateIncludesAllEvidence` 失败仍保留，不宣称完整检查通过。本 change 保持活动，不归档。
 
 验收脚本、服务配置和截图保存在被忽略的 `.build`，不纳入 Git。
+
+## 紧凑表格修订验收
+
+按用户后续批注移除匹配列中的片段卡片、区间列表及视觉描述，仅保留简短匹配类型；此前展示片段卡片的验收描述由本节替代。真实关键词 `local` 返回 3 个素材，浏览器测得各行约 67–68px，每行仅素材名称一个链接，内容匹配链接仍保留 startMs/endMs。`pnpm build:web`（含类型检查）、`pnpm build:server` 和 change / 主规范严格验证通过；本地服务已更新。截图保存于被忽略的 `.build/material-compact.png`。
