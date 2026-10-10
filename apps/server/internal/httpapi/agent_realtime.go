@@ -30,6 +30,10 @@ func stepRealtimeSession() gin.H {
 	tools := []gin.H{{"type": "function", "function": gin.H{"name": "query_project", "description": "查询当前项目的数据。支持设备、任务、案件、资产、轨迹和地图。", "parameters": gin.H{"type": "object", "properties": gin.H{"resource": gin.H{"type": "string", "enum": []string{"devices", "tasks", "issues", "assets", "tracks", "map"}, "description": "查询的数据类型，设备选devices，任务选tasks"}}, "required": []string{"resource"}, "additionalProperties": false}}}, {"type": "function", "function": gin.H{"name": "mutate_issue", "description": "申请案件评论、状态、标签或分配变更，等待用户在界面点击授权后才会执行。先查询案件以获取 stateVersion。", "parameters": gin.H{"type": "object", "properties": gin.H{"issueId": gin.H{"type": "integer"}, "expectedVersion": gin.H{"type": "integer"}, "mutation": gin.H{"type": "object", "properties": gin.H{"action": gin.H{"type": "string", "enum": []string{"comment", "status", "labels", "assign", "unassign"}}, "body": gin.H{"type": "string"}, "status": gin.H{"type": "string"}, "labels": gin.H{"type": "array", "items": gin.H{"type": "string"}}, "assigneeType": gin.H{"type": "string"}, "assigneeId": gin.H{"type": "integer"}}, "required": []string{"action"}, "additionalProperties": false}}, "required": []string{"issueId", "expectedVersion", "mutation"}, "additionalProperties": false}}}, {"type": "function", "function": gin.H{"name": "create_task_draft", "description": "申请为已有任务创建可编辑草稿，等待用户在界面点击授权后才会执行，不会发布或运行。", "parameters": gin.H{"type": "object", "properties": gin.H{"taskId": gin.H{"type": "integer"}}, "required": []string{"taskId"}, "additionalProperties": false}}}}
 	tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": "query_inspection", "description": "只读查询巡检就绪、任务工作台、飞行、照片清单、识别、研判和报告。使用查询到的真实资源 ID。", "parameters": agentInspectionQuerySchema()}})
 	tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": "search_media", "description": "搜索当前项目图片和视频内容，返回模型描述、视频分段和证据链接；请复核原片。", "parameters": mediaSearchSchema()}})
+	extensions := append(agentExtensionTools(), agentWorkflowTool{Name: "load_skill", Description: "按名称加载启用的 Skill，不改变权限。", Schema: agentObject(map[string]any{"skillName": agentText()}, "skillName")})
+	for _, spec := range extensions {
+		tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": spec.Name, "description": spec.Description, "parameters": spec.Schema}})
+	}
 	for _, spec := range agentWorkflowTools() {
 		tools = append(tools, gin.H{"type": "function", "function": gin.H{"name": spec.Name, "description": spec.Description + " 必须用户在界面点击授权后执行。", "parameters": spec.Schema}})
 	}
@@ -325,7 +329,7 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 		return err
 	}
 	name := item.Name
-	if !agentIsWriteTool(name) && name != "query_inspection" && name != "search_media" {
+	if !agentIsWriteTool(name) && name != "query_inspection" && name != "search_media" && !isAgentExtensionTool(name) && name != "load_skill" {
 		var err error
 		name, err = realtimeReadTool(item)
 		if err != nil {
@@ -345,6 +349,8 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 	var result gin.H
 	if name == "mutate_issue" {
 		result, err = r.s.proposeIssueWrite(toolCtx, r.uid, r.pid, r.sid, json.RawMessage(item.Arguments), r.requestID)
+	} else if name == "call_mcp_tool" {
+		result, err = r.s.executeMCPTool(toolCtx, r.uid, r.pid, r.sid, json.RawMessage(item.Arguments), r.requestID)
 	} else if name == "create_task_draft" {
 		result, err = r.s.proposeTaskDraft(toolCtx, r.uid, r.pid, r.sid, json.RawMessage(item.Arguments), r.requestID)
 	} else if _, known := agentWorkflowSpec(name); known {
@@ -359,6 +365,8 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 		} else {
 			result, err = r.s.executeInspectionQuery(toolCtx, r.uid, r.pid, json.RawMessage(item.Arguments))
 		}
+	} else if isAgentExtensionTool(name) || name == "load_skill" {
+		result, err = r.s.executeChatReadTool(toolCtx, r.uid, r.pid, name, json.RawMessage(item.Arguments))
 	} else {
 		result, err = r.s.executeChatReadTool(toolCtx, r.uid, r.pid, name, json.RawMessage(`{}`))
 	}
@@ -368,7 +376,7 @@ func (r *realtimeConversation) tool(ctx context.Context, item stepRealtimeItem) 
 		_ = r.save(ctx, m)
 		return err
 	}
-	if agentIsWriteTool(name) {
+	if agentIsWriteTool(name) || result["status"] == "confirmation_required" {
 		m.ToolCalls = []gin.H{{"name": name, "status": "confirmation_required", "summary": result["summary"], "approvalId": result["approvalId"]}}
 	} else {
 		m.ToolCalls = []gin.H{chatToolEvidence(name, result)}

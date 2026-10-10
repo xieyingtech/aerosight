@@ -10,9 +10,22 @@ import type { AIProviderView } from "@/lib/web-api-types";
 import { useAPI } from "@/lib/use-api";
 import { apiJSON } from "@/lib/api-client";
 import { APIStateView } from "@/components/api-state";
+import { AgentExtensionsPanel } from "@/components/agent-extensions-panel";
 
 
 export default function AdminAIProvidersPage() {
+  const [tab, setTab] = useState<"providers" | "skills" | "mcp">("providers");
+  return <div className="space-y-6">
+    <div role="tablist" aria-label="AI 平台配置" className="flex gap-1 border-b">
+      {([ ["providers", "提供商"], ["skills", "Skills"], ["mcp", "MCP"] ] as const).map(([key, label]) => <button key={key} id={`tab-${key}`} role="tab" aria-selected={tab === key} aria-controls={`panel-${key}`} onClick={() => setTab(key)} className={`px-5 py-3 text-sm font-medium border-b-2 ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{label}</button>)}
+    </div>
+    <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`}>
+      {tab === "providers" ? <ProvidersPanel /> : <AgentExtensionsPanel key={tab} kind={tab} />}
+    </div>
+  </div>;
+}
+
+function ProvidersPanel() {
   const state = useAPI<AIProviderView[]>("/api/admin/ai-providers");
   const [editing, setEditing] = useState<AIProviderView | "new" | null>(null);
   const [deleting, setDeleting] = useState<AIProviderView | null>(null);

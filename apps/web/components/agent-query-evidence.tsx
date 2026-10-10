@@ -1,4 +1,7 @@
 const queryNames: Record<string, string> = {
+  list_skills: "可用 Skills",
+  list_mcp_tools: "可用 MCP 工具",
+  call_mcp_tool: "MCP 调用",
   load_skill: "加载行业技能",
   query_objects: "影像目标查询",
   query_devices: "设备状态",
@@ -25,7 +28,7 @@ const queryNames: Record<string, string> = {
   generate_report: "生成报告草稿",
 };
 export const agentToolLabel = (name: string) => queryNames[name] ?? name;
-const isWriteTool = (name?: string) => Boolean(name && name !== "load_skill" && name !== "query_inspection" && !name.startsWith("query_") && queryNames[name]);
+const isWriteTool = (name?: string) => Boolean(name && name !== "load_skill" && name !== "call_mcp_tool" && !name.startsWith("list_") && name !== "query_inspection" && !name.startsWith("query_") && queryNames[name]);
 
 const queryDescriptions: Record<string, string> = {
   load_skill: "加载巡检目标查询、证据检查和复核规则，供智能体执行。",

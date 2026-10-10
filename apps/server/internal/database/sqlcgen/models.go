@@ -44,6 +44,20 @@ type AgentDraft struct {
 	EvidenceRefsJson        json.RawMessage `json:"evidence_refs_json"`
 }
 
+type AgentMcpServer struct {
+	ID                     int64                 `json:"id"`
+	Name                   string                `json:"name"`
+	Endpoint               string                `json:"endpoint"`
+	CredentialEnvelopeJson pqtype.NullRawMessage `json:"credential_envelope_json"`
+	Enabled                bool                  `json:"enabled"`
+	Revision               int64                 `json:"revision"`
+	ToolsJson              json.RawMessage       `json:"tools_json"`
+	CreatedByUserID        int32                 `json:"created_by_user_id"`
+	UpdatedByUserID        int32                 `json:"updated_by_user_id"`
+	CreatedAt              time.Time             `json:"created_at"`
+	UpdatedAt              time.Time             `json:"updated_at"`
+}
+
 type AgentMessage struct {
 	ID             int32           `json:"id"`
 	SessionID      int32           `json:"session_id"`
@@ -66,6 +80,20 @@ type AgentSession struct {
 	StartedAt       time.Time      `json:"started_at"`
 	EndedAt         sql.NullTime   `json:"ended_at"`
 	CreatedAt       time.Time      `json:"created_at"`
+}
+
+type AgentSkill struct {
+	ID              int64     `json:"id"`
+	Slug            string    `json:"slug"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Body            string    `json:"body"`
+	Enabled         bool      `json:"enabled"`
+	Revision        int64     `json:"revision"`
+	CreatedByUserID int32     `json:"created_by_user_id"`
+	UpdatedByUserID int32     `json:"updated_by_user_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type AgentToolJob struct {

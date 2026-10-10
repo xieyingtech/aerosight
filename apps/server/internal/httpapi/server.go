@@ -122,6 +122,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.algorithmRunRoutes()
 	s.algorithmDefinitionRoutes()
 	s.aiProviderRoutes()
+	s.agentExtensionRoutes()
 	s.adminAlgorithmProviderRoutes()
 	s.deviceTypePresentationRoutes()
 	s.agentSessionRoutes()

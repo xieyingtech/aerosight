@@ -32,6 +32,8 @@ function errorMessage(error: unknown) {
   if (error.code === "AGENT_TOOL_STEP_LIMIT") return "本次查询已达到执行步数上限，可根据已有结果继续追问。";
   if (error.code.startsWith("AGENT_TOOL_")) return "本次工具调用未完成，请查看调用状态后重试。";
   if (error.code === "ISSUE_VERSION_CONFLICT") return "案件已更新，请让智能体重新查询后再发起操作。";
+  if (error.code === "MCP_CONFIG_CHANGED" || error.code === "MCP_SCHEMA_CHANGED") return "MCP 配置或工具已更新，请重新发现工具并发起调用。";
+  if (error.code.startsWith("MCP_")) return "MCP 调用未完成，请检查工具状态与连接配置。";
   if (error.status === 403) return "你没有在此项目中使用智能体的权限。";
   return "消息未能完成，请稍后重试。";
 }

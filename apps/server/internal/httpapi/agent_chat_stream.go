@@ -54,7 +54,7 @@ func chatStreamError(err error) string {
 		return err.Error()
 	case err.Error() == "ISSUE_VERSION_CONFLICT":
 		return err.Error()
-	case strings.HasPrefix(err.Error(), "AI_PROVIDER_"), strings.HasPrefix(err.Error(), "AI_UPSTREAM_"), strings.HasPrefix(err.Error(), "AGENT_TOOL_"):
+	case strings.HasPrefix(err.Error(), "AI_PROVIDER_"), strings.HasPrefix(err.Error(), "AI_UPSTREAM_"), strings.HasPrefix(err.Error(), "AGENT_TOOL_"), strings.HasPrefix(err.Error(), "MCP_"):
 		return strings.SplitN(err.Error(), ":", 2)[0]
 	default:
 		return "AGENT_SESSION_FAILED"

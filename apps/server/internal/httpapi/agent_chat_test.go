@@ -74,7 +74,7 @@ func TestChatResponsesToolLoop(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Fatal(err)
 			}
-			if body["model"] != "model-test" || body["store"] != false || body["previous_response_id"] != nil || len(body["tools"].([]any)) != 12+len(agentWorkflowTools()) {
+			if body["model"] != "model-test" || body["store"] != false || body["previous_response_id"] != nil || len(body["tools"].([]any)) != 15+len(agentWorkflowTools()) {
 				t.Fatalf("params %+v", body)
 			}
 			input := body["input"].([]any)

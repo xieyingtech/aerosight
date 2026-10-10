@@ -182,8 +182,28 @@ func (s *Server) executeChatReadTool(ctx context.Context, uid, pid int32, name s
 	if name == "search_media" {
 		return s.executeMediaSearch(ctx, uid, pid, arguments)
 	}
+	if name == "list_skills" || name == "list_mcp_tools" {
+		schema, _ := json.Marshal(agentObject(map[string]any{}))
+		if _, err := parseFHInput(arguments, schema); err != nil {
+			return nil, err
+		}
+		if name == "list_skills" {
+			return s.listAgentSkills(ctx, uid, pid)
+		}
+		return s.listAgentMCPTools(ctx, uid, pid)
+	}
+	if name == "list_skills" || name == "list_mcp_tools" {
+		schema, _ := json.Marshal(agentObject(map[string]any{}))
+		if _, err := parseFHInput(arguments, schema); err != nil {
+			return nil, err
+		}
+		if name == "list_skills" {
+			return s.listAgentSkills(ctx, uid, pid)
+		}
+		return s.listAgentMCPTools(ctx, uid, pid)
+	}
 	if name == "load_skill" {
-		return loadAgentSkill(arguments)
+		return s.loadPlatformSkill(ctx, uid, pid, arguments)
 	}
 	if name == "query_objects" {
 		return s.executeObjectQuery(ctx, uid, pid, arguments)

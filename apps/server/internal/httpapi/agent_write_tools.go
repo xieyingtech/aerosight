@@ -258,6 +258,10 @@ func (s *Server) decideAgentWrite(c *gin.Context) {
 		s.failure(c, 500, "AGENT_APPROVAL_FAILED")
 		return
 	}
+	if toolName == "call_mcp_tool" {
+		s.decideMCPWrite(c, uid, pid, sid, id.String(), input)
+		return
+	}
 	if _, known := agentWorkflowSpec(toolName); known {
 		s.decideWorkflowWrite(c, uid, pid, sid, id.String(), toolName, input)
 		return
