@@ -3,6 +3,13 @@ import test from "node:test";
 
 import { presentDevicePosition } from "./device-position-presentation.ts";
 
+test("static registrations have a position without fabricated capture time", () => {
+  const result = presentDevicePosition({ positionStatus: "registered", positionSource: "manual-registration", pose: { longitude: 113.88, latitude: 22.78 } });
+  assert.equal(result.label, "登记位置");
+  assert.equal(result.capturedAt, null);
+  assert.equal(result.source, "manual-registration");
+});
+
 test("device position presentation distinguishes available, missing, and stale data", () => {
   assert.equal(presentDevicePosition({
     dataFreshness: "fresh", positionStatus: "available", positionSource: "fixture.driver",

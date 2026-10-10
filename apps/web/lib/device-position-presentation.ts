@@ -31,6 +31,7 @@ export function presentDevicePosition(device: DevicePositionFacts): DevicePositi
   const source = String(device.positionSource ?? "unknown");
   const capturedAt = device.pose?.capturedAt ? String(device.pose.capturedAt) : null;
   const coordinate = hasPosition ? `${longitude.toFixed(6)}, ${latitude.toFixed(6)}` : null;
+  if (hasPosition && rawStatus === "registered") return { state: "available", label: "登记位置", reason: "静态登记位置，尚未接入遥测", source, capturedAt, coordinate };
   if (!hasPosition) {
     if (rawStatus === "invalid") return { state: "invalid", label: "位置无效", reason: rawReason || "上游坐标无效", source, capturedAt, coordinate: null };
     return { state: "missing", label: "暂无位置", reason: rawReason || "尚未收到有效坐标", source, capturedAt, coordinate: null };

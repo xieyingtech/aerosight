@@ -116,6 +116,7 @@ func New(db *sql.DB, cfg config.HTTP, logger *slog.Logger) (*Server, error) {
 	s.projectReadRoutes()
 	s.flightHubRoutes()
 	s.deviceAdapterRoutes()
+	s.mapRegistrationRoutes()
 	s.missionReadRoutes()
 	s.legacyEventRoutes()
 	s.issueReadRoutes()

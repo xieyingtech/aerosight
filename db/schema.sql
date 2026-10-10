@@ -9922,3 +9922,19 @@ CREATE TABLE agent_mcp_servers (
  created_at timestamptz NOT NULL DEFAULT now(),
  updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE project_map_regions (
+ id bigserial PRIMARY KEY,
+ project_id integer NOT NULL,
+ team_id integer NOT NULL,
+ registration_key text NOT NULL,
+ name text NOT NULL,
+ geometry geometry(MultiPolygon,4326) NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ FOREIGN KEY (project_id,team_id) REFERENCES projects(id,team_id) ON DELETE CASCADE,
+ UNIQUE (project_id,registration_key),
+ CHECK (ST_IsValid(geometry) AND NOT ST_IsEmpty(geometry))
+);
+
+ALTER TABLE devices ADD COLUMN registration_key text;
+CREATE UNIQUE INDEX devices_project_registration_key ON devices(project_id,registration_key) WHERE registration_key IS NOT NULL;

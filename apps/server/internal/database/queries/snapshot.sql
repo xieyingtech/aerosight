@@ -10,6 +10,7 @@ select project.id, project.name, project.team_id as "teamId", membership.role,
 SELECT to_jsonb(r) FROM (
 
        select device.id, device.name, device.type, device.status,
+              device.config_json->'registeredPosition' as "registeredPosition",
               (select definition.connector_key from device_connector_bindings binding
                join device_adapters adapter on adapter.id=binding.connector_instance_id and adapter.project_id=binding.project_id
                join connector_definitions definition on definition.id=adapter.connector_definition_id

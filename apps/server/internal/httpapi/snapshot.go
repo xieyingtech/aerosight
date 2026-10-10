@@ -32,6 +32,7 @@ func decodeSnapshotRows(raw []json.RawMessage) ([]gin.H, error) {
 				}
 			}
 		}
+		applyRegisteredPosition(row)
 		out = append(out, row)
 	}
 	return out, nil
@@ -81,6 +82,7 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 		read func(context.Context, int32) ([]json.RawMessage, error)
 	}{
 		{"devices", q.SnapshotDevices}, {"deviceRelations", q.ReadDeviceRelations}, {"tracks", q.SnapshotTracks}, {"activeTasks", q.SnapshotActiveTasks}, {"taskSteps", q.SnapshotTaskSteps}, {"algorithmRuns", q.SnapshotAlgorithmRuns}, {"liveStreams", q.SnapshotLiveStreams}, {"realtimeChannels", q.SnapshotRealtimeChannels}, {"diagnostics", q.SnapshotDiagnostics}, {"mediaPoints", q.SnapshotMedia}, {"algorithmResults", q.SnapshotAlgorithmResults}, {"openAlerts", q.SnapshotAlerts}, {"openIssues", q.SnapshotIssues},
+		{"regions", q.SnapshotMapRegions},
 	}
 	for _, read := range reads {
 		raw, err := read.read(ctx, pid)
@@ -133,6 +135,7 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 	result["generatedAt"] = timestamp(now)
 	result["freshness"] = gin.H{"latestCapturedAt": latestAt, "isRealtime": !latest.IsZero() && now.Sub(latest) <= 120*time.Second}
 	health, availability := snapshotHealth(project.DependencyHealth)
+	availability["regions"] = "available"
 	result["health"] = health
 	result["availability"] = availability
 	if err := tx.Commit(); err != nil {

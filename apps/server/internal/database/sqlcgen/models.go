@@ -906,6 +906,7 @@ type Device struct {
 	StatusProjectedAt        time.Time       `json:"status_projected_at"`
 	DataFreshness            string          `json:"data_freshness"`
 	RawStatusRef             sql.NullString  `json:"raw_status_ref"`
+	RegistrationKey          sql.NullString  `json:"registration_key"`
 }
 
 type DeviceAdapter struct {
@@ -1719,6 +1720,16 @@ type ProjectFeatureFlag struct {
 	UpdatedByUserID           sql.NullInt32   `json:"updated_by_user_id"`
 	UpdatedAt                 time.Time       `json:"updated_at"`
 	FlighthubActionFlagsJson  json.RawMessage `json:"flighthub_action_flags_json"`
+}
+
+type ProjectMapRegion struct {
+	ID              int64       `json:"id"`
+	ProjectID       int32       `json:"project_id"`
+	TeamID          int32       `json:"team_id"`
+	RegistrationKey string      `json:"registration_key"`
+	Name            string      `json:"name"`
+	Geometry        interface{} `json:"geometry"`
+	CreatedAt       time.Time   `json:"created_at"`
 }
 
 type ProjectPermission struct {

@@ -1,0 +1,7 @@
+# 验证记录
+
+- 2026-10-10：本地隔离 PostGIS 测试通过，覆盖区域保存、幂等、静态设备位置、空项目隔离、成员越权及自交拒绝。快照回归和静态位置优先级验证通过。
+- 设备树登记位置读取验证通过。登记不生成 observations，不生成在线状态或 capabilities。
+- 前端位置及地图模型相关测试 10/10 通过，pnpm typecheck、pnpm db:check、pnpm build 和 OpenSpec 严格验证通过。迁移与 schema 快照数据库结构对比通过。
+- 初次测试环境未指定 PostgreSQL 用户导致连接失败，补全本地测试用户名后重跑通过。
+- 完整 pnpm check 尚未运行，change 不归档。线上发布与登记待验证。

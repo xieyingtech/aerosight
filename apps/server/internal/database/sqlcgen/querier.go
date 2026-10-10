@@ -294,6 +294,8 @@ type Querier interface {
 	RecentChatHistory(ctx context.Context, arg RecentChatHistoryParams) ([]RecentChatHistoryRow, error)
 	RecordAdapterHealth(ctx context.Context, arg RecordAdapterHealthParams) error
 	RecordNetworkValidation(ctx context.Context, arg RecordNetworkValidationParams) error
+	RegisterMapDevice(ctx context.Context, arg RegisterMapDeviceParams) (int32, error)
+	RegisterMapRegion(ctx context.Context, arg RegisterMapRegionParams) (int64, error)
 	RemoveIssueAssignee(ctx context.Context, arg RemoveIssueAssigneeParams) error
 	ReplayEvents(ctx context.Context, arg ReplayEventsParams) ([]json.RawMessage, error)
 	ReplayMedia(ctx context.Context, arg ReplayMediaParams) ([]json.RawMessage, error)
@@ -320,6 +322,7 @@ type Querier interface {
 	SnapshotDiagnostics(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotIssues(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotLiveStreams(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	SnapshotMapRegions(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotMedia(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	SnapshotProjectScope(ctx context.Context, arg SnapshotProjectScopeParams) (SnapshotProjectScopeRow, error)
 	SnapshotRealtimeChannels(ctx context.Context, projectID int32) ([]json.RawMessage, error)

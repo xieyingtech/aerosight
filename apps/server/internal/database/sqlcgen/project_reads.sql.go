@@ -77,6 +77,7 @@ func (q *Queries) ListProjectAssets(ctx context.Context, projectID int32) ([]jso
 const listProjectDevices = `-- name: ListProjectDevices :many
 select to_jsonb(result_row) as item from (
 select device.id, device.name, device.type, device.status,
+                   device.config_json->'registeredPosition' as "registeredPosition",
                    device.last_seen_at as "lastSeenAt", device.updated_at as "updatedAt",
                    device_type.id::text as "deviceTypeId", device_type.type_key as "typeKey",
                    device_type.version as "typeVersion", device_type.display_name as "typeName", device_type.icon as "typeIcon",
@@ -146,6 +147,7 @@ func (q *Queries) ReadDeviceRelations(ctx context.Context, projectID int32) ([]j
 const readDeviceTree = `-- name: ReadDeviceTree :many
 SELECT to_jsonb(r) FROM (
 select device.id,device.device_type_id::text as "deviceTypeId",device.name,device_type.category,device.status,device.data_freshness as "dataFreshness",
+              device.config_json->'registeredPosition' as "registeredPosition",
               device.status_reason as "statusReason",device_type.display_name as "typeName", device_type.icon as "typeIcon",
               device_type.type_key as "typeKey",driver.driver_key as "driverKey",driver.version as "driverVersion",
               device_type.vendor,device_type.model,
