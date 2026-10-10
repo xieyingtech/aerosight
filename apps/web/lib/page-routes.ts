@@ -1,5 +1,6 @@
 // Resource identity belongs to the path; view options remain in the query.
 export const resourcePages: Record<string, { segment: string; key: string }> = {
+  "assets/detail": { segment: "assets", key: "assetId" },
   "inspection/summary": { segment: "inspection/runs", key: "runId" },
   "tasks/detail": { segment: "tasks", key: "taskId" },
   "tasks/runs/detail": { segment: "tasks/runs", key: "runId" },

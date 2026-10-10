@@ -11,7 +11,7 @@ test("path identity overrides stale query scope and preserves filters", () => {
 });
 test("resource page paths round trip without identity query parameters", () => {
   for (const [page, resource] of Object.entries(resourcePages)) {
-    const id = ["taskId", "issueId"].includes(resource.key) || page === "tasks/runs/detail" || page === "inspection/summary" ? "12" : "01234567-89ab-cdef-0123-456789abcdef";
+    const id = ["taskId", "issueId", "assetId"].includes(resource.key) || page === "tasks/runs/detail" || page === "inspection/summary" ? "12" : "01234567-89ab-cdef-0123-456789abcdef";
     const href = projectPageHref(7, page, {[resource.key]: id, filter: "a&b"});
     const url = new URL(href, "http://localhost");
     assert(!url.searchParams.has("projectId"));
@@ -26,4 +26,9 @@ test("realtime device identity is in the path and stream selection stays in quer
   const href = canonicalPageHref("/projects/realtime/?projectId=7&deviceId=12&streamId=21");
   assert.equal(href, "/projects/7/realtime/devices/12/?streamId=21");
   assert.equal(scopedPageQuery("/projects/7/realtime/devices/12/", "streamId=21").get("deviceId"), "12");
+});
+test("material details retain segment and search context with path-authoritative identity",()=>{
+  assert.equal(canonicalPageHref("/projects/assets/detail/?projectId=7&assetId=12&startMs=10000&endMs=18018"),"/projects/7/assets/12/?startMs=10000&endMs=18018");
+  const query=scopedPageQuery("/projects/7/assets/12/","projectId=9&assetId=99&q=林间&type=video&startMs=10000");
+  assert.equal(query.get("assetId"),"12");assert.equal(query.get("projectId"),"7");assert.equal(query.get("q"),"林间");assert.equal(query.get("startMs"),"10000");
 });

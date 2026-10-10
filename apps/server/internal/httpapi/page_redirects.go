@@ -22,7 +22,7 @@ func projectPageURL(pid int32, path string, parameters url.Values) string {
 	if segment == "detail" {
 		segment = ""
 	}
-	for page, key := range map[string]string{"tasks/detail": "taskId", "tasks/runs/detail": "runId", "algorithms/runs/detail": "runId", "issues/detail": "issueId", "events/detail": "eventId", "reports/detail": "reportId", "inspection/summary": "runId", "inspection/observation": "observationId", "inspection/evidence": "evidenceSetId", "inspection/assessment": "assessmentId"} {
+	for page, key := range map[string]string{"assets/detail": "assetId", "tasks/detail": "taskId", "tasks/runs/detail": "runId", "algorithms/runs/detail": "runId", "issues/detail": "issueId", "events/detail": "eventId", "reports/detail": "reportId", "inspection/summary": "runId", "inspection/observation": "observationId", "inspection/evidence": "evidenceSetId", "inspection/assessment": "assessmentId"} {
 		if segment == page && query.Get(key) != "" {
 			base := strings.TrimSuffix(page, "/detail")
 			switch page {
@@ -84,6 +84,10 @@ func legacyPageURL(u *url.URL) (string, bool) {
 				target = "/projects/" + parts[3] + "/"
 			}
 		case 5:
+			if parts[3] == "assets" && validPageID(parts[4]) {
+				target = "/projects/assets/detail/"
+				query.Set("assetId", parts[4])
+			}
 			if parts[3] == "reports" && pageUUID.MatchString(parts[4]) {
 				target = "/projects/reports/detail/"
 				query.Set("reportId", parts[4])

@@ -80,7 +80,7 @@ func TestMediaSearchAgentEvidenceAndRevokedAccess(t *testing.T) {
 		t.Fatalf("search %+v", data)
 	}
 	ref := data["items"].([]any)[0].(map[string]any)["reference"].(map[string]any)
-	if ref["href"] != fmt.Sprintf("/projects/assets/?projectId=%d&assetId=%d&startMs=10000&endMs=20000", pid, aid) {
+	if ref["href"] != fmt.Sprintf("/projects/%d/assets/%d/?startMs=10000&endMs=20000", pid, aid) {
 		t.Fatalf("evidence %+v", ref)
 	}
 	calls := 0

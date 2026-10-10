@@ -25,6 +25,7 @@ func TestProjectPageURLScopeAndEncoding(t *testing.T) {
 func TestLegacyPageRedirects(t *testing.T) {
 	id := "01234567-89ab-cdef-0123-456789abcdef"
 	cases := map[string]string{
+		"/projects/42/assets/7":                      "/projects/assets/detail/?assetId=7&projectId=42",
 		"/projects/42/realtime/devices/7":            "/projects/realtime/?deviceId=7&projectId=42",
 		"/projects/42/reports/" + id:                 "/projects/reports/detail/?projectId=42&reportId=" + id,
 		"/projects/42/inspection/runs/7":             "/projects/inspection/summary/?projectId=42&runId=7",

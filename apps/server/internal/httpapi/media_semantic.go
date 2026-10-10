@@ -79,7 +79,7 @@ func (s *Server) executeMediaSearch(ctx context.Context, uid, pid int32, argumen
 	}
 	items := []gin.H{}
 	for _, row := range rows {
-		items = append(items, gin.H{"segmentId": row.ID, "assetId": row.AssetID, "version": row.Version, "startMs": row.StartMS, "endMs": row.EndMS, "description": row.Description, "timeQuality": row.TimeQuality, "capturedStart": row.CapturedStart, "capturedEnd": row.CapturedEnd, "score": row.Score, "reference": gin.H{"type": "asset", "id": strconv.FormatInt(int64(row.AssetID), 10), "href": fmt.Sprintf("/projects/assets/?projectId=%d&assetId=%d&startMs=%d&endMs=%d", pid, row.AssetID, row.StartMS, row.EndMS)}})
+		items = append(items, gin.H{"segmentId": row.ID, "assetId": row.AssetID, "version": row.Version, "startMs": row.StartMS, "endMs": row.EndMS, "description": row.Description, "timeQuality": row.TimeQuality, "capturedStart": row.CapturedStart, "capturedEnd": row.CapturedEnd, "score": row.Score, "reference": gin.H{"type": "asset", "id": strconv.FormatInt(int64(row.AssetID), 10), "href": fmt.Sprintf("/projects/%d/assets/%d/?startMs=%d&endMs=%d", pid, row.AssetID, row.StartMS, row.EndMS)}})
 	}
 	return gin.H{"items": items, "truncated": truncated, "summary": fmt.Sprintf("找到 %d 个素材片段。描述由模型生成，请打开原素材复核；零匹配不证明目标不存在。", len(items)), "query": input.Query}, nil
 }

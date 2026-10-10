@@ -9,6 +9,7 @@ export function legacyPageRedirects() {
     { source: project, destination: "/projects/detail/?projectId=:id" },
     ...["tasks", "settings", "realtime", "assets", "issues", "events", "devices", "algorithms", "connectors", "agents", "flight-operations", "geospatial", "models"].map(section => ({source: `${project}/${section}`, destination: `/projects/${section}/?projectId=:id`})),
     { source: `${project}/tasks/:taskId(${integer})`, destination: "/projects/tasks/detail/?projectId=:id&taskId=:taskId" },
+    { source: `${project}/assets/:assetId(${integer})`, destination: "/projects/assets/detail/?projectId=:id&assetId=:assetId" },
     { source: `${project}/tasks/runs/:runId(${integer})`, destination: "/projects/tasks/runs/detail/?projectId=:id&runId=:runId" },
     { source: `${project}/algorithms/runs/:runId(${uuid})`, destination: "/projects/algorithms/runs/detail/?projectId=:id&runId=:runId" },
     { source: `${project}/issues/:issueId(${integer})`, destination: "/projects/issues/detail/?projectId=:id&issueId=:issueId" },
