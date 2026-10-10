@@ -184,6 +184,7 @@ type Querier interface {
 	ListChatMessages(ctx context.Context, arg ListChatMessagesParams) ([]ListChatMessagesRow, error)
 	ListChatSessions(ctx context.Context, arg ListChatSessionsParams) ([]ListChatSessionsRow, error)
 	ListDeviceAdapters(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ListDeviceCatalogDrivers(ctx context.Context) ([]json.RawMessage, error)
 	ListDeviceTypePresentation(ctx context.Context) ([]json.RawMessage, error)
 	ListFlightHubConnections(ctx context.Context, projectID int32) ([]json.RawMessage, error)
 	ListFlightHubIdentities(ctx context.Context, projectID int32) ([]json.RawMessage, error)

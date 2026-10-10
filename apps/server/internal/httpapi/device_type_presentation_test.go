@@ -75,3 +75,66 @@ func TestDeviceTypeIconAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestDevicePlatformCatalog(t *testing.T) {
+	f := newAPIFixture(t)
+	_, err := f.db.Exec(`INSERT INTO driver_definitions(driver_key,version,display_name,manifest_json) VALUES('catalog.test','1.0.0','Catalog test','{"capabilities":{"state.read":{"kind":"read","risk":"low","outputSchema":{"type":"object","properties":{"testKey":{"type":"string"}}}}},"streams":[{"channelKey":"test.channel","capabilityCode":"state.read","dataType":"telemetry","unit":"m"}]}')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := f.request(t, "GET", "/api/admin/device-types/catalog", "")
+	var catalog struct{ Drivers, Capabilities, Streams, Actions []map[string]any }
+	err = json.NewDecoder(res.Body).Decode(&catalog)
+	res.Body.Close()
+	if err != nil || res.StatusCode != 200 || len(catalog.Drivers) == 0 || len(catalog.Actions) == 0 {
+		t.Fatal("catalog", res.StatusCode, err)
+	}
+	found, duplicates := false, 0
+	for _, cap := range catalog.Capabilities {
+		if cap["code"] == "state.read" {
+			duplicates++
+		}
+		if cap["driverKey"] == "catalog.test" {
+			encoded, _ := json.Marshal(cap)
+			found = cap["code"] == "state.read" && cap["driverVersion"] == "1.0.0" && strings.Contains(string(encoded), "testKey")
+		}
+	}
+	if !found || duplicates < 2 {
+		t.Fatal("historical schema/source or duplicates lost", catalog.Capabilities)
+	}
+	found = false
+	for _, stream := range catalog.Streams {
+		if stream["channelKey"] == "test.channel" {
+			found = stream["capabilityCode"] == "state.read" && stream["unit"] == "m" && stream["driverKey"] == "catalog.test"
+		}
+	}
+	if !found {
+		t.Fatal("stream relationships missing")
+	}
+	found = false
+	for _, action := range catalog.Actions {
+		if action["key"] == "mission.create" && action["capabilityCode"] == "mission.execute" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("actual action catalog missing")
+	}
+	res = f.request(t, "GET", "/api/admin/device-types", "")
+	var types []map[string]any
+	err = json.NewDecoder(res.Body).Decode(&types)
+	res.Body.Close()
+	if err != nil || len(types) == 0 || types[0]["driverKey"] == nil || types[0]["capabilityProfile"] == nil || types[0]["category"] == nil {
+		t.Fatal("type relationships missing", types, err)
+	}
+	if _, err = f.db.Exec(`UPDATE users SET role='user' WHERE email='admin@example.com'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/admin/device-types", "/api/admin/device-types/catalog"} {
+		res = f.request(t, "GET", path, "")
+		res.Body.Close()
+		if res.StatusCode != 403 {
+			t.Fatal("non-admin catalog access", path, res.StatusCode)
+		}
+	}
+}

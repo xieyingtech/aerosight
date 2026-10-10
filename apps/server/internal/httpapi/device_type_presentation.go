@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"sort"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,7 @@ func validDeviceTypeIcon(icon string) bool {
 
 func (s *Server) deviceTypePresentationRoutes() {
 	g := s.router.Group("/api/admin/device-types", s.requireUser, s.requireAdmin, s.timeout)
+	g.GET("/catalog", s.devicePlatformCatalog)
 	g.GET("", func(c *gin.Context) {
 		rows, err := s.queries.ListDeviceTypePresentation(c.Request.Context())
 		if err != nil {
@@ -55,4 +57,84 @@ func (s *Server) deviceTypePresentationRoutes() {
 		}
 		c.JSON(200, gin.H{"id": strconv.FormatInt(id, 10), "icon": input.Icon})
 	})
+}
+
+// Definitions describe supported keys, not a particular device's live state.
+func (s *Server) devicePlatformCatalog(c *gin.Context) {
+	raw, err := s.queries.ListDeviceCatalogDrivers(c.Request.Context())
+	if err != nil {
+		s.failure(c, 500, "DEVICE_CATALOG_FAILED")
+		return
+	}
+	drivers, err := decodeSnapshotRows(raw)
+	if err != nil {
+		s.failure(c, 500, "DEVICE_CATALOG_FAILED")
+		return
+	}
+	capabilities, streams := []gin.H{}, []gin.H{}
+	for _, d := range drivers {
+		manifest, _ := d["manifest"].(map[string]any)
+		appendDefinition := func(value map[string]any, target *[]gin.H) {
+			row := gin.H{}
+			for key, v := range value {
+				row[key] = v
+			}
+			row["driverKey"] = d["driverKey"]
+			row["driverVersion"] = d["version"]
+			row["driverStatus"] = d["status"]
+			*target = append(*target, row)
+		}
+		switch defs := manifest["capabilities"].(type) {
+		case []any:
+			for _, def := range defs {
+				if v, ok := def.(map[string]any); ok {
+					appendDefinition(v, &capabilities)
+				}
+			}
+		case map[string]any:
+			keys := []string{}
+			for key := range defs {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				v := map[string]any{"code": key}
+				if params, ok := defs[key].(map[string]any); ok {
+					for k, value := range params {
+						v[k] = value
+					}
+				}
+				v["code"] = key
+				appendDefinition(v, &capabilities)
+			}
+		}
+		if defs, ok := manifest["streams"].([]any); ok {
+			for _, def := range defs {
+				if v, ok := def.(map[string]any); ok {
+					appendDefinition(v, &streams)
+				}
+			}
+		}
+	}
+	var catalog map[string][]gin.H
+	if json.Unmarshal(actionCatalog, &catalog) != nil {
+		s.failure(c, 500, "DEVICE_CATALOG_FAILED")
+		return
+	}
+	actions := []gin.H{}
+	keys := []string{}
+	for key := range catalog {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		for _, definition := range catalog[key] {
+			row := gin.H{"capabilityCode": key}
+			for k, v := range definition {
+				row[k] = v
+			}
+			actions = append(actions, row)
+		}
+	}
+	c.JSON(200, gin.H{"drivers": drivers, "capabilities": capabilities, "streams": streams, "actions": actions})
 }
