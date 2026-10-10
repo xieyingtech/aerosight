@@ -1,5 +1,14 @@
 # 验证记录
 
+## 2026-10-10 红花山公园演示配置
+
+- 用户明确授权在 xieying.tech 创建演示 Skills。使用现有管理员 API 创建五个启用配置（ID 1–5、revision 1）：巡检准备、游客通道、烟火夜间、环境设施、事件证据交接。原有内置 Skill 保留，目录从 1 项变为 6 项；逐项回读正文、名称、简介和启用状态一致。可审查正文与公开来源位于 docs/agent-skills/。
+- 真实线上项目 1、会话 5：五次独立加载均 HTTP 201，持久化工具记录 load_skill 均 succeeded，真实模型输出说明版本 1 及对应流程。不是模型协议替身验收。
+- 同会话最小巡检准备演示 HTTP 201：query_devices、query_map_context 均 succeeded，返回当前项目两台设备及态势引用。模型如实指出当前设备质量 unusable，未启动飞行、写任务/案件或发通知。
+- 浏览器管理员 Skills tab 显示五项启用配置。完整列表截图与 API/Agent 原始验收结果保存在忽略的 .build/online-park-skills* 文件中，不提交凭据或原始项目数据。
+- 首次“加载并多步检查”请求遇 HTTP 524，未产生助手结果；拆为单项加载后五项全部成功。最小业务查询第一次遇网络连接超时，随后只读重试成功。多步长链路的线上时延仍需录屏前检查，不把这些重试包装成全链路稳定性或并发性能验收。
+- 本次仅配置内容与文档，不变更 API、数据模型、模型部署或权限。对应主规范既有 On-demand skill loading，不产生新的 delta 要求；严格 change 验证与 git diff --check 通过。未重跑代码构建/全量测试，既有失败仍保留，不归档 change。
+
 ## 已验证
 
 - 隔离本地 PostgreSQL 迁移执行成功，新增 agent_skills / agent_mcp_servers；sqlc 生成模型和 schema 检查一致。
