@@ -111,9 +111,9 @@ try{
  const validationSource='apiVersion: aerosight/v2\nname: 校验样例\ntrigger: {type: manual}\nsteps: [{key: report, uses: report.generate, with: {scope: all-projects}}]\n';
  await page.getByLabel('任务定义 YAML').fill(validationSource);
  await page.getByRole('button',{name:'校验当前草稿',exact:true}).click();
- await page.getByText('/with/scope · const',{exact:true}).waitFor();
+ await page.getByText('/with/scope：const',{exact:true}).waitFor();
  await page.getByLabel('任务定义 YAML').fill(validationSource.replace('all-projects','current-run'));
- assert.equal(await page.getByText('/with/scope · const',{exact:true}).count(),0);
+ assert.equal(await page.getByText('/with/scope：const',{exact:true}).count(),0);
  await page.getByRole('button',{name:'校验当前草稿',exact:true}).click();
  await page.getByText('当前草稿校验通过；发布和运行前仍会重新检查权限与资源。',{exact:true}).waitFor();
  await page.getByLabel('任务定义 YAML').fill(formSource);
@@ -310,7 +310,7 @@ try{
  await page.getByRole('status').filter({hasText:'有 1 项研判待人工复核'}).waitFor();
  await page.getByText('缺少历史影像',{exact:true}).waitFor();
  await page.screenshot({path:resolve(output,'inspection-summary-fixture.png'),fullPage:true});
- await page.getByRole('link',{name:'查看研判 · 修订 1 · needs_review',exact:true}).click();
+ await page.getByRole('link',{name:/^查看研判@v1\s*needs_review$/}).click();
  const reviewURL=`${origin}/projects/inspection/assessment/?projectId=${pid}&assessmentId=${assessmentId}`;
  await page.goto(reviewURL);
  await page.getByLabel('线索 1 处理决定').selectOption('create');
@@ -350,8 +350,10 @@ try{
  for(const [mode,label] of [['unknown','未标明来源'],['assets','既有图片'],['existing-flight','司空已完成飞行'],['flighthub-flight','司空飞行']]) {
   reportContent={taskRun:{id:1},issues:[],inspection:{scopeNotice:'仅分析冻结样本',observations:[{id:'source-label-fixture',mode,scopeDescription:'来源标签协议样本',completeness:'partial',assets:[],observedFrom:'2026-09-14T00:00:00Z',observedTo:'2026-09-14T00:00:00Z'}],assessments:[]}};
   await page.reload();
-  await page.getByText(`${label} · 0 张图片 · partial`,{exact:true}).waitFor();
-  if(mode!=='existing-flight'&&await page.getByText('司空已完成飞行 · 0 张图片 · partial',{exact:true}).count())throw new Error('report falsely claimed completed flight');
+  await page.getByText(label,{exact:true}).waitFor();
+  await page.getByText('0 张图片',{exact:true}).waitFor();
+  await page.getByText('partial',{exact:true}).waitFor();
+  if(mode!=='existing-flight'&&await page.getByText('司空已完成飞行',{exact:true}).count())throw new Error('report falsely claimed completed flight');
  }
  reportContent={sections:{taskRun:{id:1},issues:[{id:1,title:'历史报告案件',status:'open'}]}};
  reportGaps=[{message:'历史资料缺失',code:'SOURCE_MISSING'}];

@@ -41,7 +41,7 @@ export function ConnectorCreateDialog({ projectId, onChanged }: { projectId: num
         >
           <span className="rounded-lg bg-primary/10 p-2 text-primary"><CloudIcon className="size-5" /></span>
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2 font-medium">DJI 司空 2 <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">公有云 · 只读</span></span>
+            <span className="flex items-center gap-2 font-medium">DJI 司空 2 <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">公有云</span><span className="rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">只读</span></span>
             <span className="mt-1 block text-sm text-muted-foreground">通过组织 Token 同步已有司空项目、机场与飞行器目录，无需现场配置设备网络。</span>
           </span>
           <CheckIcon className="mt-1 size-4 text-muted-foreground" />

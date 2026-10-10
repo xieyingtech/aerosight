@@ -68,7 +68,7 @@ export function FlightHubFlightLaunch({ projectId, deviceId, deviceName }: { pro
  }
  return <>
   <Button size="sm" variant="outline" disabled={pending || Boolean(watchKey)} onClick={() => void show()}>执行航线</Button>
-  {receipt && <p role="status" className="basis-full text-sm text-muted-foreground">{messages[receipt.remoteStatus ?? receipt.status] ?? receipt.remoteStatus ?? receipt.status}{receipt.error && ` · ${messages[receipt.error] ?? receipt.error}`}</p>}
+  {receipt && <p role="status" className="basis-full text-sm text-muted-foreground">{messages[receipt.remoteStatus ?? receipt.status] ?? receipt.remoteStatus ?? receipt.status}<span className="inline-block whitespace-pre-line">{receipt.error && `\n${messages[receipt.error] ?? receipt.error}`}</span></p>}
   {!open && error && <p role="alert" className="basis-full text-sm text-destructive">{error}</p>}
   <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}><DialogContent><DialogHeader><DialogTitle>执行航线</DialogTitle><DialogDescription>由 {deviceName} 执行所选航线。点击起飞后立即向司空下发任务。</DialogDescription></DialogHeader>
    <form className="space-y-4" onSubmit={event => { event.preventDefault(); void launch(); }}>

@@ -91,12 +91,12 @@ export function AIProviderForm({ provider, onChanged, onClose, onDelete }: { pro
   const selectClass = "h-8 w-full rounded-md border bg-background px-2 text-xs";
   return <Dialog open onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
     <DialogContent className="grid h-[min(760px,90svh)] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden sm:max-w-3xl" showCloseButton={!busy}>
-      <DialogHeader className="pr-8"><DialogTitle>{provider ? "编辑 Provider" : "新建 Provider"}</DialogTitle><DialogDescription>{name || "供应商"} · 连接与模型配置</DialogDescription></DialogHeader>
+      <DialogHeader className="pr-8"><DialogTitle>{provider ? "编辑 Provider" : "新建 Provider"}</DialogTitle><DialogDescription><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{name || "供应商"}</span><span>连接与模型配置</span></span></DialogDescription></DialogHeader>
       <form onSubmit={submit} className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3">
         <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 min-w-0 flex-col">
           <Tabs.List aria-label="Provider 配置" className="mb-4 flex shrink-0 gap-4 border-b">
             <Tabs.Trigger value="basic" className="pb-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-primary">基础配置</Tabs.Trigger>
-            <Tabs.Trigger value="models" className="pb-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-primary">模型配置 · {models.length}</Tabs.Trigger>
+            <Tabs.Trigger value="models" className="pb-2 text-sm data-[state=active]:border-b-2 data-[state=active]:border-primary">模型配置（{models.length}）</Tabs.Trigger>
           </Tabs.List>
           <Tabs.Content value="basic" className="min-h-0 overflow-y-auto">
             <fieldset disabled={busy} className="grid min-w-0 grid-cols-1 items-start gap-4 pb-2 sm:grid-cols-3">

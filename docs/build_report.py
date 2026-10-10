@@ -95,7 +95,7 @@ def build_architecture_png(path: Path):
     im = Image.new("RGB", (1800, 1040), "#F8FAFC")
     d = ImageDraw.Draw(im)
     d.text((70, 48), "AeroSight 空天一体化智能感知平台总体架构", font=img_font(48, True), fill=f"#{NAVY}")
-    d.text((72, 112), "设备接入 · 边缘感知 · 时空数据 · 核心智能体 · 业务闭环", font=img_font(25), fill=f"#{MUTED}")
+    d.text((72, 112), "设备接入、边缘感知、时空数据、核心智能体、业务闭环", font=img_font(25), fill=f"#{MUTED}")
 
     layers = [
         ("空天感知层", "无人机 / 大疆机场\n可见光、热红外、倾斜摄影\nGNSS/RTK、气象、设备遥测", "EAF3FA", BLUE),
@@ -469,7 +469,7 @@ def cover(doc):
         doc.add_paragraph()
     kicker = doc.add_paragraph()
     kicker.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r = kicker.add_run("AEROSIGHT · 技术方案简报")
+    r = kicker.add_run("AEROSIGHT 技术方案简报")
     set_font(r, 12, True, ORANGE)
     title = doc.add_paragraph(style="Title")
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER

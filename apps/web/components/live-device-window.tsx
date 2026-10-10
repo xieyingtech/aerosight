@@ -51,7 +51,7 @@ export function LiveDeviceWindow({ snapshot, device, selectedStreamId, videoChan
   void start(true);
  }, [stream?.id, channel?.channelKey, enabled, signal, autoStart]);
  const header = <div hidden={!controlsVisible} className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-   <h2 className="text-sm font-medium">{String(device.name)} · {String(device.typeName ?? "直播")}</h2>
+   <h2 className="text-sm font-medium"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{String(device.name)}</span><span>{String(device.typeName ?? "直播")}</span></span></h2>
    {videoChannelKey === undefined && channels.length > 1 && <select aria-label={`${device.name} 视频通道`} title={streams.length ? "停止当前直播后可切换通道" : "选择视频通道"} className="max-w-full rounded border bg-background px-2 py-1 text-xs" value={channel?.channelKey ?? ""} disabled={pending || streams.length > 0} onChange={event => { setChannelKey(event.target.value); setError(""); suppressed.current = false; }}>
     {channels.map(item => <option key={item.stableChannelId} value={item.channelKey}>{item.displayName}</option>)}
    </select>}

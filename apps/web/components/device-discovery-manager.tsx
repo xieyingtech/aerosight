@@ -37,8 +37,8 @@ function DiscoveryRow({ item, projectId, deviceTypes, canManage, busy, act }: {
           <Badge variant={item.status === "conflicted" ? "destructive" : item.status === "managed" ? "secondary" : "outline"}>{DISCOVERY_STATUS_LABELS[item.status]}</Badge>
           {item.matchConfidence !== null && <Badge variant="outline">匹配 {Math.round(item.matchConfidence * 100)}%</Badge>}
         </div>
-        <p className="mt-1 text-xs text-muted-foreground">{item.connectorName} · {item.externalDeviceType ?? "未知类型"}{item.parentExternalId ? ` · 上级 ${item.parentExternalId}` : ""}</p>
-        <p className="mt-1 text-xs text-muted-foreground">建议类型：{item.suggestedTypeName ?? "未匹配"} · 最近发现 {new Date(item.lastSeenAt).toLocaleString("zh-CN")}</p>
+        <p className="mt-1 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{item.connectorName}</span><span>{item.externalDeviceType ?? "未知类型"}<span className="inline-block whitespace-pre-line">{item.parentExternalId ? `\n上级 ${item.parentExternalId}` : ""}</span></span></span></p>
+        <p className="mt-1 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>建议类型：{item.suggestedTypeName ?? "未匹配"}</span><span>最近发现 {new Date(item.lastSeenAt).toLocaleString("zh-CN")}</span></span></p>
       </div>
       {item.status === "conflicted" && <AlertTriangleIcon className="size-4 text-destructive" />}
     </div>
@@ -46,7 +46,7 @@ function DiscoveryRow({ item, projectId, deviceTypes, canManage, busy, act }: {
       <Input aria-label="设备名称" onChange={(event) => setName(event.target.value)} value={name} />
       <select aria-label="DeviceType" className="h-9 rounded-md border bg-background px-3 text-sm" onChange={(event) => setTypeKey(event.target.value)} value={typeKey}>
         <option value="">选择 DeviceType</option>
-        {deviceTypes.map((type) => <option key={type.id} value={type.typeKey}>{type.displayName} · {type.category}</option>)}
+        {deviceTypes.map((type) => <option key={type.id} value={type.typeKey}>{type.displayName}（{type.category}）</option>)}
       </select>
       <Button disabled={busy || !name.trim() || !typeKey} onClick={() => act(
         `/api/projects/${projectId}/device-adapters/discoveries/${item.id}/bind`, { name, deviceTypeKey: typeKey }

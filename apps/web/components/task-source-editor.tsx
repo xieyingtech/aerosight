@@ -37,7 +37,7 @@ export function TaskSourceEditor({value,onChange,readOnly=false}:{value:TaskSour
       </div>
       {Object.keys(object(trigger.inputs)).length>0&&<fieldset className="grid gap-3 rounded border p-3 md:grid-cols-2"><legend>触发输入资源</legend>{Object.entries(object(trigger.inputs)).map(([key,current])=>field(`输入 ${key}`,["trigger","inputs",key],current,typeof current==="number"?"number":typeof current==="object"?"json":"text"))}</fieldset>}
       {steps.map((raw,index)=>{const step=object(raw),parameters=object(step.with);return <fieldset className="space-y-3 rounded border p-3" key={String(step.key??index)} disabled={readOnly}>
-        <legend>{String(step.name??step.key)} · {String(step.uses)}</legend>
+        <legend><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{String(step.name??step.key)}</span><span>{String(step.uses)}</span></span></legend>
         <div className="grid gap-3 md:grid-cols-2">{Object.entries(parameters).filter(([,current])=>current===null||typeof current!=="object"||Array.isArray(current)).map(([key,current])=>field(key,["steps",index,"with",key],current,typeof current==="number"?"number":Array.isArray(current)?"json":"text"))}</div>
         {Object.values(parameters).some(v=>typeof v==="object"&&!Array.isArray(v))&&<p className="text-xs text-muted-foreground">嵌套参数请使用原始编辑；未编辑的字段会保留。</p>}
       </fieldset>})}

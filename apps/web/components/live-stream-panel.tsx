@@ -49,7 +49,7 @@ function HistoricalMedia({ projectId, media }: { projectId: number; media: Recor
         : !accessUrl ? <RefreshCwIcon className="size-5 animate-spin" />
           : mimeType.startsWith("image/") ? <img alt="历史巡检媒体" className="h-full w-full object-contain" src={accessUrl} />
             : mimeType.startsWith("video/") ? <video className="h-full w-full object-contain" controls src={accessUrl} />
-              : <div>媒体 #{String(media.id)} · {mimeType}</div>}
+              : <div><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>媒体 #{String(media.id)}</span><span>{mimeType}</span></span></div>}
     </div>
     <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs" onClick={download} type="button">
       <DownloadIcon className="size-3.5" />下载
@@ -164,11 +164,11 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
   const realtimeData = activeChannel ? <section className="space-y-2 border-t pt-3">
     <div className="flex flex-wrap gap-2">
       {dataChannels.map((channel) => <button className={`rounded-md border px-2.5 py-1 text-xs ${String(channel.stableChannelId) === String(activeChannel.stableChannelId) ? "bg-primary text-primary-foreground" : ""}`} key={String(channel.stableChannelId)} onClick={() => setActiveChannelId(String(channel.stableChannelId))} type="button">
-        {String(channel.displayName)} · {String(channel.dataType)}
+        {String(channel.displayName)}（{String(channel.dataType)}）
       </button>)}
     </div>
     <div className="rounded-lg border bg-muted/20 p-3">
-      <div className="mb-2 flex items-center justify-between text-xs"><span>{String(activeChannel.displayName)}</span><span className="text-muted-foreground">{String(activeChannel.unit ?? "无统一单位")} · {String(activeChannel.availability)}</span></div>
+      <div className="mb-2 flex items-center justify-between text-xs"><span>{String(activeChannel.displayName)}</span><span className="text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{String(activeChannel.unit ?? "无统一单位")}</span><span className="rounded-md bg-muted px-2 py-0.5 text-xs">{String(activeChannel.availability)}</span></span></span></div>
       <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-xs text-muted-foreground">{sample ? JSON.stringify(sample, null, 2) : "等待实时数据…"}</pre>
     </div>
   </section> : null;
@@ -202,7 +202,7 @@ export function LiveStreamPanel({ snapshot, selection, mode, cursor, selectedStr
       if (!video) throw new Error("等待直播视频画面");
       signal.throwIfAborted(); return captureVideoFrame(video);
     }} />}
-    {!compact && <p className="text-xs text-muted-foreground">{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`} · {sourceType}</p>}
+    {!compact && <p className="text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{latencySeconds === null ? "等待首帧时间" : `最后活动约 ${latencySeconds} 秒前`}</span><span>{sourceType}</span></span></p>}
     {playback.status === "ready" && playback.index + 1 < playback.candidates.length && <button className="rounded-md border px-2.5 py-1 text-xs" onClick={() => setPlayback({ ...playback, index: playback.index + 1 })} type="button">切换备用协议</button>}
     <div className={`flex items-center gap-2 ${compact ? "px-3 pb-2" : ""}`}>
       <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs disabled:opacity-50" disabled={stopState === "stopping" || status === "stopping"} onClick={stopStream} type="button">

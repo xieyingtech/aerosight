@@ -102,7 +102,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
     </div>
 
     <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
-      <div className="text-xs text-muted-foreground">步骤 {step}/2 · {step === 1 ? "设备身份" : "网络与媒体端点"}</div>
+      <div className="text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>步骤 {step}/2</span><span>{step === 1 ? "设备身份" : "网络与媒体端点"}</span></span></div>
       <div className={step === 1 ? "grid gap-3 md:grid-cols-2" : "hidden"}>
         <label className="space-y-1 text-sm">名称<Input name="name" placeholder="例如：华东机场集群" required /></label>
         <label className="space-y-1 text-sm">网络模式<select className="flex h-9 w-full rounded-md border bg-transparent px-3 text-sm" onChange={(event) => setMode(event.target.value as "lan" | "public")} value={mode}><option value="lan">局域网 LAN</option><option value="public">公网 Public</option></select></label>
@@ -138,7 +138,7 @@ export function DjiAdapterWizard({ projectId, initialAdapters }: { projectId: nu
 
     <div className="space-y-2">
       {adapters.map((adapter) => <article className="space-y-3 rounded-lg bg-muted/30 p-3" key={adapter.id}>
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium">{adapter.name}</p><p className="text-xs text-muted-foreground">DJI · {adapter.protocolVersion} · {adapter.status}</p></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm font-medium">{adapter.name}</p><p className="text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>DJI@v{String(adapter.protocolVersion).replace(/^v/, "")}</span><span className="rounded-md bg-muted px-2 py-0.5 text-xs">{adapter.status}</span></span></p></div>
         <Button disabled={busy} onClick={() => void testConnection(adapter)} size="sm" type="button" variant="outline">连接自检</Button></div>
         <details><summary className="cursor-pointer text-sm">更新连接凭据</summary>
           <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); void updateCredentials(adapter, event.currentTarget); }}>

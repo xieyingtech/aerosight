@@ -70,7 +70,7 @@ export async function revalidateSelectedFlightHubProject(
 }
 
 export function buildFlightHubConnectionPlan(project: FlightHubProject): FlightHubConnectionPlan {
-  const displayName = `DJI 司空 2 · ${project.name}`;
+  const displayName = `DJI 司空 2（${project.name}）`;
   return {
     connectorKey: "dji.flighthub2",
     connectorVersion: "1.0.0",

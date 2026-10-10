@@ -281,7 +281,7 @@ const snapshotDiagnostics = `-- name: SnapshotDiagnostics :many
 select to_jsonb(snapshot_row) as item from (
 select 'command:'||command.id::text as id,command.device_id as "deviceId",'command'::text as kind,
               case when command.status in ('unknown','timed_out','nacked') then 'error' else 'warning' end as severity,
-              device.name||' · '||command.capability_code as title,
+              device.name||'（'||command.capability_code||'）' as title,
               coalesce(command.result_json->>'reason',command.result_json->>'errorCode',command.status) as reason,
               command.status,coalesce(command.completed_at,command.created_at) as "occurredAt"
          from device_commands command join devices device on device.id=command.device_id and device.project_id=command.project_id
@@ -293,7 +293,7 @@ select 'command:'||command.id::text as id,command.device_id as "deviceId",'comma
          from device_adapters adapter where adapter.project_id=$1 and adapter.status in ('failed','degraded')
        union all
        select 'stream:'||stream.id::text,stream.device_id,'stream',case when stream.status='failed' then 'error' else 'warning' end,
-              device.name||' · '||stream.stream_key,coalesce(stream.status_reason,stream.status),stream.status,
+              device.name||'（'||stream.stream_key||'）',coalesce(stream.status_reason,stream.status),stream.status,
               coalesce(stream.ended_at,stream.updated_at)
          from live_streams stream join devices device on device.id=stream.device_id and device.project_id=stream.project_id
         where stream.project_id=$1 and stream.status in ('failed','degraded','starting')

@@ -177,7 +177,7 @@ export function DjiFlightHubSetup({ projectId, onCreated }: { projectId: number;
       在司空中进入“我的组织 → 组织设置 → OpenAPI → 复制密钥”。这不是 OAuth；Token 只存在于当前向导内存，连接后加密保存。
     </div>
     <div className="space-y-3 rounded-lg border p-3">
-      <div className="text-xs text-muted-foreground">步骤 {phase === "token" ? "1/2 · 验证 Token" : "2/2 · 选择司空项目"}</div>
+      <div className="text-xs text-muted-foreground">步骤 <span className="inline-block whitespace-pre-line">{phase === "token" ? "1/2\n验证 Token" : "2/2\n选择司空项目"}</span></div>
       {phase === "token" ? <div className="grid gap-3 md:grid-cols-[1fr_auto]">
         <label className="space-y-1 text-sm">司空组织 Token
           <Input ref={tokenInputRef} autoComplete="new-password" onChange={(event) => setToken(event.target.value)} placeholder="仅在当前向导内临时使用" type="password" value={token} />
@@ -352,7 +352,7 @@ export function DjiFlightHubConnections({
 
     {selectedConnector && <section className="space-y-4 rounded-xl border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><div className="flex items-center gap-2"><h2 className="font-medium">{selectedConnector.projectName}</h2><Badge variant={statusVariant(selectedConnector.status)}>{flightHubStatusLabel(selectedConnector.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground">DJI 司空 2 · 项目 UUID {selectedConnector.projectUuid} · 最近验证 {formatDate(selectedConnector.lastValidatedAt)}</p></div>
+        <div><div className="flex items-center gap-2"><h2 className="font-medium">{selectedConnector.projectName}</h2><Badge variant={statusVariant(selectedConnector.status)}>{flightHubStatusLabel(selectedConnector.status)}</Badge></div><p className="mt-1 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>DJI 司空 2</span><span>项目 UUID {selectedConnector.projectUuid}</span><span>最近验证 {formatDate(selectedConnector.lastValidatedAt)}</span></span></p></div>
         <div className="flex flex-wrap gap-2">
           {selectedConnector.status === "disabled" && <Button disabled={busyAction !== null} onClick={() => void runConnectorAction(selectedConnector.id, "reconnect")} size="sm" type="button" variant="default"><RefreshCwIcon />重新连接</Button>}
           <Button disabled={busyAction !== null || selectedConnector.status === "disabled"} onClick={() => void runConnectorAction(selectedConnector.id, "sync")} size="sm" type="button" variant="outline"><RefreshCwIcon />立即同步</Button>
@@ -386,8 +386,8 @@ export function DjiFlightHubConnections({
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {selectedDiagnostics.resourceWatermarks.map((watermark) => <div className="rounded-md bg-muted/35 p-2 text-xs" key={watermark.resourceKind}>
               <div className="flex items-center justify-between gap-2"><span className="font-medium">{watermark.resourceKind}</span><Badge variant={statusVariant(watermark.status)}>{watermark.status}</Badge></div>
-              <p className="mt-1 text-muted-foreground">成功水位 {formatDate(watermark.lastSucceededAt)} · 尝试 {watermark.attemptCount}</p>
-              {watermark.lastErrorCode && <p className="mt-1 text-destructive">{watermark.lastErrorCode} · 下次 {formatDate(watermark.nextAttemptAt)}</p>}
+              <p className="mt-1 text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>成功水位 {formatDate(watermark.lastSucceededAt)}</span><span>尝试 {watermark.attemptCount}</span></span></p>
+              {watermark.lastErrorCode && <p className="mt-1 text-destructive"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{watermark.lastErrorCode}</span><span>下次 {formatDate(watermark.nextAttemptAt)}</span></span></p>}
             </div>)}
             {selectedDiagnostics.resourceWatermarks.length === 0 && <p className="text-xs text-muted-foreground">暂无资源流水位。</p>}
           </div>
@@ -415,7 +415,7 @@ export function DjiFlightHubConnections({
         <div className="space-y-2"><h3 className="flex items-center gap-2 text-sm font-medium"><ShieldCheckIcon className="size-4" />设备候选</h3><div className="max-h-80 space-y-2 overflow-auto rounded-lg border p-2">
           {selectedIdentities.map((identity) => <div className="rounded-md bg-muted/30 p-2 text-xs" key={identity.id}>
             <div className="flex items-center justify-between gap-2"><span className="font-medium">{identity.callsign || identity.serialNumber || identity.externalDeviceId}</span><Badge variant={statusVariant(identity.discoveryStatus)}>{discoveryStatusLabel(identity.discoveryStatus)}</Badge></div>
-            <p className="mt-1 text-muted-foreground">{identity.externalDeviceType ?? "未知型号"} · SN {identity.serialNumber ?? "—"} · {formatDate(identity.lastSeenAt)}</p>
+            <p className="mt-1 text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{identity.externalDeviceType ?? "未知型号"}</span><span>SN {identity.serialNumber ?? "—"}</span><span>{formatDate(identity.lastSeenAt)}</span></span></p>
             {identity.parentExternalId && <p className="mt-1 text-muted-foreground">上级：{identity.parentExternalId}</p>}
             {identity.discoveryStatus === "conflicted" && <p className="mt-1 text-destructive">同一 SN 存在其他来源；需人工确认，系统不会自动改变下行路由。</p>}
           </div>)}
@@ -424,7 +424,7 @@ export function DjiFlightHubConnections({
         <div className="space-y-2"><h3 className="text-sm font-medium">同步日志</h3><div className="max-h-80 space-y-2 overflow-auto rounded-lg border p-2">
           {selectedSyncRuns.map((run) => <div className="rounded-md bg-muted/30 p-2 text-xs" key={run.id}>
             <div className="flex items-center justify-between gap-2"><span className="font-medium">{run.connectorName}</span><Badge variant={statusVariant(run.status)}>{run.status}</Badge></div>
-            <p className="mt-1 text-muted-foreground">发现 {run.discoveredCount} · 纳管 {run.managedCount} · 缺失 {run.missingCount} · {formatDate(run.finishedAt ?? run.createdAt)}</p>
+            <p className="mt-1 text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>发现 {run.discoveredCount}</span><span>纳管 {run.managedCount}</span><span>缺失 {run.missingCount}</span><span>{formatDate(run.finishedAt ?? run.createdAt)}</span></span></p>
             {run.errorCode && <p className="mt-1 text-destructive">{run.errorCode}</p>}
           </div>)}
           {selectedSyncRuns.length === 0 && <p className="p-2 text-xs text-muted-foreground">暂无同步记录。</p>}

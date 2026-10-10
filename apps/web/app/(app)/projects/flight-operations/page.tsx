@@ -60,7 +60,7 @@ function Workspace({ operations, projectId }: { operations: FlightHubFlightOpera
             <CardHeader><CardTitle>{connector.name}</CardTitle><CardDescription>本地连接器 #{connector.id}</CardDescription><CardAction>{statusBadge(connector.status)}</CardAction></CardHeader>
             <CardContent className="space-y-1 text-muted-foreground">
               <p>最近检查：{displayDate(connector.lastCheckedAt)}</p>
-              <p>功能开关：{connector.actionEnabled ? "已开启" : "已关闭"} · 现场验收：{connector.actionVerified ? "已通过" : "未通过"}</p>
+              <p><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>功能开关：{connector.actionEnabled ? "已开启" : "已关闭"}</span><span>现场验收：{connector.actionVerified ? "已通过" : "未通过"}</span></span></p>
               {operations.access.canOperate ? <p className="text-foreground">{connector.actionReady ? "当前可提交受控任务操作" : "当前不可提交写操作"}</p> : null}
             </CardContent>
           </Card>) : <Card size="sm"><CardContent className="text-muted-foreground">暂无提供飞行目录的连接器</CardContent></Card>}

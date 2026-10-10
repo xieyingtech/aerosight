@@ -85,7 +85,7 @@ func projectHMSAlert(ctx context.Context, tx *sql.Tx, instance connector.Instanc
 		status = "closed"
 	}
 	priority := hmsPriority(alert)
-	title := fmt.Sprintf("司空设备 HMS · %s", boundedDiagnostic(alert.Code, 96))
+	title := fmt.Sprintf("司空设备 HMS：%s", boundedDiagnostic(alert.Code, 96))
 	description := fmt.Sprintf("模块 %s；级别 %s", boundedDiagnostic(alert.Module, 64), boundedDiagnostic(alert.Level, 32))
 	labels, _ := json.Marshal([]string{"dji-flighthub", "hms", boundedDiagnostic(alert.DomainType, 64)})
 	var issueID int

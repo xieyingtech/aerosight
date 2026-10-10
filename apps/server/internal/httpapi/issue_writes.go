@@ -297,7 +297,7 @@ func applyIssueAssignment(ctx context.Context, q *sqlcgen.Queries, pid, team, ii
 func queueIssueCopilot(ctx context.Context, q *sqlcgen.Queries, pid, team, iid, uid, agent, activity int32, trigger string) (string, error) {
 	ni := func(id int32) sql.NullInt32 { return sql.NullInt32{Int32: id, Valid: true} }
 	ns := func(s string) sql.NullString { return sql.NullString{String: s, Valid: true} }
-	session, err := q.CreateIssueCopilotSession(ctx, sqlcgen.CreateIssueCopilotSessionParams{ProjectID: pid, AgentID: ni(agent), IssueID: ni(iid), StartedByUserID: ni(uid), Summary: ns(fmt.Sprintf("Copilot · 案件 #%d", iid))})
+	session, err := q.CreateIssueCopilotSession(ctx, sqlcgen.CreateIssueCopilotSessionParams{ProjectID: pid, AgentID: ni(agent), IssueID: ni(iid), StartedByUserID: ni(uid), Summary: ns(fmt.Sprintf("Copilot（案件 #%d）", iid))})
 	if err != nil {
 		return "", err
 	}

@@ -20,7 +20,7 @@ test("empty issue states that neither location nor evidence has been linked", ()
 test("media without detections is still linked evidence", () => {
   const summary = issueEvidenceSummary({ detections: [], assets: [{id: 9}] });
   assert.equal(summary.hasEvidence, true);
-  assert.equal(summary.evidenceLabel, "0 条检测 · 1 个媒体");
+  assert.equal(summary.evidenceLabel, "检测（0 条），媒体（1 个）");
 });
 
 test("located detections and assets form complete issue evidence", () => {

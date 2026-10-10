@@ -65,7 +65,7 @@ export function AgentQueryEvidence({ toolCalls, inline = false }: { toolCalls: u
 
   return <details className="mt-4 text-xs">
     <summary className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
-      {single ? <><span className={single.status === "running" ? "animate-pulse" : ""}>{queryNames[single.name ?? ""] ?? single.name ?? "项目查询"}</span><code className="ml-2">{single.name}</code><span className="ml-2">{statusText(single)}</span></> : <>工具调用 · {queries.length} 次{hasFailure ? " · 部分查询失败" : ""}</>}
+      {single ? <><span className={single.status === "running" ? "animate-pulse" : ""}>{queryNames[single.name ?? ""] ?? single.name ?? "项目查询"}</span><code className="ml-2">{single.name}</code><span className="ml-2">{statusText(single)}</span></> : <>工具调用（{queries.length} 次）<span className="inline-block whitespace-pre-line">{hasFailure ? "\n部分查询失败" : ""}</span></>}
     </summary>
     <div className="mt-3 space-y-4 border-l-2 border-border pl-4">
       {queries.map((item, index) => {
@@ -79,7 +79,7 @@ export function AgentQueryEvidence({ toolCalls, inline = false }: { toolCalls: u
           {summary && <p className="mt-1 leading-5">{isWriteTool(item.name) ? "操作内容" : "返回结果"}：{summary}</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.length > 0 && <p className="mt-2 font-medium">相关依据</p>}
           {Array.isArray(item.evidenceRefs) && item.evidenceRefs.map((ref, refIndex) => <p className="mt-1 break-words text-muted-foreground" key={refIndex}>
-            {ref.href?.startsWith("/") && !ref.href.startsWith("//") ? <a className="text-primary underline underline-offset-2" href={ref.href}>{item.name === 'query_objects' ? '查看目标框与筛选结果' : `${ref.type}:${ref.id}`}</a> : <span>{ref.type}:{ref.id}</span>} · {ref.version}
+            {ref.href?.startsWith("/") && !ref.href.startsWith("//") ? <a className="text-primary underline underline-offset-2" href={ref.href}>{item.name === 'query_objects' ? '查看目标框与筛选结果' : `${ref.type}:${ref.id}`}</a> : <span>{ref.type}:{ref.id}</span>}@{/^\d+(?:\.\d+)*$/.test(ref.version) ? `v${ref.version}` : ref.version}
           </p>)}
         </div>;
       })}

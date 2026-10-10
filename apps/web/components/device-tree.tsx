@@ -31,7 +31,7 @@ function availabilityLabel(availability: string) {
 }
 
 const TCA_LABELS: Record<string, string> = {
-  available: "可用", empty: "已检查·当前无记录", stale: "状态过期", unavailable: "不可用", missing: "尚未检查"
+  available: "可用", empty: "已检查，当前无记录", stale: "状态过期", unavailable: "不可用", missing: "尚未检查"
 };
 
 function DeviceBranch({ node, depth, selectedId, onSelect, searching }: {
@@ -57,7 +57,7 @@ function DeviceBranch({ node, depth, selectedId, onSelect, searching }: {
           <DeviceTypeIcon name={node.typeIcon} className="size-4 shrink-0" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{node.name}</span>
-            <span className="block truncate text-[11px] text-muted-foreground">{node.typeName}{node.relationType ? ` · ${node.relationType}` : ""}</span>
+            <span className="block truncate text-[11px] text-muted-foreground">{node.typeName}<span className="inline-block whitespace-pre-line">{node.relationType ? `\n${node.relationType}` : ""}</span></span>
           </span>
           <span aria-label={STATUS_LABELS[node.status] ?? node.status} className={cn("size-2 shrink-0 rounded-full", statusClass(node.status))} />
         </button>
@@ -84,7 +84,7 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
         <div className="rounded-lg bg-primary/10 p-2.5 text-primary"><DeviceTypeIcon name={device.typeIcon} className="size-5" /></div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-lg font-semibold">{device.name}</h2><Badge variant="outline">{device.typeName}</Badge></div>
-          <p className="mt-1 text-xs text-muted-foreground">设备 ID {device.id} · {device.typeKey}</p>
+          <p className="mt-1 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>设备 ID {device.id}</span><span>{device.typeKey}</span></span></p>
         </div>
       </div>
       <Button asChild size="sm"><Link href={projectNavigationHref(projectId, "realtime", {deviceId: device.id})}>进入实时作业<ArrowRightIcon /></Link></Button>
@@ -95,8 +95,8 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
         <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <DetailItem label="设备类型" value={device.typeName} />
           <DetailItem label="驱动" value={`${device.driverKey}@${device.driverVersion}`} />
-          <DetailItem label="连接状态" value={`${STATUS_LABELS[device.status] ?? device.status} · ${device.dataFreshness}`} />
-          <DetailItem label="厂商 / 型号" value={[device.vendor, device.model].filter(Boolean).join(" · ") || "未设置"} />
+          <DetailItem label="连接状态" value={STATUS_LABELS[device.status] ?? device.status} />
+          <DetailItem label="厂商" value={device.vendor || "未设置"} /><DetailItem label="型号" value={device.model || "未设置"} />
         </dl>
         {device.statusReason && <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">{device.statusReason}</p>}
       </section>
@@ -115,10 +115,10 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
         {device.capabilities.length ? <div className="grid gap-2 md:grid-cols-2">{device.capabilities.map((capability) =>
           <div className="rounded-lg border p-3" key={capability.code}>
             <div className="flex items-center justify-between gap-2"><code className="text-xs font-medium">{capability.code}</code><Badge variant={capability.availability === "available" ? "secondary" : "outline"}>{availabilityLabel(capability.availability)}</Badge></div>
-            <p className="mt-2 text-xs text-muted-foreground">{capability.authorized ? "已授权" : "未授权"} · 风险 {capability.risk}{capability.reason ? ` · ${capability.reason}` : ""}</p>
+            <p className="mt-2 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span className="rounded-md bg-muted px-2 py-0.5 text-xs">{capability.authorized ? "已授权" : "未授权"}</span><span className="rounded-md bg-muted px-2 py-0.5 text-xs">风险 {capability.risk}<span className="inline-block whitespace-pre-line">{capability.reason ? `\n${capability.reason}` : ""}</span></span></span></p>
             {capability.actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{capability.actions.map((action) =>
               <Badge key={action.key} title={action.unavailableReason ?? undefined} variant={action.enabled ? "secondary" : "outline"}>
-                {action.label} · {action.enabled ? "前置条件满足" : "已阻止"}
+                <span>{action.label}</span><span className="ml-2 rounded bg-background px-1.5">{action.enabled ? "前置条件满足" : "已阻止"}</span>
               </Badge>)}</div>}
           </div>)}</div> : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">该设备类型尚未声明能力</p>}
       </section>
@@ -127,7 +127,7 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
         <dl className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <DetailItem label="连接器" value={device.flightHubControl.connectorStatus === "connected" ? "已连接" : "未连接"} />
           <DetailItem label="设备状态" value={device.flightHubControl.stateFresh ? "30 秒内有效" : "已过期，禁止上游调用"} />
-          <DetailItem label="TCA" value={`${TCA_LABELS[device.flightHubControl.tcaState] ?? device.flightHubControl.tcaState}${device.flightHubControl.tcaItemCount === null ? "" : ` · ${device.flightHubControl.tcaItemCount} 项`}`} />
+          <DetailItem label="TCA" value={`${TCA_LABELS[device.flightHubControl.tcaState] ?? device.flightHubControl.tcaState}${device.flightHubControl.tcaItemCount === null ? "" : `（${device.flightHubControl.tcaItemCount} 项）`}`} />
           <DetailItem label="TCA 检查时间" value={device.flightHubControl.tcaCheckedAt ? new Date(device.flightHubControl.tcaCheckedAt).toLocaleString("zh-CN") : "暂无"} />
         </dl>
         <p className="mt-2 text-xs text-muted-foreground">相机/镜头按钮只在精确型号与固件现场验收、功能开关、在线状态和 30 秒新鲜度同时满足时启用；TCA 仅展示官方开放返回的存在性和新鲜度。</p>
@@ -137,7 +137,7 @@ function DeviceDetails({ device, projectId }: { device: DeviceTreeNode; projectI
         {device.channels.length ? <div className="grid gap-2 md:grid-cols-2">{device.channels.map((channel) =>
           <div className="rounded-lg border p-3" key={channel.stableChannelId}>
             <div className="flex items-center justify-between gap-2"><span className="text-sm font-medium">{channel.name}</span><Badge variant="outline">{availabilityLabel(channel.availability)}</Badge></div>
-            <p className="mt-1 text-xs text-muted-foreground">{channel.dataType} · {channel.stableChannelId}</p>
+            <p className="mt-1 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{channel.dataType}</span><span>{channel.stableChannelId}</span></span></p>
           </div>)}</div> : <p className="rounded-lg border border-dashed p-5 text-center text-sm text-muted-foreground">该设备没有实时数据或直播通道</p>}
       </section>
     </div>

@@ -152,7 +152,7 @@ export class AgentRealtimeCall {
     }
     const muted = this.media?.getAudioTracks().some(track => track.muted || !track.enabled);
     this.callbacks.inputStatus?.(muted ? "音频输入已静音，请检查设备" :
-      this.lastSignal && now - this.lastSignal < 1500 ? (this.lastAck ? "检测到声音 · 音频已送达" : "检测到声音 · 正在发送") :
+      this.lastSignal && now - this.lastSignal < 1500 ? (this.lastAck ? "检测到声音，音频已送达" : "检测到声音，正在发送") :
       now - Math.max(this.connectedAt, this.lastSignal) > 6000 ? "未检测到声音，请检查输入设备或靠近麦克风" : "音频输入已就绪");
   }
 

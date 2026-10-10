@@ -84,7 +84,7 @@ func queueInspectionAssessment(ctx context.Context, tx *sql.Tx, step mission.Pre
 		return err
 	}
 	var sessionID int
-	if err = tx.QueryRowContext(ctx, `insert into agent_sessions(project_id,agent_id,task_run_id,started_by_user_id,summary) values($1,$2,$3,$4,$5) returning id`, step.ProjectID, copilotID, step.RunID, step.UserID, fmt.Sprintf("巡检研判 · Task Run #%d", step.RunID)).Scan(&sessionID); err != nil {
+	if err = tx.QueryRowContext(ctx, `insert into agent_sessions(project_id,agent_id,task_run_id,started_by_user_id,summary) values($1,$2,$3,$4,$5) returning id`, step.ProjectID, copilotID, step.RunID, step.UserID, fmt.Sprintf("巡检研判（Task Run #%d）", step.RunID)).Scan(&sessionID); err != nil {
 		return err
 	}
 	args := map[string]any{"assessmentId": assessmentID, "evidenceSetId": input.EvidenceSetID, "taskRunId": step.RunID, "taskRunStepId": step.StepID, "promptVersion": inspectionAssessmentPromptVersion, "temperature": temperature}

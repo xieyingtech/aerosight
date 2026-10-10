@@ -9,7 +9,7 @@ export function Page({
   children
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
   variant?: "default" | "workspace" | "canvas";
   children: ReactNode;

@@ -13,7 +13,7 @@ def call(path,body=None,method='POST',**kwargs):
  return r.json()
 call('/api/auth/login',{'username':'admin@example.com','password':'admin'})
 if 'team' not in state:state['team']=call('/api/teams',{'name':'MSUP 高校组演示'});save()
-if 'project' not in state:state['project']=call('/api/projects',{'teamId':state['team']['id'],'name':'红花山历史航拍巡检 · 演示','description':'仅分析 2026-08-18 已下载历史图片；无飞行控制。'});save()
+if 'project' not in state:state['project']=call('/api/projects',{'teamId':state['team']['id'],'name':'红花山历史航拍巡检（演示）','description':'仅分析 2026-08-18 已下载历史图片；无飞行控制。'});save()
 pid=state['project']['id']; prefix=f'/api/projects/{pid}'
 if 'provider' not in state:
  state['provider']=call(prefix+'/algorithm-providers',{'name':'本地 YOLO11n','providerType':'http-json','baseUrl':'https://127.0.0.1:8444/infer','authType':'none','timeoutSeconds':60,'concurrencyLimit':2,'rateLimitPerMinute':60});save()

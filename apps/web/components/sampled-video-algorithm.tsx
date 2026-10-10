@@ -54,7 +54,7 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
         // Live timestamps describe the browser's received frame; offline source
         // timestamps are only assigned when the video has a known capture time.
         if (!videoAssetId) form.set("capturedAt", frame.capturedAt);
-        form.set("sourceDescription", videoAssetId ? `视频 #${videoAssetId} · ${frame.mediaTimeSeconds.toFixed(3)} 秒` : `直播 #${streamId} 的浏览器抽帧`);
+        form.set("sourceDescription", videoAssetId ? `视频 #${videoAssetId}（${frame.mediaTimeSeconds.toFixed(3)} 秒）` : `直播 #${streamId} 的浏览器抽帧`);
         if (streamId) form.set("streamId", String(streamId));
         if (videoAssetId) { form.set("videoAssetId", String(videoAssetId)); form.set("mediaTimeSeconds", String(frame.mediaTimeSeconds)); }
         const asset = await apiJSON<{ assetId: number }>(`/api/projects/${projectId}/assets/import`, { method: "POST", body: form, signal });
@@ -95,16 +95,16 @@ export function SampledVideoAlgorithm({ projectId, streamId, videoAssetId, captu
       <button className="rounded border px-2 py-1.5 disabled:opacity-50" type="button" disabled={!entry} onClick={active ? stop : () => void start()}>{active ? "停止识别" : videoAssetId ? "分析视频" : "开始直播识别"}</button>
     </div>
     <form ref={parameters} className="flex flex-wrap gap-2">{Object.entries(properties ?? {}).map(([key, property]) => <label className="text-xs" key={`${entry?.id}-${key}`}>{String(property.title ?? key)} <input name={key} className="w-24 rounded border bg-background p-1" disabled={active} defaultValue={String(property.default ?? "")} placeholder="默认值" type={property.type === "number" || property.type === "integer" ? "number" : "text"} step="any" /></label>)}</form>
-    <p className="text-xs text-muted-foreground">{status}{history.length ? ` · ${history.at(-1)!.count} 帧 · 最近一次 ${(history.at(-1)!.latency / 1000).toFixed(2)} 秒` : ""}</p>
+    <p className="text-xs text-muted-foreground">{status}<span className="inline-block whitespace-pre-line">{history.length ? `\n${history.at(-1)!.count} 帧\n最近一次 ${(history.at(-1)!.latency / 1000).toFixed(2)} 秒` : ""}</span></p>
     {(error || catalog.error) && <p className="text-xs text-destructive" role="alert">{error ?? "算法列表读取失败"}</p>}
     {!!history.length && <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">已识别帧 · 点击回看{history.length === 200 ? "（显示最近 200 帧）" : ""}</p>
-      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-auto">{history.map(frame => <button type="button" key={frame.runId} aria-pressed={result?.runId === frame.runId} className={`rounded border px-2 py-1 text-xs ${result?.runId === frame.runId ? "bg-primary text-primary-foreground" : ""}`} onClick={() => setResult(frame)}>{videoAssetId ? `${frame.mediaTimeSeconds.toFixed(1)} 秒` : new Date(frame.capturedAt).toLocaleTimeString()} · {frame.detections.length} 个目标</button>)}</div>
+      <p className="text-xs text-muted-foreground">已识别帧，点击回看{history.length === 200 ? "（显示最近 200 帧）" : ""}</p>
+      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-auto">{history.map(frame => <button type="button" key={frame.runId} aria-pressed={result?.runId === frame.runId} className={`rounded border px-2 py-1 text-xs ${result?.runId === frame.runId ? "bg-primary text-primary-foreground" : ""}`} onClick={() => setResult(frame)}><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{videoAssetId ? `${frame.mediaTimeSeconds.toFixed(1)} 秒` : new Date(frame.capturedAt).toLocaleTimeString()}</span><span>{frame.detections.length} 个目标</span></span></button>)}</div>
     </div>}
     {result && <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">{videoAssetId ? `视频 ${result.mediaTimeSeconds.toFixed(2)} 秒处` : `抽帧时间 ${new Date(result.capturedAt).toLocaleTimeString()}`} · {result.detections.length} 个目标</p>
+      <p className="text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{videoAssetId ? `视频 ${result.mediaTimeSeconds.toFixed(2)} 秒处` : `抽帧时间 ${new Date(result.capturedAt).toLocaleTimeString()}`}</span><span>{result.detections.length} 个目标</span></span></p>
       <AlgorithmAssetPreview key={result.runId} projectId={projectId} assetId={result.assetId} runId={result.runId} detections={result.detections} />
-      <p className="text-xs">{result.detections.map(d => `${d.label} ${(d.confidence * 100).toFixed(0)}%`).join(" · ")}</p>
+      <p className="text-xs"><span className="inline-block whitespace-pre-line">{result.detections.map(d => `${d.label} ${(d.confidence * 100).toFixed(0)}%`).join("\n")}</span></p>
       {result.payload.kind !== "detection" && !Array.isArray(result.payload.detections) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs">{JSON.stringify(result.payload, null, 2)}</pre>}
       <a className="text-xs underline" href={`/projects/algorithms/runs/detail/?projectId=${projectId}&runId=${result.runId}`}>查看本帧运行详情</a>
     </div>}

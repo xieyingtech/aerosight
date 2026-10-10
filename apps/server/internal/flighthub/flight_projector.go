@@ -148,7 +148,7 @@ func projectedFlightTaskName(name string, remoteResourceID int64) string {
 	if name == "" {
 		name = "DJI FlightHub task"
 	}
-	return fmt.Sprintf("%s · FlightHub %d", name, remoteResourceID)
+	return fmt.Sprintf("%s（FlightHub %d）", name, remoteResourceID)
 }
 
 func waylineDefinition(item WaylineSummary, remoteResourceID int64, remoteVersion, taskName string) map[string]any {

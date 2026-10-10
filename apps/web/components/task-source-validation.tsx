@@ -26,7 +26,7 @@ export function TaskSourceValidation({projectId,value,disabled=false}:{projectId
   <Button type="button" variant="outline" disabled={disabled||pending} onClick={validate}>{pending?"正在校验…":"校验当前草稿"}</Button>
   {shown&&<div role="status" className="space-y-1 text-sm">
    {shown.error?<p>{shown.error}</p>:shown.canPublish?<p>当前草稿校验通过；发布和运行前仍会重新检查权限与资源。</p>:<p>当前草稿暂不可发布：</p>}
-   {shown.issues?.map((issue,index)=><div key={index}><p>{issue.stepKey?`步骤 ${issue.stepKey}：`:""}{issue.code}</p>{issue.fields?.map((field,i)=><p className="font-mono text-xs" key={i}>{field.path} · {field.constraint}</p>)}</div>)}
+   {shown.issues?.map((issue,index)=><div key={index}><p>{issue.stepKey?`步骤 ${issue.stepKey}：`:""}{issue.code}</p>{issue.fields?.map((field,i)=><p className="font-mono text-xs" key={i}>{field.path}：{field.constraint}</p>)}</div>)}
   </div>}
  </div>;
 }

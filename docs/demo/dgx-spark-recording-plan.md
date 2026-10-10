@@ -1,4 +1,4 @@
-# AeroSight · DGX Spark 黑客松补录计划
+# AeroSight DGX Spark 黑客松补录计划
 
 更新：2026-09-29。主线：行业经验 → Agent Skill → 工具执行 → DGX 本地检测 → 模型辅助复核 → 可追溯交付。建议成片约 4–5 分钟，时长是制作建议，不是已核实的赛事要求。
 

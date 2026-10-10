@@ -41,7 +41,8 @@ export function ProjectTimeline({ snapshot, cursor, range, onSelect, onCursorCha
                 {lane.items.map((item) => (
                   <button className={cn("absolute top-1/2 h-3.5 min-w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-sm", laneColors[lane.key])}
                     key={item.id} onClick={() => onSelect?.({ lane: item.lane, entityId: item.entityId, label: item.label, timestamp: item.timestamp })}
-                    style={{ left: `${timelinePosition(item.timestamp, model.from, model.to)}%`, width: item.count > 1 ? `${Math.min(32, 12 + item.count * 3)}px` : undefined }} title={`${item.label} · ${new Date(item.timestamp).toLocaleString("zh-CN")}${item.count > 1 ? ` · ${item.count} 项` : ""}`} type="button" />
+                    style={{ left: `${timelinePosition(item.timestamp, model.from, model.to)}%`, width: item.count > 1 ? `${Math.min(32, 12 + item.count * 3)}px` : undefined }} title={`${item.label}${item.count > 1 ? `（${item.count} 项）` : ""}
+${new Date(item.timestamp).toLocaleString("zh-CN")}`} type="button" />
                 ))}
                 {!lane.items.length && <span className="absolute inset-0 flex items-center justify-center text-[10px] text-muted-foreground/70">暂无数据</span>}
               </div>

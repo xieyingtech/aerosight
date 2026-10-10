@@ -27,7 +27,7 @@ export function IssueFeedbackPanel({ projectId,issueId,stateVersion,detections,o
     } catch(error) {setError(error instanceof Error?error.message:"反馈保存失败");} finally {setPending(false);}
   }
   return <div className="space-y-3"><div className="grid gap-2 md:grid-cols-4">
-    <select className="h-9 rounded-md border bg-background px-2 text-sm" value={detectionId} onChange={(event) => setDetectionId(event.target.value)}>{detections.map((item) => <option value={String(item.id)} key={String(item.id)}>检测 #{String(item.id)} · {String(item.label)}</option>)}</select>
+    <select className="h-9 rounded-md border bg-background px-2 text-sm" value={detectionId} onChange={(event) => setDetectionId(event.target.value)}>{detections.map((item) => <option value={String(item.id)} key={String(item.id)}>检测 #{String(item.id)}（{String(item.label)}）</option>)}</select>
     <Input placeholder="处置原因（必填）" value={reason} onChange={(event) => setReason(event.target.value)} />
     <Input placeholder="修正类别" value={correctedLabel} onChange={(event) => setCorrectedLabel(event.target.value)} />
     <select className="h-9 rounded-md border bg-background px-2 text-sm" value={disposition} onChange={(event) => setDisposition(event.target.value)}><option value="resolved">已解决</option><option value="monitoring">持续观察</option><option value="remediated">已整改</option><option value="accepted_risk">接受风险</option><option value="not_applicable">不适用</option></select>

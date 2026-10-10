@@ -10,7 +10,7 @@ export function projectMonitorViews(snapshot: ProjectSituationSnapshot, added: r
     const deviceId = Number(device.id);
     for (const channel of (device.channels ?? []).filter(channel => channel.dataType === "video")) {
       const id = videoViewId(deviceId, channel.channelKey);
-      if (added.includes(id)) views.set(id, { id, kind: "video", deviceId, channelKey: channel.channelKey, label: `${device.name} · ${channel.displayName}` });
+      if (added.includes(id)) views.set(id, { id, kind: "video", deviceId, channelKey: channel.channelKey, label: `${device.name}（${channel.displayName}）` });
     }
   }
   for (const stream of activeProjectStreams(snapshot)) {
@@ -19,7 +19,7 @@ export function projectMonitorViews(snapshot: ProjectSituationSnapshot, added: r
     const channelKey = String(stream.streamKey ?? "");
     const id = videoViewId(Number(device.id), channelKey);
     const channel = device.channels?.find(channel => channel.channelKey === channelKey);
-    views.set(id, { id, kind: "video", deviceId: Number(device.id), channelKey, streamId: Number(stream.id), label: `${device.name} · ${channel?.displayName ?? (channelKey || "直播")}` });
+    views.set(id, { id, kind: "video", deviceId: Number(device.id), channelKey, streamId: Number(stream.id), label: `${device.name}（${channel?.displayName ?? (channelKey || "直播")}）` });
   }
   return [...views.values(), { id: "map", kind: "map", label: "项目地图" }];
 }

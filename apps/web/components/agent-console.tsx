@@ -374,7 +374,7 @@ export function AgentConversation({ projectId, sessions: initialSessions, initia
                   const evidence = approval ? { ...call, status: expired ? "expired" : approval.status === "pending" ? "confirmation_required" : approval.status, summary: approvalDescription(approval) } : call;
                   return <div key={index}>
                     <AgentQueryEvidence toolCalls={[evidence]} inline />
-                    {approval?.status === "pending" && !expired && <p className="mt-1 text-xs text-muted-foreground">已请求授权 · 请在下方确认</p>}
+                    {approval?.status === "pending" && !expired && <p className="mt-1 text-xs text-muted-foreground">已请求授权，请在下方确认</p>}
                     {expired ? <p className="mt-1 text-xs text-muted-foreground">本次授权已过期，请重新向智能体发起操作。</p> : null}
                     {approval?.status === "executing" && <p className="mt-1 text-xs text-muted-foreground">授权已提交，正在处理；若长时间未更新，请核对平台任务或飞行作业，勿重复提交。</p>}
                     {approval?.result != null && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">查看平台返回结果</summary><pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all">{JSON.stringify(approval.result, null, 2)}</pre></details>}
@@ -404,7 +404,7 @@ export function AgentConversation({ projectId, sessions: initialSessions, initia
           {session?.status === "open" && approvals.some(approval => approval.status === "pending" && Date.parse(approval.expiresAt) > now) && <section aria-label="待授权操作" className="mb-3 max-h-[min(18rem,35dvh)] space-y-2 overflow-y-auto">
             {approvals.filter(approval => approval.status === "pending" && Date.parse(approval.expiresAt) > now).map(approval => <div key={approval.id} className="rounded-xl border bg-card p-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-medium">请确认 · {agentToolLabel(approval.toolName)}{approval.taskId ? ` · 任务 #${approval.taskId}` : approval.issueId ? ` · 案件 #${approval.issueId}` : ""}</p>
+                <p className="font-medium">请确认：{agentToolLabel(approval.toolName)}<span className="inline-block whitespace-pre-line">{approval.taskId ? `\n任务 #${approval.taskId}` : approval.issueId ? `\n案件 #${approval.issueId}` : ""}</span></p>
                 <div className="flex gap-2">
                   <Button size="sm" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "approve")}>{deciding === approval.id ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}授权执行</Button>
                   <Button size="sm" variant="outline" disabled={Boolean(deciding) || busy} onClick={() => void decide(approval.id, "reject")}>拒绝</Button>
@@ -423,7 +423,7 @@ export function AgentConversation({ projectId, sessions: initialSessions, initia
               {voice === "connecting" ? <Loader2 className="size-5 animate-spin text-primary" /> : <AudioLines className="size-5 animate-pulse text-primary" />}
               <div><p className="text-sm font-medium">{voice === "connecting" ? "正在接通实时对话" : "实时语音对话中"}</p><p className="mt-1 text-xs text-muted-foreground">{voiceStatus}</p>{voice === "connected" && <p role="status" className="mt-1 text-xs text-muted-foreground">{inputStatus}</p>}</div>
             </div> : <textarea ref={input} aria-label="发送给项目智能体" placeholder="询问项目情况，或继续追问…" value={draft} onChange={event => setDraft(event.target.value)} disabled={busy || Boolean(session && session.status !== "open")} rows={2} className="max-h-40 min-h-16 w-full resize-none bg-transparent px-1 py-1 text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-60" onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); void send(); } }} />}
-            <div className="flex items-center justify-between gap-2"><span className="px-1 text-[11px] text-muted-foreground">{voice !== "off" ? "可以随时说话打断 · 转写与查询显示在对话中" : voiceButton ? "输入文字，或点击声波开始实时对话" : "Enter 发送 · Shift + Enter 换行"}</span>
+            <div className="flex items-center justify-between gap-2"><span className="px-1 text-[11px] text-muted-foreground">{voice !== "off" ? "可以随时说话打断，转写与查询显示在对话中" : voiceButton ? "输入文字，或点击声波开始实时对话" : "Enter 发送 · Shift + Enter 换行"}</span>
               {voice !== "off" ? <Button type="button" size="icon" variant="destructive" className="size-8 shrink-0 rounded-lg" aria-label="结束实时对话" title="结束实时对话" onClick={() => voiceCall.current?.stop()}><PhoneOff className="size-4" /></Button>
                 : voiceButton ? <Button type="button" size="icon" className="size-8 shrink-0 rounded-lg" aria-label="开始实时语音对话" title="开始实时语音对话" disabled={busy || Boolean(session && session.status !== "open")} onClick={() => void startVoice()}><AudioLines className="size-4" /></Button>
                 : <Button type="submit" size="icon" className="size-8 shrink-0 rounded-lg" aria-label="发送消息" disabled={busy || !draft.trim() || Boolean(session && session.status !== "open")}>{busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}</Button>}

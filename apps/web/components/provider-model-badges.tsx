@@ -49,7 +49,7 @@ export function ProviderModelBadges({ models }: { models: { id: string }[] }) {
         {visible < models.length ? <Badge variant="outline" className="shrink-0">...+{models.length - visible}</Badge> : null}
       </button></TooltipTrigger>
       <TooltipContent side="bottom" align="start" sideOffset={6} className="block max-w-[min(24rem,90vw)] border bg-popover p-3 text-popover-foreground shadow-md">
-        <p className="mb-2 font-medium">全部模型 · {models.length}</p>
+        <p className="mb-2 font-medium">全部模型（{models.length}）</p>
         <ul className="max-h-64 space-y-1.5 overflow-y-auto">{models.map((model, index) => <li key={index} className="break-all">{model.id}</li>)}</ul>
       </TooltipContent>
     </Tooltip> : <span className="text-xs text-muted-foreground">暂无模型</span>}

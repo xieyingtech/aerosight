@@ -219,7 +219,7 @@ func (s *Server) fhFlightLaunch(c *gin.Context) {
 		}
 		// The task is an execution record, not a scheduler template.
 		var task int32
-		err = w.Tx.QueryRowContext(ctx, `insert into tasks(project_id,team_id,name,trigger_type,script,required_capability_code,created_by_user_id,status) values($1,$2,$3,'manual','flighthub-manual-flight','mission.execute',$4,'archived') returning id`, pid, access.TeamID, fmt.Sprintf("%s · %s", input.Name, job.String()[:8]), uid).Scan(&task)
+		err = w.Tx.QueryRowContext(ctx, `insert into tasks(project_id,team_id,name,trigger_type,script,required_capability_code,created_by_user_id,status) values($1,$2,$3,'manual','flighthub-manual-flight','mission.execute',$4,'archived') returning id`, pid, access.TeamID, fmt.Sprintf("%s（%s）", input.Name, job.String()[:8]), uid).Scan(&task)
 		if err != nil {
 			return nil, err
 		}

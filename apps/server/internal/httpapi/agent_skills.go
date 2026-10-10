@@ -31,5 +31,5 @@ func loadAgentSkill(raw json.RawMessage) (gin.H, error) {
 	if err != nil {
 		return nil, err
 	}
-	return gin.H{"quality": "trusted-platform-skill", "summary": "已加载巡检目标查询与复核 Skill · v" + objectSkillVersion, "items": []gin.H{{"id": objectSkillName, "version": objectSkillVersion, "instructions": string(body), "reference": gin.H{"type": "skill", "id": objectSkillName}}}}, nil
+	return gin.H{"quality": "trusted-platform-skill", "summary": "已加载巡检目标查询与复核 Skill@v" + objectSkillVersion, "items": []gin.H{{"id": objectSkillName, "version": objectSkillVersion, "instructions": string(body), "reference": gin.H{"type": "skill", "id": objectSkillName}}}}, nil
 }

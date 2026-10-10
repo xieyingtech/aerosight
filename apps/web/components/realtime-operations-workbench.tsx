@@ -135,7 +135,7 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   const deviceOptions = snapshot.devices.map((device) => ({
     value: String(device.id),
     label: String(device.name ?? `设备 #${device.id}`),
-    description: `${String(device.typeName ?? device.category ?? "未分类")} · ${String(device.status ?? "unknown")}`,
+    description: `${String(device.typeName ?? device.category ?? "未分类")}（${String(device.status ?? "unknown")}）`,
     keywords: [String(device.typeKey ?? ""), String(device.driverKey ?? ""), String(device.category ?? "")]
   }));
   const deviceSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;

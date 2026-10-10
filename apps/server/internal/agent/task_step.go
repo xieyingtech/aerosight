@@ -118,7 +118,7 @@ func TaskStepHandler(ctx context.Context, tx *sql.Tx, event outbox.Event) error 
 	var sessionID int
 	if err := tx.QueryRowContext(ctx, `insert into agent_sessions(project_id,agent_id,task_run_id,issue_id,started_by_user_id,summary)
 		values($1,$2,$3,$4,$5,$6) returning id`, event.ProjectID, copilotID, payload.TaskRunID, issueID, userID,
-		fmt.Sprintf("Copilot · Task Run #%d", payload.TaskRunID)).Scan(&sessionID); err != nil {
+		fmt.Sprintf("Copilot（Task Run #%d）", payload.TaskRunID)).Scan(&sessionID); err != nil {
 		return err
 	}
 	idempotencyKey := fmt.Sprintf("task-copilot:%d", payload.TaskRunStepID)

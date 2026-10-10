@@ -11,7 +11,7 @@ export function OperationDiagnostics({ items, compact = false }: { items: Operat
       {items.map((raw) => {
         const item = diagnosticPresentation(raw);
         return <article className="rounded-lg border p-3" key={item.id}>
-          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium">{item.title}</span><Badge variant="outline">{item.label} · {item.status}</Badge></div>
+          <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium">{item.title}</span><span className="flex flex-wrap gap-2"><span>{item.label}</span><Badge variant="outline">{item.status}</Badge></span></div>
           <p className="mt-1 break-all text-xs text-muted-foreground">{item.reason}</p>
           {item.occurredAt && <p className="mt-2 text-xs text-muted-foreground">{new Date(item.occurredAt).toLocaleString("zh-CN")}</p>}
         </article>;

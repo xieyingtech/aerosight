@@ -85,7 +85,7 @@ function RunDetail({ initial, projectId, query }: { initial: AlgorithmRunDetail;
     {section==='summary' && <>
      <h2 className="font-semibold">运行概览</h2>
      <dl className="grid grid-cols-[100px_minmax(0,1fr)] gap-x-5 gap-y-4 border-y py-5 text-sm">
-      <dt className="text-muted-foreground">输入素材</dt><dd>{asset?assetName(asset):`素材 #${run.inputAssetId}`} · v{view.input.assetVersion??'—'}</dd>
+      <dt className="text-muted-foreground">输入素材</dt><dd>{asset?assetName(asset):`素材 #${run.inputAssetId}`}@v{view.input.assetVersion??'—'}</dd>
       <dt className="text-muted-foreground">算法服务</dt><dd>{run.providerName}</dd>
       <dt className="text-muted-foreground">模型</dt><dd>{view.provenance.modelOrProcess??'—'}</dd>
       <dt className="text-muted-foreground">模型版本</dt><dd>{view.provenance.modelRevision??'—'}</dd>

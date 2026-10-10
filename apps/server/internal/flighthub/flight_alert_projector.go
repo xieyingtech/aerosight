@@ -296,7 +296,7 @@ func createAlertIssue(ctx context.Context, tx *sql.Tx, instance connector.Instan
 		return 0, err
 	}
 	labels, _ := json.Marshal(alertLabels(alert))
-	title := fmt.Sprintf("司空 AI 告警 · %s", alertLabel(alert))
+	title := fmt.Sprintf("司空 AI 告警：%s", alertLabel(alert))
 	description := alertText(alert.Reason, 512)
 	if alert.Reason == "" {
 		description = fmt.Sprintf("算法来源 %d；处理状态 %d", alert.AlgorithmSource, alert.Status)
@@ -431,7 +431,7 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 		}
 		var eventID string
 		deduplicationKey := fmt.Sprintf("dji-flighthub:%d:ai:%s", instance.ID, secureRemoteKey(alert.AlertUUID))
-		title := fmt.Sprintf("司空 AI 告警 · %s", label)
+		title := fmt.Sprintf("司空 AI 告警：%s", label)
 		err = tx.QueryRowContext(ctx, `insert into perception_events(
 			id,project_id,team_id,event_rule_version_id,detection_group_id,deduplication_key,title,severity,status,
 			occurrence_count,state_version,first_detected_at,last_detected_at
@@ -468,7 +468,7 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 		state_version=state_version+case when status in('resolved','dismissed') then 1 else 0 end,
 		first_detected_at=least(first_detected_at,$5),last_detected_at=greatest(last_detected_at,$5),
 		resolved_at=case when status in('resolved','dismissed') then null else resolved_at end,updated_at=now()
-		where project_id=$1 and id=$2`, instance.ProjectID, projection.EventID, fmt.Sprintf("司空 AI 告警 · %s", label), severity, capturedAt)
+		where project_id=$1 and id=$2`, instance.ProjectID, projection.EventID, fmt.Sprintf("司空 AI 告警：%s", label), severity, capturedAt)
 	if err != nil {
 		return err
 	}
@@ -479,7 +479,7 @@ func (projector *SQLFlightCatalogProjector) projectAIAlert(ctx context.Context, 
 		state_version=state_version+case when status='closed' then 1 else 0 end,
 		first_seen_at=least(first_seen_at,$7),last_seen_at=greatest(last_seen_at,$7),labels_json=$8,
 		closed_at=case when status='closed' then null else closed_at end,updated_at=now()
-		where project_id=$1 and id=$2`, instance.ProjectID, projection.IssueID, fmt.Sprintf("司空 AI 告警 · %s", label),
+		where project_id=$1 and id=$2`, instance.ProjectID, projection.IssueID, fmt.Sprintf("司空 AI 告警：%s", label),
 		alertText(alert.Reason, 512), alertPriority(severity), runID, capturedAt, labels)
 	if err != nil {
 		return err

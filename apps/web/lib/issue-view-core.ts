@@ -8,7 +8,7 @@ export function issueEvidenceSummary(input: {
     locationLabel: located.length > 0 ? `${located.length} 条检测具有地图位置` : "尚未关联地理位置",
     hasEvidence: input.detections.length > 0 || input.assets.length > 0,
     evidenceLabel: input.detections.length > 0 || input.assets.length > 0
-      ? `${input.detections.length} 条检测 · ${input.assets.length} 个媒体` : "暂无关联证据",
+      ? `检测（${input.detections.length} 条），媒体（${input.assets.length} 个）` : "暂无关联证据",
     detectionCount: input.detections.length,
     assetCount: input.assets.length,
     completeEvidence: input.detections.length > 0 && input.assets.length > 0

@@ -73,7 +73,7 @@ export function TaskTemplateWorkbench({ projectId,taskId,model,onChanged }: { pr
   }
   return <div className="space-y-4">
     <Card><CardHeader><CardTitle>版本与触发器</CardTitle><CardDescription>已发布版本不可变；编辑会落到独立草稿。</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center gap-2">
-      {model.versions.map((version) => <Badge key={String(version.id)} variant={version.status === "published" ? "default" : "outline"}>v{String(version.version)} · {String(version.status)}</Badge>)}
+      {model.versions.map((version) => <span className="flex items-center gap-2" key={String(version.id)}><span>v{String(version.version)}</span><Badge variant={version.status === "published" ? "default" : "outline"}>{String(version.status)}</Badge></span>)}
       {model.canEdit && selected?.status !== "draft" ? <Button disabled={pending} onClick={() => act("create")}>创建草稿</Button> : null}
       {model.canEdit && selected?.status === "draft" ? <><Button disabled={pending} onClick={() => act("save")}>保存草稿</Button><Button disabled={pending||dirty} variant="outline" onClick={() => act("publish")}>发布版本</Button></> : null}
       {selected?.status === "published" && ["manual", "schedule"].includes((model.definition.trigger as { type?: string } | undefined)?.type ?? "") && model.canEdit
@@ -97,7 +97,7 @@ export function TaskTemplateWorkbench({ projectId,taskId,model,onChanged }: { pr
     </CardContent></Card>
     <Card><CardHeader><CardTitle>步骤配置</CardTitle></CardHeader><CardContent className="space-y-2">{model.steps.map((step) => <div className="rounded-lg border p-3" key={String(step.id)}>
       <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">#{String(step.position)}</Badge><strong>{String(step.name)}</strong><Badge>{String(step.uses)}</Badge></div>
-      <p className="mt-2 text-xs text-muted-foreground">key={String(step.key)} · requires={String(step.capabilityCode)} · dependsOn={JSON.stringify(step.dependsOn)} · timeout={String(step.timeoutSeconds)}s · retry={JSON.stringify(step.retry)} · onFailure={String(step.onFailure)}</p>
+      <p className="mt-2 text-xs text-muted-foreground"><span className="inline-flex max-w-full flex-col items-start gap-1"><span>key={String(step.key)}</span><span>requires={String(step.capabilityCode)}</span><span>dependsOn={JSON.stringify(step.dependsOn)}</span><span>timeout={String(step.timeoutSeconds)}s</span><span>retry={JSON.stringify(step.retry)}</span><span>onFailure={String(step.onFailure)}</span></span></p>
       <pre className="mt-2 overflow-auto rounded bg-muted p-2 text-xs">条件 {JSON.stringify(step.condition ?? null)}{"\n"}输入 {JSON.stringify(step.inputSchema)}{"\n"}输出 {JSON.stringify(step.outputSchema)}</pre>
     </div>)}</CardContent></Card>
   </div>;

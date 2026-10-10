@@ -153,7 +153,7 @@ func (projector *Projector) claimNode(ctx context.Context, tx *sql.Tx, teamID in
 	if node.ReadOnly {
 		status, freshness, reason = "degraded", "fresh", node.CompatibilityReason
 	}
-	name := fmt.Sprintf("%s · %s", node.Name, node.ExternalID)
+	name := fmt.Sprintf("%s（%s）", node.Name, node.ExternalID)
 	err = tx.QueryRowContext(ctx, `
 		insert into devices (
 		  project_id, name, type, status, last_seen_at, config_json, metadata_json, adapter_id,

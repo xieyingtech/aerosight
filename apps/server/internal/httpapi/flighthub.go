@@ -390,7 +390,7 @@ func (s *Server) createFlightHub(c *gin.Context) {
 	audit := flightHubAudit(c, a, "connector.flighthub.create", 0, gin.H{"connectorKey": flighthub.ConnectorKey, "externalScopeFingerprint": scopeFingerprint(pid)})
 	audit.PolicyResult["upstreamProjectRevalidated"] = true
 	result, err := database.AuditedWrite(c.Request.Context(), s.db, audit, s.authorizeWrite(currentUser(c).ID, a.ProjectID, a.TeamID, "device:configure", true), func(w *database.WriteTx) (gin.H, error) {
-		name := "DJI 司空 2 · " + selected.Name
+		name := "DJI 司空 2：" + selected.Name
 		units := utf16.Encode([]rune(name))
 		if len(units) > 100 {
 			name = string(utf16.Decode(units[:97])) + "..."

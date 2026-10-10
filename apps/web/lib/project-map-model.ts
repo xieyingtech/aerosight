@@ -82,7 +82,7 @@ export function createProjectMapModel(snapshot: ProjectSituationSnapshot): Featu
 		const diagnostics = (snapshot.diagnostics ?? []).filter(item => Number(item.deviceId) === Number(device.id) && item.deviceId != null && item.severity !== "info");
 		const warningSeverity = diagnostics.some(item => item.severity === "error") || presentedPosition.state === "invalid" ? "error"
 			: diagnostics.length || ["unverified", "stale"].includes(presentedPosition.state) ? "warning" : undefined;
-		const warningMessage = [...diagnostics.map(item => item.title), ...(presentedPosition.state !== "available" ? [presentedPosition.label] : [])].join(" · ");
+		const warningMessage = [...diagnostics.map(item => item.title), ...(presentedPosition.state !== "available" ? [presentedPosition.label] : [])].join("\n");
 		features.push(feature(projectId, position, {
 			...appearance, layerKind: "device-generic", entityId: String(device.id), label: String(device.name ?? "未命名设备"),
 			status: String(device.status ?? "unknown"), capturedAt: pose.capturedAt ? String(pose.capturedAt) : undefined,

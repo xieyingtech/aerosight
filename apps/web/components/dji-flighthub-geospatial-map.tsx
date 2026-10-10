@@ -91,7 +91,7 @@ export function FlightHubGeospatialMap({ workspace, className }: {
       </Source>
     </Map>
     <div className="absolute bottom-3 left-3 max-w-[calc(100%-5rem)] rounded-md border bg-background/90 px-2.5 py-1.5 text-xs shadow-sm backdrop-blur">
-      {selected ? <><span className="font-medium">{selected.label}</span> · {selected.freshness} · {selected.version}</> : <>{model.features.length} 个可绘制空间要素 · 坐标待验收数据仅供观察</>}
+      {selected ? <><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span><span className="font-medium">{selected.label}@{selected.version}</span></span><span className="rounded-md bg-muted px-2 py-0.5 text-xs">{selected.freshness}</span></span></> : <><span className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1"><span>{model.features.length} 个可绘制空间要素</span><span>坐标待验收数据仅供观察</span></span></>}
     </div>
   </div>;
 }
