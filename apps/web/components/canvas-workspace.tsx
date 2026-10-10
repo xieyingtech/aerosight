@@ -5,10 +5,11 @@ import { MaximizeIcon, MinimizeIcon, PanelLeftIcon, PanelRightIcon, XIcon } from
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { SiteHeaderActions } from "@/components/site-header";
 
 // Panels overlay the canvas, so opening them never resizes or reconnects video.
-export function CanvasWorkspace({ title, subtitle, showTitle = true, leftTitle, left, rightTitle, right, children }: {
-  title: string; subtitle?: string; showTitle?: boolean; leftTitle?: string; left?: ReactNode;
+export function CanvasWorkspace({ title, subtitle, showTitle = true, fullscreenInHeader = false, leftTitle, left, rightTitle, right, children }: {
+  title: string; subtitle?: string; showTitle?: boolean; fullscreenInHeader?: boolean; leftTitle?: string; left?: ReactNode;
   rightTitle?: string; right?: ReactNode; children: ReactNode;
 }) {
   const ownsFullscreen = useRef(false);
@@ -46,17 +47,19 @@ export function CanvasWorkspace({ title, subtitle, showTitle = true, leftTitle, 
       else { await document.documentElement.requestFullscreen(); ownsFullscreen.current = true; }
     } catch { setError("浏览器暂不支持全屏，请使用浏览器的全屏菜单。"); }
   };
-  return <div className={cn("isolate min-h-0 w-full overflow-hidden bg-background", fullscreen ? "fixed inset-0 z-40 h-dvh" : "relative h-full")} aria-label={title}>
+  const fullscreenButton = <Button variant="ghost" size="icon-sm" aria-label={fullscreen ? "退出全屏" : "全屏主画面"} title={fullscreen ? "退出全屏" : "全屏主画面"} onClick={expand}>{fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}</Button>;
+  return <div className={cn("isolate min-h-0 w-full overflow-hidden bg-background", fullscreen ? fullscreenInHeader ? "fixed inset-x-0 bottom-0 top-12 z-40" : "fixed inset-0 z-40 h-dvh" : "relative h-full")} aria-label={title}>
+    {fullscreenInHeader && <SiteHeaderActions>{fullscreenButton}</SiteHeaderActions>}
     <div className="absolute inset-0">{children}</div>
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-between gap-2 px-3">
       { (showTitle || left) ? <div className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-lg border bg-background/95 p-1 shadow-sm">
         {left && <Button variant="ghost" size="icon-sm" aria-label={leftOpen ? `收起${leftTitle}` : `展开${leftTitle}`} aria-expanded={leftOpen} aria-controls={`${id}-left`} onClick={() => toggle("left")}><PanelLeftIcon /></Button>}
         {showTitle && <div className="min-w-0 pr-2"><h2 className="truncate text-sm font-semibold">{title}</h2>{subtitle && <p className="max-w-48 truncate text-xs text-muted-foreground sm:max-w-80">{subtitle}</p>}</div>}
       </div> : <span />}
-      <div className="pointer-events-auto flex shrink-0 gap-1 rounded-lg border bg-background/95 p-1 shadow-sm">
-        <Button variant="ghost" size="icon-sm" aria-label={fullscreen ? "退出全屏" : "全屏主画面"} title={fullscreen ? "退出全屏" : "全屏主画面"} onClick={expand}>{fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}</Button>
+      {(!fullscreenInHeader || right) && <div className="pointer-events-auto flex shrink-0 gap-1 rounded-lg border bg-background/95 p-1 shadow-sm">
+        {!fullscreenInHeader && fullscreenButton}
         {right && <Button variant="ghost" size="icon-sm" aria-label={rightOpen ? `收起${rightTitle}` : `展开${rightTitle}`} aria-expanded={rightOpen} aria-controls={`${id}-right`} onClick={() => toggle("right")}><PanelRightIcon /></Button>}
-      </div>
+      </div>}
     </div>
     {(["left", "right"] as const).map(side => {
       if (!(side === "left" ? left : right)) return null;

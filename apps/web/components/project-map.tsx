@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { Fragment, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { AlertTriangleIcon, ArrowUpRightIcon, XIcon, CpuIcon, CameraIcon, ScanEyeIcon, FlagIcon, RouteIcon, WaypointsIcon, FenceIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowUpRightIcon, XIcon, CpuIcon, CameraIcon, ScanEyeIcon, FlagIcon, RouteIcon, WaypointsIcon, FenceIcon, GlobeIcon, MapIcon } from "lucide-react";
 import { DeviceTypeIcon } from "@/components/device-type-icon";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,9 +10,10 @@ import { overviewSelectionHref } from "@/lib/overview-map-core";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
-import Map, { Layer, Marker, NavigationControl, Popup, Source } from "react-map-gl/maplibre";
+import Map, { Layer, Marker, NavigationControl, Popup, Source, type MapRef } from "react-map-gl/maplibre";
 import { cn } from "@/lib/utils";
 import { vectorStreetMapStyle } from "@/lib/map-style";
+import { createProjectMapFences, fenceBands, fenceHeight } from "@/lib/project-map-fences";
 import { createProjectMapModel, projectMapDeviceTypes, filterProjectMapModelByDeviceTypes, filterProjectMapModelByLayers, filterProjectMapModelByTime, firstMapCoordinate, projectMapLayerCounts, projectMapLayers } from "@/lib/project-map-model";
 import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
@@ -32,18 +33,55 @@ const markerColors = {
   "device-generic": "#0284c7"
 };
 
-export function ProjectMap({ snapshot, className, controlsTarget, controlsClassName, compactControls = false, showPopups = false, selection, range, onSelect, excludedLayers = noExcludedLayers }: {
+export function ProjectMap({ snapshot, className, controlsTarget, controlsClassName, compactControls = false, showPopups = false, showProjectionControl = false, selection, range, onSelect, excludedLayers = noExcludedLayers }: {
   snapshot: ProjectSituationSnapshot;
   className?: string;
   controlsTarget?: HTMLDivElement | null;
   compactControls?: boolean;
   controlsClassName?: string;
   showPopups?: boolean;
+  showProjectionControl?: boolean;
   excludedLayers?: readonly typeof projectMapLayers[number]["id"][];
   selection?: SituationSelection | null;
   range?: { from: string; to: string } | null;
   onSelect?: (selection: SituationSelection) => void;
 }) {
+  const mapRef = useRef<MapRef>(null);
+  const flatCamera = useRef<{ center: [number, number]; zoom: number; bearing: number; pitch: number } | null>(null);
+  const [projection, setProjection] = useState<"mercator" | "globe">("mercator");
+  const projectionMode = useRef<"mercator" | "globe">("mercator");
+  const [mapReady, setMapReady] = useState(false);
+  const syncBuildings = (mode = projectionMode.current) => {
+    if (!showProjectionControl) return;
+    const map = mapRef.current?.getMap();
+    const visibility = mode === "globe" ? "visible" : "none";
+    for (const layer of map?.getStyle()?.layers ?? []) {
+      if (layer.type === "fill-extrusion" && "source-layer" in layer && layer["source-layer"] === "building" && map?.getLayoutProperty(layer.id, "visibility") !== visibility) {
+        map?.setLayoutProperty(layer.id, "visibility", visibility);
+      }
+    }
+  };
+  const changeProjection = (next: "mercator" | "globe") => {
+    const map = mapRef.current;
+    if (!map || !mapReady || next === projection) return;
+    map.stop();
+    const position = map.getCenter();
+    if (next === "globe") {
+      flatCamera.current = { center: [position.lng, position.lat], zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() };
+    }
+    const camera = next === "globe"
+      ? { center: [position.lng, position.lat] as [number, number], zoom: map.getZoom(), bearing: map.getBearing(), pitch: 55 }
+      : flatCamera.current;
+    // Apply before moving the camera; the prop also retains projection on style reload.
+    projectionMode.current = next;
+    map.getMap().setProjection({ type: next });
+    setProjection(next);
+    syncBuildings(next);
+    if (camera) {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) map.jumpTo(camera);
+      else map.flyTo({ ...camera, duration: 1400 });
+    }
+  };
   const model = useMemo(() => filterProjectMapModelByLayers(
     filterProjectMapModelByTime(createProjectMapModel(snapshot), range ?? null),
     new Set(projectMapLayers.filter(layer => !excludedLayers.includes(layer.id)).map(layer => layer.id))
@@ -55,6 +93,7 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(() => new Set());
   const deviceTypes = projectMapDeviceTypes(model);
   const visibleModel = filterProjectMapModelByDeviceTypes(filterProjectMapModelByLayers(model, visible), hiddenTypes);
+  const fences = useMemo(() => createProjectMapFences(model), [model]);
   const popupFeature = popup && visibleModel.features.find(item => item.properties.entityId === popup.selection.entityId && item.properties.layerKind === popup.selection.lane);
   const popupLayer = popupFeature && projectMapLayers.find(layer => layer.kind === popupFeature.properties.layerKind);
   const hiddenOwnerTypes = [...hiddenTypes];
@@ -74,6 +113,10 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
     setHiddenTypes(current => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   };
   const badgeClass = (active: boolean) => cn("h-7 border px-2.5 shadow-sm", active ? "border-primary/25 bg-background/95" : "bg-muted/95 text-muted-foreground");
+  const projectionControls = showProjectionControl && <div role="group" aria-label="地图视角" className="inline-flex gap-1 rounded-lg border bg-background/95 p-1 shadow-sm">
+      <Button type="button" size="sm" variant={projection === "mercator" ? "secondary" : "ghost"} className="h-7 px-2.5" disabled={!mapReady} aria-pressed={projection === "mercator"} onClick={() => changeProjection("mercator")}><MapIcon aria-hidden="true" className="size-3.5" />平面</Button>
+      <Button type="button" size="sm" variant={projection === "globe" ? "secondary" : "ghost"} className="h-7 px-2.5" disabled={!mapReady} aria-pressed={projection === "globe"} onClick={() => changeProjection("globe")}><GlobeIcon aria-hidden="true" className="size-3.5" />3D</Button>
+    </div>;
   const controls = <div className="space-y-2" aria-label="地图图层">
     <div className="flex flex-wrap gap-1.5" aria-label="地图要素">
       {controlsLayers.map(layer => { const Icon = mapIcons[layer.kind]; return <Badge key={layer.id} asChild variant={visible.has(layer.id) ? "secondary" : "outline"} className={badgeClass(visible.has(layer.id))}><button type="button" aria-pressed={visible.has(layer.id)} onClick={() => toggle(layer.id)}><Icon aria-hidden="true" className="mr-1 size-3.5" />{layer.label}<span className="ml-1 tabular-nums">{counts[layer.id]}</span></button></Badge>; })}
@@ -84,10 +127,15 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
   </div>;
   return (
     <div className={cn("relative h-[520px] overflow-hidden rounded-xl border bg-muted", className)}>
+      {projectionControls && <div className="absolute right-3 top-3 z-10">{projectionControls}</div>}
       {controlsTarget !== undefined ? controlsTarget && createPortal(controls, controlsTarget) : <div className={cn("absolute left-3 right-12 top-3 z-10", controlsClassName)}>
         {compactControls ? <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline">地图图层</Button></DropdownMenuTrigger><DropdownMenuContent>{controlsLayers.map(layer => <DropdownMenuCheckboxItem key={layer.id} checked={visible.has(layer.id)} onCheckedChange={() => toggle(layer.id)} onSelect={event => event.preventDefault()}>{layer.label}<span className="ml-auto pl-3 tabular-nums">{counts[layer.id]}</span></DropdownMenuCheckboxItem>)}{deviceTypes.map(type => <DropdownMenuCheckboxItem key={type.key} checked={!hiddenTypes.has(type.key)} onCheckedChange={() => toggleType(type.key)} onSelect={event => event.preventDefault()}><DeviceTypeIcon name={type.icon} className="mr-1 size-3.5" />{type.label}<span className="ml-auto pl-3 tabular-nums">{type.count}</span></DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu> : controls}
       </div>}
       <Map
+        ref={mapRef}
+        projection={{ type: projection }}
+        onLoad={() => { syncBuildings(); setMapReady(true); }}
+        onStyleData={() => syncBuildings()}
         attributionControl={{ compact: true }}
         initialViewState={{ longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
         interactiveLayerIds={interactiveLayers}
@@ -116,6 +164,21 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
           {visible.has("mission-routes") && <Layer id="mission-routes-line" type="line" filter={["all", ["==", ["get", "layerKind"], "mission-route"], ["!", ["in", ["coalesce", ["get", "ownerDeviceTypeKey"], ""], ["literal", hiddenOwnerTypes]]]]} paint={{ "line-color": "#8b5cf6", "line-dasharray": [2, 1.5], "line-width": 3 }} />}
           {visible.has("tracks") && <Layer id="tracks-line" type="line" filter={["all", ["==", ["get", "layerKind"], "track"], ["!", ["in", ["coalesce", ["get", "ownerDeviceTypeKey"], ""], ["literal", hiddenOwnerTypes]]]]} paint={{ "line-color": "#2563eb", "line-opacity": 0.8, "line-width": 3 }} />}
         </Source>
+        {projection === "globe" && visible.has("regions") && <Source id="project-region-fences" type="geojson" data={fences}>
+          {Array.from({ length: fenceBands }, (_, band) => <Fragment key={band}><Layer source="project-region-fences" id={`region-fence-${band}`} type="fill-extrusion" filter={["==", ["get", "kind"], "wall"]} paint={{
+            "fill-extrusion-color": "#14b8a6",
+            "fill-extrusion-base": band * fenceHeight / fenceBands,
+            "fill-extrusion-height": (band + 1) * fenceHeight / fenceBands,
+            "fill-extrusion-opacity": 0.58 * Math.pow(1 - band / (fenceBands - 1), 1.5),
+            "fill-extrusion-vertical-gradient": false
+          }} /><Layer source="project-region-fences" id={`region-fence-post-${band}`} type="fill-extrusion" filter={["==", ["get", "kind"], "post"]} paint={{
+            "fill-extrusion-color": "#0d9488",
+            "fill-extrusion-base": band * fenceHeight / fenceBands,
+            "fill-extrusion-height": (band + 1) * fenceHeight / fenceBands,
+            "fill-extrusion-opacity": 0.95 * Math.pow(1 - band / (fenceBands - 1), 0.8),
+            "fill-extrusion-vertical-gradient": false
+          }} /></Fragment>)}
+        </Source>}
         {visibleModel.features.filter(item => item.geometry.type === "Point").map(item => {
           if (item.geometry.type !== "Point") return null;
           const coordinates = item.geometry.coordinates;
