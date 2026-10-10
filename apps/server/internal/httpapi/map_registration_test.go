@@ -51,8 +51,12 @@ func TestMapRegistration(t *testing.T) {
 	var observations int
 	treeResponse := f.request(t, "GET", root+"/device-tree", "")
 	if treeResponse.StatusCode == 200 {
-		tree := decodedResponse(t, treeResponse)
-		if len(tree["devices"].([]any)) != 1 || tree["devices"].([]any)[0].(map[string]any)["positionSource"] != "manual-registration" {
+		var tree []map[string]any
+		if err := json.NewDecoder(treeResponse.Body).Decode(&tree); err != nil {
+			t.Fatal(err)
+		}
+		treeResponse.Body.Close()
+		if len(tree) != 1 || tree[0]["positionSource"] != "manual-registration" {
 			t.Fatal("device tree registration missing")
 		}
 	} else {

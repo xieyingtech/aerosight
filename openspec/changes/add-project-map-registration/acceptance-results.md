@@ -4,4 +4,5 @@
 - 设备树登记位置读取验证通过。登记不生成 observations，不生成在线状态或 capabilities。
 - 前端位置及地图模型相关测试 10/10 通过，pnpm typecheck、pnpm db:check、pnpm build 和 OpenSpec 严格验证通过。迁移与 schema 快照数据库结构对比通过。
 - 初次测试环境未指定 PostgreSQL 用户导致连接失败，补全本地测试用户名后重跑通过。
+- 新增设备树断言初次使用对象解码，但已有接口实际返回数组；修正测试解码后，重新执行区域、设备登记及位置优先级相关测试通过。
 - 完整 pnpm check 尚未运行，change 不归档。线上发布与登记待验证。
