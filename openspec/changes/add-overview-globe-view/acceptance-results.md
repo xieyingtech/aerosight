@@ -53,3 +53,7 @@
 ## 推送前检查
 
 2026-10-10：用户要求推送并验收线上。完整 `pnpm check` 已执行，前端测试及多数 Go 包通过；已有 `TestReportAggregateIncludesAllEvidence` 仍失败，期待的报告引用路径与当前 `/projects/1/tasks/runs/1/` 不一致，与本次地图改动无关。`pnpm build:server` 通过，准备了 96 份迁移与静态前端。未修改或新增数据库迁移；change 不归档。
+
+## 线上部署
+
+地图变更已在 `a2a4ea2` 推送到 main；Zeabur 部署 `6ac9de71fb15905b77d53085` 状态 RUNNING，`https://xieying.tech` 的 `/healthz`、`/readyz` 与项目 snapshot 返回 200。线上浏览器页面观察两次超时，故不把线上视觉验收标为通过；交互和渲染验证见此前本地浏览器记录。

@@ -20,3 +20,5 @@
 ## Impact
 
 Go runtime、HTTP API、Agent 工具、素材库、数据库迁移、Docker 镜像和部署配置。Qdrant 为派生索引，PostgreSQL 与对象存储为重建来源；默认不开启，启用需显式配置模型及服务。
+
+- 2026-10-10 用户追加：推送线上并检查上传/向量化/智能体，授权 CLI 创建 Qdrant；补齐 Qdrant/E5 私网依赖并完成真实验收。

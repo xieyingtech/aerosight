@@ -33,3 +33,13 @@ EMBEDDING_DIMENSION=384
 Qdrant 不可用不阻断上传；搜索返回 503。删除或版本变更立即由查询回表过滤，后台最终清理旧向量。collection 丢失后，创建 collection 并逐素材调用重试从对象材料恢复，无需再次视觉分析。切换 E5 配置会创建新空间并重新生成索引。
 
 开发取样、生产只读复制脚本和凭据不属于运行时，放在忽略目录，不纳入提交。
+
+## Zeabur 部署
+
+使用 `infra/zeabur/qdrant.yaml` 在现有项目部署 Qdrant v1.19.0，模板变量 `QDRANT_AUTH_KEY` 使用独立随机密钥。保留 `/qdrant/storage` 数据卷，只在项目私网提供 6333 端口，无需绑定公网域名。应用配置 `QDRANT_URL=http://qdrant.zeabur.internal:6333` 和对应 `QDRANT_API_KEY`。
+
+从 `infra/embedding` 目录部署已有 Dockerfile；`zbpack.json` 明确选择 Docker 构建，避免 Python 自动识别覆盖镜像安装步骤。设置 `EMBEDDING_HOST=0.0.0.0`、`EMBEDDING_PORT=8080`、独立 `EMBEDDING_API_KEY` 和上述固定模型/revision，私网 HTTP 端口为 8080。应用配置 `EMBEDDING_URL=http://aerosight-embedding.zeabur.internal:8080`、相同 E5 密钥、模型/revision/384 维。
+
+首次下载模型需要等待；部署状态 RUNNING 本身不能证明模型已加载。启用前从项目私网确认 `/health` 的模型/revision/维度，以及带鉴权的 `/v1/embeddings` 实际返回 384 维。Qdrant `/readyz` 应为 200、未鉴权 `/collections` 为 401、带 API Key 为 200。最后设置应用 `SEMANTIC_ENABLED=true` 并重启使变量生效；自动扫描会处理已有合格素材，也会消耗视觉模型配额。
+
+YOLO 视频抽帧独立于语义索引。其 `YOLO_ASSET_HOSTS` 必须包含应用对象存储签名 URL 的准确域名，更新时保留已有域名；否则抽帧请求会被远端服务拒绝。不要写入签名 URL 或放宽为任意域名。

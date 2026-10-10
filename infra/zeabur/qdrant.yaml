@@ -1,0 +1,29 @@
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: AeroSight Qdrant
+spec:
+  description: AeroSight 内网派生向量索引
+  variables:
+    - key: QDRANT_AUTH_KEY
+      type: STRING
+      name: Qdrant API Key
+      description: 使用独立随机密钥，勿写入仓库。
+  services:
+    - name: qdrant
+      template: PREBUILT_V2
+      spec:
+        source:
+          image: qdrant/qdrant:v1.19.0
+        ports:
+          - id: web
+            port: 6333
+            type: HTTP
+        volumes:
+          - id: storage
+            dir: /qdrant/storage
+        env:
+          QDRANT__SERVICE__API_KEY:
+            default: ${QDRANT_AUTH_KEY}
+          QDRANT__SERVICE__HOST:
+            default: 0.0.0.0
