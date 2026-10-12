@@ -103,3 +103,41 @@ func TestStaticPagesGinFallbackBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestProjectExportNavigationData(t *testing.T) {
+	files := fstest.MapFS{}
+	for _, name := range []string{"index.html", "login/index.html", "projects/index.html", "404.html", "projects/devices/index.txt", "projects/devices/__next._tree.txt", "projects/devices/__next.segment/page.txt", "projects/issues/detail/index.txt"} {
+		files[name] = &fstest.MapFile{Data: []byte(name)}
+	}
+	pages, err := webassets.New(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{}
+	s.AttachStaticPages(pages)
+	r := gin.New()
+	r.NoRoute(s.pageNotFound)
+	for _, tc := range []struct{ path, want string }{
+		{"/projects/1/devices/index.txt?selected=2&_rsc=abc", "projects/devices/index.txt"},
+		{"/projects/1/devices/__next._tree.txt", "projects/devices/__next._tree.txt"},
+		{"/projects/1/devices/__next.segment/page.txt", "projects/devices/__next.segment/page.txt"},
+		{"/projects/1/issues/2/index.txt", "projects/issues/detail/index.txt"},
+		{"/projects/1/devices/__next.missing.txt", ""},
+		{"/projects/1/unknown/index.txt", ""},
+		{"/projects/0/devices/index.txt", ""},
+		{"/projects/1/devices/__next.segment/../index.txt", ""},
+		{"/api/projects/1/devices/index.txt", ""},
+	} {
+		for _, method := range []string{"GET", "HEAD"} {
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, httptest.NewRequest(method, tc.path, nil))
+			wantCode := 200
+			if tc.want == "" {
+				wantCode = 404
+			}
+			if w.Code != wantCode || tc.want != "" && method == "GET" && w.Body.String() != tc.want {
+				t.Fatalf("%s %s: status=%d body=%q", method, tc.path, w.Code, w.Body.String())
+			}
+		}
+	}
+}

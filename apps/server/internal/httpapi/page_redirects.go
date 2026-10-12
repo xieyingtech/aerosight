@@ -139,9 +139,38 @@ func legacyPageURL(u *url.URL) (string, bool) {
 	return (&url.URL{Path: target, RawQuery: query.Encode()}).String(), true
 }
 
+// Next static export requests Flight data beneath the visible page URL.
+func exportedPageURL(u *url.URL) (string, bool) {
+	if target, ok := legacyPageURL(u); ok {
+		return target, true
+	}
+	for _, segment := range strings.Split(u.Path, "/") {
+		if segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+	cut := strings.Index(u.Path, "/__next.")
+	if cut < 0 && strings.HasSuffix(u.Path, "/index.txt") {
+		cut = len(u.Path) - len("/index.txt")
+	}
+	if cut < 0 || !strings.HasSuffix(u.Path, ".txt") {
+		return "", false
+	}
+	page := *u
+	page.Path = u.Path[:cut] + "/"
+	page.RawPath = ""
+	target, ok := legacyPageURL(&page)
+	if !ok {
+		return "", false
+	}
+	mapped, _ := url.Parse(target)
+	mapped.Path += strings.TrimPrefix(u.Path[cut:], "/")
+	return mapped.String(), true
+}
+
 func (s *Server) pageNotFound(c *gin.Context) {
 	if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
-		if target, ok := legacyPageURL(c.Request.URL); ok && s.staticPages != nil {
+		if target, ok := exportedPageURL(c.Request.URL); ok && s.staticPages != nil {
 			// Serve the exported page shell without exposing its internal query route.
 			request := c.Request.Clone(c.Request.Context())
 			request.URL, _ = url.Parse(target)

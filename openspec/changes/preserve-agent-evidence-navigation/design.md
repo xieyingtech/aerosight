@@ -10,6 +10,8 @@ ChatMarkdown 对所有链接使用 a 元素。AgentWorkspace 已在共享布局�
 
 ## Decisions
 
+生产核验发现 `/projects/1/devices/index.txt` 及 `__next.*.txt` 未映射，导致客户端导航失败。沿用已校验的 legacyPageURL，仅将其对应页面目录下的导出导航文本映射到构建产物。拒绝点段，未知页面及不存在的文件仍返回 404。增加 Go HTTP 边界测试和使用真实导出文件的本地浏览器测试。
+
 根相对 `/projects/` 链接使用 Next.js Link；prefetch=false，避免多个查询结果提前触发资源加载。其余链接继续使用 a。相比为每个链接自定义 click/router.push，Link 保持键盘和修饰键等常规行为。绝对 URL 仍按现有外链方式处理。
 
 ## Risks / Trade-offs
