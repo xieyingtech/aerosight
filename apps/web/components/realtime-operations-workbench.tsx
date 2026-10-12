@@ -7,7 +7,7 @@ import { projectPageHref, scopedPageQuery } from "@/lib/page-routes";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { MonitorBoard } from "@/components/monitor-board";
-import { projectMonitorViews, videoViewId, type MonitorView } from "@/lib/monitor-layout";
+import { linkedFlightMonitor, projectMonitorViews, videoViewId, type MonitorView } from "@/lib/monitor-layout";
 import { Button } from "@/components/ui/button";
 import { DeviceActionPanel } from "@/components/device-action-panel";
 import { FlightHubDeviceOperations } from "@/components/flighthub-device-operations";
@@ -139,7 +139,10 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
     keywords: [String(device.typeKey ?? ""), String(device.driverKey ?? ""), String(device.category ?? "")]
   }));
   const deviceSnapshot = selectedDevice && selection.deviceId ? scopedTimelineSnapshot(snapshot, selection.deviceId) : null;
-  const views = projectMonitorViews(snapshot, addedViews);
+  const linkedMonitor = linkedFlightMonitor(snapshot, selection.deviceId);
+  const autoLiveMonitor = linkedFlightMonitor(snapshot, autoLiveDeviceId.current);
+  const autoLiveViews = autoLiveMonitor?.viewIds ?? [];
+  const views = projectMonitorViews(snapshot, [...addedViews, ...(linkedMonitor?.viewIds ?? []), ...(autoLive ? autoLiveViews : [])]);
   const focusedView = views.find(view => view.id === focusedViewId)
     ?? views.find(view => view.deviceId === selection.deviceId && view.streamId === selection.streamId)
     ?? views.find(view => view.deviceId === selection.deviceId);
@@ -177,11 +180,11 @@ export function RealtimeOperationsWorkbench({ initialSnapshot, initialDeviceId, 
   };
   return <div className="flex h-full min-h-0 overflow-hidden bg-background">
     <main className="min-h-0 min-w-0 flex-1">
-      <MonitorBoard projectId={snapshot.project.id} views={views} focusedId={focusedView?.id ?? null} onFocus={focusView} renderView={view => {
+      <MonitorBoard projectId={snapshot.project.id} layoutScope={linkedMonitor?.scope} preferredOrder={linkedMonitor?.preferredOrder} views={views} focusedId={focusedView?.id ?? null} onFocus={focusView} renderView={view => {
         if (view.kind === "map") return <ProjectMap compactControls className="h-full min-h-0 rounded-none border-0" onSelect={value => { if (value.lane.startsWith("device-")) selectDevice(Number(value.entityId)); }} selection={mapSelection} snapshot={snapshot} />;
         const device = findProjectDevice(snapshot, view.deviceId ?? null);
         if (!device) return null;
-        return <LiveDeviceWindow immersive videoChannelKey={view.channelKey} controlsTarget={liveControls} controlsVisible={view.id === focusedView?.id} snapshot={snapshot} device={device} selectedStreamId={view.streamId} autoStart={autoLive && Number(device.id) === autoLiveDeviceId.current} onStarted={session => handleStreamStarted(session, Number(device.id))} onChanged={async () => { await refresh(); }} />;
+        return <LiveDeviceWindow immersive videoChannelKey={view.channelKey} controlsTarget={liveControls} controlsVisible={view.id === focusedView?.id} snapshot={snapshot} device={device} selectedStreamId={view.streamId} autoStart={autoLive && (autoLiveMonitor ? autoLiveViews.includes(view.id) : Number(device.id) === autoLiveDeviceId.current)} onStarted={session => handleStreamStarted(session, Number(device.id))} onChanged={async () => { await refresh(); }} />;
       }} />
     </main>
     <aside aria-label="设备与操作" className={sidebarOpen ? "flex h-full w-80 shrink-0 flex-col border-l bg-background" : "flex h-full w-10 shrink-0 flex-col border-l bg-background"}>

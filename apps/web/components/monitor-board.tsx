@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { closestMonitorCorner, mergeMonitorOrder, swapMonitorViews, type MonitorView } from "@/lib/monitor-layout";
 
-export function MonitorBoard({ projectId, views, focusedId, onFocus, renderView }: {
+export function MonitorBoard({ projectId, layoutScope, preferredOrder = [], views, focusedId, onFocus, renderView }: {
   projectId: number; views: MonitorView[]; focusedId: string | null;
+  layoutScope?: string; preferredOrder?: string[];
   onFocus: (view: MonitorView) => void; renderView: (view: MonitorView) => ReactNode;
 }) {
   const [corner, setCorner] = useState("bottom-right");
@@ -17,26 +18,27 @@ export function MonitorBoard({ projectId, views, focusedId, onFocus, renderView 
   const reorderDrag = useRef<string | null>(null);
   const floatingDrag = useRef<{ startX: number; startY: number; x: number; y: number; width: number; height: number } | null>(null);
   const [floatingPosition, setFloatingPosition] = useState<{ x: number; y: number } | null>(null);
-  const [order, setOrder] = useState<string[]>([]);
+  const [savedOrder, setSavedOrder] = useState<{ key: string; order: string[] } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const initialized = useRef(false);
-  const storageKey = `aerosight:monitor-layout:${projectId}`;
+  const storageKey = `aerosight:monitor-layout:${projectId}${layoutScope ? `:${layoutScope}` : ""}`;
   useEffect(() => {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
       const savedCorner = localStorage.getItem(`${storageKey}:corner`);
       if (savedCorner && ["top-left", "top-right", "bottom-left", "bottom-right"].includes(savedCorner)) setCorner(savedCorner);
-      if (Array.isArray(saved) && saved.every(id => typeof id === "string")) setOrder(saved);
+      if (Array.isArray(saved) && saved.every(id => typeof id === "string")) setSavedOrder({ key: storageKey, order: saved });
     } catch { /* A blocked browser storage does not prevent arranging views. */ }
     initialized.current = true;
   }, [storageKey]);
+  const order = savedOrder?.key === storageKey && savedOrder.order.length ? savedOrder.order : preferredOrder;
   const positions = mergeMonitorOrder(order, views.map(view => view.id));
   const swap = (source: string, target: string) => {
     snapAnimation.current?.cancel();
     const next = swapMonitorViews(positions, source, target);
-    setOrder(next);
+    setSavedOrder({ key: storageKey, order: next });
     if (initialized.current) try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Optional persistence. */ }
     setNotice("视角位置已更新");
   };

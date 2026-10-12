@@ -221,11 +221,6 @@ func (store *SQLSyncStore) ApplyBatch(
 				result.Managed++
 			}
 		}
-		if onboardingPolicy == string(OnboardingAutomatic) {
-			if err = store.materializeAutomaticRelationships(ctx, tx, instance, teamID, batch.Devices); err != nil {
-				return result, err
-			}
-		}
 		result.Discovered = len(batch.Devices)
 		if batch.CompleteSnapshot {
 			seen, marshalErr := json.Marshal(externalIDs(batch.Devices))
@@ -254,6 +249,11 @@ func (store *SQLSyncStore) ApplyBatch(
 		if err != nil {
 			return result, err
 		}
+	}
+	// Reconcile topology for already managed identities under every onboarding
+	// policy, including cursor replays. This does not onboard unapproved devices.
+	if err = store.materializeAutomaticRelationships(ctx, tx, instance, teamID, batch.Devices); err != nil {
+		return result, err
 	}
 	_, err = tx.ExecContext(ctx, `
 		update connector_sync_runs set status='succeeded',cursor_after_json=$2,
@@ -374,15 +374,20 @@ func (store *SQLSyncStore) materializeAutomaticRelationships(
 			select $1,$2,parent.device_id,child.device_id,'contains','discovery',$5
 			  from device_external_identities parent,device_external_identities child
 			 where parent.project_id=$1 and child.project_id=$1
+			   and parent.team_id=$2 and child.team_id=$2
 			   and parent.adapter_id=$3 and child.adapter_id=$3
 			   and parent.external_device_id=$4 and child.external_device_id=$6
 			   and parent.device_id is not null and child.device_id is not null
+			   and parent.device_id<>child.device_id
+			   and parent.discovery_status='managed' and child.discovery_status='managed'
+			   and child.identity_json->>'parentExternalId'=parent.external_device_id
 			   and not exists (
 			     select 1 from device_relationships relation
 			      where relation.project_id=$1 and relation.from_device_id=parent.device_id
 			        and relation.to_device_id=child.device_id and relation.valid_until is null
+			        and relation.relation_type in('contains','mounted-on')
 			   )`, instance.ProjectID, teamID, instance.ID, device.ParentExternalID,
-			json.RawMessage(`{"source":"automatic-onboarding"}`), device.ExternalID)
+			json.RawMessage(`{"source":"managed-discovery-sync"}`), device.ExternalID)
 		if err != nil {
 			return err
 		}

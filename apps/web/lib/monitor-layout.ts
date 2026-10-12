@@ -1,8 +1,25 @@
 import type { ProjectSituationSnapshot } from "./project-snapshot-core.ts";
-import { activeProjectStreams } from "./realtime-workbench-core.ts";
+import { activeProjectStreams, relatedLiveDevices } from "./realtime-workbench-core.ts";
+import { defaultVideoChannel } from "./device-video-channel.ts";
 
 export type MonitorView = { id: string; kind: "map" | "video"; label: string; deviceId?: number; channelKey?: string; streamId?: number };
 export const videoViewId = (deviceId: number, channelKey: string) => `video:${deviceId}:${channelKey}`;
+
+export function linkedFlightMonitor(snapshot: ProjectSituationSnapshot, deviceId: number | null) {
+  const selected = snapshot.devices.find(device => Number(device.id) === deviceId);
+  if (!selected || !["dock", "aircraft"].includes(String(selected.category))) return null;
+  const devices = relatedLiveDevices(snapshot, deviceId)
+    .filter(device => ["dock", "aircraft"].includes(String(device.category)))
+    .sort((a, b) => Number(b.category === "aircraft") - Number(a.category === "aircraft") || Number(a.id) - Number(b.id));
+  if (!devices.some(device => device.category === "dock") || !devices.some(device => device.category === "aircraft")) return null;
+  const viewIds = devices.flatMap(device => {
+    const video = (device.channels ?? []).filter(channel => channel.dataType === "video");
+    const payload = video.filter(channel => !channel.channelKey.startsWith("176-"));
+    const channel = defaultVideoChannel(payload.length ? payload : video);
+    return channel ? [videoViewId(Number(device.id), channel.channelKey)] : [];
+  });
+  return { scope: `flight:${devices.map(device => device.id).join(":")}`, deviceIds: devices.map(device => Number(device.id)), viewIds, preferredOrder: [...viewIds, "map"] };
+}
 
 export function projectMonitorViews(snapshot: ProjectSituationSnapshot, added: readonly string[] = []): MonitorView[] {
   const views = new Map<string, MonitorView>();

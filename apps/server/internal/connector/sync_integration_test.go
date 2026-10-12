@@ -118,6 +118,99 @@ func TestSQLSyncStoreMarksCrossSourceSerialConflictWithoutChangingBindings(t *te
 	}
 }
 
+func TestSQLSyncRepairsManagedReviewTopologyOnReplay(t *testing.T) {
+	dsn := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("AEROSIGHT_TEST_DATABASE_URL is not configured")
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	var team, project int
+	if err = db.QueryRow(`insert into teams(name) values($1) returning id`, fmt.Sprintf("monitor-topology-%d", time.Now().UnixNano())).Scan(&team); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec(`delete from teams where id=$1`, team) })
+	if err = db.QueryRow(`insert into projects(team_id,name) values($1,'topology') returning id`, team).Scan(&project); err != nil {
+		t.Fatal(err)
+	}
+	var adapter int64
+	if err = db.QueryRow(`insert into device_adapters(project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status,onboarding_policy)
+	 select $1,$2,'topology','dji-flighthub2',id,'2','connected','review' from connector_definitions where connector_key='dji.flighthub2' and version='1.0.0' returning id`, project, team).Scan(&adapter); err != nil {
+		t.Fatal(err)
+	}
+	add := func(external, key, status, parent string) int {
+		t.Helper()
+		var id int
+		if err := db.QueryRow(`insert into devices(project_id,adapter_id,device_type_id,name,type,status) select $1,$2,id,$3,category,'offline' from device_types where type_key=$4 and status='active' order by version desc limit 1 returning id`, project, adapter, external, key).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		identity, _ := json.Marshal(map[string]string{"parentExternalId": parent})
+		if _, err := db.Exec(`insert into device_external_identities(project_id,team_id,adapter_id,device_id,external_device_id,external_device_type,identity_json,discovery_status) values($1,$2,$3,$4,$5,$6,$7,$8)`, project, team, adapter, id, external, key, identity, status); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	dock := add("dock", "dji.dock2", "managed", "")
+	drone := add("drone", "dji.matrice3td", "managed", "dock")
+	add("ignored", "dji.matrice3td", "ignored", "dock")
+	add("other-dock", "dji.dock2", "managed", "")
+	batch := DiscoveryBatch{Cursor: json.RawMessage(`{"snapshot":1}`), SourceVersion: "integration", Devices: []ExternalDevice{
+		{ExternalID: "dock", ExternalType: "dji.dock2"},
+		{ExternalID: "drone", ExternalType: "dji.matrice3td", ParentExternalID: "dock"},
+		{ExternalID: "ignored", ExternalType: "dji.matrice3td", ParentExternalID: "dock"},
+	}}
+	store := NewSQLSyncStore(db)
+	instance := Instance{ID: adapter, ProjectID: project}
+	if _, err = store.ApplyBatch(ctx, instance, DiscoveryPoll, json.RawMessage(`{}`), batch); err != nil {
+		t.Fatal(err)
+	}
+	// Historical review imports may have no materialized relation despite an
+	// unchanged discovery cursor. Replaying must repair, not onboard or duplicate.
+	if _, err = db.Exec(`delete from device_relationships where project_id=$1`, project); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		result, err := store.ApplyBatch(ctx, instance, DiscoveryPoll, batch.Cursor, batch)
+		if err != nil || !result.ReplayedCursor || result.Managed != 0 {
+			t.Fatalf("replay: %+v %v", result, err)
+		}
+	}
+	var count, from, to int
+	if err = db.QueryRow(`select count(*),min(from_device_id),min(to_device_id) from device_relationships where project_id=$1 and relation_type='contains' and valid_until is null`, project).Scan(&count, &from, &to); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || from != dock || to != drone {
+		t.Fatalf("unexpected topology: %d %d %d", count, from, to)
+	}
+	// A stale replay claiming a different parent cannot override saved identity.
+	batch.Devices[1].ParentExternalID = "other-dock"
+	if _, err = store.ApplyBatch(ctx, instance, DiscoveryPoll, batch.Cursor, batch); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`select count(*) from device_relationships where project_id=$1`, project).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("stale replay changed topology: %d %v", count, err)
+	}
+	var otherAdapter int64
+	if err = db.QueryRow(`insert into device_adapters(project_id,team_id,name,adapter_type,connector_definition_id,protocol_version,status,onboarding_policy)
+	 select project_id,team_id,'other-topology',adapter_type,connector_definition_id,protocol_version,status,onboarding_policy from device_adapters where id=$1 returning id`, adapter).Scan(&otherAdapter); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`update device_external_identities set adapter_id=$2 where adapter_id=$1 and external_device_id='other-dock'`, adapter, otherAdapter); err != nil {
+		t.Fatal(err)
+	}
+	batch.Cursor = json.RawMessage(`{"snapshot":2}`)
+	if _, err = store.ApplyBatch(ctx, instance, DiscoveryPoll, json.RawMessage(`{"snapshot":1}`), batch); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`select count(*) from device_relationships where project_id=$1`, project).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("cross-connector relationship created: %d %v", count, err)
+	}
+}
+
 func TestSQLSyncStoreAppliesSafeOnboardingPolicies(t *testing.T) {
 	databaseURL := os.Getenv("AEROSIGHT_TEST_DATABASE_URL")
 	if databaseURL == "" {
