@@ -9,3 +9,5 @@
 线上核验待部署后补充。
 
 生产首次验证发现 canonical 页面目录的 index.txt / __next.*.txt 返回 404，修复范围扩展为 Go 导出文件别名。TestProjectExportNavigationData 与 TestStaticPagesGinFallbackBoundary 通过。实际静态导出经 Go pageNotFound + webassets 在本地运行，浏览器文档加载 1 次、会话及原回答保持、业务写请求 0；记录 .build/agent-navigation/export.json。严格主规范失败具体为独立 overview-map-terrain 的 Purpose 少于 50 字符；非严格校验该规范通过。
+
+2026-10-12 15:23 CST：线上提交 676137d 部署 RUNNING。真实生产静态文件浏览器验证通过：只读会话 11 从回答进入设备页并返回，文档加载次数 1，会话保留，业务写请求 0，外链和 API 链接保持原行为。验证使用只读会话夹具，不作为视频素材。记录 .build/agent-navigation/production.json。change 与本能力主规范严格校验通过。
