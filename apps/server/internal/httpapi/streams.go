@@ -87,7 +87,11 @@ func (s *Server) streamSessionActive(ctx context.Context, token string, uid int3
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
 	loaded, err := s.sessions.Load(fresh, token)
-	return err == nil && s.sessions.GetInt(loaded, "userId") == int(uid)
+	if err != nil || s.sessions.GetInt(loaded, "userId") != int(uid) {
+		return false
+	}
+	user, err := s.queries.GetUser(fresh, uid)
+	return err == nil && int(user.CredentialVersion) == s.sessions.GetInt(loaded, "credentialVersion")
 }
 
 func (s *Server) projectStream(c *gin.Context) {

@@ -25,6 +25,10 @@ function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const canvas = /^\/projects\/(?:[1-9]\d*\/?|[1-9]\d*\/realtime(?:\/devices\/[1-9]\d*)?\/?|detail\/?|realtime\/?)$/.test(pathname);
   const projects = useAPI<ComponentProps<typeof AppSidebar>["projects"]>("/api/projects");
+  useEffect(() => {
+    window.addEventListener("aerosight:projects-updated", projects.reload);
+    return () => window.removeEventListener("aerosight:projects-updated", projects.reload);
+  }, [projects.reload]);
   if (!user) return null;
   return <APIStateView state={projects}>{(projects) => <SidebarProvider defaultOpen={!canvas} className={canvas ? "h-dvh min-h-0 overflow-hidden" : undefined}>
     <CanvasNavigation canvas={canvas} />

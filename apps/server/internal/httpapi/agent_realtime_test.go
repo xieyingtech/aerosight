@@ -32,6 +32,65 @@ func TestRealtimeStepEndpoint(t *testing.T) {
 	}
 }
 
+func TestRealtimeCredentialVersionRevocation(t *testing.T) {
+	f, _, _, _, _, path := newChatFixture(t)
+	path = strings.TrimSuffix(path, "messages") + "realtime"
+	if _, err := f.db.Exec("update ai_providers set base_url='https://api.stepfun.com/v1',realtime_protocol='stepfun',realtime_model_id='voice',is_realtime_default=true"); err != nil {
+		t.Fatal(err)
+	}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, req, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		conn.SetReadDeadline(time.Now().Add(25 * time.Second))
+		_ = conn.WriteJSON(gin.H{"type": "session.created"})
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer upstream.Close()
+	f.server.realtimeConnect = func(ctx context.Context) (*websocket.Conn, error) {
+		conn, _, err := websocket.DefaultDialer.DialContext(ctx, "ws"+strings.TrimPrefix(upstream.URL, "http"), nil)
+		return conn, err
+	}
+	u, _ := url.Parse(f.host.URL)
+	headers := http.Header{"Origin": {"http://frontend.test"}}
+	for _, cookie := range f.client.Jar.Cookies(u) {
+		headers.Add("Cookie", cookie.String())
+	}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(f.host.URL, "http")+path, headers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetReadDeadline(time.Now().Add(20 * time.Second))
+	if _, err = f.db.Exec("update users set credential_version=credential_version+1 where email='admin@example.com'"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		var event struct {
+			Type string
+			Data struct{ Code string }
+		}
+		if err = conn.ReadJSON(&event); err != nil {
+			t.Fatal(err)
+		}
+		if event.Type == "error" {
+			if event.Data.Code != "UNAUTHENTICATED" {
+				t.Fatalf("unexpected error: %s", event.Data.Code)
+			}
+			break
+		}
+	}
+	if _, _, err = conn.ReadMessage(); err == nil {
+		t.Fatal("revoked realtime connection remains open")
+	}
+}
+
 func TestRealtimeDispatcherDoesNotAcceptScopeOrWriteTools(t *testing.T) {
 	for resource, name := range realtimeResources {
 		actual, err := realtimeReadTool(stepRealtimeItem{Name: "query_project", Arguments: `{"resource":"` + resource + `"}`})

@@ -201,6 +201,7 @@ type Querier interface {
 	ListTeams(ctx context.Context, arg ListTeamsParams) ([]ListTeamsRow, error)
 	LockAIProvider(ctx context.Context, id int64) (LockAIProviderRow, error)
 	LockAIProviderRegistry(ctx context.Context) error
+	LockAccount(ctx context.Context, id int32) (LockAccountRow, error)
 	LockAlgorithmDefinition(ctx context.Context, arg LockAlgorithmDefinitionParams) (int64, error)
 	LockAlgorithmRetrySource(ctx context.Context, arg LockAlgorithmRetrySourceParams) (LockAlgorithmRetrySourceRow, error)
 	LockChatSession(ctx context.Context, arg LockChatSessionParams) (int32, error)
@@ -232,6 +233,7 @@ type Querier interface {
 	PublishReportVersion(ctx context.Context, arg PublishReportVersionParams) error
 	QueueIssueCopilot(ctx context.Context, arg QueueIssueCopilotParams) (uuid.UUID, error)
 	ReadAIProviderPublic(ctx context.Context, id int64) (json.RawMessage, error)
+	ReadAccountPassword(ctx context.Context, id int32) (ReadAccountPasswordRow, error)
 	ReadAlgorithmAccessAsset(ctx context.Context, arg ReadAlgorithmAccessAssetParams) (ReadAlgorithmAccessAssetRow, error)
 	ReadAlgorithmRunAttempts(ctx context.Context, arg ReadAlgorithmRunAttemptsParams) ([]json.RawMessage, error)
 	ReadAlgorithmRunDetail(ctx context.Context, arg ReadAlgorithmRunDetailParams) (json.RawMessage, error)
@@ -355,12 +357,15 @@ type Querier interface {
 	TaskWorkbenchTask(ctx context.Context, arg TaskWorkbenchTaskParams) ([]json.RawMessage, error)
 	TaskWorkbenchVersions(ctx context.Context, arg TaskWorkbenchVersionsParams) ([]json.RawMessage, error)
 	UpdateAIProvider(ctx context.Context, arg UpdateAIProviderParams) error
+	UpdateAccountPassword(ctx context.Context, arg UpdateAccountPasswordParams) (int64, error)
 	UpdateAlgorithmDefinition(ctx context.Context, arg UpdateAlgorithmDefinitionParams) error
 	UpdateDJIAdapterEnvelope(ctx context.Context, arg UpdateDJIAdapterEnvelopeParams) error
 	UpdateDeviceTypeIcon(ctx context.Context, arg UpdateDeviceTypeIconParams) (string, error)
 	UpdateFlightHubCredentials(ctx context.Context, arg UpdateFlightHubCredentialsParams) (int64, error)
 	UpdateIssueMutation(ctx context.Context, arg UpdateIssueMutationParams) (int32, error)
 	UpdateMissionControlRun(ctx context.Context, arg UpdateMissionControlRunParams) (UpdateMissionControlRunRow, error)
+	UpdateProfileName(ctx context.Context, arg UpdateProfileNameParams) error
+	UpdateProjectName(ctx context.Context, arg UpdateProjectNameParams) (UpdateProjectNameRow, error)
 	UpdateRealtimeChatMessage(ctx context.Context, arg UpdateRealtimeChatMessageParams) (int64, error)
 	UpsertDraftReport(ctx context.Context, arg UpsertDraftReportParams) (uuid.UUID, error)
 }

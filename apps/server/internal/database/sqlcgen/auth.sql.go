@@ -22,18 +22,19 @@ func (q *Queries) CreateDefaultAdmin(ctx context.Context, password sql.NullStrin
 }
 
 const findLoginUser = `-- name: FindLoginUser :one
-SELECT id, name, email, phone, password, role FROM users
+SELECT id, name, email, phone, password, role, credential_version FROM users
 WHERE lower(email) = lower($1::text) OR phone = $1::text
 LIMIT 1
 `
 
 type FindLoginUserRow struct {
-	ID       int32          `json:"id"`
-	Name     string         `json:"name"`
-	Email    sql.NullString `json:"email"`
-	Phone    sql.NullString `json:"phone"`
-	Password sql.NullString `json:"password"`
-	Role     string         `json:"role"`
+	ID                int32          `json:"id"`
+	Name              string         `json:"name"`
+	Email             sql.NullString `json:"email"`
+	Phone             sql.NullString `json:"phone"`
+	Password          sql.NullString `json:"password"`
+	Role              string         `json:"role"`
+	CredentialVersion int32          `json:"credential_version"`
 }
 
 func (q *Queries) FindLoginUser(ctx context.Context, username string) (FindLoginUserRow, error) {
@@ -46,6 +47,7 @@ func (q *Queries) FindLoginUser(ctx context.Context, username string) (FindLogin
 		&i.Phone,
 		&i.Password,
 		&i.Role,
+		&i.CredentialVersion,
 	)
 	return i, err
 }
@@ -85,15 +87,16 @@ func (q *Queries) GetProjectAccess(ctx context.Context, arg GetProjectAccessPara
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, email, phone, role FROM users WHERE id = $1
+SELECT id, name, email, phone, role, credential_version FROM users WHERE id = $1
 `
 
 type GetUserRow struct {
-	ID    int32          `json:"id"`
-	Name  string         `json:"name"`
-	Email sql.NullString `json:"email"`
-	Phone sql.NullString `json:"phone"`
-	Role  string         `json:"role"`
+	ID                int32          `json:"id"`
+	Name              string         `json:"name"`
+	Email             sql.NullString `json:"email"`
+	Phone             sql.NullString `json:"phone"`
+	Role              string         `json:"role"`
+	CredentialVersion int32          `json:"credential_version"`
 }
 
 func (q *Queries) GetUser(ctx context.Context, id int32) (GetUserRow, error) {
@@ -105,6 +108,7 @@ func (q *Queries) GetUser(ctx context.Context, id int32) (GetUserRow, error) {
 		&i.Email,
 		&i.Phone,
 		&i.Role,
+		&i.CredentialVersion,
 	)
 	return i, err
 }

@@ -1,10 +1,10 @@
 -- name: FindLoginUser :one
-SELECT id, name, email, phone, password, role FROM users
+SELECT id, name, email, phone, password, role, credential_version FROM users
 WHERE lower(email) = lower(sqlc.arg(username)::text) OR phone = sqlc.arg(username)::text
 LIMIT 1;
 
 -- name: GetUser :one
-SELECT id, name, email, phone, role FROM users WHERE id = $1;
+SELECT id, name, email, phone, role, credential_version FROM users WHERE id = $1;
 
 -- name: HasUsers :one
 SELECT EXISTS(SELECT 1 FROM users);

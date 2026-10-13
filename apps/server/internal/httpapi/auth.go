@@ -42,6 +42,7 @@ func (s *Server) authRoutes() {
 		c.Status(204)
 	})
 	s.router.GET("/api/auth/session", s.requireUser, func(c *gin.Context) { c.JSON(200, gin.H{"user": currentUser(c)}) })
+	s.router.POST("/api/auth/password", s.requireUser, s.timeout, s.changePassword)
 }
 func (s *Server) login(c *gin.Context) {
 	if s.loginRate.RespondOnLimit(c.Writer, c.Request, c.ClientIP()) {
@@ -70,6 +71,7 @@ func (s *Server) login(c *gin.Context) {
 		return
 	}
 	s.sessions.Put(c.Request.Context(), "userId", int(user.ID))
+	s.sessions.Put(c.Request.Context(), "credentialVersion", int(user.CredentialVersion))
 	for _, name := range []string{"authjs.session-token", "__Secure-authjs.session-token", "next-auth.session-token", "__Secure-next-auth.session-token"} {
 		http.SetCookie(c.Writer, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: strings.HasPrefix(name, "__Secure-"), SameSite: http.SameSiteLaxMode})
 	}
@@ -94,6 +96,10 @@ func (s *Server) requireUser(c *gin.Context) {
 	}
 	if err != nil {
 		s.failure(c, 500, "USER_LOOKUP_FAILED")
+		return
+	}
+	if int(user.CredentialVersion) != s.sessions.GetInt(c.Request.Context(), "credentialVersion") {
+		s.failure(c, 401, "UNAUTHENTICATED")
 		return
 	}
 	c.Set("user", userDTO(user))

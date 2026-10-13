@@ -4372,7 +4372,8 @@ CREATE TABLE public.users (
     password text,
     role text DEFAULT 'user'::text NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL
+    updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    credential_version integer DEFAULT 0 NOT NULL
 );
 
 

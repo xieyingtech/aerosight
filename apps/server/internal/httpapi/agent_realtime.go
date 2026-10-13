@@ -410,6 +410,7 @@ func (s *Server) realtimeChat(c *gin.Context) {
 		return
 	}
 	uid := currentUser(c).ID
+	token := s.sessions.Token(c.Request.Context())
 	if err = s.checkChatAccess(c.Request.Context(), uid, pid, int32(sid)); err != nil {
 		s.agentSessionFailure(c, err)
 		return
@@ -476,7 +477,7 @@ func (s *Server) realtimeChat(c *gin.Context) {
 	}
 	clientFrames, upstreamFrames := read(client, 64<<10), read(upstream, 2<<20)
 	var lastAudioAck time.Time
-	ticker := time.NewTicker(20 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -484,6 +485,10 @@ func (s *Server) realtimeChat(c *gin.Context) {
 			_ = emit("error", gin.H{"code": "AI_REALTIME_TIMEOUT"})
 			return
 		case <-ticker.C:
+			if !s.streamSessionActive(ctx, token, uid) {
+				_ = emit("error", gin.H{"code": "UNAUTHENTICATED"})
+				return
+			}
 			if err = s.checkChatAccess(ctx, uid, pid, int32(sid)); err != nil {
 				_ = emit("error", gin.H{"code": realtimeError(err)})
 				return
