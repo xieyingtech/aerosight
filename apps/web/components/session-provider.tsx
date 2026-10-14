@@ -6,7 +6,9 @@ import { APIError, getSession, type SessionUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 
 const SessionContext = createContext<SessionUser | null>(null);
+const UpdateSessionContext = createContext<(user: SessionUser) => void>(() => {});
 export const useSessionUser = () => useContext(SessionContext);
+export const useUpdateSessionUser = () => useContext(UpdateSessionContext);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -26,7 +28,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [router, revision]);
   if (failed) return <div className="p-6" role="alert"><p>暂时无法获取登录状态。</p><Button onClick={() => setRevision((value) => value + 1)} variant="outline">重试</Button></div>;
   if (!user) return <p className="p-6 text-sm text-muted-foreground" role="status">正在检查登录状态…</p>;
-  return <SessionContext.Provider value={user}>{children}</SessionContext.Provider>;
+  return <SessionContext.Provider value={user}><UpdateSessionContext.Provider value={setUser}>{children}</UpdateSessionContext.Provider></SessionContext.Provider>;
 }
 
 export function AdminGuard({ children }: { children: ReactNode }) {

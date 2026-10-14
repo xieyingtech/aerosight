@@ -1,18 +1,24 @@
 "use client";
 
-import { useAPI } from "@/lib/use-api";
-import { APIStateView } from "@/components/api-state";
-import { DataTable } from "@/components/data-table";
 import { Page } from "@/components/page";
+import { NameSettingsForm } from "@/components/name-settings-form";
+import { PasswordSettingsForm } from "@/components/password-settings-form";
+import { useSessionUser } from "@/components/session-provider";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ProfilePage() {
-  const state = useAPI<{ profile: Record<string, unknown>[]; teams: Record<string, unknown>[] }>("/api/profile");
-  return <APIStateView state={state}>{({ profile, teams }) => (
-    <Page description="查看账号基础信息和所属团队" title="个人中心">
-      <div className="grid gap-5 lg:grid-cols-2">
-        <DataTable columns={[{ key: "name", label: "姓名" }, { key: "email", label: "邮箱" }, { key: "phone", label: "手机号" }, { key: "role", label: "角色" }]} items={profile as unknown as Record<string, unknown>[]} />
-        <DataTable columns={[{ key: "name", label: "团队" }, { key: "role", label: "角色" }, { key: "joinedAt", label: "加入时间" }]} items={teams} />
-      </div>
-    </Page>
-  )}</APIStateView>;
+  const user = useSessionUser();
+  if (!user) return null;
+  return <Page description="管理个人资料和账号安全" title="个人中心">
+    <div className="w-full max-w-3xl space-y-5">
+      <Card><CardHeader><CardTitle>个人资料</CardTitle></CardHeader><CardContent>
+        <dl className="divide-y">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-5"><div className="min-w-0"><dt className="text-sm text-muted-foreground">显示名称</dt><dd className="mt-1 break-words font-medium">{user.name}</dd></div><NameSettingsForm name={user.name} /></div>
+          <div className="py-5"><dt className="text-sm text-muted-foreground">登录邮箱</dt><dd className="mt-1 break-words">{user.email ?? "未设置邮箱"}</dd></div>
+          {user.phone && <div className="pt-5"><dt className="text-sm text-muted-foreground">手机号</dt><dd className="mt-1">{user.phone}</dd></div>}
+        </dl>
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>账号安全</CardTitle></CardHeader><CardContent><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="font-medium">登录密码</p><p className="mt-1 text-sm text-muted-foreground">使用原密码验证后更换密码。</p></div><PasswordSettingsForm /></div></CardContent></Card>
+    </div>
+  </Page>;
 }

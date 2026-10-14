@@ -109,6 +109,8 @@ func (s *Server) directoryRoutes() {
 	})
 	api.POST("/teams", s.createTeam)
 	api.POST("/projects", s.createProject)
+	api.PATCH("/projects/:id", s.renameProject)
+	api.PATCH("/profile", s.renameProfile)
 	admin := api.Group("/admin", s.requireAdmin)
 	admin.GET("/overview", func(c *gin.Context) {
 		r, err := s.queries.AdminOverview(c.Request.Context())

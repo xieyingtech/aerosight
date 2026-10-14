@@ -1906,12 +1906,13 @@ type TelemetryEventDedup struct {
 }
 
 type User struct {
-	ID        int32          `json:"id"`
-	Name      string         `json:"name"`
-	Email     sql.NullString `json:"email"`
-	Phone     sql.NullString `json:"phone"`
-	Password  sql.NullString `json:"password"`
-	Role      string         `json:"role"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
+	ID                int32          `json:"id"`
+	Name              string         `json:"name"`
+	Email             sql.NullString `json:"email"`
+	Phone             sql.NullString `json:"phone"`
+	Password          sql.NullString `json:"password"`
+	Role              string         `json:"role"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	CredentialVersion int32          `json:"credential_version"`
 }

@@ -13,9 +13,11 @@ import { verifyMap } from './browser-map.mjs';
 import { verifyProjectWorkspaces } from './browser-project-workspaces.mjs';
 import { verifyProjectDetails } from './browser-project-details.mjs';
 import { verifyMediaFrame } from './browser-media-frame.mjs';
+import { verifyAccountSettings } from './browser-account-settings.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const development = process.argv.includes('--development');
+const settingsOnly = process.argv.includes('--settings-only');
 const mode = development ? 'development' : 'production';
 const id = randomUUID(), container = `aerosight-browser-${id}`;
 const output = resolve(root, '.build', `${mode}-browser-${id}`);
@@ -100,7 +102,7 @@ try {
   const cookie=(await context.cookies()).find(cookie=>cookie.name==='aerosight_session');
   assert(cookie && cookie.secure===!development && cookie.httpOnly && cookie.sameSite==='Lax',`${mode} session cookie policy`);
   await page.screenshot({path:resolve(output,'projects.png'),fullPage:true});
-  const pageStates = development ? [] : await verifyPageStates(page, origin);
+  const pageStates = development || settingsOnly ? [] : await verifyPageStates(page, origin);
   writeFileSync(resolve(output,'page-states.json'),JSON.stringify({pages:pageStates},null,2));
   await page.getByRole('link',{name:'团队',exact:true}).click();
   await page.getByRole('button',{name:'新建团队',exact:true}).click();
@@ -111,15 +113,15 @@ try {
   await page.getByRole('link',{name:'新建项目',exact:true}).click();
   await page.getByLabel('项目名称',{exact:true}).fill('Browser acceptance project');
   await page.getByRole('button',{name:'创建项目',exact:true}).click();
-  await page.waitForURL(url=>/^\/projects\/detail\/?$/.test(url.pathname) && Number(url.searchParams.get('projectId'))>0);
+  await page.waitForURL(url=>(/^\/projects\/detail\/?$/.test(url.pathname) && Number(url.searchParams.get('projectId'))>0) || (settingsOnly && /^\/projects\/[1-9]\d*\/?$/.test(url.pathname)));
   const detailURL=page.url();
-  const legacyLinks=await verifyLegacyLinks(page,context,origin,detailURL);
+  const legacyLinks=settingsOnly ? [] : await verifyLegacyLinks(page,context,origin,detailURL);
   writeFileSync(resolve(output,'legacy-links.json'),JSON.stringify(legacyLinks,null,2));
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.reload();
   await page.getByRole('heading',{name:'Browser acceptance project',exact:true}).waitFor({state:'visible'});
   await page.screenshot({path:resolve(output,'created-project.png'),fullPage:true});
-  if(!development) {
+  if(!development && !settingsOnly) {
     const workspaces=await verifyProjectWorkspaces(page,detailURL);
     writeFileSync(resolve(output,'project-workspaces.json'),JSON.stringify(workspaces,null,2));
     const details=await verifyProjectDetails(page,detailURL,sql=>command('docker',['exec',container,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc',sql]));
@@ -151,6 +153,8 @@ try {
   await page.getByRole('button',{name:'登录',exact:true}).click();
   await page.waitForURL(url=>url.pathname==='/projects/' || url.pathname==='/projects');
   await page.getByRole('link',{name:/Browser acceptance project/}).waitFor({state:'visible'});
+  const settings = await verifyAccountSettings(page,context,origin,detailURL,output);
+  writeFileSync(resolve(output,'account-settings.json'),JSON.stringify(settings,null,2));
   command('docker',['exec',container,'psql','-U','postgres','-d','postgres','-c',"update sessions set expiry=now()-interval '1 second'"]);
   await page.reload();
   await page.waitForURL(url=>url.pathname==='/login/' || url.pathname==='/login');
