@@ -61,7 +61,7 @@ export function LiveDeviceWindow({ snapshot, device, selectedStreamId, videoChan
   {stream ? <LiveStreamPanel compact immersive={immersive} controlsTarget={controlsTarget} controlsVisible={controlsVisible} key={String(stream.id)} snapshot={snapshot} selectedStreamId={Number(stream.id)} selection={{ lane: "device-generic", entityId: String(device.id), label: String(device.name) }} mode="live" cursor={null} onStreamChanged={async () => { suppressed.current = true; await onChanged(); }} />
    : <div className={cn("flex flex-col items-center justify-center gap-3 p-4 text-center text-sm", immersive ? "min-h-0 flex-1 bg-slate-950 text-slate-200" : "aspect-video bg-muted/30")}>
     <p className="text-muted-foreground">{pending ? signal ? "正在连接直播…" : "正在启动直播…" : device.status !== "online" ? "设备尚未在线，等待设备连接" : "暂无直播信号"}</p>
-    {channel && <Button size="sm" variant="outline" disabled={!enabled || pending} onClick={() => { suppressed.current = false; void start(); }}>{pending ? <RefreshCwIcon className="size-4 animate-spin"/> : <PlayIcon className="size-4"/>}{signal ? "连接直播" : "启动直播"}</Button>}
+    {channel && <Button size="sm" variant="outline" className="text-foreground" disabled={!enabled || pending} onClick={() => { suppressed.current = false; void start(); }}>{pending ? <RefreshCwIcon className="size-4 animate-spin"/> : <PlayIcon className="size-4"/>}{signal ? "连接直播" : "启动直播"}</Button>}
     {!enabled && device.status === "online" && <p className="text-xs text-muted-foreground">{action?.unavailableReason ?? channel?.availabilityReason ?? "当前没有可用的视频通道"}</p>}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
    </div>}
