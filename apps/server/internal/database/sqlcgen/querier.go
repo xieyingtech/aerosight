@@ -244,7 +244,7 @@ type Querier interface {
 	ReadDefaultChatProvider(ctx context.Context) ([]ReadDefaultChatProviderRow, error)
 	ReadDefaultRealtimeProvider(ctx context.Context) ([]ReadDefaultRealtimeProviderRow, error)
 	ReadDeviceRelations(ctx context.Context, projectID int32) ([]json.RawMessage, error)
-	ReadDeviceTree(ctx context.Context, projectID int32) ([]json.RawMessage, error)
+	ReadDeviceTree(ctx context.Context, arg ReadDeviceTreeParams) ([]json.RawMessage, error)
 	ReadFHDiagnosticsAccess(ctx context.Context, arg ReadFHDiagnosticsAccessParams) ([]json.RawMessage, error)
 	ReadFHDiagnosticsCapabilities(ctx context.Context, arg ReadFHDiagnosticsCapabilitiesParams) ([]json.RawMessage, error)
 	ReadFHDiagnosticsWatermarks(ctx context.Context, arg ReadFHDiagnosticsWatermarksParams) ([]json.RawMessage, error)

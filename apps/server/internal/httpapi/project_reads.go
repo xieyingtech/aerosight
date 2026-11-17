@@ -101,7 +101,9 @@ func (s *Server) projectReadRoutes() {
 }
 func (s *Server) deviceTree(c *gin.Context) {
 	s.scopedRead(c, func(q *sqlcgen.Queries, a sqlcgen.GetProjectAccessRow) (any, error) {
-		raw, err := q.ReadDeviceTree(c.Request.Context(), a.ProjectID)
+		raw, err := q.ReadDeviceTree(c.Request.Context(), sqlcgen.ReadDeviceTreeParams{
+			ProjectID: a.ProjectID, IncludeLatestPose: true,
+		})
 		if err != nil {
 			return nil, err
 		}

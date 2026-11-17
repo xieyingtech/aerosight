@@ -75,7 +75,9 @@ select device.id,device.device_type_id::text as "deviceTypeId",device.name,devic
          join driver_definitions driver on driver.id=device_type.driver_definition_id
          left join lateral(
            select observation_id,standard_position,original_position,captured_at
-             from poses where project_id=device.project_id and device_id=device.id
+             from poses
+            where sqlc.arg(include_latest_pose)::boolean
+              and project_id=device.project_id and device_id=device.id
             order by captured_at desc limit 1
          ) pose on true
          left join device_latest_telemetry telemetry
@@ -104,7 +106,7 @@ select device.id,device.device_type_id::text as "deviceTypeId",device.name,devic
              and capability.capability_code='tca.status.read' and capability.evidence_level='live-read'
            order by capability.verified_at desc limit 1
         ) tca on true
-        where device.project_id=$1 order by device.id
+        where device.project_id=sqlc.arg(project_id) order by device.id
 ) r;
 -- name: ReadDeviceRelations :many
 select to_jsonb(result_row) as item from (

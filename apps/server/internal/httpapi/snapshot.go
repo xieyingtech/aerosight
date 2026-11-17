@@ -95,7 +95,8 @@ func (s *Server) readSnapshot(ctx context.Context, uid, pid int32) (gin.H, error
 		}
 		result[read.key] = rows
 	}
-	deviceControlRaw, err := q.ReadDeviceTree(ctx, pid)
+	// SnapshotDevices already supplied the latest positions.
+	deviceControlRaw, err := q.ReadDeviceTree(ctx, sqlcgen.ReadDeviceTreeParams{ProjectID: pid})
 	if err != nil {
 		return nil, err
 	}

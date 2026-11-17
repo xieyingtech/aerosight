@@ -7266,6 +7266,18 @@ CREATE INDEX observations_pose_position_idx ON public.observations USING gist (p
 
 CREATE INDEX observations_pose_project_time_idx ON public.observations USING btree (project_id, pose_captured_at, id) WHERE (pose_spatial_quality IS NOT NULL);
 
+--
+-- Name: observations_pose_project_device_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX observations_pose_project_device_time_idx ON public.observations USING btree (project_id, pose_device_id, pose_captured_at DESC) WHERE (pose_spatial_quality IS NOT NULL);
+
+--
+-- Name: observations_pose_project_track_time_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX observations_pose_project_track_time_idx ON public.observations USING btree (project_id, pose_captured_at DESC) WHERE ((pose_spatial_quality IS NOT NULL) AND (pose_standard_position IS NOT NULL));
+
 
 --
 -- Name: observations_project_time_idx; Type: INDEX; Schema: public; Owner: -

@@ -213,7 +213,9 @@ select device.id,device.device_type_id::text as "deviceTypeId",device.name,devic
          join driver_definitions driver on driver.id=device_type.driver_definition_id
          left join lateral(
            select observation_id,standard_position,original_position,captured_at
-             from poses where project_id=device.project_id and device_id=device.id
+             from poses
+            where $1::boolean
+              and project_id=device.project_id and device_id=device.id
             order by captured_at desc limit 1
          ) pose on true
          left join device_latest_telemetry telemetry
@@ -242,12 +244,17 @@ select device.id,device.device_type_id::text as "deviceTypeId",device.name,devic
              and capability.capability_code='tca.status.read' and capability.evidence_level='live-read'
            order by capability.verified_at desc limit 1
         ) tca on true
-        where device.project_id=$1 order by device.id
+        where device.project_id=$2 order by device.id
 ) r
 `
 
-func (q *Queries) ReadDeviceTree(ctx context.Context, projectID int32) ([]json.RawMessage, error) {
-	rows, err := q.db.QueryContext(ctx, readDeviceTree, projectID)
+type ReadDeviceTreeParams struct {
+	IncludeLatestPose bool  `json:"include_latest_pose"`
+	ProjectID         int32 `json:"project_id"`
+}
+
+func (q *Queries) ReadDeviceTree(ctx context.Context, arg ReadDeviceTreeParams) ([]json.RawMessage, error) {
+	rows, err := q.db.QueryContext(ctx, readDeviceTree, arg.IncludeLatestPose, arg.ProjectID)
 	if err != nil {
 		return nil, err
 	}

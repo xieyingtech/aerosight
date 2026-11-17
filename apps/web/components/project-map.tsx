@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AlertTriangleIcon, ArrowUpRightIcon, XIcon, CpuIcon, CameraIcon, ScanEyeIcon, FlagIcon, RouteIcon, WaypointsIcon, FenceIcon, GlobeIcon, MapIcon } from "lucide-react";
 import { DeviceTypeIcon } from "@/components/device-type-icon";
@@ -19,6 +19,8 @@ import type { ProjectSituationSnapshot } from "@/lib/project-snapshot-core";
 import type { SituationSelection } from "@/lib/situation-state";
 
 const interactiveLayers = ["regions-fill", "algorithm-results-fill", "mission-routes-line", "tracks-line"];
+const baseMapWaitMs = 8000;
+type MapView = { longitude: number; latitude: number; zoom: number; bearing: number; pitch: number };
 // Tracks follow their owning device layer and have no separate visibility control.
 const selectableLayers = projectMapLayers.filter(layer => layer.id !== "tracks" && layer.id !== "devices");
 const noExcludedLayers: readonly typeof projectMapLayers[number]["id"][] = [];
@@ -51,6 +53,24 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
   const [projection, setProjection] = useState<"mercator" | "globe">("mercator");
   const projectionMode = useRef<"mercator" | "globe">("mercator");
   const [mapReady, setMapReady] = useState(false);
+  const [mapSlow, setMapSlow] = useState(false);
+  const [mapAttempt, setMapAttempt] = useState<{ revision: number; view?: MapView }>({ revision: 0 });
+  useEffect(() => {
+    if (mapReady) return;
+    const timeout = window.setTimeout(() => setMapSlow(true), baseMapWaitMs);
+    return () => window.clearTimeout(timeout);
+  }, [mapReady, mapAttempt.revision]);
+  const retryMap = () => {
+    const map = mapRef.current;
+    const position = map?.getCenter();
+    const view = map && position ? {
+      longitude: position.lng, latitude: position.lat, zoom: map.getZoom(),
+      bearing: map.getBearing(), pitch: map.getPitch(),
+    } : undefined;
+    setMapReady(false);
+    setMapSlow(false);
+    setMapAttempt(attempt => ({ revision: attempt.revision + 1, view }));
+  };
   const syncBuildings = (mode = projectionMode.current) => {
     if (!showProjectionControl) return;
     const map = mapRef.current?.getMap();
@@ -131,13 +151,18 @@ export function ProjectMap({ snapshot, className, controlsTarget, controlsClassN
       {controlsTarget !== undefined ? controlsTarget && createPortal(controls, controlsTarget) : <div className={cn("absolute left-3 right-12 top-3 z-10", controlsClassName)}>
         {compactControls ? <DropdownMenu><DropdownMenuTrigger asChild><Button size="sm" variant="outline">地图图层</Button></DropdownMenuTrigger><DropdownMenuContent>{controlsLayers.map(layer => <DropdownMenuCheckboxItem key={layer.id} checked={visible.has(layer.id)} onCheckedChange={() => toggle(layer.id)} onSelect={event => event.preventDefault()}>{layer.label}<span className="ml-auto pl-3 tabular-nums">{counts[layer.id]}</span></DropdownMenuCheckboxItem>)}{deviceTypes.map(type => <DropdownMenuCheckboxItem key={type.key} checked={!hiddenTypes.has(type.key)} onCheckedChange={() => toggleType(type.key)} onSelect={event => event.preventDefault()}><DeviceTypeIcon name={type.icon} className="mr-1 size-3.5" />{type.label}<span className="ml-auto pl-3 tabular-nums">{type.count}</span></DropdownMenuCheckboxItem>)}</DropdownMenuContent></DropdownMenu> : controls}
       </div>}
+      {!mapReady && <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+        <span role="status">{mapSlow ? "底图加载较慢" : "正在加载底图…"}</span>
+        {mapSlow && <Button type="button" size="sm" variant="outline" onClick={retryMap}>重试底图</Button>}
+      </div>}
       <Map
+        key={mapAttempt.revision}
         ref={mapRef}
         projection={{ type: projection }}
         onLoad={() => { syncBuildings(); setMapReady(true); }}
         onStyleData={() => syncBuildings()}
         attributionControl={{ compact: true }}
-        initialViewState={{ longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
+        initialViewState={mapAttempt.view ?? { longitude: center[0], latitude: center[1], zoom: model.features.length ? 13 : 5 }}
         interactiveLayerIds={interactiveLayers}
         mapStyle={vectorStreetMapStyle}
         onClick={(event) => {
